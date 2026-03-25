@@ -16,13 +16,16 @@ Jsi autonomní systémový administrátor (DevOps AI) na prázdném Linux server
 *   Nainstaluj nejnovější **Rust toolchain** (přes `rustup`). Projdi instalací zcela neinteraktivně (`-y`). Nastav ho do systémové cesty.
 
 ### KROK 3: AI Lokální Ekosystém (GPU DETEKCE)
-*   Prozkoumej systém na přítomnost jakékoliv grafické karty (NVIDIA, AMD, Intel) pomocí `lspci`, `nvidia-smi` nebo prohledáním `/sys/class/drm/`.
-*   Zjisti celkovou velikost VRAM dostupné pro výpočty.
+*   Prozkoumej systém na přítomnost jakékoliv grafické karty (NVIDIA, AMD, Intel).
+*   Zjisti přesnou velikost VRAM.
 *   Pokud má grafický adaptér **alespoň 5800 MB (6GB) VRAM**, nainstaluj lokální AI:
-    1. Nainstaluj Ollama (`curl -fsSL https://ollama.com/install.sh | sh`). Ollama automaticky detekuje ovladače pro NVIDIA (CUDA) i AMD (ROCm).
-    2. Spusť ji jako službu.
-    3. Stáhni přes ni optimalizovaný model: `ollama pull phi3:mini`.
-*   Pokud GPU není přítomno nebo má malou paměť, tento krok přeskoč (bot poběží čistě na cloudu).
+    1. Nainstaluj Ollama.
+    2. **VÝBĚR MODELU:** Na základě zjištěné VRAM vyber nejinteligentnější model, který se do paměti bezpečně vejde (v 4-bit kvantizaci). 
+       - Pro 6GB karty: `phi3:mini` (3.8B) nebo `qwen2.5:3b`.
+       - Pro 8GB-12GB karty: `llama3.1:8b` nebo `mistral`.
+       - Pro 16GB+ karty: Navrhni a stáhni silnější model (např. `gemma2:9b` nebo `command-r-v01`).
+    3. Spusť stahování vybraného modelu pomocí `./install_local_ai.sh <nazev_modelu>`.
+*   Pokud GPU není přítomno, tento krok přeskoč.
 
 ### KROK 4: Klonování a Kompilace HFT Bota
 *   Naklonuj GitHub repozitář: `git clone https://github.com/VaclavSercl/HFT-MoonShot.git /home/wwwenda/hft-moonshot` (pokud složka neexistuje).

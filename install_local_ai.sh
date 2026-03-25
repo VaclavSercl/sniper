@@ -56,10 +56,24 @@ sudo systemctl enable ollama
 sudo systemctl start ollama
 sleep 5 # Wait for the API to boot
 
-# 6. Pull the optimal model for 6GB VRAM (Phi-3 Mini 4-bit quantized)
-# Best Practice: Phi-3 3.8B at Q4_K_M uses ~2.3GB of RAM, leaving plenty of room for Context/KV cache.
-MODEL_NAME="phi3:mini"
-echo "-> Downloading optimized HFT Local Model: $MODEL_NAME (This may take a few minutes)..."
+# 6. Select and Pull Model
+# If a model name is passed as an argument, use it. 
+# Otherwise, auto-select based on VRAM size.
+if [ -n "$1" ]; then
+    MODEL_NAME="$1"
+    echo "-> Using AI-selected model: $MODEL_NAME"
+else
+    if [ "$VRAM_MB" -gt 13000 ]; then
+        MODEL_NAME="llama3.1:8b" # High-end (12GB+ VRAM)
+    elif [ "$VRAM_MB" -gt 7500 ]; then
+        MODEL_NAME="mistral"    # Mid-range (8GB VRAM)
+    else
+        MODEL_NAME="phi3:mini"  # Entry-level (6GB VRAM)
+    fi
+    echo "-> Auto-selecting model based on VRAM: $MODEL_NAME"
+fi
+
+echo "-> Pulling model: $MODEL_NAME (This may take a few minutes)..."
 ollama pull $MODEL_NAME
 
 echo "============================================================"
