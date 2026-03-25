@@ -73,7 +73,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 .env("HOME", "/home/wwwenda")
                                 .arg("-p").arg(&prompt)
                                 .arg("--yolo")
-                                .current_dir("/home/wwwenda/beroun-projects/beroun-core")
+                                .current_dir("/home/wwwenda/hft-sniper")
                                 .output();
 
                             let reply = match output {

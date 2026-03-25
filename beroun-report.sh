@@ -2,7 +2,7 @@
 # BEROUN INTELLIGENT REPORTER v5.1
 # (c) 2026 Sovereign HFT Systems
 
-PROJECT_ROOT="/home/wwwenda/HFT-Sniper"
+PROJECT_ROOT="/home/wwwenda/hft-sniper"
 STATE_FILE="$PROJECT_ROOT/runtime/engine_state.bin"
 source $PROJECT_ROOT/.env
 

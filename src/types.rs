@@ -1,8 +1,8 @@
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU64, AtomicI64};
 
-pub static RISK_STATE_PATH: LazyLock<String> = LazyLock::new(|| "/home/wwwenda/HFT-Sniper/runtime/risk_state.bin".to_string());
-pub static ENGINE_STATE_PATH: LazyLock<String> = LazyLock::new(|| "/home/wwwenda/HFT-Sniper/runtime/engine_state.bin".to_string());
+pub static RISK_STATE_PATH: LazyLock<String> = LazyLock::new(|| "/home/wwwenda/hft-sniper/runtime/risk_state.bin".to_string());
+pub static ENGINE_STATE_PATH: LazyLock<String> = LazyLock::new(|| "/home/wwwenda/hft-sniper/runtime/engine_state.bin".to_string());
 
 pub const PRICE_SCALE: f64 = 100_000_000.0;
 pub const PRICE_SCALE_I: i64 = 100_000_000;

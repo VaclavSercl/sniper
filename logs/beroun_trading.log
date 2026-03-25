@@ -6,3 +6,59 @@
 -> Sovereign AI started
 ✅ All systems operational.
 --- BEROUN AI MANAGER v5.1.0 (EXTREME) ---
+🐺 Starting Beroun Sovereign Suite...
+-> Sniper started (PID: 1714)
+{"timestamp":"2026-03-25T11:58:00.540140Z","level":"INFO","fields":{"event":"system_start","version":"5.1.0-ultra-low-latency"}}
+{"timestamp":"2026-03-25T11:58:00.540186Z","level":"INFO","fields":{"event":"async_alert","message":"🐺 Beroun Sniper v5.1.0 ONLINE (Extreme Latency Edition)"}}
+-> AI Manager started
+-> Sovereign AI started
+✅ All systems operational.
+--- BEROUN AI MANAGER v5.1.0 (EXTREME) ---
+🐺 Starting Beroun Sovereign Suite...
+-> Sniper started (PID: 4025)
+{"timestamp":"2026-03-25T12:54:54.277203Z","level":"INFO","fields":{"event":"system_start","version":"5.1.0-ultra-low-latency"}}
+{"timestamp":"2026-03-25T12:54:54.277279Z","level":"INFO","fields":{"event":"async_alert","message":"🐺 Beroun Sniper v5.1.0 ONLINE (Extreme Latency Edition)"}}
+-> AI Manager started
+-> Sovereign AI started
+-> Telegram Brain started
+--- BEROUN AI MANAGER v5.1.0 (EXTREME) ---
+✅ All systems operational.
+🐺 --- BEROUN TELE-BRAIN v1.6 (Singleton) ONLINE ---
+🐺 Starting Beroun Sovereign Suite...
+-> Sniper started (PID: 4934)
+Error: No such file or directory (os error 2)
+-> AI Manager started
+-> Sovereign AI started
+-> Telegram Brain started
+✅ All systems operational.
+Error: No such file or directory (os error 2)
+--- BEROUN AI MANAGER v5.1.0 (EXTREME) ---
+Error: No such file or directory (os error 2)
+🐺 --- BEROUN TELE-BRAIN v1.6 (Singleton) ONLINE ---
+📥 Zpráva: Jsi online?
+🐺 Starting Beroun Sovereign Suite...
+-> Sniper started (PID: 5015)
+Error: No such file or directory (os error 2)
+-> AI Manager started
+-> Sovereign AI started
+-> Telegram Brain started
+✅ All systems operational.
+Error: No such file or directory (os error 2)
+--- BEROUN AI MANAGER v5.1.0 (EXTREME) ---
+Error: No such file or directory (os error 2)
+🐺 --- BEROUN TELE-BRAIN v1.6 (Singleton) ONLINE ---
+📥 Zpráva: Beroune žiješ?
+🐺 Starting Beroun Sovereign Suite...
+-> Sniper started (PID: 5343)
+{"timestamp":"2026-03-25T13:09:50.180768Z","level":"INFO","fields":{"event":"system_start","version":"5.1.0-ultra-low-latency"}}
+{"timestamp":"2026-03-25T13:09:50.180834Z","level":"INFO","fields":{"event":"async_alert","message":"🐺 Beroun Sniper v5.1.0 ONLINE (Extreme Latency Edition)"}}
+-> AI Manager started
+-> Sovereign AI started
+-> Telegram Brain started
+✅ All systems operational.
+--- BEROUN AI MANAGER v5.1.0 (EXTREME) ---
+🐺 --- BEROUN TELE-BRAIN v1.6 (Singleton) ONLINE ---
+📥 Zpráva: Beroune žiješ?
+📥 Zpráva: Halooo?
+📥 Zpráva: Jaké je datum?
+📥 Zpráva: Kolik je hodin?

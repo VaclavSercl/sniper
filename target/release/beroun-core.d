@@ -1,1 +1,1 @@
-/home/wwwenda/HFT-Sniper/target/release/beroun-core: /home/wwwenda/HFT-Sniper/src/main.rs /home/wwwenda/HFT-Sniper/src/types.rs
+/home/wwwenda/hft-sniper/target/release/beroun-core: /home/wwwenda/hft-sniper/src/main.rs /home/wwwenda/hft-sniper/src/types.rs

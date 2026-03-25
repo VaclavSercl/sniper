@@ -1,1 +1,1 @@
-/home/wwwenda/HFT-Sniper/target/release/beroun-sovereign-ai: /home/wwwenda/HFT-Sniper/src/sovereign_ai.rs /home/wwwenda/HFT-Sniper/src/types.rs
+/home/wwwenda/hft-sniper/target/release/beroun-sovereign-ai: /home/wwwenda/hft-sniper/src/sovereign_ai.rs /home/wwwenda/hft-sniper/src/types.rs

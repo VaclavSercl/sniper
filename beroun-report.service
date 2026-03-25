@@ -5,8 +5,8 @@ After=network.target
 [Service]
 Type=oneshot
 User=wwwenda
-WorkingDirectory=/home/wwwenda/beroun-projects/beroun-core
-ExecStart=/bin/bash /home/wwwenda/beroun-projects/beroun-core/beroun-report.sh
+WorkingDirectory=/home/wwwenda/hft-sniper
+ExecStart=/bin/bash /home/wwwenda/hft-sniper/beroun-report.sh
 
 [Install]
 WantedBy=multi-user.target

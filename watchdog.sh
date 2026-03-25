@@ -2,8 +2,8 @@
 # BEROUN SMART WATCHDOG v5.1
 # Monitoring project-local runtime for heartbeat
 
-STATE_FILE="/home/wwwenda/HFT-Sniper/runtime/engine_state.bin"
-LOG_FILE="/home/wwwenda/HFT-Sniper/logs/watchdog.log"
+STATE_FILE="/home/wwwenda/hft-sniper/runtime/engine_state.bin"
+LOG_FILE="/home/wwwenda/hft-sniper/logs/watchdog.log"
 
 echo "[$(date)] Watchdog Guardian ONLINE" >> $LOG_FILE
 

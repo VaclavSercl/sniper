@@ -2,19 +2,19 @@
 Description=Beroun Sniper v5.1 Sovereign HFT Suite
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
 User=wwwenda
-WorkingDirectory=/home/wwwenda/HFT-Sniper
-ExecStart=/bin/bash /home/wwwenda/HFT-Sniper/beroun-start.sh
+WorkingDirectory=/home/wwwenda/hft-sniper
+ExecStart=/home/wwwenda/hft-sniper/beroun-start.sh
 Restart=always
 RestartSec=3
-StartLimitIntervalSec=0
 
 # Centralized Logging in Project Root
-StandardOutput=append:/home/wwwenda/HFT-Sniper/logs/beroun_trading.log
-StandardError=append:/home/wwwenda/HFT-Sniper/logs/beroun_trading.log
+StandardOutput=append:/home/wwwenda/hft-sniper/logs/beroun_trading.log
+StandardError=append:/home/wwwenda/hft-sniper/logs/beroun_trading.log
 
 [Install]
 WantedBy=multi-user.target

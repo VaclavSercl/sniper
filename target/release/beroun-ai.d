@@ -1,1 +1,1 @@
-/home/wwwenda/HFT-Sniper/target/release/beroun-ai: /home/wwwenda/HFT-Sniper/dashboard.html /home/wwwenda/HFT-Sniper/src/ai_manager.rs /home/wwwenda/HFT-Sniper/src/types.rs
+/home/wwwenda/hft-sniper/target/release/beroun-ai: /home/wwwenda/hft-sniper/dashboard.html /home/wwwenda/hft-sniper/src/ai_manager.rs /home/wwwenda/hft-sniper/src/types.rs
