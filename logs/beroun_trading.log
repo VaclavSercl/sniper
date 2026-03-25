@@ -1,0 +1,8 @@
+🐺 Starting Beroun Sovereign Suite...
+-> Sniper started (PID: 25666)
+{"timestamp":"2026-03-25T11:48:44.566255Z","level":"INFO","fields":{"event":"system_start","version":"5.1.0-ultra-low-latency"}}
+{"timestamp":"2026-03-25T11:48:44.566320Z","level":"INFO","fields":{"event":"async_alert","message":"🐺 Beroun Sniper v5.1.0 ONLINE (Extreme Latency Edition)"}}
+-> AI Manager started
+-> Sovereign AI started
+✅ All systems operational.
+--- BEROUN AI MANAGER v5.1.0 (EXTREME) ---

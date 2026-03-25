@@ -1,0 +1,1 @@
+{"rustc":18276270781310494267,"features":"","declared_features":"","target":0,"profile":0,"path":0,"deps":[[6509165896255665847,"build_script_build",false,4401727044240020762]],"local":[{"RerunIfChanged":{"output":"release/build/getrandom-ab32ae105d4f43b3/output","paths":["build.rs"]}}],"rustflags":["-Cprofile-use=/tmp/pgo-data"],"config":0,"compile_kind":0}

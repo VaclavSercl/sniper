@@ -1,0 +1,74 @@
+[package]
+name = "beroun-core"
+version = "5.0.0"
+edition = "2024"
+
+[lib]
+name = "beroun_types"
+path = "src/types.rs"
+
+[[bin]]
+name = "beroun-core"
+path = "src/main.rs"
+
+[[bin]]
+name = "risk-control"
+path = "src/risk_control.rs"
+
+[[bin]]
+name = "beroun-ai"
+path = "src/ai_manager.rs"
+
+[[bin]]
+name = "beroun-health"
+path = "src/health.rs"
+
+[[bin]]
+name = "beroun-monitor"
+path = "src/monitor.rs"
+
+[[bin]]
+name = "beroun-sovereign-ai"
+path = "src/sovereign_ai.rs"
+
+[[bin]]
+name = "beroun-tele-brain"
+path = "src/tele_brain.rs"
+
+[dependencies]
+chrono = "0.4.44"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+simd-json = "0.14.3"
+itoa = "1.0.18"
+ryu = "1.0.19"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["json", "env-filter"] }
+reqwest = { version = "0.12.12", features = ["json"] }
+axum = { version = "0.8.1", features = ["ws"] }
+tower-http = { version = "0.6.2", features = ["cors", "fs"] }
+tokio = { version = "1.50.0", features = ["full"] }
+tokio-tungstenite = { version = "0.26.1", features = ["native-tls"] }
+futures-util = "0.3.31"
+crc32fast = "1.4.2"
+bytes = "1.11.1"
+rand = "0.9.0"
+hmac = "0.12.1"
+sha2 = "0.10.8"
+hex = "0.4.3"
+dotenvy = "0.15.7"
+memmap2 = "0.9.5"
+zerocopy = { version = "0.8.14", features = ["derive"] }
+sysinfo = "0.33.1"
+tokio-stream = "0.1.18"
+feed-rs = "2.3.1"
+thiserror = "2.0"
+anyhow = "1.0"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false

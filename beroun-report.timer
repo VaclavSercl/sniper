@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer for Beroun Sniper Periodic AI Report
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=66min
+Unit=beroun-report.service
+
+[Install]
+WantedBy=timers.target

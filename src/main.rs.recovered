@@ -1,0 +1,428 @@
+use std::time::{SystemTime, UNIX_EPOCH, Instant, Duration};
+use std::fs::{OpenOptions};
+use std::sync::LazyLock;
+use futures_util::{StreamExt, SinkExt};
+use serde_json::{json, Value};
+use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+use hmac::{Hmac, Mac};
+use sha2::Sha384;
+use dotenvy::dotenv;
+use tracing::{info, Level, error, warn};
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+use memmap2::MmapMut;
+use zerocopy::{FromBytes, Immutable, IntoBytes};
+use anyhow::{Context, Result};
+
+static RISK_STATE_PATH: LazyLock<String> = LazyLock::new(|| "/home/wwwenda/beroun-brain/short_term/risk_state.bin".to_string());
+static ENGINE_STATE_PATH: LazyLock<String> = LazyLock::new(|| "/home/wwwenda/beroun-brain/short_term/engine_state.bin".to_string());
+const BITFINEX_AUTH_URL: &str = "wss://api.bitfinex.com/ws/2";
+
+type HmacSha384 = Hmac<Sha384>;
+
+struct Notifier {
+    token: String,
+    chat_id: String,
+    client: reqwest::Client,
+}
+
+impl Notifier {
+    fn new() -> Self {
+        Self {
+            token: std::env::var("TELEGRAM_BOT_TOKEN").unwrap_or_default(),
+            chat_id: std::env::var("TELEGRAM_CHAT_ID").unwrap_or_default(),
+            client: reqwest::Client::builder().timeout(Duration::from_secs(10)).build().unwrap(),
+        }
+    }
+
+    async fn send(&self, msg: &str) {
+        info!(event = "alert_log", message = msg);
+        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open("/home/wwwenda/beroun-brain/short_term/alerts.log") {
+            use std::io::Write;
+            let _ = writeln!(file, "[{:?}] {}", SystemTime::now(), msg);
+        }
+
+        if self.token.is_empty() || self.chat_id.is_empty() { return; }
+        let url = format!("https://api.telegram.org/bot{}/sendMessage", self.token);
+        let _ = self.client.post(url)
+            .json(&json!({"chat_id": self.chat_id, "text": format!("🐺 *BEROUN ALERT*\
+`{}`", msg), "parse_mode": "Markdown"}))
+            .send().await;
+    }
+}
+
+#[derive(Copy, Clone, FromBytes, IntoBytes, Immutable, Debug, Default)]
+#[repr(C, align(64))]
+struct EngineState {
+    best_bid: f64, best_ask: f64, latency_ns: f64, net_position: f64, realized_pnl: f64, _padding: [u8; 24],
+}
+
+#[derive(Copy, Clone, FromBytes, IntoBytes, Immutable, Debug)]
+#[repr(C, align(64))]
+struct RiskState {
+    grid_step: f64, grid_size: u64, order_usd: f64, max_inv_delta: f64, bias_offset: f64, paused: u64, _padding: [u8; 16],
+}
+
+impl Default for RiskState {
+    fn default() -> Self {
+        Self { grid_step: 10.0, grid_size: 2, order_usd: 15.0, max_inv_delta: 0.001, bias_offset: 0.0, paused: 0, _padding: [0; 16] }
+    }
+}
+
+fn init_mmap<T: Default + IntoBytes + FromBytes + Immutable>(path: &str) -> Result<MmapMut> {
+    let file = OpenOptions::new().read(true).write(true).create(true).open(path)?;
+    file.set_len(std::mem::size_of::<T>() as u64)?;
+    let mut mmap = unsafe { MmapMut::map_mut(&file)? };
+    if mmap.iter().all(|&b| b == 0) { mmap.copy_from_slice(T::default().as_bytes()); }
+    Ok(mmap)
+}
+
+async fn get_sig(sec: &str, payload: &str) -> String {
+    let mut mac = HmacSha384::new_from_slice(sec.as_bytes()).expect("HMAC error");
+    mac.update(payload.as_bytes());
+    hex::encode(mac.finalize().into_bytes())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    dotenv().ok();
+    tracing_subscriber::registry().with(fmt::layer().with_target(false).json()).with(EnvFilter::from_default_env().add_directive(Level::INFO.into())).init();
+    
+    let notifier = Notifier::new();
+    let risk_mmap = init_mmap::<RiskState>(&RISK_STATE_PATH)?;
+    let mut engine_mmap = init_mmap::<EngineState>(&ENGINE_STATE_PATH)?;
+    
+    let key = std::env::var("BITFINEX_API_KEY")?;
+    let sec = std::env::var("BITFINEX_API_SECRET")?;
+
+    notifier.send("🐺 Beroun Sniper v4.9.11 START").await;
+
+    loop {
+        let (ws, _) = match connect_async(BITFINEX_AUTH_URL).await {
+            Ok(v) => v,
+            Err(e) => { 
+                let err_str = format!("{:?}", e);
+                if err_str.contains("503") {
+                    notifier.send("⚠️ Bitfinex: Údržba (503)").await;
+                } else {
+                    notifier.send("❌ Bitfinex: Spojení selhalo").await;
+                }
+                tokio::time::sleep(Duration::from_secs(60)).await; continue; 
+            }
+        };
+        let (mut write, mut read) = ws.split();
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis().to_string();
+        let auth_payload = format!("AUTH{}", nonce);
+        let sig = get_sig(&sec, &auth_payload).await;
+
+        write.send(Message::Text(json!({"event": "auth", "apiKey": key, "authSig": sig, "authPayload": auth_payload, "authNonce": nonce, "dms": 4}).to_string().into())).await?;
+        write.send(Message::Text(json!({"event": "subscribe", "channel": "ticker", "symbol": "tBTCUSD"}).to_string().into())).await?;
+
+        let mut chan_id: Option<i64> = None;
+        let mut last_upd = Instant::now();
+        let mut authed = false;
+
+        while let Some(msg) = read.next().await {
+            let start_process = Instant::now();
+            let msg = match msg { Ok(m) => m, Err(_) => break };
+            let Message::Text(text) = msg else { continue };
+            let v: Value = serde_json::from_str(&text).unwrap_or_default();
+
+            if v.is_object() {
+                if v["event"] == "auth" && v["status"] == "OK" { info!(event = "auth_ok"); authed = true; }
+                if v["event"] == "subscribed" { chan_id = v["chanId"].as_i64(); }
+            } else if let Some(arr) = v.as_array() {
+                if arr[0].as_i64() == chan_id && chan_id.is_some() {
+                    if arr[1] == "hb" { continue; }
+                    let price = if arr[1].is_array() { arr[1][6].as_f64() } else { arr[7].as_f64() };
+
+                    if let Some(p) = price {
+                        let risk: RiskState = unsafe { std::ptr::read_unaligned(risk_mmap.as_ptr() as *const RiskState) };
+                        let mut est: EngineState = unsafe { std::ptr::read_unaligned(engine_mmap.as_ptr() as *const EngineState) };
+                        est.best_bid = p; est.best_ask = p; est.latency_ns = start_process.elapsed().as_nanos() as f64;
+                        engine_mmap.copy_from_slice(est.as_bytes());
+
+                        if authed && last_upd.elapsed().as_millis() > 2000 {
+                            let btc_amount = (risk.order_usd / p).max(0.00015);
+                            let ops = vec![
+                                json!(["oc_multi", {"symbol": "tBTCUSD"}]),
+                                json!(["on", {"type": "EXCHANGE LIMIT", "symbol": "tBTCUSD", "price": format!("{:.1}", p - risk.grid_step), "amount": format!("{:.5}", btc_amount), "flags": 4096}]),
+                                json!(["on", {"type": "EXCHANGE LIMIT", "symbol": "tBTCUSD", "price": format!("{:.1}", p + risk.grid_step), "amount": format!("{:.5}", -btc_amount), "flags": 4096}])
+                            ];
+                            let _ = write.send(Message::Text(json!([0, "ox_multi", null, ops]).to_string().into())).await;"
+use std::time::{Duration, Instant, SystemTime};
+use std::sync::{Arc, Mutex, LazyLock};
+use zerocopy::{FromBytes, Immutable, IntoBytes};
+use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+use futures_util::{StreamExt, SinkExt};
+use serde_json::{json, Value};
+use axum::{extract::ws::{WebSocket, WebSocketUpgrade, Message as AxumMessage}, response::IntoResponse, routing::get, Router};
+use tower_http::cors::CorsLayer;
+use dotenvy::dotenv;
+use anyhow::{Context, Result};
+
+static RISK_STATE_PATH: LazyLock<String> = LazyLock::new(|| "/home/wwwenda/beroun-brain/short_term/risk_state.bin".to_string());
+static ENGINE_STATE_PATH: LazyLock<String> = LazyLock::new(|| "/home/wwwenda/beroun-brain/short_term/engine_state.bin".to_string());
+const BITFINEX_PUB_URL: &str = "wss://api-pub.bitfinex.com/ws/2";
+
+#[derive(Copy, Clone, FromBytes, IntoBytes, Immutable, Debug, Default)]
+#[repr(C, align(64))]
+struct EngineState {
+    best_bid: f64, best_ask: f64, latency_ns: f64, net_position: f64, realized_pnl: f64,
+    _padding: [u8; 24],
+}
+
+#[derive(Copy, Clone, FromBytes, IntoBytes, Immutable, Debug)]
+#[repr(C, align(64))]
+struct RiskState {
+    grid_step: f64, grid_size: u64, order_usd: f64, max_inv_delta: f64, bias_offset: f64, paused: u64,
+    _padding: [u8; 16],
+}
+
+impl Default for RiskState {
+    fn default() -> Self {
+        Self { 
+            grid_step: 10.0, grid_size: 2, order_usd: 15.0, 
+            max_inv_delta: 0.001, bias_offset: 0.0, paused: 0,
+            _padding: [0; 16]
+        }
+    }
+}
+
+#[derive(Debug, Default, serde::Serialize, Clone)]
+struct DashboardData {
+    mid_price: f64, latency_ms: f64, position: f64, realized_pnl: f64, timestamp: u64,
+    grid_base: f64, grid_step: f64, grid_size: u64,
+}
+
+fn init_mmap<T: Default + IntoBytes + FromBytes + Immutable>(path: &str) -> Result<MmapMut> {
+    let file = OpenOptions::new().read(true).write(true).create(true).open(path)?;
+    file.set_len(std::mem::size_of::<T>() as u64)?;
+    let mut mmap = unsafe { MmapMut::map_mut(&file)? };
+    if mmap.iter().all(|&b| b == 0) { mmap.copy_from_slice(T::default().as_bytes()); }
+    Ok(mmap)
+}
+
+async fn websocket_stream(mut socket: WebSocket, dashboard: Arc<Mutex<DashboardData>>) {
+    let mut interval = tokio::time::interval(Duration::from_millis(500));
+    loop {
+        interval.tick().await;
+        let data = {
+            let db = dashboard.lock().expect("Lock failed");
+            serde_json::to_string(&*db).unwrap_or_default()
+        };
+        if socket.send(AxumMessage::Text(data.into())).await.is_err() { break; }
+    }
+}
+
+async fn ws_handler(ws: WebSocketUpgrade, dashboard: Arc<Mutex<DashboardData>>) -> impl IntoResponse {
+    ws.on_upgrade(move |socket| websocket_stream(socket, dashboard))
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    dotenv().ok();
+    println!("--- BEROUN AI MANAGER v4.9.9-rust2024 ---");
+    let dashboard = Arc::new(Mutex::<DashboardData>::default());
+    let d_clone = dashboard.clone();
+    
+    tokio::spawn(async move {
+        let app = Router::new()
+            .route("/", get(|| async { axum::response::Html(include_str!("../dashboard.html")) }))
+            .route("/ws", get(move |ws| ws_handler(ws, d_clone)))
+            .layer(CorsLayer::permissive());
+        let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+        println!("[SERVER] Dashboard online at port 3000");
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    let mut r_mmap = init_mmap::<RiskState>(&RISK_STATE_PATH)?;
+    let mut e_mmap = init_mmap::<EngineState>(&ENGINE_STATE_PATH)?;
+    
+    loop {
+        let ws_result = connect_async(BITFINEX_PUB_URL).await;
+        if let Err(e) = ws_result {
+            eprintln!("[WS] Connection error: {:?}. Retrying...", e);
+            tokio::time::sleep(Duration::from_secs(10)).await;
+            continue;
+        }
+        
+        let (mut ws_write, mut ws_read) = ws_result.unwrap().0.split();
+        ws_write.send(Message::Text(json!({"event": "subscribe", "channel": "ticker", "symbol": "tBTCUSD"}).to_string().into())).await?;
+        
+        while let Some(msg) = ws_read.next().await {
+            let msg = match msg { Ok(m) => m, Err(_) => break };
+            let Message::Text(text) = msg else { continue };
+            let v: Value = serde_json::from_str(&text).unwrap_or_default();
+            
+            if let Some(arr) = v.as_array() {
+                let price = if arr.len() > 1 && arr[1].is_array() { arr[1][6].as_f64() } 
+                            else if arr.len() >= 8 { arr[7].as_f64() } else { None };
+                
+                if let Some(p) = price {
+                    let r: RiskState = unsafe { std::ptr::read_unaligned(r_mmap.as_ptr() as *const RiskState) };
+                    let e: EngineState = unsafe { std::ptr::read_unaligned(e_mmap.as_ptr() as *const EngineState) };
+                    
+                    let mut db = dashboard.lock().expect("Lock failed");
+                    db.mid_price = p; 
+                    db.latency_ms = e.latency_ns / 1_000_000.0;
+                    db.position = e.net_position; 
+                    db.realized_pnl = e.realized_pnl;
+                    db.grid_base = p; db.grid_step = r.grid_step; db.grid_size = r.grid_size;
+                    db.timestamp = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+                }
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(5)).await;
+    }
+}
+"
+use std::time::Duration;
+use tokio::time::sleep;
+use serde_json::{json, Value};
+use std::process::Command;
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    dotenvy::dotenv().ok();
+    let token = env::var("TELEGRAM_BOT_TOKEN").expect("Chybí TELEGRAM_BOT_TOKEN");
+    let allowed_chat_id: i64 = env::var("TELEGRAM_CHAT_ID").expect("Chybí TELEGRAM_CHAT_ID").parse()?;
+
+    println!("🐺 --- BEROUN TELE-BRAIN v1.5 (Loop-Fix) ONLINE ---");
+
+    let client = reqwest::Client::builder().timeout(Duration::from_secs(30)).build()?;
+    
+    // INICIALIZACE OFFSETU: Přeskočíme staré zprávy při startu
+    let mut offset = 0;
+    let init_url = format!("https://api.telegram.org/bot{}/getUpdates", token);
+    if let Ok(res) = client.get(&init_url).query(&[("offset", "-1")]).send().await {
+        if let Ok(json) = res.json::<Value>().await {
+            if let Some(updates) = json["result"].as_array() {
+                if let Some(last) = updates.last() {
+                    offset = last["update_id"].as_i64().unwrap_or(0) + 1;
+                    println!("🚀 Offset inicializován na: {}", offset);
+                }
+            }
+        }
+    }
+
+    loop {
+        let url = format!("https://api.telegram.org/bot{}/getUpdates", token);
+        let res = match client.get(&url).query(&[("offset", offset.to_string()), ("timeout", "20".to_string())]).send().await {
+            Ok(r) => r, Err(_) => { sleep(Duration::from_secs(5)).await; continue; }
+        };
+        let json_res: Value = match res.json().await { Ok(v) => v, Err(_) => { sleep(Duration::from_secs(1)).await; continue; } };
+
+        if let Some(updates) = json_res["result"].as_array() {
+            for update in updates {
+                // OKAMŽITÁ AKTUALIZACE OFFSETU - Nejdůležitější změna
+                let current_update_id = update["update_id"].as_i64().unwrap_or(0);
+                offset = current_update_id + 1;
+
+                if let Some(msg) = update.get("message") {
+                    let chat_id = msg["chat"]["id"].as_i64().unwrap_or(0);
+                    if chat_id != allowed_chat_id { continue; }
+
+                    if let Some(text) = msg["text"].as_str() {
+                        println!("📥 Telegram [{}]: {}", chat_id, text);
+                        
+                        let ack_url = format!("https://api.telegram.org/bot{}/sendMessage", token);
+                        let _ = client.post(&ack_url).json(&json!({"chat_id": chat_id, "text": "⏳ _Beroun přemýšlí..._", "parse_mode": "Markdown"})).send().await;
+
+                        let prompt = format!("Uživatel se ptá: '{}'. Odpověz jako Beroun AI krátce.", text);
+                        
+                        let output = Command::new("/usr/local/bin/gemini")
+                            .env("HOME", "/home/wwwenda")
+                            .arg("-p").arg(&prompt)
+                            .arg("--yolo")
+                            .current_dir("/home/wwwenda/beroun-projects/beroun-core")
+                            .output();
+
+                        let reply = match output {
+                            Ok(out) => {
+                                let stdout = String::from_utf8_lossy(&out.stdout).to_string();
+                                let cleaned: String = stdout.lines()
+                                    .filter(|l| !l.contains("YOLO") && !l.contains("Keychain") && !l.contains("Loaded"))
+                                    .collect::<Vec<_>>()
+                                    .join("\
+");
+                                if cleaned.trim().is_empty() { "✅ Hotovo.".to_string() } else { cleaned }
+                            }
+                            Err(e) => format!("❌ AI Error: {}", e),
+                        };
+
+                        let _ = client.post(&ack_url).json(&json!({"chat_id": chat_id, "text": reply.trim()})).send().await;
+                    }
+                }
+            }
+        }
+        sleep(Duration::from_millis(500)).await;
+    }
+}
+"
+use std::time::Instant;
+use std::os::unix::fs::PermissionsExt;
+use std::fs;
+
+fn main() {
+    let mut sys = System::new_all();
+    sys.refresh_all();
+    let disks = Disks::new_with_refreshed_list();
+
+    println!("--- BEROUN HEALTH CHECK v1.0 (Rust Engine) ---");
+
+    // 1. Kontrola disku
+    let mut disk_ok = false;
+    for disk in disks.list() {
+        let usage = 1.0 - (disk.available_space() as f64 / disk.total_space() as f64);
+        println!("[DISK] {} Usage: {:.2}%", disk.mount_point().display(), usage * 100.0);
+        if usage < 0.85 { disk_ok = true; }
+    }
+    if !disk_ok { panic!("DISK SPACE CRITICAL: Over 85% used!"); }
+
+    // 2. Kontrola RAM
+    let ram_usage = sys.used_memory() as f64 / sys.total_memory() as f64;
+    println!("[RAM] Usage: {:.2}%", ram_usage * 100.0);
+    if ram_usage > 0.90 { panic!("RAM CRITICAL: Over 90% used!"); }
+
+    // 3. Kontrola síťové latence (Bitfinex)
+    let start = Instant::now();
+    let output = Command::new("curl")
+        .arg("-I")
+        .arg("--silent")
+        .arg("https://api.bitfinex.com/v2/platform/status")
+        .output();
+    
+    match output {
+        Ok(res) if res.status.success() => {
+            println!("[NET] Bitfinex Latency: {:?} (OK)", start.elapsed());
+        }
+        _ => panic!("NETWORK CRITICAL: Bitfinex API unreachable!"),
+    }
+
+    // 4. Kontrola oprávnění .env
+    if let Ok(meta) = fs::metadata(".env") {
+        let mode = meta.permissions().mode();
+        let octal = format!("{:o}", mode & 0o777);
+        println!("[AUTH] .env permissions: {} (Required: 600 or 644/660 limit)", octal);
+        // Varování při příliš volných právech
+        if (mode & 0o007) != 0 {
+            println!("! WARNING: .env is world-readable! Consider chmod 600 .env");
+        }
+    } else {
+        println!("! WARNING: .env file missing - ensure environment variables are set!");
+    }
+
+    // 5. Kontrola Dockeru (pro MCP servery)
+    let docker_status = Command::new("systemctl")
+        .arg("is-active")
+        .arg("docker")
+        .output();
+    
+    match docker_status {
+        Ok(res) if res.status.success() => println!("[SYST] Docker service: ACTIVE"),
+        _ => println!("[SYST] Docker service: INACTIVE (MCP might be limited)"),
+    }
+
+    println!(">>> DIAGNOSTICS SUCCESSFUL: BEROUN READY TO TRADE <<<");
+}
+"
