@@ -40,21 +40,23 @@ graph TD
 - **Sovereign Risk Management:** AI upravuje grid bias v reálném čase podle čisté pozice.
 - **Watchdog Guardian:** Automatické sestřelení a restart při detekci stale dat v paměti.
 
-## 🛠 Instalace a spuštění
+## 🛠 Instalace (Agentic Deployment)
 
-### Požadavky
-- Rust 1.80+ (Edition 2024)
-- Linux (vázání na jádra CPU)
+Systém využívá **Zero-Touch AI instalaci**. Místo psaní manuálních příkazů nebo řešení chybějících závislostí v Linuxu, pouze probudíte umělou inteligenci na prázdném serveru a ona systém kompletně sestaví a optimalizuje na míru vašemu hardware (vč. PGO kompilace).
 
-### Build a Optimalizace
-Pro maximální výkon použijte přiložený PGO skript:
+**Stačí spustit tento JEDINÝ PŘÍKAZ na čistém Ubuntu/Debian serveru:**
 ```bash
-# Sběr dat a finální kompilace
-bash optimize.sh
+curl -fsSL https://raw.githubusercontent.com/VaclavSercl/HFT-Sniper/main/bootstrap.sh | bash
 ```
 
+**Co tento příkaz udělá:**
+1. Nainstaluje základní mozek (`gemini-cli`).
+2. AI prozkoumá stroj a připraví ho (vytvoří SWAP, apod.).
+3. **GPU Detekce:** Pokud najde **NVIDIA GPU s min. 6GB VRAM**, automaticky stáhne systém **Ollama** s bleskovým lokálním modelem pro HFT filtrování.
+4. AI nainstaluje Rust, naklonuje tento repozitář, vyřeší Linux závislosti a zkompiluje hotové binárky.
+
 ### Konfigurace
-Zkopírujte `.env.example` do `.env` a vyplňte své API klíče.
+Zkopírujte `.env.example` do `.env` a vyplňte své API klíče. Pro registraci démona do Linuxu proveďte zkopírování služby podle instrukcí na konci instalace.
 
 ## 📚 Dokumentace
 - [Architektonické detaily](docs/ARCHITECTURE.md)
