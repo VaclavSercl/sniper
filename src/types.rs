@@ -49,8 +49,12 @@ pub struct EngineState {
     pub active_buy_id: AtomicU64,   // Bitfinex order ID for active buy
     pub active_sell_id: AtomicU64,  // Bitfinex order ID for active sell
 
+    // --- INTELLIGENCE METRICS (v6.2: OBI + Dynamic Sizing) ---
+    pub l2_imbalance: AtomicI64,      // OBI (-1.0..1.0) * PRICE_SCALE
+    pub current_order_usd: AtomicU64, // Dynamic order size * PRICE_SCALE
+
     // --- cache line boundary ---
-    pub _pad_hot_cold: [u8; 24],  // 64-40=24 (5 atomics = 40 bytes)
+    pub _pad_hot_cold: [u8; 8],  // 64-56=8 (7 atomics = 56 bytes)
 
     // --- COLD: updated infrequently ---
     pub net_position: AtomicI64,
@@ -92,7 +96,9 @@ impl Default for EngineState {
             current_skew: AtomicI64::new(0),
             active_buy_id: AtomicU64::new(0),
             active_sell_id: AtomicU64::new(0),
-            _pad_hot_cold: [0; 24],
+            l2_imbalance: AtomicI64::new(0),
+            current_order_usd: AtomicU64::new(0),
+            _pad_hot_cold: [0; 8],
             net_position: AtomicI64::new(0),
             realized_pnl: AtomicI64::new(0),
             wallet_btc: AtomicU64::new(0),

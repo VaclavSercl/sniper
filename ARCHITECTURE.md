@@ -61,7 +61,7 @@ Při markentím volume přijímáš stovky book updatů, a tvůj order čeká ve
 
 Order string se formátuje na hot path a posílá přes `unbounded_channel` — **nanosekunda**, ne milisekunda čekání na TCP.
 
-## Trading Intelligence (v6.0)
+## Trading Intelligence (v6.2)
 
 ### Micro-Price (Volume-Weighted Mid)
 ```
@@ -69,6 +69,24 @@ micro = (bid_price × ask_vol + ask_price × bid_vol) / total_vol
 ```
 Na rozdíl od hloupého `(bid+ask)/2`, micro-price predikuje směr z volume imbalance.
 Velký bid volume → cena se posune k asku (předpovídá růst) → bot se posune dřív než trh.
+
+### L2 Order Book Imbalance (OBI) — NOVÉ v6.2
+```
+OBI = (Σ bid_vol[0..10] - Σ ask_vol[0..10]) / (Σ bid_vol[0..10] + Σ ask_vol[0..10])
+```
+Rozsah: -1.0 (čistý prodejní tlak) → +1.0 (čistý nákupní tlak).
+Bot čte hloubku 10 hladin order booku a vidí "zdi" — velké objemy, které drží cenu.
+
+### Dynamic Sizing (Konvergence signálů) — NOVÉ v6.2
+| OBI | Micro-Price bias | Signály | Sizing |
+|-----|-----------------|---------|--------|
+| > +0.2 | kladný (bid tlak) | ✅ Shodné | **1.5× base** (přitlačí) |
+| < -0.2 | záporný (ask tlak) | ✅ Shodné | **1.5× base** (přitlačí) |
+| > +0.1 | záporný | ❌ Protichůdné | **0.7× base** (opatrný) |
+| < -0.1 | kladný | ❌ Protichůdné | **0.7× base** (opatrný) |
+| jinak | jakýkoli | Neutrální | **1.0× base** |
+
+Clamp: `[0.5× base, 2.0× base]`
 
 ### Inventory Skew (Řízení zásob)
 ```

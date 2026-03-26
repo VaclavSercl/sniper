@@ -72,10 +72,15 @@ fn main() -> anyhow::Result<()> {
         println!();
         println!(" {d}┌─ TRH: tBTCUSD ─────────────────┐  ┌─ BOT METRIKY ────────────────┐{x}");
         println!(" {d}│{x} {r}Best Ask:    ${x} {w}{:<14.2}{x} {d}│  │{x} {c}T2T Latence:{x}  {w}{:>6}{x} µs      {d}│{x}", best_ask, t2t);
+        let obi = engine.l2_imbalance.load(Ordering::Acquire) as f64 / scale;
+        let cur_usd = engine.current_order_usd.load(Ordering::Acquire) as f64 / scale;
+        let obi_c = if obi > 0.1 { g } else if obi < -0.1 { r } else { d };
+
         println!(" {d}│{x} {m}Micro-Price: ${x} {w}{:<14.2}{x} {d}│  │{x} {c}Dyn Grid:   ${x} {w}{:<10.2}{x}     {d}│{x}", micro_p, dyn_grid);
         println!(" {d}│{x} {d}Mid-Price:   ${x} {w}{:<14.2}{x} {d}│  │{x} {m}Inv Skew:   ${x} {skew_c}{:<+10.2}{x}     {d}│{x}", mid, skew);
-        println!(" {d}│{x} {g}Best Bid:    ${x} {w}{:<14.2}{x} {d}│  │{x} {pnl_c}PnL:        ${x} {pnl_c}{:<+10.2}{x}     {d}│{x}", best_bid, pnl);
-        println!(" {d}│{x} {y}Spread:      ${x} {w}{:<14.2}{x} {d}│  │{x}                              {d}│{x}", spread);
+        println!(" {d}│{x} {g}Best Bid:    ${x} {w}{:<14.2}{x} {d}│  │{x} {obi_c}L2 OBI:      {x} {obi_c}{:<+10.3}{x}     {d}│{x}", best_bid, obi);
+        println!(" {d}│{x} {y}Spread:      ${x} {w}{:<14.2}{x} {d}│  │{x} {c}Order:    $ {x} {w}{:<10.2}{x}     {d}│{x}", spread, cur_usd);
+        println!(" {d}│{x}                                {d}│  │{x} {pnl_c}PnL:        ${x} {pnl_c}{:<+10.2}{x}     {d}│{x}", pnl);
         println!(" {d}└────────────────────────────────┘  └──────────────────────────────┘{x}");
         println!();
         let buy_id = engine.active_buy_id.load(Ordering::Acquire);

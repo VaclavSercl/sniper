@@ -597,28 +597,46 @@ async fn async_main() -> Result<()> {
                                     eng.best_bid.store(best_bid, Ordering::SeqCst);
                                     eng.best_ask.store(best_ask, Ordering::SeqCst);
 
-                                    // SNIPER
+                                    // ── SNIPER INTEL v6.2 (OBI + Dynamic Sizing) ──
                                     const MIN_TICK: i64 = 100_000_000;
                                     if best_bid > 0 && best_ask > 0 {
                                         let now = Instant::now();
                                         if now.duration_since(last_upd).as_millis() > 3000 {
                                             if risk.paused.load(Ordering::Acquire) == 0 {
-                                                // Micro-Price: volume-weighted mid
-                                                let bid_vol = eng.bids[0].amount.load(Ordering::SeqCst).unsigned_abs() as f64;
-                                                let ask_vol = eng.asks[0].amount.load(Ordering::SeqCst).unsigned_abs() as f64;
-                                                let total_vol = bid_vol + ask_vol;
-                                                let micro_i = if total_vol > 0.0 {
-                                                    ((best_bid as f64 * ask_vol + best_ask as f64 * bid_vol) / total_vol).round() as i64
-                                                } else {
-                                                    ((best_bid as i64) + (best_ask as i64)) / 2
-                                                };
+                                                // 1. MICRO-PRICE (volume-weighted mid from L1)
+                                                let mid_i = ((best_bid as i64) + (best_ask as i64)) / 2;
+                                                let bid_vol_0 = eng.bids[0].amount.load(Ordering::Relaxed).unsigned_abs() as f64;
+                                                let ask_vol_0 = eng.asks[0].amount.load(Ordering::Relaxed).unsigned_abs() as f64;
+                                                let total_vol_0 = bid_vol_0 + ask_vol_0;
+                                                let micro_i = if total_vol_0 > 0.0 {
+                                                    ((best_bid as f64 * ask_vol_0 + best_ask as f64 * bid_vol_0) / total_vol_0).round() as i64
+                                                } else { mid_i };
                                                 let micro_f = micro_i as f64 / beroun_types::PRICE_SCALE;
 
-                                                let order_usd = risk.order_usd.load(Ordering::Acquire) as i64;
-                                                let grid = risk.grid_step.load(Ordering::Acquire) as i64;
-                                                let bias = risk.bias_offset.load(Ordering::Acquire);
+                                                // 2. L2 ORDER BOOK IMBALANCE (OBI — top 10 levels)
+                                                let mut sum_bid_vol: f64 = 0.0;
+                                                let mut sum_ask_vol: f64 = 0.0;
+                                                for i in 0..10 {
+                                                    sum_bid_vol += eng.bids[i].amount.load(Ordering::Relaxed).unsigned_abs() as f64;
+                                                    sum_ask_vol += eng.asks[i].amount.load(Ordering::Relaxed).unsigned_abs() as f64;
+                                                }
+                                                let obi = if (sum_bid_vol + sum_ask_vol) > 0.0 {
+                                                    (sum_bid_vol - sum_ask_vol) / (sum_bid_vol + sum_ask_vol)
+                                                } else { 0.0 };
 
-                                                // Inventory Skew
+                                                // 3. DYNAMIC SIZING (signal convergence)
+                                                let base_usd = risk.order_usd.load(Ordering::Acquire) as f64;
+                                                let micro_bias = micro_i - mid_i;
+                                                let final_order_usd = if (obi > 0.2 && micro_bias > 0) || (obi < -0.2 && micro_bias < 0) {
+                                                    (base_usd * 1.5).clamp(base_usd * 0.5, base_usd * 2.0)
+                                                } else if (obi > 0.1 && micro_bias < 0) || (obi < -0.1 && micro_bias > 0) {
+                                                    (base_usd * 0.7).clamp(base_usd * 0.5, base_usd * 2.0)
+                                                } else {
+                                                    base_usd
+                                                };
+
+                                                // 4. INVENTORY SKEW
+                                                let grid = risk.grid_step.load(Ordering::Acquire) as i64;
                                                 let current_pos = eng.net_position.load(Ordering::Acquire);
                                                 let max_pos = risk.max_inv_delta.load(Ordering::Acquire) as i64;
                                                 let inv_skew = if max_pos > 0 {
@@ -626,6 +644,8 @@ async fn async_main() -> Result<()> {
                                                     (-ratio * grid as f64 * 2.0).round() as i64
                                                 } else { 0 };
 
+                                                // 5. FINAL PRICES
+                                                let bias = risk.bias_offset.load(Ordering::Acquire);
                                                 let final_bias = bias + inv_skew;
                                                 let buy_i = (micro_i - grid + final_bias).max(0);
                                                 let sell_i = (micro_i + grid + final_bias).max(0);
@@ -633,39 +653,41 @@ async fn async_main() -> Result<()> {
                                                 let ls = eng.last_sell_price.load(Ordering::SeqCst);
                                                 let db = (buy_i - lb).abs();
                                                 let ds = (sell_i - ls).abs();
+
                                                 if db >= MIN_TICK || ds >= MIN_TICK || lb == 0 {
-                                                    // Targeted cancel: only our tracked orders
+                                                    // 6. TARGETED CANCEL + NEW ORDERS
                                                     let buy_id = eng.active_buy_id.load(Ordering::SeqCst);
                                                     let sell_id = eng.active_sell_id.load(Ordering::SeqCst);
-                                                    let oc_payload = if buy_id > 0 && sell_id > 0 {
-                                                        format!(r#"["oc_multi",{{"id":[{},{}]}}],"#, buy_id, sell_id)
-                                                    } else if buy_id > 0 {
-                                                        format!(r#"["oc_multi",{{"id":[{}]}}],"#, buy_id)
-                                                    } else if sell_id > 0 {
-                                                        format!(r#"["oc_multi",{{"id":[{}]}}],"#, sell_id)
-                                                    } else {
-                                                        String::new()
+                                                    let oc_payload = match (buy_id > 0, sell_id > 0) {
+                                                        (true, true) => format!(r#"["oc_multi",{{"id":[{},{}]}}],"#, buy_id, sell_id),
+                                                        (true, false) => format!(r#"["oc_multi",{{"id":[{}]}}],"#, buy_id),
+                                                        (false, true) => format!(r#"["oc_multi",{{"id":[{}]}}],"#, sell_id),
+                                                        _ => String::new(),
                                                     };
 
                                                     let bp = buy_i as f64 / beroun_types::PRICE_SCALE;
                                                     let sp = sell_i as f64 / beroun_types::PRICE_SCALE;
-                                                    let amt = (order_usd as f64 / micro_f / beroun_types::PRICE_SCALE).max(0.00015);
+                                                    let amt = (final_order_usd / micro_f / beroun_types::PRICE_SCALE).max(0.00015);
                                                     let msg = format!(
                                                         r#"[0,"ox_multi",null,[{}["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}],["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]]]"#,
                                                         oc_payload, amt, bp, -amt, sp
                                                     );
                                                     let _ = order_tx.send(msg);
+
+                                                    // 7. DASHBOARD METRICS
                                                     eng.last_buy_price.store(buy_i, Ordering::SeqCst);
                                                     eng.last_sell_price.store(sell_i, Ordering::SeqCst);
-                                                    // Dashboard metrics
                                                     let t2t_us = now.elapsed().as_micros() as u64;
                                                     eng.t2t_micros.store(t2t_us, Ordering::SeqCst);
                                                     eng.micro_price.store(micro_i as u64, Ordering::SeqCst);
                                                     eng.current_skew.store(inv_skew, Ordering::SeqCst);
+                                                    eng.l2_imbalance.store((obi * beroun_types::PRICE_SCALE) as i64, Ordering::SeqCst);
+                                                    eng.current_order_usd.store(final_order_usd as u64, Ordering::SeqCst);
                                                     last_upd = now;
                                                     info!(event = "sniper_fire", bid = best_bid, ask = best_ask,
                                                           micro = micro_i, buy = bp, sell = sp,
-                                                          delta_buy = db, delta_sell = ds,
+                                                          obi = format!("{:.3}", obi),
+                                                          order_usd = final_order_usd as f64 / beroun_types::PRICE_SCALE,
                                                           inv_skew = inv_skew, position = current_pos,
                                                           dynamic_grid = grid);
                                                 }
