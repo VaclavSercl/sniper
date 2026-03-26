@@ -1,8 +1,8 @@
-# 🐺 Beroun Sniper v7.0 — HFT Trading Bot
+# 🐺 Beroun Sniper v8.0 — HFT Trading Bot
 
-Vysokofrekvenční obchodní bot pro Bitfinex BTC/USD. Rust 2024, zero-copy architektura, sub-millisecond tick-to-trade.
+Vysokofrekvenční obchodní bot pro Bitfinex BTC/USD. Rust 2024, zero-copy architektura, sub-millisecond tick-to-trade, třívrstvý AI imunitní systém.
 
-## Architektura v7.0 — Dual WS + AI Node + TUI Monitor
+## Architektura v8.0 — Tri-Layer AI + Telegram Command & Control
 
 ```mermaid
 graph TB
@@ -332,7 +332,7 @@ te (executed)  → obchod proveden → aktualizuje net_position
 - Posílá cílený cancel
 - Fallback na `cancel_all` pokud nejsou žádné trackované ID
 
-## Lokální AI Node (v7.0)
+## Lokální AI Node (v8.0)
 
 ### Stack
 | Komponenta | Hodnota |
@@ -341,17 +341,45 @@ te (executed)  → obchod proveden → aktualizuje net_position
 | Model | Phi-3.5-mini-instruct (3.8B, Q4_K_S) |
 | GPU | GTX 1060 6GB (VRAM: ~3.7 GB model + ~2.3 GB KV cache) |
 | API | `localhost:1234` (OpenAI-compatible) |
-| Systemd | `lmstudio.service` (system-level, Restart=always) |
+| Sampling | Greedy: temp=0, top_p=0.1, max_tokens=5 |
+| Systemd | `beroun-ai.service` (Restart=always, CPU core 2) |
 
-### Použití v botech
+### AI Safety Systems (v8.0)
+| System | Trigger | Akce |
+|--------|---------|------|
+| **Heartbeat Fuse** | `ai_heartbeat_ms` > 30s stale | Bias zeroed, pure grid |
+| **Thermal Guard** | GPU ≥ 82°C | Cycle 5s → 10s |
+| **Sanity Clamp** | beroun-config writes | Grid $1-$200, ±50%/update |
+| **Alpha Tracking** | Every trade execution | Measures AI $ contribution |
+
+### Třívrstvý AI Pipeline
 ```
-beroun-sovereign-ai čte OBI + micro_price z mmap
-    │
-    ├─► POST /v1/chat/completions (localhost:1234)
-    │   „OBI=+0.45. Predict direction."
-    │
-    └─► Zápis do risk.bias_offset (mmap)
-        Bot okamžitě posune grid
+L0 (µs)  main.rs         — Rust zero-copy, simd_json, mmap
+L1 (5s)  sovereign_ai.rs — LM Studio GPU, OBI→bias, heartbeat
+L2 (26h) oracle_brain.sh — Gemini 3.1 Pro, RSS→grid, beroun-config
+```
+
+### Telegram Command & Control (v8.0)
+```
+📱 /status  → beroun-config export-json → live mmap snapshot
+📱 /analyze → gemini -p → Gemini 3.1 Pro ad-hoc analysis
+📱 /grid N  → beroun-config set-grid (3× safety layers)
+📱 /pause   → beroun-config pause true → instant stop
+📱 /oracle  → oracle_brain.sh → force 26h cycle
+📱 free-text → gemini -p → CIO advisor
+```
+
+### Oracle Pipeline (L2)
+```
+main.rs (hourly) → runtime/state.json
+                        ↓
+oracle_brain.sh  → beroun-config export-json + RSS + Fear/Greed
+                        ↓
+                   gemini-cli → {new_grid, max_position, risk_level, reasoning}
+                        ↓
+                   beroun-config set-grid + set-max-inv (with 3× safety)
+                        ↓
+                   risk_state.bin (mmap) → Sniper reads immediately
 ```
 
 Dokumentace: [docs/AI_INFRASTRUCTURE.md](docs/AI_INFRASTRUCTURE.md)
@@ -360,3 +388,5 @@ Dokumentace: [docs/AI_INFRASTRUCTURE.md](docs/AI_INFRASTRUCTURE.md)
 
 1. **`into_data().to_vec()`** — tungstenite 0.26 vrací `Bytes`, true zero-copy by vyžadoval `fastwebsockets`
 2. **Sell ordery** mohou selhat bez BTC balance na exchange walletce
+3. **AI inference** závisí na LM Studio dostupnosti — heartbeat fuse ochrání při výpadku
+

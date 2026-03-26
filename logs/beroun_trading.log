@@ -51792,3 +51792,1213 @@ AI │ OBI=+0.154 │ Spread=$7.00 │ Pos=+0.00201 │ Raw=+3 │ Bias=$+3 │ 
 {"timestamp":"2026-03-26T17:46:41.696376Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
 {"timestamp":"2026-03-26T17:46:41.696387Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234103288531,"side":"buy"}}
 {"timestamp":"2026-03-26T17:46:41.696395Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234104124371,"side":"buy"}}
+AI │ OBI=+0.382 │ Spread=$2.00 │ Pos=+0.00128 │ Raw=+20 │ Bias=$+8 │ Grid=$4.25
+{"timestamp":"2026-03-26T17:46:43.562417Z","level":"INFO","fields":{"event":"checksum_ok","cs":-651097329}}
+{"timestamp":"2026-03-26T17:46:44.686485Z","level":"INFO","fields":{"event":"sniper_fire","bid":6894900000000,"ask":6895000000000,"micro":6894983205472,"buy":68951.40265472,"sell":68959.90265472,"obi":"0.062","order_usd":50.0,"inv_skew":-217940000,"position":128200,"dynamic_grid":425000000}}
+{"timestamp":"2026-03-26T17:46:44.711258Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234104124371,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:46:44.712235Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:46:44.712254Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00073 BTCUSD at 68951.4"}}
+{"timestamp":"2026-03-26T17:46:44.712264Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00073 BTCUSD at 68959.9"}}
+{"timestamp":"2026-03-26T17:46:44.712279Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:46:45.033868Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00109,"price":68946.0,"new_pos":0.002372,"aep":68944.32703779}}
+{"timestamp":"2026-03-26T17:46:45.033975Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234103288531,"status":"EXECUTED @ 68946.0(0.00109)"}}
+{"timestamp":"2026-03-26T17:46:45.034025Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00109,"price":68946.0,"buys":82,"sells":74}}
+{"timestamp":"2026-03-26T17:46:46.155438Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1913856390}}
+AI │ OBI=+0.062 │ Spread=$8.00 │ Pos=+0.00237 │ Raw=+1 │ Bias=$+1 │ Grid=$3.27
+{"timestamp":"2026-03-26T17:46:48.291268Z","level":"INFO","fields":{"event":"sniper_fire","bid":6893800000000,"ask":6894600000000,"micro":6893926379348,"buy":68933.88147348,"sell":68940.43147348,"obi":"0.116","order_usd":35.0,"inv_skew":-310732000,"position":237200,"dynamic_grid":327500000}}
+{"timestamp":"2026-03-26T17:46:48.331269Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234104124372,"side":"sell"}}
+{"timestamp":"2026-03-26T17:46:48.358272Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00051 BTCUSD at 68933.88"}}
+{"timestamp":"2026-03-26T17:46:48.358315Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:46:48.358331Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:46:48.358342Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234103288532,"side":"sell"}}
+{"timestamp":"2026-03-26T17:46:48.698432Z","level":"INFO","fields":{"event":"checksum_ok","cs":1165873606}}
+{"timestamp":"2026-03-26T17:46:49.287517Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.0016967892729022425,"closed":0.00051,"aep":68944.32703779}}
+{"timestamp":"2026-03-26T17:46:49.287537Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00051,"price":68941.0,"new_pos":0.001862,"aep":68944.32703779}}
+{"timestamp":"2026-03-26T17:46:49.287564Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234103288532,"status":"EXECUTED @ 68941.0(-0.00051)"}}
+{"timestamp":"2026-03-26T17:46:49.287577Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.0006767892729022424,"closed":0.00051,"aep":68944.32703779}}
+{"timestamp":"2026-03-26T17:46:49.287594Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00051,"price":68943.0,"new_pos":0.001352,"aep":68944.32703779}}
+{"timestamp":"2026-03-26T17:46:49.287602Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234104124372,"status":"EXECUTED @ 68943.0(-0.00051)"}}
+{"timestamp":"2026-03-26T17:46:49.287613Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00051,"price":68941.0,"buys":82,"sells":75}}
+{"timestamp":"2026-03-26T17:46:49.287618Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00051,"price":68943.0,"buys":82,"sells":76}}
+{"timestamp":"2026-03-26T17:46:51.479464Z","level":"INFO","fields":{"event":"sniper_fire","bid":6893800000000,"ask":6894700000000,"micro":6894250028387,"buy":68937.99192387,"sell":68945.14192387,"obi":"0.091","order_usd":50.0,"inv_skew":-193336000,"position":135200,"dynamic_grid":357500000}}
+{"timestamp":"2026-03-26T17:46:51.479539Z","level":"INFO","fields":{"event":"checksum_ok","cs":1635978825}}
+{"timestamp":"2026-03-26T17:46:51.504533Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234104124373,"side":"buy"}}
+{"timestamp":"2026-03-26T17:46:51.514783Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:46:51.514820Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00073 BTCUSD at 68945.14"}}
+{"timestamp":"2026-03-26T17:46:51.514853Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:46:51.514863Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234103288533,"side":"buy"}}
+{"timestamp":"2026-03-26T17:46:52.011023Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00073,"price":68945.0,"new_pos":0.0020819999999999996,"aep":68944.56299476}}
+{"timestamp":"2026-03-26T17:46:52.011068Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234104124373,"status":"EXECUTED @ 68945.0(0.00073)"}}
+{"timestamp":"2026-03-26T17:46:52.011082Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00073,"price":68945.0,"buys":83,"sells":76}}
+⚠️  AI error (#1): error sending request for url (http://localhost:1234/v1/chat/completions)
+{"timestamp":"2026-03-26T17:46:53.992766Z","level":"INFO","fields":{"event":"checksum_ok","cs":-2071248257}}
+{"timestamp":"2026-03-26T17:46:54.587635Z","level":"INFO","fields":{"event":"sniper_fire","bid":6893800000000,"ask":6894500000000,"micro":6893956081854,"buy":68934.00855854,"sell":68941.15855854,"obi":"0.173","order_usd":35.0,"inv_skew":-297726000,"position":208200,"dynamic_grid":357500000}}
+{"timestamp":"2026-03-26T17:46:54.612952Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234103288533,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:46:54.612988Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234104124374,"side":"sell"}}
+{"timestamp":"2026-03-26T17:46:54.636958Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:46:54.636998Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:46:54.637008Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:46:54.637022Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:46:54.637033Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234103288534,"side":"buy"}}
+{"timestamp":"2026-03-26T17:46:54.637041Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234103288535,"side":"sell"}}
+{"timestamp":"2026-03-26T17:46:57.001808Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.0013071273275977002,"closed":0.00051,"aep":68944.56299476}}
+{"timestamp":"2026-03-26T17:46:57.001828Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00051,"price":68942.0,"new_pos":0.001572,"aep":68944.56299476}}
+{"timestamp":"2026-03-26T17:46:57.001854Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234103288535,"status":"EXECUTED @ 68942.0(-0.00051)"}}
+{"timestamp":"2026-03-26T17:46:57.001866Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.0002871273275977001,"closed":0.00051,"aep":68944.56299476}}
+{"timestamp":"2026-03-26T17:46:57.001870Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00051,"price":68944.0,"new_pos":0.001062,"aep":68944.56299476}}
+{"timestamp":"2026-03-26T17:46:57.001892Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234104124374,"status":"EXECUTED @ 68944.0(-0.00051)"}}
+{"timestamp":"2026-03-26T17:46:57.001904Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00051,"price":68942.0,"buys":83,"sells":77}}
+{"timestamp":"2026-03-26T17:46:57.001908Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00051,"price":68944.0,"buys":83,"sells":78}}
+{"timestamp":"2026-03-26T17:46:57.554916Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00073,"price":68937.0,"new_pos":0.001792,"aep":68941.4820873}}
+{"timestamp":"2026-03-26T17:46:57.554957Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234104124368,"status":"EXECUTED @ 68937.0(0.00073)"}}
+{"timestamp":"2026-03-26T17:46:57.554971Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00073,"price":68937.0,"buys":84,"sells":78}}
+{"timestamp":"2026-03-26T17:46:57.586301Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00051,"price":68934.0,"new_pos":0.0023020000000000002,"aep":68939.82445719}}
+{"timestamp":"2026-03-26T17:46:57.586329Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234103288534,"status":"EXECUTED @ 68934.0(0.00051)"}}
+{"timestamp":"2026-03-26T17:46:57.586344Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00051,"price":68934.0,"buys":85,"sells":78}}
+{"timestamp":"2026-03-26T17:46:57.598669Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00073,"price":68931.0,"new_pos":0.003032,"aep":68937.69983524}}
+{"timestamp":"2026-03-26T17:46:57.598716Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234104124366,"status":"EXECUTED @ 68931.0(0.00073)"}}
+{"timestamp":"2026-03-26T17:46:57.598731Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00073,"price":68931.0,"buys":86,"sells":78}}
+{"timestamp":"2026-03-26T17:46:57.645272Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00073,"price":68930.0,"new_pos":0.0037619999999999997,"aep":68936.20571516}}
+{"timestamp":"2026-03-26T17:46:57.645323Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234104124357,"status":"EXECUTED @ 68930.0(0.00073)"}}
+{"timestamp":"2026-03-26T17:46:57.645352Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00073,"price":68930.0,"buys":87,"sells":78}}
+{"timestamp":"2026-03-26T17:46:57.663512Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00073,"price":68928.0,"new_pos":0.004492,"aep":68934.87219511}}
+{"timestamp":"2026-03-26T17:46:57.663557Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234103288517,"status":"EXECUTED @ 68928.0(0.00073)"}}
+{"timestamp":"2026-03-26T17:46:57.663572Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00073,"price":68928.0,"buys":88,"sells":78}}
+{"timestamp":"2026-03-26T17:46:57.686443Z","level":"INFO","fields":{"event":"sniper_fire","bid":6892700000000,"ask":6894400000000,"micro":6892708459728,"buy":68918.08603728,"sell":68925.23603728,"obi":"-0.799","order_usd":75.0,"inv_skew":-642356000,"position":449200,"dynamic_grid":357500000}}
+{"timestamp":"2026-03-26T17:46:57.715358Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:46:57.715400Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:46:57.715411Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:46:57.715425Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:46:57.715435Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234103288536,"side":"buy"}}
+{"timestamp":"2026-03-26T17:46:57.715465Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234103288537,"side":"sell"}}
+{"timestamp":"2026-03-26T17:46:57.715476Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.009670692669901618,"closed":0.00109,"aep":68934.87219511}}
+{"timestamp":"2026-03-26T17:46:57.715495Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00109,"price":68926.0,"new_pos":0.0034020000000000005,"aep":68934.87219511}}
+{"timestamp":"2026-03-26T17:46:57.715504Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234103288537,"status":"EXECUTED @ 68926.0(-0.00109)"}}
+{"timestamp":"2026-03-26T17:46:57.715524Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00109,"price":68926.0,"buys":88,"sells":79}}
+{"timestamp":"2026-03-26T17:46:57.721453Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234104124375,"side":"buy"}}
+{"timestamp":"2026-03-26T17:46:57.726517Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234104124376,"side":"sell"}}
+AI │ OBI=-0.799 │ Spread=$1.00 │ Pos=+0.00340 │ Raw=-7 │ Bias=$-7 │ Grid=$5.38
+{"timestamp":"2026-03-26T17:46:59.234009Z","level":"INFO","fields":{"event":"checksum_ok","cs":1974849935}}
+{"timestamp":"2026-03-26T17:46:59.708353Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.0019974035087219314,"closed":0.00029065,"aep":68934.87219511}}
+{"timestamp":"2026-03-26T17:46:59.708415Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00029065,"price":68928.0,"new_pos":0.00311135,"aep":68934.87219511}}
+{"timestamp":"2026-03-26T17:46:59.708456Z","level":"INFO","fields":{"event":"order_tracked","mt":"ou","id":234104124376,"side":"sell"}}
+{"timestamp":"2026-03-26T17:46:59.708497Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.005493289161179687,"closed":0.00079935,"aep":68934.87219511}}
+{"timestamp":"2026-03-26T17:46:59.708514Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00079935,"price":68928.0,"new_pos":0.0023120000000000003,"aep":68934.87219511}}
+{"timestamp":"2026-03-26T17:46:59.708544Z","level":"INFO","fields":{"event":"order_tracked","mt":"oc","id":234104124376,"side":"sell"}}
+{"timestamp":"2026-03-26T17:46:59.708581Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00029065,"price":68928.0,"buys":88,"sells":80}}
+{"timestamp":"2026-03-26T17:46:59.708600Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00079935,"price":68928.0,"buys":88,"sells":81}}
+{"timestamp":"2026-03-26T17:46:59.811446Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00109,"price":68924.0,"new_pos":0.0034019999999999996,"aep":68931.38874635}}
+{"timestamp":"2026-03-26T17:46:59.811522Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234104124335,"status":"EXECUTED @ 68924.0(0.00109)"}}
+{"timestamp":"2026-03-26T17:46:59.811567Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00109,"price":68924.0,"buys":89,"sells":81}}
+{"timestamp":"2026-03-26T17:47:00.370493Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00109,"price":68920.0,"new_pos":0.004492,"aep":68928.62522598}}
+{"timestamp":"2026-03-26T17:47:00.370580Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234104124375,"status":"EXECUTED @ 68920.0(0.00109)"}}
+{"timestamp":"2026-03-26T17:47:00.370627Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00109,"price":68920.0,"buys":90,"sells":81}}
+{"timestamp":"2026-03-26T17:47:00.644767Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00109,"price":68918.0,"new_pos":0.005582,"aep":68926.55043266}}
+{"timestamp":"2026-03-26T17:47:00.644850Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234103288536,"status":"EXECUTED @ 68918.0(0.00109)"}}
+{"timestamp":"2026-03-26T17:47:00.644903Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00109,"price":68918.0,"buys":91,"sells":81}}
+{"timestamp":"2026-03-26T17:47:00.805300Z","level":"INFO","fields":{"event":"sniper_fire","bid":6891300000000,"ask":6892900000000,"micro":6891300000041,"buy":68889.20000041,"sell":68900.40000041,"obi":"-0.724","order_usd":75.0,"inv_skew":-1120000000,"position":558200,"dynamic_grid":560000000}}
+{"timestamp":"2026-03-26T17:47:00.846276Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:47:00.846324Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:47:00.846334Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:47:00.846373Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:47:00.846384Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234104124377,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:00.846394Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234104124378,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:47:00.846402Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234103288538,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:00.846409Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234103288539,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:47:01.889757Z","level":"INFO","fields":{"event":"checksum_mismatch","remote":-1525993297,"local":-277524641}}
+{"timestamp":"2026-03-26T17:47:01.889780Z","level":"INFO","fields":{"event":"reconnecting","reason":"checksum_persist"}}
+{"timestamp":"2026-03-26T17:47:01.890908Z","level":"INFO","fields":{"event":"async_alert","message":"⚠️ *RECONNECT*\n`Reason: checksum_persist`"}}
+{"timestamp":"2026-03-26T17:47:04.894441Z","level":"INFO","fields":{"event":"connecting_dual_ws"}}
+{"timestamp":"2026-03-26T17:47:05.070417Z","level":"INFO","fields":{"event":"mdata_ws_connected"}}
+{"timestamp":"2026-03-26T17:47:05.200176Z","level":"INFO","fields":{"event":"exec_ws_connected"}}
+{"timestamp":"2026-03-26T17:47:05.220807Z","level":"INFO","fields":{"event":"exec_auth_ok"}}
+{"timestamp":"2026-03-26T17:47:06.954527Z","level":"INFO","fields":{"event":"mdata_subscribed","chan_id":"Some(1767)"}}
+{"timestamp":"2026-03-26T17:47:06.954715Z","level":"INFO","fields":{"event":"snapshot_loaded","bids":25,"asks":25,"best_bid_p":6889900000000,"best_ask_p":6890800000000,"best_bid_a":39573,"best_ask_a":-25274999,"best_bid_c":1,"best_ask_c":1}}
+{"timestamp":"2026-03-26T17:47:08.279947Z","level":"INFO","fields":{"event":"sniper_fire","bid":6889900000000,"ask":6890400000000,"micro":6890399929783,"buy":68869.17429783,"sell":68887.72429783,"obi":"-0.036","order_usd":50.0,"inv_skew":-1855000000,"position":558200,"dynamic_grid":927500000}}
+{"timestamp":"2026-03-26T17:47:08.309507Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:47:08.309539Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:47:08.309556Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:47:08.309569Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149291,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:08.309579Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302299,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:08.309588Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302300,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:47:08.309598Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149292,"status":"POSTONLY CANCELED"}}
+AI │ OBI=-0.036 │ Spread=$5.00 │ Pos=+0.00558 │ Raw=+1 │ Bias=$+1 │ Grid=$9.28
+{"timestamp":"2026-03-26T17:47:09.558478Z","level":"INFO","fields":{"event":"checksum_debug","levels":50,"bids0_p":6889900000000,"bids0_c":2,"asks0_p":6890400000000,"asks0_c":1,"cs_str_preview":"68899:0.07296554:68904:-0.00004715:68898:0.07257082:68907:-0.07256156:68895:0.4543969:68908:-0.32531106:68894:0.26273452:68909:-0.00148:68892:0.0002:68911:-0.07255833:68891:0.00036289:68912:-0.0001:68"}}
+{"timestamp":"2026-03-26T17:47:09.558547Z","level":"INFO","fields":{"event":"checksum_ok","cs":-462544538}}
+{"timestamp":"2026-03-26T17:47:11.530405Z","level":"INFO","fields":{"event":"sniper_fire","bid":6889900000000,"ask":6890300000000,"micro":6890292047878,"buy":68875.87047878,"sell":68894.57047878,"obi":"-0.002","order_usd":50.0,"inv_skew":-1870000000,"position":558200,"dynamic_grid":935000000}}
+{"timestamp":"2026-03-26T17:47:11.582284Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:47:11.582321Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00073 BTCUSD at 68875.87"}}
+{"timestamp":"2026-03-26T17:47:11.582333Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:47:11.582347Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:47:11.582358Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302299,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:47:11.582366Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302301,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:47:11.582372Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149293,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:47:12.087306Z","level":"INFO","fields":{"event":"checksum_debug","levels":50,"bids0_p":6889900000000,"bids0_c":2,"asks0_p":6890300000000,"asks0_c":1,"cs_str_preview":"68899:0.07296554:68903:-0.00148:68898:0.07257082:68904:-0.00204715:68895:0.4543969:68908:-0.32531106:68894:0.26273452:68909:-0.07255949:68892:0.0002:68911:-0.46703524:68891:0.00036289:68912:-0.0001:68"}}
+{"timestamp":"2026-03-26T17:47:12.087338Z","level":"INFO","fields":{"event":"checksum_ok","cs":1999432191}}
+AI │ OBI=-0.002 │ Spread=$8.00 │ Pos=+0.00558 │ Raw=+7 │ Bias=$+7 │ Grid=$9.35
+{"timestamp":"2026-03-26T17:47:14.607606Z","level":"INFO","fields":{"event":"sniper_fire","bid":6889900000000,"ask":6890500000000,"micro":6890488071814,"buy":68883.83071814,"sell":68902.53071814,"obi":"0.010","order_usd":50.0,"inv_skew":-1870000000,"position":558200,"dynamic_grid":935000000}}
+{"timestamp":"2026-03-26T17:47:14.607675Z","level":"INFO","fields":{"event":"checksum_debug","levels":50,"bids0_p":6889900000000,"bids0_c":2,"asks0_p":6890500000000,"asks0_c":1,"cs_str_preview":"68899:0.07296552:68905:-0.00148:68898:0.07257089:68906:-0.07256262:68895:0.07257339:68907:-0.25396992:68894:0.26256749:68908:-0.45967817:68893:0.00005:68910:-0.07255873:68892:0.0002:68911:-0.002:68891"}}
+{"timestamp":"2026-03-26T17:47:14.607684Z","level":"INFO","fields":{"event":"checksum_ok","cs":1638553173}}
+{"timestamp":"2026-03-26T17:47:14.638088Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302302,"side":"sell"}}
+{"timestamp":"2026-03-26T17:47:14.638133Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00073 BTCUSD at 68883.83"}}
+{"timestamp":"2026-03-26T17:47:14.638143Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:47:14.638156Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:47:14.638164Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149294,"side":"sell"}}
+{"timestamp":"2026-03-26T17:47:17.220660Z","level":"INFO","fields":{"event":"checksum_debug","levels":50,"bids0_p":6889900000000,"bids0_c":3,"asks0_p":6890100000000,"asks0_c":1,"cs_str_preview":"68899:0.0731654:68901:-0.00073:68898:0.07257057:68903:-0.00243001:68895:0.07266466:68906:-0.07256311:68894:0.26256749:68907:-0.25396992:68893:0.00005:68908:-0.45967845:68892:0.0002:68910:-0.07277845:6"}}
+{"timestamp":"2026-03-26T17:47:17.220695Z","level":"INFO","fields":{"event":"checksum_ok","cs":1108000839}}
+{"timestamp":"2026-03-26T17:47:17.635093Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":51,"new_grid_usd":9}}
+{"timestamp":"2026-03-26T17:47:17.724570Z","level":"INFO","fields":{"event":"sniper_fire","bid":6889500000000,"ask":6890100000000,"micro":6890094041913,"buy":68878.76541913,"sell":68898.21541913,"obi":"-0.018","order_usd":50.0,"inv_skew":-1945000000,"position":558200,"dynamic_grid":972500000}}
+{"timestamp":"2026-03-26T17:47:17.749654Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:47:17.749694Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00073 BTCUSD at 68878.77"}}
+{"timestamp":"2026-03-26T17:47:17.749704Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:47:17.749719Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:47:17.749743Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149294,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:47:17.749750Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149295,"side":"sell"}}
+{"timestamp":"2026-03-26T17:47:18.056285Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149295,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:47:18.056310Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302303,"side":"sell"}}
+{"timestamp":"2026-03-26T17:47:18.137219Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":52,"new_grid_usd":9}}
+{"timestamp":"2026-03-26T17:47:18.638482Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":52,"new_grid_usd":9}}
+{"timestamp":"2026-03-26T17:47:19.140273Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":52,"new_grid_usd":9}}
+AI │ OBI=-0.018 │ Spread=$10.00 │ Pos=+0.00558 │ Raw=-3 │ Bias=$-3 │ Grid=$9.88
+{"timestamp":"2026-03-26T17:47:19.641156Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":54,"new_grid_usd":10}}
+{"timestamp":"2026-03-26T17:47:19.856346Z","level":"INFO","fields":{"event":"checksum_debug","levels":50,"bids0_p":6888900000000,"bids0_c":1,"asks0_p":6889900000000,"asks0_c":1,"cs_str_preview":"68889:0.0561905:68899:-0.00073:68888:0.07268504:68901:-0.37530434:68887:0.07263158:68902:-0.26539511:68886:0.072936:68903:-0.00022001:68885:0.07258158:68904:-0.07256522:68884:0.00005:68907:-0.07256158"}}
+{"timestamp":"2026-03-26T17:47:19.856368Z","level":"INFO","fields":{"event":"checksum_ok","cs":621664302}}
+{"timestamp":"2026-03-26T17:47:20.008921Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.0201118158418042,"closed":0.00073,"aep":68926.55043266}}
+{"timestamp":"2026-03-26T17:47:20.008954Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00073,"price":68899.0,"new_pos":0.004852,"aep":68926.55043266}}
+{"timestamp":"2026-03-26T17:47:20.008980Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302303,"status":"EXECUTED @ 68899.0(-0.00073)"}}
+{"timestamp":"2026-03-26T17:47:20.009008Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00073,"price":68899.0,"buys":91,"sells":82}}
+{"timestamp":"2026-03-26T17:47:20.142509Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":52,"new_grid_usd":9}}
+{"timestamp":"2026-03-26T17:47:20.222775Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.018651815841804198,"closed":0.00073,"aep":68926.55043266}}
+{"timestamp":"2026-03-26T17:47:20.222801Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00073,"price":68901.0,"new_pos":0.004122000000000001,"aep":68926.55043266}}
+{"timestamp":"2026-03-26T17:47:20.222840Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302302,"status":"EXECUTED @ 68901.0(-0.00073)"}}
+{"timestamp":"2026-03-26T17:47:20.222871Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00073,"price":68901.0,"buys":91,"sells":83}}
+{"timestamp":"2026-03-26T17:47:20.643923Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":52,"new_grid_usd":9}}
+{"timestamp":"2026-03-26T17:47:20.828675Z","level":"INFO","fields":{"event":"sniper_fire","bid":6889500000000,"ask":6890000000000,"micro":6889990007319,"buy":68870.74317319,"sell":68890.49317319,"obi":"0.074","order_usd":50.0,"inv_skew":-1628190000,"position":412200,"dynamic_grid":987500000}}
+{"timestamp":"2026-03-26T17:47:20.850319Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:47:20.850344Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:47:20.850371Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:47:20.850380Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149296,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:20.850389Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149297,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:47:21.145069Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":52,"new_grid_usd":9}}
+{"timestamp":"2026-03-26T17:47:21.199632Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149296,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:47:21.199669Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302304,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:21.199691Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302305,"side":"sell"}}
+{"timestamp":"2026-03-26T17:47:21.646218Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":52,"new_grid_usd":9}}
+{"timestamp":"2026-03-26T17:47:21.719120Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.0164618158418042,"closed":0.00073,"aep":68926.55043266}}
+{"timestamp":"2026-03-26T17:47:21.719140Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00073,"price":68904.0,"new_pos":0.003392,"aep":68926.55043266}}
+{"timestamp":"2026-03-26T17:47:21.719152Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302305,"status":"EXECUTED @ 68904.0(-0.00073)"}}
+{"timestamp":"2026-03-26T17:47:21.719166Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00073,"price":68904.0,"buys":91,"sells":84}}
+{"timestamp":"2026-03-26T17:47:22.146870Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":52,"new_grid_usd":9}}
+{"timestamp":"2026-03-26T17:47:22.573173Z","level":"INFO","fields":{"event":"checksum_ok","cs":1863408322}}
+{"timestamp":"2026-03-26T17:47:22.648394Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":52,"new_grid_usd":9}}
+{"timestamp":"2026-03-26T17:47:22.695545Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00073,"price":68884.0,"new_pos":0.004122,"aep":68919.01481504}}
+{"timestamp":"2026-03-26T17:47:22.695587Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302304,"status":"EXECUTED @ 68884.0(0.00073)"}}
+{"timestamp":"2026-03-26T17:47:22.695616Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00073,"price":68884.0,"buys":92,"sells":84}}
+{"timestamp":"2026-03-26T17:47:23.149207Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":59,"new_grid_usd":10}}
+{"timestamp":"2026-03-26T17:47:23.650458Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":62,"new_grid_usd":11}}
+{"timestamp":"2026-03-26T17:47:23.725435Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00073,"price":68869.0,"new_pos":0.0048519999999999995,"aep":68911.489915}}
+{"timestamp":"2026-03-26T17:47:23.725475Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149291,"status":"EXECUTED @ 68869.0(0.00073)"}}
+{"timestamp":"2026-03-26T17:47:23.725489Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00073,"price":68869.0,"buys":93,"sells":84}}
+{"timestamp":"2026-03-26T17:47:23.916736Z","level":"INFO","fields":{"event":"sniper_fire","bid":6885400000000,"ask":6888500000000,"micro":6885403414909,"buy":68817.80310909,"sell":68840.40310909,"obi":"-0.243","order_usd":75.0,"inv_skew":-2193104000,"position":485200,"dynamic_grid":1130000000}}
+{"timestamp":"2026-03-26T17:47:23.958193Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:47:23.958222Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:47:23.958261Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:47:23.958275Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:47:23.958285Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149298,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:23.958294Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149299,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:47:24.151586Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":76,"new_grid_usd":13}}
+{"timestamp":"2026-03-26T17:47:24.201748Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149298,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:47:24.203294Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302306,"side":"sell"}}
+{"timestamp":"2026-03-26T17:47:24.241656Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.06157400734999814,"closed":0.00109,"aep":68911.489915}}
+{"timestamp":"2026-03-26T17:47:24.241756Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00109,"price":68855.0,"new_pos":0.0037620000000000006,"aep":68911.489915}}
+{"timestamp":"2026-03-26T17:47:24.241774Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302306,"status":"EXECUTED @ 68855.0(-0.00109)"}}
+{"timestamp":"2026-03-26T17:47:24.241792Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00109,"price":68855.0,"buys":93,"sells":85}}
+{"timestamp":"2026-03-26T17:47:24.652650Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":78,"new_grid_usd":13}}
+AI │ OBI=-0.243 │ Spread=$7.00 │ Pos=+0.00376 │ Raw=-6 │ Bias=$-6 │ Grid=$13.47
+{"timestamp":"2026-03-26T17:47:25.153867Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":79,"new_grid_usd":13}}
+{"timestamp":"2026-03-26T17:47:25.188730Z","level":"INFO","fields":{"event":"checksum_ok","cs":-2114290661}}
+{"timestamp":"2026-03-26T17:47:25.655076Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":79,"new_grid_usd":13}}
+{"timestamp":"2026-03-26T17:47:26.155836Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":79,"new_grid_usd":13}}
+{"timestamp":"2026-03-26T17:47:26.657305Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":79,"new_grid_usd":13}}
+{"timestamp":"2026-03-26T17:47:27.158245Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":75,"new_grid_usd":13}}
+{"timestamp":"2026-03-26T17:47:27.210193Z","level":"INFO","fields":{"event":"sniper_fire","bid":6887400000000,"ask":6888300000000,"micro":6888299865757,"buy":68843.81005757,"sell":68870.31005757,"obi":"0.210","order_usd":75.0,"inv_skew":-1993860000,"position":376200,"dynamic_grid":1325000000}}
+{"timestamp":"2026-03-26T17:47:27.230709Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:47:27.230796Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:47:27.230842Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:47:27.230876Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149300,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:27.230907Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149301,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:47:27.230968Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302307,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:27.231535Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302308,"side":"sell"}}
+{"timestamp":"2026-03-26T17:47:27.659326Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":75,"new_grid_usd":13}}
+{"timestamp":"2026-03-26T17:47:27.800161Z","level":"INFO","fields":{"event":"checksum_ok","cs":1993562121}}
+{"timestamp":"2026-03-26T17:47:28.159735Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":75,"new_grid_usd":13}}
+{"timestamp":"2026-03-26T17:47:28.661472Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":75,"new_grid_usd":13}}
+{"timestamp":"2026-03-26T17:47:29.163004Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":75,"new_grid_usd":13}}
+{"timestamp":"2026-03-26T17:47:29.664393Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":75,"new_grid_usd":13}}
+{"timestamp":"2026-03-26T17:47:29.912267Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.03323400734999814,"closed":0.00109,"aep":68911.489915}}
+{"timestamp":"2026-03-26T17:47:29.912300Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00109,"price":68881.0,"new_pos":0.002672,"aep":68911.489915}}
+{"timestamp":"2026-03-26T17:47:29.912322Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302308,"status":"EXECUTED @ 68881.0(-0.00109)"}}
+{"timestamp":"2026-03-26T17:47:29.912346Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00109,"price":68881.0,"buys":93,"sells":86}}
+{"timestamp":"2026-03-26T17:47:30.164704Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":75,"new_grid_usd":13}}
+AI │ OBI=+0.210 │ Spread=$7.00 │ Pos=+0.00376 │ Raw=+4 │ Bias=$+4 │ Grid=$13.25
+{"timestamp":"2026-03-26T17:47:30.445179Z","level":"INFO","fields":{"event":"sniper_fire","bid":6887500000000,"ask":6888300000000,"micro":6888299847687,"buy":68859.58687687,"sell":68886.08687687,"obi":"0.092","order_usd":50.0,"inv_skew":-1416160000,"position":267200,"dynamic_grid":1325000000}}
+{"timestamp":"2026-03-26T17:47:30.445425Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1534403041}}
+{"timestamp":"2026-03-26T17:47:30.465827Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302307,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:47:30.465901Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302309,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:30.468876Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:47:30.468952Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:47:30.468988Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:47:30.469054Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:47:30.469089Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302310,"side":"sell"}}
+{"timestamp":"2026-03-26T17:47:30.469123Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149302,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:30.469147Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149303,"side":"sell"}}
+{"timestamp":"2026-03-26T17:47:30.665745Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":75,"new_grid_usd":13}}
+{"timestamp":"2026-03-26T17:47:31.167438Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":75,"new_grid_usd":13}}
+{"timestamp":"2026-03-26T17:47:31.637266Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.01787763794999875,"closed":0.00073,"aep":68911.489915}}
+{"timestamp":"2026-03-26T17:47:31.637296Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00073,"price":68887.0,"new_pos":0.001942,"aep":68911.489915}}
+{"timestamp":"2026-03-26T17:47:31.637312Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302310,"status":"EXECUTED @ 68887.0(-0.00073)"}}
+{"timestamp":"2026-03-26T17:47:31.637327Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.01787763794999875,"closed":0.00073,"aep":68911.489915}}
+{"timestamp":"2026-03-26T17:47:31.637331Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00073,"price":68887.0,"new_pos":0.001212,"aep":68911.489915}}
+{"timestamp":"2026-03-26T17:47:31.637340Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149303,"status":"EXECUTED @ 68887.0(-0.00073)"}}
+{"timestamp":"2026-03-26T17:47:31.637355Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00073,"price":68887.0,"buys":93,"sells":87}}
+{"timestamp":"2026-03-26T17:47:31.637361Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00073,"price":68887.0,"buys":93,"sells":88}}
+{"timestamp":"2026-03-26T17:47:31.669399Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":75,"new_grid_usd":13}}
+{"timestamp":"2026-03-26T17:47:32.171242Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":75,"new_grid_usd":13}}
+{"timestamp":"2026-03-26T17:47:32.671916Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":61,"new_grid_usd":11}}
+{"timestamp":"2026-03-26T17:47:33.101761Z","level":"INFO","fields":{"event":"checksum_ok","cs":39037153}}
+{"timestamp":"2026-03-26T17:47:33.173250Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":61,"new_grid_usd":11}}
+{"timestamp":"2026-03-26T17:47:33.502668Z","level":"INFO","fields":{"event":"sniper_fire","bid":6887900000000,"ask":6888500000000,"micro":6888028865143,"buy":68867.62177143,"sell":68890.07177143,"obi":"-0.072","order_usd":50.0,"inv_skew":-544188000,"position":121200,"dynamic_grid":1122500000}}
+{"timestamp":"2026-03-26T17:47:33.527904Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:47:33.527978Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:47:33.528012Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:47:33.528060Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:47:33.528097Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149302,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:47:33.528124Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302311,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:33.528183Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149304,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:33.528207Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302312,"side":"sell"}}
+{"timestamp":"2026-03-26T17:47:33.528253Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149305,"side":"sell"}}
+{"timestamp":"2026-03-26T17:47:33.609717Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00073,"price":68877.0,"new_pos":0.001942,"aep":68898.52511688}}
+{"timestamp":"2026-03-26T17:47:33.610002Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302311,"status":"EXECUTED @ 68877.0(0.00073)"}}
+{"timestamp":"2026-03-26T17:47:33.610071Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00073,"price":68877.0,"buys":94,"sells":88}}
+{"timestamp":"2026-03-26T17:47:33.673794Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":61,"new_grid_usd":11}}
+{"timestamp":"2026-03-26T17:47:34.175251Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":61,"new_grid_usd":11}}
+{"timestamp":"2026-03-26T17:47:34.676061Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":61,"new_grid_usd":11}}
+{"timestamp":"2026-03-26T17:47:35.176764Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":59,"new_grid_usd":10}}
+⚠️  AI error (#1): error sending request for url (http://localhost:1234/v1/chat/completions)
+{"timestamp":"2026-03-26T17:47:35.637984Z","level":"INFO","fields":{"event":"checksum_ok","cs":1108062908}}
+{"timestamp":"2026-03-26T17:47:35.678241Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":54,"new_grid_usd":10}}
+{"timestamp":"2026-03-26T17:47:36.179318Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":52,"new_grid_usd":9}}
+{"timestamp":"2026-03-26T17:47:36.530138Z","level":"INFO","fields":{"event":"sniper_fire","bid":6887500000000,"ask":6887700000000,"micro":6887699930875,"buy":68863.58666875,"sell":68883.18666875,"obi":"0.047","order_usd":50.0,"inv_skew":-761264000,"position":194200,"dynamic_grid":980000000}}
+{"timestamp":"2026-03-26T17:47:36.558141Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:47:36.558167Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:47:36.558177Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00073 BTCUSD at 68883.19"}}
+{"timestamp":"2026-03-26T17:47:36.558193Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:47:36.558204Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149304,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:47:36.558227Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149305,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:47:36.558236Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149306,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:36.558243Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302313,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:36.558251Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302314,"side":"sell"}}
+{"timestamp":"2026-03-26T17:47:38.233834Z","level":"INFO","fields":{"event":"checksum_ok","cs":943426054}}
+{"timestamp":"2026-03-26T17:47:38.349304Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00073,"price":68873.0,"new_pos":0.002672,"aep":68891.55156324}}
+{"timestamp":"2026-03-26T17:47:38.349388Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302313,"status":"EXECUTED @ 68873.0(0.00073)"}}
+{"timestamp":"2026-03-26T17:47:38.349468Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00073,"price":68873.0,"buys":95,"sells":88}}
+{"timestamp":"2026-03-26T17:47:39.423093Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00073,"price":68863.0,"new_pos":0.0034019999999999996,"aep":68885.42497854}}
+{"timestamp":"2026-03-26T17:47:39.423183Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149306,"status":"EXECUTED @ 68863.0(0.00073)"}}
+{"timestamp":"2026-03-26T17:47:39.423257Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00073,"price":68863.0,"buys":96,"sells":88}}
+{"timestamp":"2026-03-26T17:47:39.546732Z","level":"INFO","fields":{"event":"sniper_fire","bid":6886000000000,"ask":6887200000000,"micro":6886000226035,"buy":68845.46998035,"sell":68861.16998035,"obi":"0.236","order_usd":35.0,"inv_skew":-1068228000,"position":340200,"dynamic_grid":785000000}}
+{"timestamp":"2026-03-26T17:47:39.569322Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:47:39.569399Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:47:39.569435Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:47:39.569483Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:47:39.569521Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302314,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:47:39.569551Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302315,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:39.569582Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149307,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:39.571118Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149308,"side":"sell"}}
+{"timestamp":"2026-03-26T17:47:39.571184Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302316,"side":"sell"}}
+{"timestamp":"2026-03-26T17:47:39.957881Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00073,"price":68857.0,"new_pos":0.004132,"aep":68880.40314061}}
+{"timestamp":"2026-03-26T17:47:39.957963Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302309,"status":"EXECUTED @ 68857.0(0.00073)"}}
+{"timestamp":"2026-03-26T17:47:39.958014Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00073,"price":68857.0,"buys":97,"sells":88}}
+{"timestamp":"2026-03-26T17:47:40.314945Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.00938560171109828,"closed":0.00051,"aep":68880.40314061}}
+{"timestamp":"2026-03-26T17:47:40.315007Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00051,"price":68862.0,"new_pos":0.0036220000000000002,"aep":68880.40314061}}
+{"timestamp":"2026-03-26T17:47:40.315047Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149308,"status":"EXECUTED @ 68862.0(-0.00051)"}}
+{"timestamp":"2026-03-26T17:47:40.315093Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00051,"price":68862.0,"buys":97,"sells":89}}
+⚠️  AI error (#2): error sending request for url (http://localhost:1234/v1/chat/completions)
+{"timestamp":"2026-03-26T17:47:40.862637Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1068710179}}
+{"timestamp":"2026-03-26T17:47:42.658049Z","level":"INFO","fields":{"event":"sniper_fire","bid":6885200000000,"ask":6886100000000,"micro":6885397153519,"buy":68835.62623519,"sell":68853.87623519,"obi":"-0.248","order_usd":75.0,"inv_skew":-1322030000,"position":362200,"dynamic_grid":912500000}}
+{"timestamp":"2026-03-26T17:47:42.689649Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:47:42.689726Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:47:42.689761Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:47:42.689814Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:47:42.689852Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302316,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:47:42.689881Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149307,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:47:42.689910Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302317,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:42.689936Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302318,"side":"sell"}}
+{"timestamp":"2026-03-26T17:47:42.689959Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149309,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:42.689981Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149310,"side":"sell"}}
+{"timestamp":"2026-03-26T17:47:42.828691Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.028779423264896322,"closed":0.00109,"aep":68880.40314061}}
+{"timestamp":"2026-03-26T17:47:42.828754Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00109,"price":68854.0,"new_pos":0.0025319999999999995,"aep":68880.40314061}}
+{"timestamp":"2026-03-26T17:47:42.828795Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149310,"status":"EXECUTED @ 68854.0(-0.00109)"}}
+{"timestamp":"2026-03-26T17:47:42.828841Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00109,"price":68854.0,"buys":97,"sells":90}}
+{"timestamp":"2026-03-26T17:47:43.447742Z","level":"INFO","fields":{"event":"checksum_ok","cs":548277303}}
+{"timestamp":"2026-03-26T17:47:45.941577Z","level":"INFO","fields":{"event":"sniper_fire","bid":6885400000000,"ask":6886200000000,"micro":6886197070709,"buy":68848.50966709,"sell":68865.85966709,"obi":"-0.091","order_usd":50.0,"inv_skew":-878604000,"position":253200,"dynamic_grid":867500000}}
+{"timestamp":"2026-03-26T17:47:45.967333Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:47:45.967411Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00073 BTCUSD at 68848.51"}}
+{"timestamp":"2026-03-26T17:47:45.967443Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00073 BTCUSD at 68865.86"}}
+{"timestamp":"2026-03-26T17:47:45.967488Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:47:45.967524Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149309,"status":"CANCELED"}}
+AI │ OBI=-0.248 │ Spread=$8.00 │ Pos=+0.00253 │ Raw=+1 │ Bias=$+1 │ Grid=$8.68
+{"timestamp":"2026-03-26T17:47:46.153158Z","level":"INFO","fields":{"event":"checksum_ok","cs":1945008449}}
+{"timestamp":"2026-03-26T17:47:46.842462Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.018969423264896323,"closed":0.00109,"aep":68880.40314061}}
+{"timestamp":"2026-03-26T17:47:46.842496Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00109,"price":68863.0,"new_pos":0.001442,"aep":68880.40314061}}
+{"timestamp":"2026-03-26T17:47:46.842531Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302318,"status":"EXECUTED @ 68863.0(-0.00109)"}}
+{"timestamp":"2026-03-26T17:47:46.842557Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00109,"price":68863.0,"buys":97,"sells":91}}
+{"timestamp":"2026-03-26T17:47:49.073280Z","level":"INFO","fields":{"event":"sniper_fire","bid":6886100000000,"ask":6886800000000,"micro":6886797436871,"buy":68855.41388871,"sell":68872.61388871,"obi":"0.031","order_usd":50.0,"inv_skew":-496048000,"position":144200,"dynamic_grid":860000000}}
+{"timestamp":"2026-03-26T17:47:49.105331Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302319,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:49.105408Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:47:49.105445Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00073 BTCUSD at 68872.61"}}
+{"timestamp":"2026-03-26T17:47:49.105485Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:47:49.105516Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149311,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:51.178418Z","level":"INFO","fields":{"event":"checksum_ok","cs":783384488}}
+AI │ OBI=+0.031 │ Spread=$8.00 │ Pos=+0.00144 │ Raw=+7 │ Bias=$+7 │ Grid=$8.60
+{"timestamp":"2026-03-26T17:47:52.247083Z","level":"INFO","fields":{"event":"sniper_fire","bid":6886700000000,"ask":6887400000000,"micro":6887399518263,"buy":68867.78948263,"sell":68884.53948263,"obi":"0.144","order_usd":50.0,"inv_skew":-483070000,"position":144200,"dynamic_grid":837500000}}
+{"timestamp":"2026-03-26T17:47:52.269428Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149311,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:47:52.269966Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302320,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:52.279607Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:47:52.279683Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:47:52.279720Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00073 BTCUSD at 68884.54"}}
+{"timestamp":"2026-03-26T17:47:52.279762Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:47:52.279794Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149312,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:53.819856Z","level":"INFO","fields":{"event":"checksum_ok","cs":557878212}}
+{"timestamp":"2026-03-26T17:47:54.032929Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00009076,"price":68872.0,"new_pos":0.00153276,"aep":68879.90556171}}
+{"timestamp":"2026-03-26T17:47:54.033011Z","level":"INFO","fields":{"event":"order_tracked","mt":"ou","id":234101302320,"side":"buy"}}
+{"timestamp":"2026-03-26T17:47:54.033061Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00009076,"price":68872.0,"buys":98,"sells":91}}
+{"timestamp":"2026-03-26T17:47:54.214542Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00063924,"price":68872.0,"new_pos":0.002172,"aep":68877.57888065}}
+{"timestamp":"2026-03-26T17:47:54.214620Z","level":"INFO","fields":{"event":"order_tracked","mt":"oc","id":234101302320,"side":"sell"}}
+{"timestamp":"2026-03-26T17:47:54.214695Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00063924,"price":68872.0,"buys":99,"sells":91}}
+{"timestamp":"2026-03-26T17:47:55.514408Z","level":"INFO","fields":{"event":"sniper_fire","bid":6886700000000,"ask":6887700000000,"micro":6886919536696,"buy":68864.74896696,"sell":68876.99896696,"obi":"-0.007","order_usd":50.0,"inv_skew":-532140000,"position":217200,"dynamic_grid":612500000}}
+{"timestamp":"2026-03-26T17:47:55.534673Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302321,"side":"sell"}}
+{"timestamp":"2026-03-26T17:47:55.548872Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:47:55.548943Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00073 BTCUSD at 68864.75"}}
+{"timestamp":"2026-03-26T17:47:55.548978Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00073 BTCUSD at 68877"}}
+{"timestamp":"2026-03-26T17:47:55.549017Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:47:56.370085Z","level":"INFO","fields":{"event":"checksum_ok","cs":-591255605}}
+⚠️  AI error (#1): error sending request for url (http://localhost:1234/v1/chat/completions)
+{"timestamp":"2026-03-26T17:47:58.963384Z","level":"INFO","fields":{"event":"sniper_fire","bid":6887000000000,"ask":6888100000000,"micro":6887196752066,"buy":68867.52112066,"sell":68879.77112066,"obi":"-0.001","order_usd":50.0,"inv_skew":-532140000,"position":217200,"dynamic_grid":612500000}}
+{"timestamp":"2026-03-26T17:47:58.963613Z","level":"INFO","fields":{"event":"checksum_ok","cs":439801394}}
+{"timestamp":"2026-03-26T17:47:58.988183Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:47:58.988288Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00073 BTCUSD at 68867.52"}}
+{"timestamp":"2026-03-26T17:47:58.988324Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00073 BTCUSD at 68879.77"}}
+{"timestamp":"2026-03-26T17:47:58.988372Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:47:58.988409Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302321,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:47:58.992969Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302322,"side":"sell"}}
+{"timestamp":"2026-03-26T17:48:01.563181Z","level":"INFO","fields":{"event":"checksum_ok","cs":1112196172}}
+AI │ OBI=-0.001 │ Spread=$10.00 │ Pos=+0.00217 │ Raw=+7 │ Bias=$+7 │ Grid=$6.12
+{"timestamp":"2026-03-26T17:48:02.034379Z","level":"INFO","fields":{"event":"sniper_fire","bid":6887100000000,"ask":6888300000000,"micro":6888298508074,"buy":68878.53868074,"sell":68890.78868074,"obi":"0.130","order_usd":50.0,"inv_skew":-532140000,"position":217200,"dynamic_grid":612500000}}
+{"timestamp":"2026-03-26T17:48:02.060983Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:48:02.061059Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00073 BTCUSD at 68878.54"}}
+{"timestamp":"2026-03-26T17:48:02.061091Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00073 BTCUSD at 68890.79"}}
+{"timestamp":"2026-03-26T17:48:02.061162Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:48:02.061202Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302322,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:48:02.061264Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302323,"side":"sell"}}
+{"timestamp":"2026-03-26T17:48:04.147156Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1271117215}}
+{"timestamp":"2026-03-26T17:48:05.070949Z","level":"INFO","fields":{"event":"sniper_fire","bid":6887200000000,"ask":6888200000000,"micro":6887203821104,"buy":68868.29261104,"sell":68879.79261104,"obi":"0.054","order_usd":50.0,"inv_skew":-499560000,"position":217200,"dynamic_grid":575000000}}
+{"timestamp":"2026-03-26T17:48:05.092562Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:48:05.092637Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00073 BTCUSD at 68868.29"}}
+{"timestamp":"2026-03-26T17:48:05.092670Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00073 BTCUSD at 68879.79"}}
+{"timestamp":"2026-03-26T17:48:05.092715Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:48:05.097308Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302323,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:48:06.664042Z","level":"INFO","fields":{"event":"checksum_ok","cs":-660352771}}
+AI │ OBI=+0.054 │ Spread=$10.00 │ Pos=+0.00217 │ Raw=+4 │ Bias=$+4 │ Grid=$5.75
+{"timestamp":"2026-03-26T17:48:08.153645Z","level":"INFO","fields":{"event":"sniper_fire","bid":6887400000000,"ask":6888400000000,"micro":6887621266105,"buy":68869.60722105,"sell":68880.95722105,"obi":"-0.233","order_usd":75.0,"inv_skew":-493044000,"position":217200,"dynamic_grid":567500000}}
+{"timestamp":"2026-03-26T17:48:08.172845Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:48:08.172919Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00109 BTCUSD at 68869.61"}}
+{"timestamp":"2026-03-26T17:48:08.172958Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:48:08.172999Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:48:08.173294Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149313,"side":"sell"}}
+{"timestamp":"2026-03-26T17:48:08.175265Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302324,"side":"sell"}}
+{"timestamp":"2026-03-26T17:48:09.377307Z","level":"INFO","fields":{"event":"checksum_ok","cs":-2056753512}}
+{"timestamp":"2026-03-26T17:48:09.732699Z","level":"INFO","fields":{"event":"pnl_realized","gain":0.003729020091493585,"closed":0.00109,"aep":68877.57888065}}
+{"timestamp":"2026-03-26T17:48:09.732765Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00109,"price":68881.0,"new_pos":0.0010819999999999998,"aep":68877.57888065}}
+{"timestamp":"2026-03-26T17:48:09.732810Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149313,"status":"EXECUTED @ 68881.0(-0.00109)"}}
+{"timestamp":"2026-03-26T17:48:09.732881Z","level":"INFO","fields":{"event":"pnl_realized","gain":0.007309283081389703,"closed":0.00098493,"aep":68877.57888065}}
+{"timestamp":"2026-03-26T17:48:09.732899Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00098493,"price":68885.0,"new_pos":0.0000970700000000001,"aep":68877.57888065}}
+{"timestamp":"2026-03-26T17:48:09.732929Z","level":"INFO","fields":{"event":"order_tracked","mt":"oc","id":234101302324,"side":"sell"}}
+{"timestamp":"2026-03-26T17:48:09.732971Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00109,"price":68881.0,"buys":99,"sells":92}}
+{"timestamp":"2026-03-26T17:48:09.732995Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00098493,"price":68885.0,"buys":99,"sells":93}}
+{"timestamp":"2026-03-26T17:48:12.274473Z","level":"INFO","fields":{"event":"sniper_fire","bid":6887600000000,"ask":6888700000000,"micro":6887802536812,"buy":68875.89628292,"sell":68887.69628292,"obi":"-0.029","order_usd":50.0,"inv_skew":-22908520,"position":9707,"dynamic_grid":590000000}}
+{"timestamp":"2026-03-26T17:48:12.297554Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:48:12.297629Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:48:12.297665Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00073 BTCUSD at 68887.7"}}
+{"timestamp":"2026-03-26T17:48:12.297706Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:48:12.297740Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149314,"side":"buy"}}
+{"timestamp":"2026-03-26T17:48:12.303550Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302325,"side":"buy"}}
+AI │ OBI=-0.233 │ Spread=$11.00 │ Pos=+0.00010 │ Raw=-6 │ Bias=$-6 │ Grid=$5.90
+{"timestamp":"2026-03-26T17:48:14.644319Z","level":"INFO","fields":{"event":"checksum_ok","cs":1132486914}}
+{"timestamp":"2026-03-26T17:48:15.438394Z","level":"INFO","fields":{"event":"sniper_fire","bid":6888000000000,"ask":6888700000000,"micro":6888697884810,"buy":68874.5381145,"sell":68886.9381145,"obi":"0.114","order_usd":50.0,"inv_skew":-24073360,"position":9707,"dynamic_grid":620000000}}
+{"timestamp":"2026-03-26T17:48:15.465794Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302325,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:48:15.465867Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302326,"side":"buy"}}
+{"timestamp":"2026-03-26T17:48:15.483255Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:48:15.483327Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:48:15.483362Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00073 BTCUSD at 68886.94"}}
+{"timestamp":"2026-03-26T17:48:15.483401Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:48:15.483435Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149315,"side":"buy"}}
+{"timestamp":"2026-03-26T17:48:16.256697Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00073,"price":68880.0,"new_pos":0.00082707,"aep":68879.71584261}}
+{"timestamp":"2026-03-26T17:48:16.256791Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00073,"price":68880.0,"buys":100,"sells":93}}
+{"timestamp":"2026-03-26T17:48:16.260244Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302326,"status":"EXECUTED @ 68880.0(0.00073)"}}
+{"timestamp":"2026-03-26T17:48:17.277308Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1159157455}}
+AI │ OBI=+0.114 │ Spread=$7.00 │ Pos=+0.00083 │ Raw=+4 │ Bias=$+4 │ Grid=$5.22
+{"timestamp":"2026-03-26T17:48:18.482915Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149315,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:48:18.703355Z","level":"INFO","fields":{"event":"sniper_fire","bid":6887600000000,"ask":6888200000000,"micro":6888197660034,"buy":68879.12283614,"sell":68889.42283614,"obi":"-0.255","order_usd":35.0,"inv_skew":-170376420,"position":82707,"dynamic_grid":515000000}}
+{"timestamp":"2026-03-26T17:48:18.726172Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:48:18.726279Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:48:18.726317Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00051 BTCUSD at 68889.42"}}
+{"timestamp":"2026-03-26T17:48:18.726359Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:48:18.726393Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149316,"side":"buy"}}
+{"timestamp":"2026-03-26T17:48:19.902301Z","level":"INFO","fields":{"event":"checksum_ok","cs":-18099216}}
+{"timestamp":"2026-03-26T17:48:21.578873Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149316,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:48:21.889720Z","level":"INFO","fields":{"event":"sniper_fire","bid":6887700000000,"ask":6888700000000,"micro":6888680019748,"buy":68885.14417848,"sell":68893.64417848,"obi":"-0.205","order_usd":35.0,"inv_skew":-140601900,"position":82707,"dynamic_grid":425000000}}
+{"timestamp":"2026-03-26T17:48:21.914465Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:48:21.914540Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:48:21.914577Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00051 BTCUSD at 68893.64"}}
+{"timestamp":"2026-03-26T17:48:21.914618Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:48:21.914652Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149317,"side":"buy"}}
+{"timestamp":"2026-03-26T17:48:21.948092Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00051,"price":68885.0,"new_pos":0.00133707,"aep":68881.73138426}}
+{"timestamp":"2026-03-26T17:48:21.948167Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149317,"status":"EXECUTED @ 68885.0(0.00051)"}}
+{"timestamp":"2026-03-26T17:48:21.948244Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00051,"price":68885.0,"buys":101,"sells":93}}
+{"timestamp":"2026-03-26T17:48:22.532203Z","level":"INFO","fields":{"event":"checksum_ok","cs":1829315771}}
+AI │ OBI=-0.205 │ Spread=$9.00 │ Pos=+0.00134 │ Raw=-6 │ Bias=$-6 │ Grid=$3.95
+{"timestamp":"2026-03-26T17:48:24.928183Z","level":"INFO","fields":{"event":"sniper_fire","bid":6887700000000,"ask":6888600000000,"micro":6888599751849,"buy":68873.93494789,"sell":68881.83494789,"obi":"-0.031","order_usd":50.0,"inv_skew":-211257060,"position":133707,"dynamic_grid":395000000}}
+{"timestamp":"2026-03-26T17:48:24.957800Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:48:24.957856Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00073 BTCUSD at 68873.93"}}
+{"timestamp":"2026-03-26T17:48:24.957865Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00073 BTCUSD at 68881.83"}}
+{"timestamp":"2026-03-26T17:48:24.957877Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:48:25.130716Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1640694933}}
+{"timestamp":"2026-03-26T17:48:27.471731Z","level":"INFO","fields":{"event":"pnl_realized","gain":0.014796089490201557,"closed":0.00073,"aep":68881.73138426}}
+{"timestamp":"2026-03-26T17:48:27.471794Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00073,"price":68902.0,"new_pos":0.0006070700000000001,"aep":68881.73138426}}
+{"timestamp":"2026-03-26T17:48:27.471836Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302312,"status":"EXECUTED @ 68902.0(-0.00073)"}}
+{"timestamp":"2026-03-26T17:48:27.471885Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00073,"price":68902.0,"buys":101,"sells":94}}
+{"timestamp":"2026-03-26T17:48:27.697401Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1158944695}}
+{"timestamp":"2026-03-26T17:48:27.740352Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302327,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:48:28.139059Z","level":"INFO","fields":{"event":"sniper_fire","bid":6889100000000,"ask":6890200000000,"micro":6889952773302,"buy":68886.84753252,"sell":68897.59753252,"obi":"0.263","order_usd":75.0,"inv_skew":-130520050,"position":60707,"dynamic_grid":537500000}}
+{"timestamp":"2026-03-26T17:48:28.164638Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:48:28.164692Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:48:28.164704Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00109 BTCUSD at 68897.6"}}
+{"timestamp":"2026-03-26T17:48:28.164716Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:48:28.164726Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149318,"side":"buy"}}
+⚠️  AI error (#1): error sending request for url (http://localhost:1234/v1/chat/completions)
+{"timestamp":"2026-03-26T17:48:30.356808Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1722587931}}
+{"timestamp":"2026-03-26T17:48:30.975779Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149318,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:48:31.258198Z","level":"INFO","fields":{"event":"sniper_fire","bid":6888300000000,"ask":6889600000000,"micro":6888950061122,"buy":68876.63398652,"sell":68887.68398652,"obi":"0.007","order_usd":50.0,"inv_skew":-134162470,"position":60707,"dynamic_grid":552500000}}
+{"timestamp":"2026-03-26T17:48:31.276890Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:48:31.276967Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:48:31.277031Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00073 BTCUSD at 68887.68"}}
+{"timestamp":"2026-03-26T17:48:31.277074Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:48:31.277139Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149319,"side":"buy"}}
+AI │ OBI=+0.007 │ Spread=$11.00 │ Pos=+0.00061 │ Raw=+4 │ Bias=$+4 │ Grid=$5.22
+{"timestamp":"2026-03-26T17:48:34.279806Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149319,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:48:34.456978Z","level":"INFO","fields":{"event":"sniper_fire","bid":6888900000000,"ask":6890000000000,"micro":6889999053291,"buy":68897.49675661,"sell":68907.94675661,"obi":"-0.004","order_usd":50.0,"inv_skew":-126877630,"position":60707,"dynamic_grid":522500000}}
+{"timestamp":"2026-03-26T17:48:34.478838Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:48:34.478868Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:48:34.478884Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00073 BTCUSD at 68907.95"}}
+{"timestamp":"2026-03-26T17:48:34.478902Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:48:34.480035Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149320,"side":"buy"}}
+{"timestamp":"2026-03-26T17:48:35.515567Z","level":"INFO","fields":{"event":"checksum_ok","cs":403005840}}
+{"timestamp":"2026-03-26T17:48:36.593268Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00073,"price":68897.0,"new_pos":0.00133707,"aep":68890.06758916}}
+{"timestamp":"2026-03-26T17:48:36.593364Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149320,"status":"EXECUTED @ 68897.0(0.00073)"}}
+{"timestamp":"2026-03-26T17:48:36.593412Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00073,"price":68897.0,"buys":102,"sells":94}}
+{"timestamp":"2026-03-26T17:48:36.640027Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00073,"price":68875.0,"new_pos":0.00206707,"aep":68884.74636632}}
+{"timestamp":"2026-03-26T17:48:36.640109Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149314,"status":"EXECUTED @ 68875.0(0.00073)"}}
+{"timestamp":"2026-03-26T17:48:36.640155Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00073,"price":68875.0,"buys":103,"sells":94}}
+{"timestamp":"2026-03-26T17:48:36.698172Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00073,"price":68867.0,"new_pos":0.0027970699999999996,"aep":68880.11478849}}
+{"timestamp":"2026-03-26T17:48:36.698205Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149312,"status":"EXECUTED @ 68867.0(0.00073)"}}
+{"timestamp":"2026-03-26T17:48:36.698226Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00073,"price":68867.0,"buys":104,"sells":94}}
+{"timestamp":"2026-03-26T17:48:36.770708Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00073,"price":68864.0,"new_pos":0.00352707,"aep":68876.77950011}}
+{"timestamp":"2026-03-26T17:48:36.770739Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302319,"status":"EXECUTED @ 68864.0(0.00073)"}}
+{"timestamp":"2026-03-26T17:48:36.770753Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00073,"price":68864.0,"buys":105,"sells":94}}
+{"timestamp":"2026-03-26T17:48:36.821309Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00051,"price":68852.0,"new_pos":0.00403707,"aep":68873.6491246}}
+{"timestamp":"2026-03-26T17:48:36.821356Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302315,"status":"EXECUTED @ 68852.0(0.00051)"}}
+{"timestamp":"2026-03-26T17:48:36.821370Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00051,"price":68852.0,"buys":106,"sells":94}}
+{"timestamp":"2026-03-26T17:48:36.860967Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00109,"price":68843.0,"new_pos":0.00512707,"aep":68867.13321087}}
+{"timestamp":"2026-03-26T17:48:36.861006Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149300,"status":"EXECUTED @ 68843.0(0.00109)"}}
+{"timestamp":"2026-03-26T17:48:36.861019Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00109,"price":68843.0,"new_pos":0.00621707,"aep":68862.90208594}}
+{"timestamp":"2026-03-26T17:48:36.861026Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302317,"status":"EXECUTED @ 68843.0(0.00109)"}}
+{"timestamp":"2026-03-26T17:48:36.861038Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00109,"price":68843.0,"buys":107,"sells":94}}
+{"timestamp":"2026-03-26T17:48:36.861044Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00109,"price":68843.0,"buys":108,"sells":94}}
+{"timestamp":"2026-03-26T17:48:37.333377Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":56,"new_grid_usd":10}}
+{"timestamp":"2026-03-26T17:48:37.426595Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302328,"side":"buy"}}
+{"timestamp":"2026-03-26T17:48:37.426667Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302329,"side":"sell"}}
+{"timestamp":"2026-03-26T17:48:37.649365Z","level":"INFO","fields":{"event":"sniper_fire","bid":6883400000000,"ask":6883600000000,"micro":6883599661894,"buy":68808.57161894,"sell":68829.52161894,"obi":"-0.378","order_usd":35.0,"inv_skew":-2095000000,"position":621707,"dynamic_grid":1047500000}}
+{"timestamp":"2026-03-26T17:48:37.722465Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:48:37.722542Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00051 BTCUSD at 68808.57"}}
+{"timestamp":"2026-03-26T17:48:37.722579Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:48:37.722630Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:48:37.722668Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302328,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:48:37.722698Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302329,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:48:37.722730Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149321,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:48:37.834090Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":63,"new_grid_usd":11}}
+{"timestamp":"2026-03-26T17:48:38.201538Z","level":"INFO","fields":{"event":"checksum_ok","cs":1549093890}}
+{"timestamp":"2026-03-26T17:48:38.334912Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":63,"new_grid_usd":11}}
+{"timestamp":"2026-03-26T17:48:38.835846Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":63,"new_grid_usd":11}}
+AI │ OBI=-0.378 │ Spread=$5.00 │ Pos=+0.00622 │ Raw=-4 │ Bias=$-4 │ Grid=$11.53
+{"timestamp":"2026-03-26T17:48:39.336698Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":63,"new_grid_usd":11}}
+{"timestamp":"2026-03-26T17:48:39.837646Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":63,"new_grid_usd":11}}
+{"timestamp":"2026-03-26T17:48:40.338825Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":63,"new_grid_usd":11}}
+{"timestamp":"2026-03-26T17:48:40.490615Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302330,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:48:40.668286Z","level":"INFO","fields":{"event":"sniper_fire","bid":6883500000000,"ask":6884000000000,"micro":6883501336316,"buy":68796.43836316,"sell":68819.48836316,"obi":"-0.112","order_usd":50.0,"inv_skew":-2305000000,"position":621707,"dynamic_grid":1152500000}}
+{"timestamp":"2026-03-26T17:48:40.668365Z","level":"INFO","fields":{"event":"checksum_ok","cs":-21732296}}
+{"timestamp":"2026-03-26T17:48:40.690742Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00073 BTCUSD at 68796.44"}}
+{"timestamp":"2026-03-26T17:48:40.690774Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:48:40.690790Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:48:40.690803Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149322,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:48:40.840053Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":63,"new_grid_usd":11}}
+{"timestamp":"2026-03-26T17:48:41.340666Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":63,"new_grid_usd":11}}
+{"timestamp":"2026-03-26T17:48:41.841654Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:42.343096Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:42.843671Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:43.344700Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:43.354369Z","level":"INFO","fields":{"event":"checksum_ok","cs":-79956655}}
+{"timestamp":"2026-03-26T17:48:43.506173Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302331,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:48:43.683876Z","level":"INFO","fields":{"event":"sniper_fire","bid":6880700000000,"ask":6882100000000,"micro":6882095606998,"buy":68765.50606998,"sell":68799.80606998,"obi":"0.332","order_usd":75.0,"inv_skew":-3430000000,"position":621707,"dynamic_grid":1715000000}}
+{"timestamp":"2026-03-26T17:48:43.704361Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00109 BTCUSD at 68765.51"}}
+{"timestamp":"2026-03-26T17:48:43.704436Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:48:43.704484Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:48:43.704563Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149323,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:48:43.845965Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+⚠️  AI error (#1): error sending request for url (http://localhost:1234/v1/chat/completions)
+{"timestamp":"2026-03-26T17:48:44.346679Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:44.847925Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:45.348734Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:45.850579Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:46.352239Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:46.648541Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302332,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:48:46.828288Z","level":"INFO","fields":{"event":"sniper_fire","bid":6880900000000,"ask":6881300000000,"micro":6881299957464,"buy":68757.54957464,"sell":68791.84957464,"obi":"0.693","order_usd":75.0,"inv_skew":-3430000000,"position":621707,"dynamic_grid":1715000000}}
+{"timestamp":"2026-03-26T17:48:46.847053Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00109 BTCUSD at 68757.55"}}
+{"timestamp":"2026-03-26T17:48:46.847178Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:48:46.847198Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:48:46.848209Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149324,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:48:46.853335Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:47.353927Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:47.855551Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:48.357560Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:48.558068Z","level":"INFO","fields":{"event":"checksum_ok","cs":-726295997}}
+{"timestamp":"2026-03-26T17:48:48.859330Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:49.359689Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+AI │ OBI=+0.693 │ Spread=$8.00 │ Pos=+0.00622 │ Raw=+5 │ Bias=$+5 │ Grid=$17.15
+{"timestamp":"2026-03-26T17:48:49.738863Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302333,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:48:49.861058Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:49.902002Z","level":"INFO","fields":{"event":"sniper_fire","bid":6881500000000,"ask":6882100000000,"micro":6882099936182,"buy":68774.54936182,"sell":68808.84936182,"obi":"0.744","order_usd":75.0,"inv_skew":-3430000000,"position":621707,"dynamic_grid":1715000000}}
+{"timestamp":"2026-03-26T17:48:49.923662Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00109 BTCUSD at 68774.55"}}
+{"timestamp":"2026-03-26T17:48:49.923700Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:48:49.923726Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:48:49.928259Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149325,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:48:50.362527Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:50.864483Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:51.366019Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:51.866816Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:52.368333Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:52.849251Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302334,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:48:52.869428Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:52.981734Z","level":"INFO","fields":{"event":"sniper_fire","bid":6882000000000,"ask":6882700000000,"micro":6882699925440,"buy":68780.5492544,"sell":68814.8492544,"obi":"0.515","order_usd":75.0,"inv_skew":-3430000000,"position":621707,"dynamic_grid":1715000000}}
+{"timestamp":"2026-03-26T17:48:53.000460Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00109 BTCUSD at 68780.55"}}
+{"timestamp":"2026-03-26T17:48:53.000541Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:48:53.000587Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:48:53.004002Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149326,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:48:53.369645Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:53.601775Z","level":"INFO","fields":{"event":"checksum_ok","cs":-915407360}}
+{"timestamp":"2026-03-26T17:48:53.870767Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:54.371897Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+AI │ OBI=+0.515 │ Spread=$5.00 │ Pos=+0.00622 │ Raw=+4 │ Bias=$+4 │ Grid=$17.15
+{"timestamp":"2026-03-26T17:48:54.872846Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:55.375230Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:55.876307Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:55.997419Z","level":"INFO","fields":{"event":"sniper_fire","bid":6882100000000,"ask":6882700000000,"micro":6882310475375,"buy":68775.65475375,"sell":68809.95475375,"obi":"0.349","order_usd":35.0,"inv_skew":-3430000000,"position":621707,"dynamic_grid":1715000000}}
+{"timestamp":"2026-03-26T17:48:56.017542Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:48:56.017623Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:48:56.017669Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:48:56.017733Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149327,"side":"buy"}}
+{"timestamp":"2026-03-26T17:48:56.017787Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149328,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:48:56.206735Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1735836915}}
+{"timestamp":"2026-03-26T17:48:56.376984Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:56.552887Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149327,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:48:56.552971Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302335,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:48:56.878056Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:57.379111Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:57.879717Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:58.380659Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":101,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:58.773002Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1421639755}}
+{"timestamp":"2026-03-26T17:48:58.882652Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":100,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:59.212336Z","level":"INFO","fields":{"event":"sniper_fire","bid":6881500000000,"ask":6882000000000,"micro":6881500533430,"buy":68767.7803343,"sell":68801.9303343,"obi":"0.213","order_usd":35.0,"inv_skew":-3415000000,"position":621707,"dynamic_grid":1707500000}}
+{"timestamp":"2026-03-26T17:48:59.231331Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:48:59.231401Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:48:59.231448Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:48:59.231518Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149329,"side":"buy"}}
+{"timestamp":"2026-03-26T17:48:59.233405Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149330,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:48:59.383809Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":100,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:48:59.718848Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149329,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:48:59.718879Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302336,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:48:59.885250Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":100,"new_grid_usd":17}}
+AI │ OBI=+0.213 │ Spread=$10.00 │ Pos=+0.00622 │ Raw=+5 │ Bias=$+5 │ Grid=$17.07
+{"timestamp":"2026-03-26T17:49:00.386148Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":100,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:49:00.887567Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":100,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:49:01.294533Z","level":"INFO","fields":{"event":"checksum_ok","cs":697354015}}
+{"timestamp":"2026-03-26T17:49:01.388915Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":100,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:49:01.889972Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":100,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:49:02.350732Z","level":"INFO","fields":{"event":"sniper_fire","bid":6882500000000,"ask":6883400000000,"micro":6883248910162,"buy":68786.26410162,"sell":68820.41410162,"obi":"0.323","order_usd":75.0,"inv_skew":-3415000000,"position":621707,"dynamic_grid":1707500000}}
+{"timestamp":"2026-03-26T17:49:02.390861Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":100,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:49:02.409591Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00109 BTCUSD at 68786.26"}}
+{"timestamp":"2026-03-26T17:49:02.409666Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:02.409712Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:49:02.409748Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149331,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:49:02.771403Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302337,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:49:02.891698Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":100,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:49:03.393010Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":100,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:49:03.836932Z","level":"INFO","fields":{"event":"checksum_ok","cs":-583054234}}
+{"timestamp":"2026-03-26T17:49:03.893946Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":100,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:49:04.395437Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":100,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:49:04.897440Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":100,"new_grid_usd":17}}
+AI │ OBI=+0.323 │ Spread=$8.00 │ Pos=+0.00622 │ Raw=+4 │ Bias=$+4 │ Grid=$17.00
+{"timestamp":"2026-03-26T17:49:05.398945Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":100,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:49:05.436341Z","level":"INFO","fields":{"event":"sniper_fire","bid":6883100000000,"ask":6883800000000,"micro":6883799518514,"buy":68790.99518514,"sell":68824.99518514,"obi":"0.171","order_usd":50.0,"inv_skew":-3400000000,"position":621707,"dynamic_grid":1700000000}}
+{"timestamp":"2026-03-26T17:49:05.473415Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00073 BTCUSD at 68791"}}
+{"timestamp":"2026-03-26T17:49:05.473491Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:49:05.473538Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:49:05.491640Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149332,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:49:05.857048Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302338,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:49:05.900022Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":100,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:49:06.401312Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":100,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:49:06.423407Z","level":"INFO","fields":{"event":"checksum_ok","cs":-97920413}}
+{"timestamp":"2026-03-26T17:49:08.586487Z","level":"INFO","fields":{"event":"sniper_fire","bid":6883100000000,"ask":6883600000000,"micro":6883516155557,"buy":68815.16155557,"sell":68831.16155557,"obi":"-0.070","order_usd":50.0,"inv_skew":-1600000000,"position":621707,"dynamic_grid":800000000}}
+{"timestamp":"2026-03-26T17:49:08.616920Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00073 BTCUSD at 68815.16"}}
+{"timestamp":"2026-03-26T17:49:08.616994Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:49:08.617073Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:49:08.627915Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149333,"side":"sell"}}
+{"timestamp":"2026-03-26T17:49:09.157319Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1966149876}}
+{"timestamp":"2026-03-26T17:49:09.186638Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149333,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:09.186709Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302339,"side":"sell"}}
+{"timestamp":"2026-03-26T17:49:10.209409Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.024748522736203156,"closed":0.00073,"aep":68862.90208594}}
+{"timestamp":"2026-03-26T17:49:10.209481Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00073,"price":68829.0,"new_pos":0.00548707,"aep":68862.90208594}}
+{"timestamp":"2026-03-26T17:49:10.209523Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302339,"status":"EXECUTED @ 68829.0(-0.00073)"}}
+{"timestamp":"2026-03-26T17:49:10.209575Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00073,"price":68829.0,"buys":108,"sells":95}}
+AI │ OBI=-0.070 │ Spread=$6.00 │ Pos=+0.00549 │ Raw=+1 │ Bias=$+1 │ Grid=$8.00
+{"timestamp":"2026-03-26T17:49:11.634947Z","level":"INFO","fields":{"event":"sniper_fire","bid":6882300000000,"ask":6883500000000,"micro":6882300307300,"buy":68801.353073,"sell":68816.453073,"obi":"-0.055","order_usd":50.0,"inv_skew":-1510000000,"position":548707,"dynamic_grid":755000000}}
+{"timestamp":"2026-03-26T17:49:11.635177Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1946550753}}
+{"timestamp":"2026-03-26T17:49:11.672824Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:49:11.672926Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:49:11.672979Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:49:11.673056Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149334,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:11.673094Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149335,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:49:12.252336Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149334,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:12.252419Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302340,"side":"sell"}}
+{"timestamp":"2026-03-26T17:49:14.317911Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1226942366}}
+{"timestamp":"2026-03-26T17:49:14.475964Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.023288522736203156,"closed":0.00073,"aep":68862.90208594}}
+{"timestamp":"2026-03-26T17:49:14.476029Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00073,"price":68831.0,"new_pos":0.00475707,"aep":68862.90208594}}
+{"timestamp":"2026-03-26T17:49:14.476074Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302340,"status":"EXECUTED @ 68831.0(-0.00073)"}}
+{"timestamp":"2026-03-26T17:49:14.476129Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00073,"price":68831.0,"buys":108,"sells":96}}
+{"timestamp":"2026-03-26T17:49:14.741076Z","level":"INFO","fields":{"event":"sniper_fire","bid":6882600000000,"ask":6883800000000,"micro":6883663113355,"buy":68817.67419105,"sell":68831.42419105,"obi":"-0.169","order_usd":35.0,"inv_skew":-1308194250,"position":475707,"dynamic_grid":687500000}}
+{"timestamp":"2026-03-26T17:49:14.760580Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:49:14.760654Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:49:14.760699Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:49:14.760740Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149336,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:14.760770Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149337,"side":"sell"}}
+{"timestamp":"2026-03-26T17:49:14.843730Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.015760063829402208,"closed":0.00051,"aep":68862.90208594}}
+{"timestamp":"2026-03-26T17:49:14.843789Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00051,"price":68832.0,"new_pos":0.00424707,"aep":68862.90208594}}
+{"timestamp":"2026-03-26T17:49:14.843830Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149337,"status":"EXECUTED @ 68832.0(-0.00051)"}}
+{"timestamp":"2026-03-26T17:49:14.843880Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00051,"price":68832.0,"buys":108,"sells":97}}
+{"timestamp":"2026-03-26T17:49:15.387563Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149336,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:15.389189Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302341,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:15.391091Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302342,"side":"sell"}}
+⚠️  AI error (#1): error sending request for url (http://localhost:1234/v1/chat/completions)
+{"timestamp":"2026-03-26T17:49:16.701266Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00009081,"price":68832.0,"new_pos":0.0043378800000000006,"aep":68862.25517583}}
+{"timestamp":"2026-03-26T17:49:16.701292Z","level":"INFO","fields":{"event":"order_tracked","mt":"ou","id":234101302341,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:16.701307Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00009081,"price":68832.0,"buys":109,"sells":97}}
+{"timestamp":"2026-03-26T17:49:17.720908Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00063919,"price":68832.0,"new_pos":0.00497707,"aep":68858.36959539}}
+{"timestamp":"2026-03-26T17:49:17.720990Z","level":"INFO","fields":{"event":"order_tracked","mt":"oc","id":234101302341,"side":"sell"}}
+{"timestamp":"2026-03-26T17:49:17.721046Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00063919,"price":68832.0,"buys":110,"sells":97}}
+{"timestamp":"2026-03-26T17:49:17.922324Z","level":"INFO","fields":{"event":"sniper_fire","bid":6880200000000,"ask":6883600000000,"micro":6880209335990,"buy":68788.1392199,"sell":68798.1392199,"obi":"-0.835","order_usd":75.0,"inv_skew":-995414000,"position":497707,"dynamic_grid":500000000}}
+{"timestamp":"2026-03-26T17:49:17.966315Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:49:17.966392Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:17.966429Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:17.966476Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:49:17.966538Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149338,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:17.966569Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149339,"side":"sell"}}
+{"timestamp":"2026-03-26T17:49:18.231322Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.06471285897510258,"closed":0.00109,"aep":68858.36959539}}
+{"timestamp":"2026-03-26T17:49:18.231345Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00109,"price":68799.0,"new_pos":0.0038870700000000003,"aep":68858.36959539}}
+{"timestamp":"2026-03-26T17:49:18.231373Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149339,"status":"EXECUTED @ 68799.0(-0.00109)"}}
+{"timestamp":"2026-03-26T17:49:18.231387Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00109,"price":68799.0,"buys":110,"sells":98}}
+{"timestamp":"2026-03-26T17:49:18.545179Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149338,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:18.545292Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302343,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:18.545334Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302344,"side":"sell"}}
+{"timestamp":"2026-03-26T17:49:18.799424Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00073,"price":68790.0,"new_pos":0.00461707,"aep":68847.55975178}}
+{"timestamp":"2026-03-26T17:49:18.799511Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302343,"status":"EXECUTED @ 68790.0(0.00073)"}}
+{"timestamp":"2026-03-26T17:49:18.799569Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00073,"price":68790.0,"buys":111,"sells":98}}
+{"timestamp":"2026-03-26T17:49:19.427856Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":71,"new_grid_usd":12}}
+{"timestamp":"2026-03-26T17:49:19.707528Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1879669294}}
+{"timestamp":"2026-03-26T17:49:19.928881Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":71,"new_grid_usd":12}}
+{"timestamp":"2026-03-26T17:49:20.429737Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":87,"new_grid_usd":15}}
+{"timestamp":"2026-03-26T17:49:20.931104Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":87,"new_grid_usd":15}}
+{"timestamp":"2026-03-26T17:49:21.086733Z","level":"INFO","fields":{"event":"sniper_fire","bid":6873800000000,"ask":6875800000000,"micro":6874796895302,"buy":68706.12419162,"sell":68736.22419162,"obi":"-0.256","order_usd":75.0,"inv_skew":-2779476140,"position":461707,"dynamic_grid":1505000000}}
+{"timestamp":"2026-03-26T17:49:21.122269Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:49:21.122300Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:21.122312Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:21.122331Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:49:21.122346Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302344,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:21.122356Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149340,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:21.122366Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149341,"status":"POSTONLY CANCELED"}}
+⚠️  AI error (#2): error sending request for url (http://localhost:1234/v1/chat/completions)
+{"timestamp":"2026-03-26T17:49:21.432292Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":88,"new_grid_usd":15}}
+{"timestamp":"2026-03-26T17:49:21.727471Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149340,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:21.727494Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302345,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:21.727503Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302346,"side":"sell"}}
+{"timestamp":"2026-03-26T17:49:21.933599Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":89,"new_grid_usd":15}}
+{"timestamp":"2026-03-26T17:49:22.287948Z","level":"INFO","fields":{"event":"checksum_ok","cs":-664847536}}
+{"timestamp":"2026-03-26T17:49:22.435417Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":92,"new_grid_usd":15}}
+{"timestamp":"2026-03-26T17:49:22.936471Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":92,"new_grid_usd":15}}
+{"timestamp":"2026-03-26T17:49:23.437773Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":92,"new_grid_usd":15}}
+{"timestamp":"2026-03-26T17:49:23.938963Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":92,"new_grid_usd":15}}
+{"timestamp":"2026-03-26T17:49:24.190424Z","level":"INFO","fields":{"event":"sniper_fire","bid":6874200000000,"ask":6874900000000,"micro":6874897558781,"buy":68704.99570541,"sell":68736.59570541,"obi":"0.218","order_usd":75.0,"inv_skew":-2917988240,"position":461707,"dynamic_grid":1580000000}}
+{"timestamp":"2026-03-26T17:49:24.214061Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:49:24.214110Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:24.214119Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:24.214151Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:49:24.215173Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302345,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:24.215193Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302346,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:24.215221Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149342,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:24.215231Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149343,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:49:24.439668Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":92,"new_grid_usd":15}}
+{"timestamp":"2026-03-26T17:49:24.768602Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149342,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:24.768680Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302347,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:24.768717Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302348,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:49:24.941148Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":102,"new_grid_usd":17}}
+{"timestamp":"2026-03-26T17:49:24.999361Z","level":"INFO","fields":{"event":"checksum_ok","cs":-2079597935}}
+{"timestamp":"2026-03-26T17:49:25.441700Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":107,"new_grid_usd":18}}
+{"timestamp":"2026-03-26T17:49:25.942775Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":107,"new_grid_usd":18}}
+⚠️  AI error (#3): error sending request for url (http://localhost:1234/v1/chat/completions)
+{"timestamp":"2026-03-26T17:49:26.444440Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":110,"new_grid_usd":18}}
+{"timestamp":"2026-03-26T17:49:26.945174Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":120,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:27.319133Z","level":"INFO","fields":{"event":"sniper_fire","bid":6870700000000,"ask":6872100000000,"micro":6870904575134,"buy":68653.10919134,"sell":68693.10919134,"obi":"-0.591","order_usd":75.0,"inv_skew":-3693656000,"position":461707,"dynamic_grid":2000000000}}
+{"timestamp":"2026-03-26T17:49:27.406937Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:49:27.406983Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:27.407005Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:27.407034Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:49:27.407074Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302347,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:27.407082Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149344,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:27.407091Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149345,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:49:27.446311Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:27.514824Z","level":"INFO","fields":{"event":"checksum_ok","cs":1034120584}}
+{"timestamp":"2026-03-26T17:49:27.946871Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:27.957923Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149344,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:27.957995Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302349,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:27.958029Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302350,"side":"sell"}}
+{"timestamp":"2026-03-26T17:49:28.142789Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.09092861879940377,"closed":0.00073,"aep":68847.55975178}}
+{"timestamp":"2026-03-26T17:49:28.142849Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00073,"price":68723.0,"new_pos":0.0038870700000000003,"aep":68847.55975178}}
+{"timestamp":"2026-03-26T17:49:28.142892Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302350,"status":"EXECUTED @ 68723.0(-0.00073)"}}
+{"timestamp":"2026-03-26T17:49:28.142941Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00073,"price":68723.0,"buys":111,"sells":99}}
+{"timestamp":"2026-03-26T17:49:28.448236Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:28.949395Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:29.450260Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:29.951154Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:30.265147Z","level":"INFO","fields":{"event":"checksum_ok","cs":271686674}}
+{"timestamp":"2026-03-26T17:49:30.451634Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:30.506511Z","level":"INFO","fields":{"event":"sniper_fire","bid":6872200000000,"ask":6873200000000,"micro":6873197022942,"buy":68681.29883312,"sell":68721.74883312,"obi":"0.682","order_usd":75.0,"inv_skew":-3144639630,"position":388707,"dynamic_grid":2022500000}}
+{"timestamp":"2026-03-26T17:49:30.539832Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:49:30.539905Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:30.539940Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:30.539990Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:49:30.540027Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302349,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:30.540057Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149346,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:30.540090Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149347,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:49:30.953005Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:31.105097Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149346,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:31.105175Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302351,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:31.105235Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302352,"side":"sell"}}
+{"timestamp":"2026-03-26T17:49:31.454039Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+AI │ OBI=+0.682 │ Spread=$8.00 │ Pos=+0.00389 │ Raw=+14 │ Bias=$+14 │ Grid=$20.23
+{"timestamp":"2026-03-26T17:49:31.955188Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:32.455931Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:32.914156Z","level":"INFO","fields":{"event":"checksum_ok","cs":946226120}}
+{"timestamp":"2026-03-26T17:49:32.957486Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:33.459406Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:33.524324Z","level":"INFO","fields":{"event":"sniper_fire","bid":6872600000000,"ask":6873400000000,"micro":6873397216594,"buy":68696.30076964,"sell":68736.75076964,"obi":"0.288","order_usd":75.0,"inv_skew":-3144639630,"position":388707,"dynamic_grid":2022500000}}
+{"timestamp":"2026-03-26T17:49:33.545798Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:49:33.545874Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:33.545909Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:33.545965Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:49:33.546002Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302351,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:33.546032Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302352,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:33.546064Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149348,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:33.546117Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149349,"side":"sell"}}
+{"timestamp":"2026-03-26T17:49:33.960286Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:34.214779Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149348,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:34.214862Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149349,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:34.214896Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302353,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:34.214956Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302354,"side":"sell"}}
+{"timestamp":"2026-03-26T17:49:34.460813Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:34.961696Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:35.405334Z","level":"INFO","fields":{"event":"checksum_ok","cs":1292008213}}
+{"timestamp":"2026-03-26T17:49:35.462645Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:35.964434Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:36.465994Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:36.893848Z","level":"INFO","fields":{"event":"sniper_fire","bid":6872800000000,"ask":6873700000000,"micro":6873696861290,"buy":68699.2972166,"sell":68739.7472166,"obi":"0.328","order_usd":75.0,"inv_skew":-3144639630,"position":388707,"dynamic_grid":2022500000}}
+{"timestamp":"2026-03-26T17:49:36.926187Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:49:36.926240Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:36.926252Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:36.926284Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:49:36.926297Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302353,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:36.926306Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302354,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:36.926313Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149350,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:36.926320Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149351,"side":"sell"}}
+AI │ OBI=+0.288 │ Spread=$6.00 │ Pos=+0.00389 │ Raw=+1 │ Bias=$+1 │ Grid=$20.23
+{"timestamp":"2026-03-26T17:49:36.968219Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:37.343538Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149350,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:37.343616Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149351,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:37.343648Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302355,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:37.343675Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302356,"side":"sell"}}
+{"timestamp":"2026-03-26T17:49:37.469069Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:37.971247Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:38.068407Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1332577645}}
+{"timestamp":"2026-03-26T17:49:38.471969Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:38.972714Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:39.474405Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:39.975010Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:40.016305Z","level":"INFO","fields":{"event":"sniper_fire","bid":6871900000000,"ask":6873200000000,"micro":6871900152732,"buy":68668.33013102,"sell":68708.78013102,"obi":"-0.071","order_usd":50.0,"inv_skew":-3144639630,"position":388707,"dynamic_grid":2022500000}}
+{"timestamp":"2026-03-26T17:49:40.037195Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:49:40.037233Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:49:40.037245Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:49:40.037263Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:49:40.037455Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302355,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:40.037475Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302356,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:40.037493Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149352,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:40.037503Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149353,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:49:40.428308Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149352,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:40.428385Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302357,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:40.428417Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302358,"side":"sell"}}
+{"timestamp":"2026-03-26T17:49:40.476589Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:40.600684Z","level":"INFO","fields":{"event":"checksum_ok","cs":-351123751}}
+{"timestamp":"2026-03-26T17:49:40.977698Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:41.479535Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:41.981395Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+⚠️  AI error (#1): error sending request for url (http://localhost:1234/v1/chat/completions)
+{"timestamp":"2026-03-26T17:49:42.481735Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:42.983483Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:43.199496Z","level":"INFO","fields":{"event":"sniper_fire","bid":6870700000000,"ask":6872200000000,"micro":6870700839067,"buy":68656.33699437,"sell":68696.78699437,"obi":"0.003","order_usd":50.0,"inv_skew":-3144639630,"position":388707,"dynamic_grid":2022500000}}
+{"timestamp":"2026-03-26T17:49:43.199569Z","level":"INFO","fields":{"event":"checksum_ok","cs":1747207748}}
+{"timestamp":"2026-03-26T17:49:43.220919Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:49:43.220957Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:49:43.220974Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:49:43.221000Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:49:43.221019Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302357,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:43.221034Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302358,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:43.221119Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149354,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:43.221393Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149355,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:49:43.485588Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:43.555091Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149354,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:43.555166Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302359,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:43.555202Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302360,"side":"sell"}}
+{"timestamp":"2026-03-26T17:49:43.986990Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":125,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:44.488374Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":125,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:44.988847Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":125,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:45.489836Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":125,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:45.733731Z","level":"INFO","fields":{"event":"checksum_ok","cs":1423833514}}
+{"timestamp":"2026-03-26T17:49:45.991591Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":126,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:46.272025Z","level":"INFO","fields":{"event":"sniper_fire","bid":6870300000000,"ask":6871500000000,"micro":6870300449555,"buy":68650.60859035,"sell":68692.40859035,"obi":"-0.119","order_usd":50.0,"inv_skew":-3249590520,"position":388707,"dynamic_grid":2090000000}}
+{"timestamp":"2026-03-26T17:49:46.319881Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:49:46.319957Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:49:46.319991Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00073 BTC."}}
+{"timestamp":"2026-03-26T17:49:46.320045Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:49:46.320084Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302359,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:46.320139Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302360,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:46.320172Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149356,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:46.320199Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149357,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:49:46.493620Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":126,"new_grid_usd":20}}
+{"timestamp":"2026-03-26T17:49:46.898901Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149356,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:46.898979Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302361,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:46.899014Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302362,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:49:46.995292Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":137,"new_grid_usd":22}}
+{"timestamp":"2026-03-26T17:49:47.496062Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":121,"new_grid_usd":20}}
+⚠️  AI error (#2): error sending request for url (http://localhost:1234/v1/chat/completions)
+{"timestamp":"2026-03-26T17:49:47.997162Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":97,"new_grid_usd":16}}
+{"timestamp":"2026-03-26T17:49:48.387822Z","level":"INFO","fields":{"event":"checksum_ok","cs":645663741}}
+{"timestamp":"2026-03-26T17:49:48.498499Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":95,"new_grid_usd":16}}
+{"timestamp":"2026-03-26T17:49:48.999896Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":66,"new_grid_usd":11}}
+{"timestamp":"2026-03-26T17:49:49.421911Z","level":"INFO","fields":{"event":"sniper_fire","bid":6869100000000,"ask":6870900000000,"micro":6869151609289,"buy":68662.11363969,"sell":68685.91363969,"obi":"-0.275","order_usd":75.0,"inv_skew":-1850245320,"position":388707,"dynamic_grid":1190000000}}
+{"timestamp":"2026-03-26T17:49:49.443706Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:49:49.443779Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:49.443813Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:49.443863Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:49:49.443901Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302361,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:49.443930Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149358,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:49.443963Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149359,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:49:49.501268Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":65,"new_grid_usd":11}}
+{"timestamp":"2026-03-26T17:49:50.001699Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149358,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:50.001728Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302363,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:50.001740Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302364,"side":"sell"}}
+{"timestamp":"2026-03-26T17:49:50.502787Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":55,"new_grid_usd":10}}
+{"timestamp":"2026-03-26T17:49:50.994298Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1391187520}}
+{"timestamp":"2026-03-26T17:49:51.004434Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":54,"new_grid_usd":10}}
+{"timestamp":"2026-03-26T17:49:51.504680Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":53,"new_grid_usd":10}}
+{"timestamp":"2026-03-26T17:49:52.006328Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":53,"new_grid_usd":9}}
+{"timestamp":"2026-03-26T17:49:52.507134Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":53,"new_grid_usd":9}}
+{"timestamp":"2026-03-26T17:49:52.512597Z","level":"INFO","fields":{"event":"sniper_fire","bid":6869200000000,"ask":6869300000000,"micro":6869202693409,"buy":68667.60639549,"sell":68687.50639549,"obi":"-0.796","order_usd":75.0,"inv_skew":-1547053860,"position":388707,"dynamic_grid":995000000}}
+{"timestamp":"2026-03-26T17:49:52.551398Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:49:52.551462Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:52.551487Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:52.551540Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:49:52.551560Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302363,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:52.551575Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302364,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:52.551588Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149360,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:52.551606Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149361,"status":"POSTONLY CANCELED"}}
+AI │ OBI=-0.796 │ Spread=$1.00 │ Pos=+0.00389 │ Raw=-7 │ Bias=$-7 │ Grid=$9.95
+{"timestamp":"2026-03-26T17:49:53.008308Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":53,"new_grid_usd":9}}
+{"timestamp":"2026-03-26T17:49:53.198711Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149360,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:53.198787Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302365,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:53.198821Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302366,"side":"sell"}}
+{"timestamp":"2026-03-26T17:49:53.509370Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":53,"new_grid_usd":9}}
+{"timestamp":"2026-03-26T17:49:53.578176Z","level":"INFO","fields":{"event":"checksum_ok","cs":-985844444}}
+{"timestamp":"2026-03-26T17:49:54.010353Z","level":"INFO","fields":{"event":"volatility_spike","range_usd":53,"new_grid_usd":9}}
+{"timestamp":"2026-03-26T17:49:55.886051Z","level":"INFO","fields":{"event":"sniper_fire","bid":6869200000000,"ask":6869300000000,"micro":6869203905635,"buy":68664.21720815,"sell":68680.51720815,"obi":"-0.722","order_usd":75.0,"inv_skew":-1267184820,"position":388707,"dynamic_grid":815000000}}
+{"timestamp":"2026-03-26T17:49:55.911130Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:49:55.911203Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:55.911266Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:49:55.911322Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:49:55.911390Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302365,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:55.911425Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302366,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:55.911451Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149362,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:55.911481Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149363,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:49:56.093918Z","level":"INFO","fields":{"event":"checksum_ok","cs":-217736235}}
+{"timestamp":"2026-03-26T17:49:56.441836Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149362,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:56.441913Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302367,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:56.441950Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302368,"status":"POSTONLY CANCELED"}}
+AI │ OBI=-0.722 │ Spread=$13.00 │ Pos=+0.00389 │ Raw=-6 │ Bias=$-6 │ Grid=$8.15
+{"timestamp":"2026-03-26T17:49:58.746237Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1759797522}}
+{"timestamp":"2026-03-26T17:49:58.939400Z","level":"INFO","fields":{"event":"sniper_fire","bid":6869300000000,"ask":6870500000000,"micro":6870408765536,"buy":68677.26580716,"sell":68693.56580716,"obi":"-0.462","order_usd":35.0,"inv_skew":-1267184820,"position":388707,"dynamic_grid":815000000}}
+{"timestamp":"2026-03-26T17:49:58.992258Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:49:58.992338Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:49:58.992372Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:49:58.992423Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:49:58.992459Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302367,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:58.992488Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149364,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:58.992513Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149365,"side":"sell"}}
+{"timestamp":"2026-03-26T17:49:59.272258Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.07831547340780265,"closed":0.00051,"aep":68847.55975178}}
+{"timestamp":"2026-03-26T17:49:59.272279Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00051,"price":68694.0,"new_pos":0.00337707,"aep":68847.55975178}}
+{"timestamp":"2026-03-26T17:49:59.272292Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149365,"status":"EXECUTED @ 68694.0(-0.00051)"}}
+{"timestamp":"2026-03-26T17:49:59.272305Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00051,"price":68694.0,"buys":111,"sells":100}}
+{"timestamp":"2026-03-26T17:49:59.501007Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149364,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:49:59.501080Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302369,"side":"buy"}}
+{"timestamp":"2026-03-26T17:49:59.501113Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302370,"side":"sell"}}
+{"timestamp":"2026-03-26T17:50:01.486892Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1153153383}}
+{"timestamp":"2026-03-26T17:50:02.199539Z","level":"INFO","fields":{"event":"sniper_fire","bid":6869300000000,"ask":6869700000000,"micro":6869686577181,"buy":68671.70652361,"sell":68688.00652361,"obi":"-0.618","order_usd":35.0,"inv_skew":-1100924820,"position":337707,"dynamic_grid":815000000}}
+{"timestamp":"2026-03-26T17:50:02.253172Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:50:02.253285Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:50:02.253325Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:50:02.253384Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:50:02.253424Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302369,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:02.253458Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302370,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:02.253484Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149366,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:02.253511Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149367,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:50:02.609832Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149366,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:02.609909Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302371,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:02.609943Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302372,"status":"POSTONLY CANCELED"}}
+⚠️  AI error (#1): error sending request for url (http://localhost:1234/v1/chat/completions)
+{"timestamp":"2026-03-26T17:50:04.076432Z","level":"INFO","fields":{"event":"checksum_ok","cs":614766863}}
+{"timestamp":"2026-03-26T17:50:05.415845Z","level":"INFO","fields":{"event":"sniper_fire","bid":6868700000000,"ask":6869700000000,"micro":6869678248930,"buy":68670.5653685,"sell":68687.7653685,"obi":"-0.476","order_usd":35.0,"inv_skew":-1161712080,"position":337707,"dynamic_grid":860000000}}
+{"timestamp":"2026-03-26T17:50:05.461645Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:50:05.461676Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:50:05.461693Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:50:05.461713Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:50:05.461729Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302371,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:05.461740Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149368,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:05.461751Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149369,"side":"sell"}}
+{"timestamp":"2026-03-26T17:50:05.487906Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.08137547340780264,"closed":0.00051,"aep":68847.55975178}}
+{"timestamp":"2026-03-26T17:50:05.487962Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00051,"price":68688.0,"new_pos":0.0028670699999999998,"aep":68847.55975178}}
+{"timestamp":"2026-03-26T17:50:05.488029Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149369,"status":"EXECUTED @ 68688.0(-0.00051)"}}
+{"timestamp":"2026-03-26T17:50:05.488073Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00051,"price":68688.0,"buys":111,"sells":101}}
+{"timestamp":"2026-03-26T17:50:05.657298Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149368,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:05.657375Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302373,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:05.657412Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302374,"side":"sell"}}
+{"timestamp":"2026-03-26T17:50:05.840077Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.07984547340780264,"closed":0.00051,"aep":68847.55975178}}
+{"timestamp":"2026-03-26T17:50:05.840136Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00051,"price":68691.0,"new_pos":0.00235707,"aep":68847.55975178}}
+{"timestamp":"2026-03-26T17:50:05.840179Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302374,"status":"EXECUTED @ 68691.0(-0.00051)"}}
+{"timestamp":"2026-03-26T17:50:05.840249Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00051,"price":68691.0,"buys":111,"sells":102}}
+{"timestamp":"2026-03-26T17:50:06.767882Z","level":"INFO","fields":{"event":"checksum_ok","cs":-960985233}}
+{"timestamp":"2026-03-26T17:50:08.444779Z","level":"INFO","fields":{"event":"sniper_fire","bid":6868600000000,"ask":6869600000000,"micro":6868602247820,"buy":68663.8970058,"sell":68680.4970058,"obi":"-0.787","order_usd":75.0,"inv_skew":-782547240,"position":235707,"dynamic_grid":830000000}}
+{"timestamp":"2026-03-26T17:50:08.479208Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:50:08.479320Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:50:08.479355Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:50:08.479406Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:50:08.479443Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302373,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:08.479471Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149370,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:08.479499Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149371,"status":"POSTONLY CANCELED"}}
+AI │ OBI=-0.476 │ Spread=$10.00 │ Pos=+0.00236 │ Raw=-9 │ Bias=$-9 │ Grid=$8.30
+{"timestamp":"2026-03-26T17:50:09.150129Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149370,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:09.150162Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302375,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:09.151090Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302376,"side":"sell"}}
+{"timestamp":"2026-03-26T17:50:09.319561Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.01451834181446267,"closed":0.00009099,"aep":68847.55975178}}
+{"timestamp":"2026-03-26T17:50:09.319621Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00009099,"price":68688.0,"new_pos":0.00226608,"aep":68847.55975178}}
+{"timestamp":"2026-03-26T17:50:09.319661Z","level":"INFO","fields":{"event":"order_tracked","mt":"ou","id":234101302376,"side":"sell"}}
+{"timestamp":"2026-03-26T17:50:09.319703Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00009099,"price":68688.0,"buys":111,"sells":103}}
+{"timestamp":"2026-03-26T17:50:09.337914Z","level":"INFO","fields":{"event":"checksum_ok","cs":126501763}}
+{"timestamp":"2026-03-26T17:50:09.349368Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.15940178762574297,"closed":0.00099901,"aep":68847.55975178}}
+{"timestamp":"2026-03-26T17:50:09.349424Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00099901,"price":68688.0,"new_pos":0.0012670700000000001,"aep":68847.55975178}}
+{"timestamp":"2026-03-26T17:50:09.349465Z","level":"INFO","fields":{"event":"order_tracked","mt":"oc","id":234101302376,"side":"sell"}}
+{"timestamp":"2026-03-26T17:50:09.349506Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00099901,"price":68688.0,"buys":111,"sells":104}}
+{"timestamp":"2026-03-26T17:50:11.618144Z","level":"INFO","fields":{"event":"sniper_fire","bid":6868500000000,"ask":6869300000000,"micro":6868500220277,"buy":68665.86878447,"sell":68679.31878447,"obi":"-0.658","order_usd":75.0,"inv_skew":-340841830,"position":126707,"dynamic_grid":672500000}}
+{"timestamp":"2026-03-26T17:50:11.749877Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:50:11.749957Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:50:11.749993Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00109 BTCUSD at 68679.32"}}
+{"timestamp":"2026-03-26T17:50:11.750044Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:50:11.750082Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302375,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:11.750112Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149372,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:12.008139Z","level":"INFO","fields":{"event":"checksum_ok","cs":1672495569}}
+{"timestamp":"2026-03-26T17:50:12.365027Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149372,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:12.365102Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302377,"side":"buy"}}
+AI │ OBI=-0.658 │ Spread=$8.00 │ Pos=+0.00127 │ Raw=-7 │ Bias=$-7 │ Grid=$6.42
+{"timestamp":"2026-03-26T17:50:14.107736Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00109,"price":68678.0,"new_pos":0.00235707,"aep":68769.14878841}}
+{"timestamp":"2026-03-26T17:50:14.107821Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302377,"status":"EXECUTED @ 68678.0(0.00109)"}}
+{"timestamp":"2026-03-26T17:50:14.107871Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00109,"price":68678.0,"buys":112,"sells":104}}
+{"timestamp":"2026-03-26T17:50:14.695852Z","level":"INFO","fields":{"event":"sniper_fire","bid":6867900000000,"ask":6868600000000,"micro":6867905326870,"buy":68658.2591899,"sell":68672.4591899,"obi":"-0.715","order_usd":75.0,"inv_skew":-669407880,"position":235707,"dynamic_grid":710000000}}
+{"timestamp":"2026-03-26T17:50:14.696082Z","level":"INFO","fields":{"event":"checksum_ok","cs":1022664257}}
+{"timestamp":"2026-03-26T17:50:14.723901Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:50:14.723980Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:50:14.724020Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:50:14.724095Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:50:14.724132Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149373,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:14.724168Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149374,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:50:15.470047Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149373,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:15.470124Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302378,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:15.470159Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302379,"side":"sell"}}
+{"timestamp":"2026-03-26T17:50:17.166726Z","level":"INFO","fields":{"event":"checksum_ok","cs":188803836}}
+{"timestamp":"2026-03-26T17:50:17.773374Z","level":"INFO","fields":{"event":"sniper_fire","bid":6867800000000,"ask":6868200000000,"micro":6867800905024,"buy":68658.52638034,"sell":68671.37638034,"obi":"-0.571","order_usd":75.0,"inv_skew":-605766990,"position":235707,"dynamic_grid":642500000}}
+{"timestamp":"2026-03-26T17:50:17.799388Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:50:17.799464Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:50:17.799499Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00109 BTCUSD at 68671.38"}}
+{"timestamp":"2026-03-26T17:50:17.799553Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:50:17.799591Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302378,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:17.799620Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302379,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:17.799651Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149375,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:18.627886Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149375,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:18.627963Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302380,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:18.627995Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302381,"side":"sell"}}
+AI │ OBI=-0.571 │ Spread=$3.00 │ Pos=+0.00236 │ Raw=-1 │ Bias=$-1 │ Grid=$5.83
+{"timestamp":"2026-03-26T17:50:19.801264Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1860548086}}
+{"timestamp":"2026-03-26T17:50:20.803440Z","level":"INFO","fields":{"event":"sniper_fire","bid":6867100000000,"ask":6868000000000,"micro":6867193958367,"buy":68660.05974687,"sell":68671.25974687,"obi":"-0.708","order_usd":75.0,"inv_skew":-527983680,"position":235707,"dynamic_grid":560000000}}
+{"timestamp":"2026-03-26T17:50:20.869689Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:50:20.869768Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:50:20.869804Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00109 BTCUSD at 68671.26"}}
+{"timestamp":"2026-03-26T17:50:20.869859Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:50:20.869922Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302380,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:20.869959Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302381,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:20.869988Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149376,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:21.654939Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149376,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:21.655016Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302382,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:21.655051Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302383,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:50:22.442620Z","level":"INFO","fields":{"event":"checksum_ok","cs":1894290114}}
+{"timestamp":"2026-03-26T17:50:23.917209Z","level":"INFO","fields":{"event":"sniper_fire","bid":6866500000000,"ask":6867400000000,"micro":6866500069815,"buy":68651.37231615,"sell":68664.37231615,"obi":"-0.536","order_usd":75.0,"inv_skew":-612838200,"position":235707,"dynamic_grid":650000000}}
+{"timestamp":"2026-03-26T17:50:23.966348Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:50:23.966427Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:50:23.966462Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:50:23.966511Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:50:23.966550Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302382,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:23.966584Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149377,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:23.966610Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149378,"side":"sell"}}
+{"timestamp":"2026-03-26T17:50:23.976775Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.11352217936690664,"closed":0.00109,"aep":68769.14878841}}
+{"timestamp":"2026-03-26T17:50:23.976845Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00109,"price":68665.0,"new_pos":0.0012670700000000001,"aep":68769.14878841}}
+{"timestamp":"2026-03-26T17:50:23.976887Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149378,"status":"EXECUTED @ 68665.0(-0.00109)"}}
+{"timestamp":"2026-03-26T17:50:23.976933Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00109,"price":68665.0,"buys":112,"sells":105}}
+AI │ OBI=-0.536 │ Spread=$16.00 │ Pos=+0.00127 │ Raw=-8 │ Bias=$-8 │ Grid=$6.50
+{"timestamp":"2026-03-26T17:50:24.804494Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149377,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:24.804571Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302384,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:24.970439Z","level":"INFO","fields":{"event":"checksum_ok","cs":-2025038182}}
+{"timestamp":"2026-03-26T17:50:27.056107Z","level":"INFO","fields":{"event":"sniper_fire","bid":6866300000000,"ask":6867400000000,"micro":6866300147288,"buy":68645.20709088,"sell":68658.20709088,"obi":"-0.575","order_usd":75.0,"inv_skew":-329438200,"position":126707,"dynamic_grid":650000000}}
+{"timestamp":"2026-03-26T17:50:27.076811Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:50:27.076915Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:50:27.076951Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00109 BTCUSD at 68658.21"}}
+{"timestamp":"2026-03-26T17:50:27.077002Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:50:27.077040Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302384,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:27.077067Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149379,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:27.488527Z","level":"INFO","fields":{"event":"checksum_ok","cs":845952850}}
+{"timestamp":"2026-03-26T17:50:27.863739Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149379,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:27.863830Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302385,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:28.903353Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00109,"price":68650.0,"new_pos":0.00235707,"aep":68714.04979713}}
+{"timestamp":"2026-03-26T17:50:28.903384Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302385,"status":"EXECUTED @ 68650.0(0.00109)"}}
+{"timestamp":"2026-03-26T17:50:28.903401Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00109,"price":68650.0,"buys":113,"sells":105}}
+AI │ OBI=-0.575 │ Spread=$17.00 │ Pos=+0.00236 │ Raw=-6 │ Bias=$-6 │ Grid=$8.22
+{"timestamp":"2026-03-26T17:50:30.149616Z","level":"INFO","fields":{"event":"sniper_fire","bid":6864100000000,"ask":6865200000000,"micro":6864211698421,"buy":68617.80583031,"sell":68636.65583031,"obi":"-0.588","order_usd":75.0,"inv_skew":-888615390,"position":235707,"dynamic_grid":942500000}}
+{"timestamp":"2026-03-26T17:50:30.149830Z","level":"INFO","fields":{"event":"checksum_ok","cs":950622267}}
+{"timestamp":"2026-03-26T17:50:30.177413Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:50:30.177488Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:50:30.177525Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:50:30.177591Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:50:30.177626Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149380,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:30.177659Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149381,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:50:30.986279Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149380,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:30.986331Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302386,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:30.986347Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302387,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:50:32.661818Z","level":"INFO","fields":{"event":"checksum_ok","cs":782402919}}
+{"timestamp":"2026-03-26T17:50:33.255779Z","level":"INFO","fields":{"event":"sniper_fire","bid":6865100000000,"ask":6867300000000,"micro":6867195238095,"buy":68647.93265125,"sell":68666.48265125,"obi":"0.591","order_usd":75.0,"inv_skew":-874472970,"position":235707,"dynamic_grid":927500000}}
+{"timestamp":"2026-03-26T17:50:33.335846Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:50:33.335920Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:50:33.335955Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:50:33.336005Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:50:33.336041Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302386,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:33.336070Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149382,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:33.336095Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149383,"side":"sell"}}
+{"timestamp":"2026-03-26T17:50:33.336143Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.05128427887170707,"closed":0.00109,"aep":68714.04979713}}
+{"timestamp":"2026-03-26T17:50:33.336162Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00109,"price":68667.0,"new_pos":0.0012670700000000001,"aep":68714.04979713}}
+{"timestamp":"2026-03-26T17:50:33.336197Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149383,"status":"EXECUTED @ 68667.0(-0.00109)"}}
+{"timestamp":"2026-03-26T17:50:33.336282Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00109,"price":68667.0,"buys":113,"sells":106}}
+{"timestamp":"2026-03-26T17:50:34.157974Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149382,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:34.158014Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302388,"side":"buy"}}
+AI │ OBI=+0.591 │ Spread=$20.00 │ Pos=+0.00127 │ Raw=+7 │ Bias=$+7 │ Grid=$9.12
+{"timestamp":"2026-03-26T17:50:35.320143Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1494105065}}
+{"timestamp":"2026-03-26T17:50:35.974977Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00051,"price":68663.0,"new_pos":0.00177707,"aep":68699.39905375}}
+{"timestamp":"2026-03-26T17:50:35.975011Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302388,"status":"EXECUTED @ 68663.0(0.00051)"}}
+{"timestamp":"2026-03-26T17:50:35.975029Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00051,"price":68663.0,"buys":114,"sells":106}}
+{"timestamp":"2026-03-26T17:50:36.478773Z","level":"INFO","fields":{"event":"sniper_fire","bid":6866500000000,"ask":6867300000000,"micro":6866648142661,"buy":68657.87012111,"sell":68676.12012111,"obi":"-0.661","order_usd":75.0,"inv_skew":-648630550,"position":177707,"dynamic_grid":912500000}}
+{"timestamp":"2026-03-26T17:50:36.512121Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:50:36.512199Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:50:36.512264Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00109 BTCUSD at 68676.12"}}
+{"timestamp":"2026-03-26T17:50:36.512310Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:50:36.512345Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149384,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:37.168021Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149384,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:37.168104Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302389,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:37.168137Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302390,"side":"sell"}}
+{"timestamp":"2026-03-26T17:50:37.940399Z","level":"INFO","fields":{"event":"checksum_ok","cs":1646098612}}
+{"timestamp":"2026-03-26T17:50:38.597472Z","level":"INFO","fields":{"event":"pnl_realized","gain":-0.010913517412503425,"closed":0.00051,"aep":68699.39905375}}
+{"timestamp":"2026-03-26T17:50:38.597533Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00051,"price":68678.0,"new_pos":0.00126707,"aep":68699.39905375}}
+{"timestamp":"2026-03-26T17:50:38.597575Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302390,"status":"EXECUTED @ 68678.0(-0.00051)"}}
+{"timestamp":"2026-03-26T17:50:38.597626Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00051,"price":68678.0,"buys":114,"sells":107}}
+{"timestamp":"2026-03-26T17:50:39.504622Z","level":"INFO","fields":{"event":"sniper_fire","bid":6867000000000,"ask":6868300000000,"micro":6868288149615,"buy":68676.47072695,"sell":68694.27072695,"obi":"-0.307","order_usd":35.0,"inv_skew":-451076920,"position":126707,"dynamic_grid":890000000}}
+{"timestamp":"2026-03-26T17:50:39.523622Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:50:39.523677Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:50:39.523700Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00051 BTCUSD at 68694.27"}}
+{"timestamp":"2026-03-26T17:50:39.523715Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:50:39.523726Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302389,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:39.523734Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149385,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:40.248531Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149385,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:40.248573Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302391,"side":"buy"}}
+AI │ OBI=-0.307 │ Spread=$5.00 │ Pos=+0.00127 │ Raw=-4 │ Bias=$-4 │ Grid=$8.90
+{"timestamp":"2026-03-26T17:50:40.576916Z","level":"INFO","fields":{"event":"checksum_ok","cs":707292821}}
+{"timestamp":"2026-03-26T17:50:42.607653Z","level":"INFO","fields":{"event":"sniper_fire","bid":6867300000000,"ask":6868000000000,"micro":6867370384504,"buy":68657.08416054,"sell":68673.83416054,"obi":"-0.473","order_usd":75.0,"inv_skew":-424468450,"position":126707,"dynamic_grid":837500000}}
+{"timestamp":"2026-03-26T17:50:42.628944Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:50:42.629018Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:50:42.629053Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00109 BTCUSD at 68673.83"}}
+{"timestamp":"2026-03-26T17:50:42.629102Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:50:42.629167Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302391,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:42.629202Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149386,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:43.222033Z","level":"INFO","fields":{"event":"checksum_ok","cs":1598069401}}
+{"timestamp":"2026-03-26T17:50:43.441966Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149386,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:43.442042Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302392,"side":"buy"}}
+AI │ OBI=-0.473 │ Spread=$11.00 │ Pos=+0.00127 │ Raw=-5 │ Bias=$-5 │ Grid=$7.78
+{"timestamp":"2026-03-26T17:50:45.614290Z","level":"INFO","fields":{"event":"sniper_fire","bid":6867700000000,"ask":6868900000000,"micro":6868898079448,"buy":68672.26520678,"sell":68687.81520678,"obi":"0.292","order_usd":75.0,"inv_skew":-394058770,"position":126707,"dynamic_grid":777500000}}
+{"timestamp":"2026-03-26T17:50:45.679676Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:50:45.679755Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:50:45.679793Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for -0.00109 BTCUSD at 68687.82"}}
+{"timestamp":"2026-03-26T17:50:45.679848Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:50:45.679890Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101302392,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:45.679923Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234109149387,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:45.816956Z","level":"INFO","fields":{"event":"checksum_ok","cs":1527526789}}
+{"timestamp":"2026-03-26T17:50:46.790312Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234109149387,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:50:46.790390Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101302393,"side":"buy"}}
+{"timestamp":"2026-03-26T17:50:48.397112Z","level":"INFO","fields":{"event":"checksum_mismatch","remote":868444421,"local":487267410}}
+{"timestamp":"2026-03-26T17:50:48.397171Z","level":"INFO","fields":{"event":"reconnecting","reason":"checksum_persist"}}
+{"timestamp":"2026-03-26T17:50:48.403428Z","level":"INFO","fields":{"event":"async_alert","message":"⚠️ *RECONNECT*\n`Reason: checksum_persist`"}}
