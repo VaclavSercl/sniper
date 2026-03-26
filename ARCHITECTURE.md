@@ -127,7 +127,7 @@ clamped to [$2, $50]
 ├── src/
 │   ├── main.rs              # Core: async_main, 3 tasks, watchdog, shutdown
 │   ├── types.rs              # EngineState, RiskState, OrderBookLevel
-│   ├── ai_manager.rs         # Dashboard WS server (:3000)
+│   ├── dashboard.rs          # Dashboard WS server (:3000)
 │   ├── monitor.rs            # TUI dashboard (ANSI, 5 FPS, mmap reader)
 │   └── sovereign_ai.rs       # AI risk module (separate binary)
 ├── runtime/

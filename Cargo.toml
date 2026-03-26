@@ -16,8 +16,8 @@ name = "risk-control"
 path = "src/risk_control.rs"
 
 [[bin]]
-name = "beroun-ai"
-path = "src/ai_manager.rs"
+name = "beroun-dashboard"
+path = "src/dashboard.rs"
 
 [[bin]]
 name = "beroun-health"

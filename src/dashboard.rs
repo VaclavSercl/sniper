@@ -68,7 +68,7 @@ async fn ws_handler(ws: WebSocketUpgrade, dashboard: Arc<Mutex<DashboardData>>) 
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv().ok();
-    println!("--- BEROUN AI MANAGER v6.0.0 ---");
+    println!("--- BEROUN DASHBOARD v6.0.0 ---");
     let dashboard = Arc::new(Mutex::<DashboardData>::default());
     let d_clone = dashboard.clone();
     let start_time = Instant::now();
