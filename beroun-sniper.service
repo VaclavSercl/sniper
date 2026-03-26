@@ -1,5 +1,5 @@
 [Unit]
-Description=Beroun Sniper v8.1 Sovereign HFT Suite
+Description=Beroun Sniper v9.0 Hydra — Sovereign HFT Suite
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=0
