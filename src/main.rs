@@ -288,7 +288,32 @@ async fn async_main() -> Result<()> {
     let sec = std::env::var("BITFINEX_API_SECRET").context("Missing API SECRET")?;
 
     info!(event = "system_start", version = "5.4.0-volatility-engine");
-    notifier.send("🐺 Beroun Sniper v5.4.0 ONLINE".to_string());
+    notifier.send("🐺 *Beroun Sniper v5.4.0 ONLINE*\n`Dual-WS + Watchdog + Vol Engine`".to_string());
+
+    // ═══ HOURLY STATUS REPORT ═══
+    let hourly_engine = engine_ptr as usize;
+    let hourly_risk_ptr = risk as *const RiskState as usize;
+    let hourly_notifier = notifier.clone();
+    tokio::spawn(async move {
+        // Wait 5 min on startup before first report
+        tokio::time::sleep(Duration::from_secs(300)).await;
+        loop {
+            tokio::time::sleep(Duration::from_secs(3600)).await;
+            let eng = unsafe { &*(hourly_engine as *const EngineState) };
+            let risk = unsafe { &*(hourly_risk_ptr as *const RiskState) };
+            let bb = eng.best_bid.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
+            let ba = eng.best_ask.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
+            let pos = eng.net_position.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
+            let pnl = eng.realized_pnl.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
+            let w_btc = eng.wallet_btc.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
+            let w_usd = eng.wallet_usd.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
+            let grid = risk.grid_step.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
+            hourly_notifier.send(format!(
+                "📊 *HOURLY REPORT*\n💲 `${:.2}` / `${:.2}`\n📏 Grid: `${:.2}`\n📊 Pos: `{:.5}` BTC\n📈 PnL: `${:.2}`\n💼 `{:.5}` ₿ / `${:.2}` USD",
+                bb, ba, grid, pos, pnl, w_btc, w_usd
+            ));
+        }
+    });
 
     // SIGTERM listener (systemd, Docker)
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
@@ -370,8 +395,16 @@ async fn async_main() -> Result<()> {
                                     if let Some(trade) = arr[2].as_array() {
                                         if let (Some(amount), Some(price)) = (safe_as_f64(&trade[4]), safe_as_f64(&trade[5])) {
                                             engine.net_position.fetch_add((amount * beroun_types::PRICE_SCALE) as i64, Ordering::SeqCst);
+                                            let pos = engine.net_position.load(Ordering::SeqCst) as f64 / beroun_types::PRICE_SCALE;
+                                            let pnl = engine.realized_pnl.load(Ordering::SeqCst) as f64 / beroun_types::PRICE_SCALE;
+                                            let w_btc = engine.wallet_btc.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
+                                            let w_usd = engine.wallet_usd.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
+                                            let side = if amount > 0.0 { "BUY" } else { "SELL" };
                                             info!(event = "trade_executed", amount = amount, price = price);
-                                            exec_notifier.send(format!("💰 TRADE: {:.5} BTC @ ${:.2}", amount, price));
+                                            exec_notifier.send(format!(
+                                                "💰 *TRADE*\n`{} {:.5} BTC @ ${:.2}`\n📊 Pos: `{:.5}` BTC\n💼 `{:.5}` ₿ / `${:.2}` USD\n📈 PnL: `${:.2}`",
+                                                side, amount.abs(), price, pos, w_btc, w_usd, pnl
+                                            ));
                                         }
                                     }
                                 }
@@ -613,7 +646,7 @@ async fn async_main() -> Result<()> {
         eng.last_buy_price.store(0, Ordering::SeqCst);
         eng.last_sell_price.store(0, Ordering::SeqCst);
 
-        notifier.send("⚠️ Reconnecting...".to_string());
+        notifier.send(format!("⚠️ *RECONNECT*\n`Reason: {}`", shutdown_reason));
         tokio::time::sleep(Duration::from_secs(3)).await;
     }
 }

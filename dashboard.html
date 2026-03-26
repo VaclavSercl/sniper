@@ -3,169 +3,439 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Beroun Sniper Dashboard 2026</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Beroun Sniper v5.4 — HFT Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/uplot@1.6.31/dist/uPlot.min.css">
     <script src="https://unpkg.com/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
     <style>
-        .glow { box-shadow: 0 0 15px rgba(34, 197, 94, 0.2); }
-        .anomaly { color: #ef4444; font-weight: bold; animation: pulse 1s infinite; }
-        .positive { color: #22c55e; }
-        .negative { color: #ef4444; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
-        .uplot { background: transparent; }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-primary: #0a0e17;
+            --bg-card: rgba(15, 20, 35, 0.75);
+            --bg-card-hover: rgba(20, 28, 50, 0.85);
+            --border: rgba(56, 78, 130, 0.3);
+            --border-glow: rgba(56, 130, 246, 0.4);
+            --text-primary: #e2e8f0;
+            --text-secondary: #64748b;
+            --text-muted: #475569;
+            --green: #22c55e;
+            --green-dim: rgba(34, 197, 94, 0.15);
+            --red: #ef4444;
+            --red-dim: rgba(239, 68, 68, 0.15);
+            --blue: #3b82f6;
+            --blue-dim: rgba(59, 130, 246, 0.12);
+            --yellow: #eab308;
+            --purple: #a855f7;
+            --cyan: #06b6d4;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 1rem;
+            background-image:
+                radial-gradient(ellipse at 20% 50%, rgba(56, 130, 246, 0.03) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 50%, rgba(168, 85, 247, 0.03) 0%, transparent 50%);
+        }
+
+        .container { max-width: 1400px; margin: 0 auto; }
+
+        /* Header */
+        .header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0.75rem 1.25rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            backdrop-filter: blur(20px);
+            margin-bottom: 1rem;
+        }
+        .header-left { display: flex; align-items: center; gap: 1rem; }
+        .logo { font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; font-weight: 700; letter-spacing: -0.5px; }
+        .logo span { color: var(--green); }
+        .version { font-size: 0.65rem; color: var(--text-muted); padding: 2px 8px; background: rgba(255,255,255,0.05); border-radius: 4px; }
+        .header-right { display: flex; align-items: center; gap: 1rem; }
+        .ws-status { display: flex; align-items: center; gap: 0.4rem; font-size: 0.7rem; font-family: 'JetBrains Mono', monospace; }
+        .ws-dot { width: 6px; height: 6px; border-radius: 50%; }
+        .ws-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+        .ws-dot.offline { background: var(--red); box-shadow: 0 0 6px var(--red); }
+        .uptime { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); }
+
+        /* Metric Cards */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 0.6rem;
+            margin-bottom: 1rem;
+        }
+        .metric-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+            backdrop-filter: blur(16px);
+            transition: border-color 0.2s, transform 0.15s;
+        }
+        .metric-card:hover { border-color: var(--border-glow); transform: translateY(-1px); }
+        .metric-label {
+            font-size: 0.6rem; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 0.3rem;
+        }
+        .metric-value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.15rem; font-weight: 700; color: var(--text-primary);
+        }
+        .metric-value.positive { color: var(--green); }
+        .metric-value.negative { color: var(--red); }
+        .metric-value.blue { color: var(--blue); }
+        .metric-value.yellow { color: var(--yellow); }
+        .metric-value.purple { color: var(--purple); }
+        .metric-value.cyan { color: var(--cyan); }
+        .metric-sub { font-size: 0.6rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
+
+        /* Charts */
+        .chart-section {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem 1.25rem;
+            backdrop-filter: blur(16px);
+            margin-bottom: 1rem;
+        }
+        .chart-header {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 0.75rem;
+        }
+        .chart-title { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
+        .chart-legend { display: flex; gap: 1rem; font-size: 0.6rem; }
+        .legend-item { display: flex; align-items: center; gap: 4px; color: var(--text-secondary); }
+        .legend-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+        /* Two-column layout */
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+        @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+
+        /* Order Book */
+        .book-table { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; }
+        .book-table th { font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--border); }
+        .book-table td { padding: 4px 8px; text-align: right; }
+        .book-table .bid-row td:first-child { color: var(--green); }
+        .book-table .ask-row td:first-child { color: var(--red); }
+        .book-table .bar-cell { position: relative; }
+        .bar-fill { position: absolute; top: 0; right: 0; bottom: 0; opacity: 0.12; border-radius: 2px; }
+        .bar-fill.bid { background: var(--green); }
+        .bar-fill.ask { background: var(--red); }
+        .spread-row td { text-align: center; color: var(--yellow); font-size: 0.6rem; padding: 3px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+
+        /* Event Log */
+        .log-container { max-height: 280px; overflow-y: auto; }
+        .log-entry { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; padding: 3px 0; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.03); }
+        .log-entry .log-time { color: var(--text-muted); margin-right: 6px; }
+        .log-entry.trade { color: var(--green); }
+        .log-entry.error { color: var(--red); }
+        .log-entry.warn { color: var(--yellow); }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+        /* uPlot overrides */
+        .uplot { background: transparent !important; }
+        .u-legend { display: none !important; }
+
+        /* Pulse animation */
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .pulse { animation: pulse 2s ease-in-out infinite; }
     </style>
 </head>
-<body class="bg-slate-900 text-white font-mono p-4 md:p-8">
-    <div class="max-w-6xl mx-auto">
-        <header class="border-b border-slate-700 pb-4 mb-6 flex justify-between items-center">
-            <div>
-                <h1 class="text-2xl font-bold text-green-400 tracking-tighter uppercase">Beroun Sniper <span class="text-slate-500 text-sm font-normal normal-case">v4.8 GridView</span></h1>
-                <p class="text-xs text-slate-500">HFT Replica Engine: <span id="uptime" class="text-slate-300">00:00:00</span></p>
-            </div>
-            <div id="status" class="px-3 py-1 rounded-full bg-green-900 text-green-400 text-xs border border-green-700">ONLINE</div>
-        </header>
-
-        <!-- Hlavní metriky -->
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div class="bg-slate-800 p-4 rounded border border-slate-700">
-                <h2 class="text-slate-400 text-[10px] uppercase mb-1">Cena BTC</h2>
-                <div id="price" class="text-2xl font-bold text-white">---</div>
-            </div>
-            <div class="bg-slate-800 p-4 rounded border border-slate-700">
-                <h2 class="text-slate-400 text-[10px] uppercase mb-1">Profit/Loss</h2>
-                <div id="pnl" class="text-2xl font-bold">$0.00</div>
-            </div>
-            <div class="bg-slate-800 p-4 rounded border border-slate-700">
-                <h2 class="text-slate-400 text-[10px] uppercase mb-1">Latence</h2>
-                <div id="latency" class="text-2xl font-bold text-yellow-400">---</div>
-            </div>
-            <div class="bg-slate-800 p-4 rounded border border-slate-700">
-                <h2 class="text-slate-400 text-[10px] uppercase mb-1">Pozice</h2>
-                <div id="position" class="text-2xl font-bold text-blue-400">0.0000</div>
-            </div>
+<body>
+<div class="container">
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <div class="logo">🐺 <span>BEROUN</span> SNIPER</div>
+            <span class="version" id="ver">v5.4.0</span>
         </div>
-
-        <!-- Hlavní Graf s Gridem -->
-        <div class="bg-slate-800 p-4 rounded border border-slate-700 mb-6">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-slate-400 text-[10px] uppercase">Real-time Trading Grid</h2>
-                <div class="flex space-x-4 text-[10px]">
-                    <span class="flex items-center"><span class="w-2 h-2 bg-red-500 rounded-full mr-1"></span> ASKS</span>
-                    <span class="flex items-center"><span class="w-2 h-2 bg-green-500 rounded-full mr-1"></span> BIDS</span>
-                </div>
+        <div class="header-right">
+            <div class="ws-status">
+                <span class="ws-dot online" id="ws-dot"></span>
+                <span id="ws-label">LIVE</span>
             </div>
-            <div id="chart-grid" class="w-full"></div>
+            <div class="uptime" id="uptime">00:00:00</div>
         </div>
+    </header>
 
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div class="bg-slate-800 p-4 rounded border border-slate-700">
-                <h2 class="text-slate-400 text-[10px] uppercase mb-4">PnL Křivka</h2>
-                <div id="chart-pnl" class="w-full"></div>
-            </div>
-            <div class="bg-slate-800 p-4 rounded border border-slate-700">
-                <h2 class="text-slate-400 text-[10px] uppercase mb-2">AI Risk Monitor</h2>
-                <div id="log" class="text-[10px] text-slate-500 h-32 overflow-y-auto italic space-y-1">
-                    <div>[SYSTEM] Inicializace GridView...</div>
-                </div>
-            </div>
+    <!-- Row 1: Price metrics -->
+    <div class="metrics-grid" style="grid-template-columns: repeat(5, 1fr);">
+        <div class="metric-card">
+            <div class="metric-label">Best Bid</div>
+            <div class="metric-value positive" id="best-bid">---</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Best Ask</div>
+            <div class="metric-value negative" id="best-ask">---</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Spread</div>
+            <div class="metric-value yellow" id="spread">---</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Dynamic Grid</div>
+            <div class="metric-value cyan" id="grid-step">---</div>
+            <div class="metric-sub" id="grid-sub"></div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Latence</div>
+            <div class="metric-value" id="latency">---</div>
         </div>
     </div>
 
-    <script>
-        const MAX_POINTS = 300;
-        let dataStore = { ts: [], price: [], pnl: [] };
-        let currentGrid = { base: 0, step: 0, size: 0 };
+    <!-- Row 2: Trading metrics -->
+    <div class="metrics-grid" style="grid-template-columns: repeat(5, 1fr);">
+        <div class="metric-card">
+            <div class="metric-label">Pozice (BTC)</div>
+            <div class="metric-value blue" id="position">0.00000</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Inventory Skew</div>
+            <div class="metric-value purple" id="inv-skew">$0.00</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Realized PnL</div>
+            <div class="metric-value" id="pnl">$0.00</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Wallet BTC</div>
+            <div class="metric-value" id="wallet-btc">---</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Wallet USD</div>
+            <div class="metric-value" id="wallet-usd">---</div>
+        </div>
+    </div>
 
-        function gridPlugin() {
-            return {
-                hooks: {
-                    draw: (u) => {
-                        if (currentGrid.base === 0) return;
-                        let { ctx, bbox } = u;
-                        ctx.save();
-                        
-                        // Kreslení gridových čar
-                        for (let i = 1; i <= currentGrid.size; i++) {
-                            // Asks (Red)
-                            let yAsk = u.valToPos(currentGrid.base + (i * currentGrid.step), 'y');
-                            ctx.strokeStyle = "rgba(239, 68, 68, 0.4)";
-                            ctx.setLineDash([5, 5]);
-                            ctx.beginPath();
-                            ctx.moveTo(bbox.left, yAsk);
-                            ctx.lineTo(bbox.left + bbox.width, yAsk);
-                            ctx.stroke();
+    <!-- Price Chart -->
+    <div class="chart-section">
+        <div class="chart-header">
+            <span class="chart-title">Real-time Price + Dynamic Grid</span>
+            <div class="chart-legend">
+                <span class="legend-item"><span class="legend-dot" style="background:var(--text-primary)"></span> Price</span>
+                <span class="legend-item"><span class="legend-dot" style="background:var(--green)"></span> Bid Grid</span>
+                <span class="legend-item"><span class="legend-dot" style="background:var(--red)"></span> Ask Grid</span>
+            </div>
+        </div>
+        <div id="chart-price"></div>
+    </div>
 
-                            // Bids (Green)
-                            let yBid = u.valToPos(currentGrid.base - (i * currentGrid.step), 'y');
-                            ctx.strokeStyle = "rgba(34, 197, 94, 0.4)";
-                            ctx.beginPath();
-                            ctx.moveTo(bbox.left, yBid);
-                            ctx.lineTo(bbox.left + bbox.width, yBid);
-                            ctx.stroke();
-                        }
-                        ctx.restore();
-                    }
-                }
-            };
+    <!-- Two-column: Book + PnL -->
+    <div class="two-col">
+        <!-- Order Book Depth -->
+        <div class="chart-section">
+            <div class="chart-header">
+                <span class="chart-title">Order Book (Top 5)</span>
+            </div>
+            <table class="book-table">
+                <thead><tr><th>Price</th><th>Amount (BTC)</th><th style="width:40%">Depth</th></tr></thead>
+                <tbody id="book-body">
+                    <tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:2rem;">Waiting for data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- PnL Chart -->
+        <div class="chart-section">
+            <div class="chart-header">
+                <span class="chart-title">PnL Curve</span>
+            </div>
+            <div id="chart-pnl"></div>
+        </div>
+    </div>
+
+    <!-- Event Log -->
+    <div class="chart-section">
+        <div class="chart-header">
+            <span class="chart-title">System Events</span>
+            <span style="font-size:0.6rem;color:var(--text-muted)" id="event-count">0 events</span>
+        </div>
+        <div class="log-container" id="log">
+            <div class="log-entry"><span class="log-time">--:--:--</span> Waiting for connection...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+const MAX_POINTS = 300;
+let ds = { ts: [], price: [], pnl: [] };
+let currentGrid = { base: 0, step: 0, size: 2 };
+let eventLog = [];
+let tickCount = 0;
+
+function fmt(n, d=2) { return n.toLocaleString('en-US', {minimumFractionDigits:d, maximumFractionDigits:d}); }
+function fmtTime(secs) {
+    const h = Math.floor(secs/3600), m = Math.floor((secs%3600)/60), s = secs%60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+}
+function nowStr() { return new Date().toLocaleTimeString('cs-CZ'); }
+
+function addLogEntry(text, cls='') {
+    eventLog.unshift({time: nowStr(), text, cls});
+    if (eventLog.length > 50) eventLog.pop();
+    const container = document.getElementById('log');
+    container.innerHTML = eventLog.map(e =>
+        `<div class="log-entry ${e.cls}"><span class="log-time">${e.time}</span>${e.text}</div>`
+    ).join('');
+    document.getElementById('event-count').textContent = `${eventLog.length} events`;
+}
+
+// Grid overlay plugin for uPlot
+function gridPlugin() {
+    return { hooks: { draw: (u) => {
+        if (currentGrid.base === 0 || currentGrid.step === 0) return;
+        const { ctx, bbox } = u;
+        ctx.save();
+        for (let i = 1; i <= currentGrid.size; i++) {
+            // Ask lines (red)
+            let yA = u.valToPos(currentGrid.base + (i * currentGrid.step), 'y');
+            ctx.strokeStyle = "rgba(239, 68, 68, 0.25)";
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath(); ctx.moveTo(bbox.left, yA); ctx.lineTo(bbox.left + bbox.width, yA); ctx.stroke();
+            // Bid lines (green)
+            let yB = u.valToPos(currentGrid.base - (i * currentGrid.step), 'y');
+            ctx.strokeStyle = "rgba(34, 197, 94, 0.25)";
+            ctx.beginPath(); ctx.moveTo(bbox.left, yB); ctx.lineTo(bbox.left + bbox.width, yB); ctx.stroke();
         }
+        ctx.restore();
+    }}};
+}
 
-        let gridChartOpts = {
-            width: document.getElementById("chart-grid").clientWidth - 20,
-            height: 400,
-            plugins: [gridPlugin()],
-            scales: { x: { time: false }, y: { auto: true, range: (u, min, max) => [min - 50, max + 50] } },
-            series: [ {}, { label: "Price", stroke: "#fff", width: 2 } ],
-            axes: [ { stroke: "#64748b" }, { stroke: "#64748b", size: 80 } ]
-        };
+const priceEl = document.getElementById('chart-price');
+const pnlEl = document.getElementById('chart-pnl');
 
-        let pnlChartOpts = {
-            width: document.getElementById("chart-pnl").clientWidth - 20,
-            height: 150,
-            scales: { x: { time: false } },
-            series: [ {}, { label: "PnL", stroke: "#22c55e", width: 2, fill: "rgba(34, 197, 94, 0.1)" } ],
-            axes: [ { show: false }, { stroke: "#64748b", size: 60 } ]
-        };
+let priceChart = new uPlot({
+    width: priceEl.clientWidth - 20, height: 350,
+    plugins: [gridPlugin()],
+    scales: { x: { time: false }, y: { auto: true, range: (u,min,max) => [min-30, max+30] }},
+    series: [{}, { label: "Price", stroke: "#e2e8f0", width: 1.5 }],
+    axes: [{ stroke: "#334155", font: "10px Inter" }, { stroke: "#334155", size: 70, font: "10px JetBrains Mono" }]
+}, [[], []], priceEl);
 
-        let gridChart = new uPlot(gridChartOpts, [[], []], document.getElementById("chart-grid"));
-        let pnlChart = new uPlot(pnlChartOpts, [[], []], document.getElementById("chart-pnl"));
+let pnlChart = new uPlot({
+    width: pnlEl.clientWidth - 20, height: 200,
+    scales: { x: { time: false }},
+    series: [{}, { label: "PnL", stroke: "#22c55e", width: 1.5, fill: "rgba(34,197,94,0.08)" }],
+    axes: [{ show: false }, { stroke: "#334155", size: 50, font: "10px JetBrains Mono" }]
+}, [[], []], pnlEl);
 
-        const ws = new WebSocket(`ws://${window.location.hostname}:3000/ws`);
-        ws.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            if (!data || data.mid_price === undefined) return;
-            
-            // Součet pro celkové PnL
-            const total_pnl = (data.realized_pnl || 0) + (data.unrealized_pnl || 0);
+function renderBook(d) {
+    if (!d.ask_prices || !d.bid_prices) return;
+    const asks = d.ask_prices.map((p,i) => ({p, a: d.ask_amounts[i]})).reverse();
+    const bids = d.bid_prices.map((p,i) => ({p, a: d.bid_amounts[i]}));
+    const maxVol = Math.max(...[...d.bid_amounts, ...d.ask_amounts].filter(v=>v>0), 0.001);
 
-            document.getElementById('price').textContent = (data.mid_price || 0).toLocaleString('cs-CZ');
-            document.getElementById('position').textContent = (data.position || 0).toFixed(5);
-            document.getElementById('pnl').textContent = (total_pnl >= 0 ? '+' : '') + '$' + total_pnl.toFixed(2);
-            document.getElementById('pnl').className = 'text-2xl font-bold ' + (total_pnl >= 0 ? 'positive' : 'negative');
-            document.getElementById('latency').textContent = (data.latency_ms || 0).toFixed(3) + ' ms';
-            document.getElementById('uptime').textContent = data.uptime_hms || "00:00:00";
-            
-            // Aktualizace gridu pro plugin
-            currentGrid = { base: data.grid_base, step: data.grid_step, size: data.grid_size };
+    let html = '';
+    // Asks (high to low)
+    for (const a of asks) {
+        const pct = (a.a / maxVol * 100).toFixed(0);
+        html += `<tr class="ask-row"><td>${fmt(a.p)}</td><td>${a.a.toFixed(5)}</td><td class="bar-cell"><div class="bar-fill ask" style="width:${pct}%"></div>${pct}%</td></tr>`;
+    }
+    // Spread row
+    html += `<tr class="spread-row"><td colspan="3">▲ SPREAD $${fmt(d.spread)} ▼</td></tr>`;
+    // Bids (high to low)
+    for (const b of bids) {
+        const pct = (b.a / maxVol * 100).toFixed(0);
+        html += `<tr class="bid-row"><td>${fmt(b.p)}</td><td>${b.a.toFixed(5)}</td><td class="bar-cell"><div class="bar-fill bid" style="width:${pct}%"></div>${pct}%</td></tr>`;
+    }
+    document.getElementById('book-body').innerHTML = html;
+}
 
-            // Data pro grafy
-            dataStore.ts.push(dataStore.ts.length);
-            dataStore.price.push(data.mid_price);
-            dataStore.pnl.push(total_pnl);
+// WebSocket connection
+let ws;
+let wsReconnectTimer;
 
-            if (dataStore.ts.length > MAX_POINTS) {
-                dataStore.ts.shift(); dataStore.price.shift(); dataStore.pnl.shift();
-                dataStore.ts = dataStore.ts.map((_, i) => i);
-            }
+function connectWS() {
+    ws = new WebSocket(`ws://${window.location.hostname}:3000/ws`);
 
-            gridChart.setData([dataStore.ts, dataStore.price]);
-            pnlChart.setData([dataStore.ts, dataStore.pnl]);
-        };
+    ws.onopen = () => {
+        document.getElementById('ws-dot').className = 'ws-dot online';
+        document.getElementById('ws-label').textContent = 'LIVE';
+        addLogEntry('WebSocket connected', 'trade');
+    };
 
-        window.addEventListener("resize", () => {
-            gridChart.setSize({ width: document.getElementById("chart-grid").clientWidth - 20, height: 400 });
-            pnlChart.setSize({ width: document.getElementById("chart-pnl").clientWidth - 20, height: 150 });
-        });
-    </script>
+    ws.onclose = () => {
+        document.getElementById('ws-dot').className = 'ws-dot offline';
+        document.getElementById('ws-label').textContent = 'OFFLINE';
+        addLogEntry('WebSocket disconnected — reconnecting...', 'error');
+        wsReconnectTimer = setTimeout(connectWS, 3000);
+    };
+
+    ws.onerror = () => { ws.close(); };
+
+    ws.onmessage = (event) => {
+        const d = JSON.parse(event.data);
+        if (!d || d.mid_price === undefined) return;
+        tickCount++;
+
+        // Prices
+        document.getElementById('best-bid').textContent = '$' + fmt(d.best_bid);
+        document.getElementById('best-ask').textContent = '$' + fmt(d.best_ask);
+        document.getElementById('spread').textContent = '$' + fmt(d.spread, 1);
+
+        // Grid
+        document.getElementById('grid-step').textContent = '$' + fmt(d.grid_step, 2);
+        currentGrid = { base: d.grid_base, step: d.grid_step, size: d.grid_size || 2 };
+
+        // Latency
+        const latEl = document.getElementById('latency');
+        const latMs = d.latency_ms || 0;
+        latEl.textContent = latMs < 1000 ? fmt(latMs, 1) + ' ms' : fmt(latMs/1000, 1) + ' s';
+        latEl.className = 'metric-value' + (latMs > 5000 ? ' negative' : latMs > 1000 ? ' yellow' : '');
+
+        // Trading
+        document.getElementById('position').textContent = (d.position >= 0 ? '+' : '') + d.position.toFixed(5);
+        const skewEl = document.getElementById('inv-skew');
+        skewEl.textContent = (d.inv_skew >= 0 ? '+$' : '-$') + fmt(Math.abs(d.inv_skew));
+        skewEl.className = 'metric-value ' + (d.inv_skew > 0 ? 'positive' : d.inv_skew < 0 ? 'negative' : 'purple');
+
+        // PnL
+        const pnlEl = document.getElementById('pnl');
+        pnlEl.textContent = (d.realized_pnl >= 0 ? '+$' : '-$') + fmt(Math.abs(d.realized_pnl));
+        pnlEl.className = 'metric-value ' + (d.realized_pnl >= 0 ? 'positive' : 'negative');
+
+        // Wallets
+        document.getElementById('wallet-btc').textContent = d.wallet_btc > 0 ? d.wallet_btc.toFixed(5) + ' ₿' : '---';
+        document.getElementById('wallet-usd').textContent = d.wallet_usd > 0 ? '$' + fmt(d.wallet_usd) : '---';
+
+        // Uptime
+        document.getElementById('uptime').textContent = fmtTime(d.uptime_secs || 0);
+
+        // Chart data
+        ds.ts.push(ds.ts.length);
+        ds.price.push(d.mid_price);
+        ds.pnl.push(d.realized_pnl || 0);
+        if (ds.ts.length > MAX_POINTS) {
+            ds.ts.shift(); ds.price.shift(); ds.pnl.shift();
+            ds.ts = ds.ts.map((_,i)=>i);
+        }
+        priceChart.setData([ds.ts, ds.price]);
+        pnlChart.setData([ds.ts, ds.pnl]);
+
+        // Order Book
+        if (tickCount % 5 === 0) renderBook(d);
+    };
+}
+
+connectWS();
+
+window.addEventListener("resize", () => {
+    priceChart.setSize({width: priceEl.clientWidth - 20, height: 350});
+    pnlChart.setSize({width: pnlEl.clientWidth - 20, height: 200});
+});
+</script>
 </body>
 </html>
