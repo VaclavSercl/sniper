@@ -6,19 +6,19 @@
   },
   "pnl": {
     "realized_usd": 0.0,
-    "total_usd": -49.67784,
-    "unrealized_usd": -49.67784
+    "total_usd": 0.0,
+    "unrealized_usd": 0.0
   },
   "position": {
-    "avg_entry_price": 68997.0,
+    "avg_entry_price": 0.0,
     "inventory_skew": 0.0,
-    "net_btc": 0.00072
+    "net_btc": 0.0
   },
   "price": {
-    "best_ask": 69009.0,
-    "best_bid": 69001.0,
+    "best_ask": 0.0,
+    "best_bid": 0.0,
     "micro_price": 0.0,
-    "spread": 8.0
+    "spread": 0.0
   },
   "risk_params": {
     "bias_offset_usd": 0.0,
@@ -26,5 +26,5 @@
     "max_inv_delta_btc": 0.005,
     "paused": false
   },
-  "timestamp": "2026-03-26T17:26:33.664074059+00:00"
+  "timestamp": "2026-03-26T17:29:59.401851495+00:00"
 }

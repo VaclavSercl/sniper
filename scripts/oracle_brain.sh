@@ -2,146 +2,144 @@
 # ═══════════════════════════════════════════════════════════════
 # 🐺 BEROUN ORACLE v7.1 — Global Macro Intelligence Layer (L3)
 # ═══════════════════════════════════════════════════════════════
-# Spouští se jednou za 26h přes systemd timer + RandomizedDelaySec
-# Využívá Gemini 3.1 Pro (gemini-cli) pro analýzu trendů
-# Výstup: úprava risk parametrů přes beroun-config (mmap)
+# Cycle: 26h + RandomizedDelaySec (systemd timer)
+# Engine: Gemini 3.1 Pro (gemini-cli v0.35.0)
+# Output: grid_step + max_inv_delta via beroun-config (mmap)
 # ═══════════════════════════════════════════════════════════════
 
 set -euo pipefail
 
 LOG="/home/wwwenda/hft-sniper/logs/oracle.log"
-RUNTIME="/home/wwwenda/hft-sniper/runtime"
 CONFIG="/home/wwwenda/hft-sniper/target/release/beroun-config"
 TIMESTAMP=$(date '+%Y-%m-%d %H:%M:%S')
+
+mkdir -p /home/wwwenda/hft-sniper/logs
 
 log() { echo "[$TIMESTAMP] $1" | tee -a "$LOG"; }
 
 log "═══════ ORACLE v7.1 ACTIVATED ═══════"
 
-# ── 1. SBĚR LOKÁLNÍCH DAT ────────────────────────────────────
-log "[1/5] Collecting bot metrics..."
+# ── 1. LOKÁLNÍ DATA ──────────────────────────────────────────
+log "[1/5] Collecting bot state..."
 
-# Aktuální stav bota (JSON snapshot z mmap)
 BOT_STATE=$($CONFIG export-json 2>/dev/null || echo '{"error":"unavailable"}')
-
-# Aktuální risk parametry (human-readable)
 CURRENT_PARAMS=$($CONFIG show 2>/dev/null || echo "unavailable")
 
-# Posledních 26h obchody a alerty
 RECENT_TRADES=$(journalctl --user -u beroun-sniper --since "26h ago" --no-pager 2>/dev/null | \
-    grep -o '"event":"trade_executed"[^}]*' | tail -20 || echo "no trades")
+    grep -oP '"event":"trade_executed"[^}]*' | wc -l || echo "0")
 
-PNL_ENTRIES=$(journalctl --user -u beroun-sniper --since "26h ago" --no-pager 2>/dev/null | \
-    grep -o '"event":"pnl_realized"[^}]*' | tail -10 || echo "no pnl data")
+PNL_EVENTS=$(journalctl --user -u beroun-sniper --since "26h ago" --no-pager 2>/dev/null | \
+    grep -oP '"event":"pnl_realized","gain":[-0-9.]+' | \
+    awk -F: '{s+=$NF} END {printf "%.4f", s}' || echo "0")
 
-AI_DECISIONS=$(journalctl -u beroun-ai --since "26h ago" --no-pager 2>/dev/null | \
-    grep "AI │" | tail -10 || echo "no ai data")
+AI_SAMPLES=$(journalctl -u beroun-ai --since "26h ago" --no-pager 2>/dev/null | \
+    grep "AI │" | tail -5 || echo "no ai data")
 
-# ── 2. SBĚR EXTERNÍCH DAT ────────────────────────────────────
+log "  Trades (26h): $RECENT_TRADES | PnL sum: $PNL_EVENTS"
+
+# ── 2. EXTERNÍ DATA ──────────────────────────────────────────
 log "[2/5] Harvesting market intelligence..."
 
-# RSS feedy - crypto news
-COINDESK_RSS=$(curl -sL --max-time 10 "https://www.coindesk.com/arc/outboundfeeds/rss/" 2>/dev/null | \
-    grep -oP '(?<=<title>).*?(?=</title>)' | head -5 | tr '\n' '; ' || echo "feed unavailable")
+COINDESK=$(curl -sL --max-time 10 "https://www.coindesk.com/arc/outboundfeeds/rss/" 2>/dev/null | \
+    grep -oP '(?<=<title>).*?(?=</title>)' | head -5 | tr '\n' '; ' || echo "unavailable")
 
-COINTELEGRAPH_RSS=$(curl -sL --max-time 10 "https://cointelegraph.com/rss" 2>/dev/null | \
-    grep -oP '(?<=<title>).*?(?=</title>)' | head -5 | tr '\n' '; ' || echo "feed unavailable")
+COINTELEGRAPH=$(curl -sL --max-time 10 "https://cointelegraph.com/rss" 2>/dev/null | \
+    grep -oP '(?<=<title>).*?(?=</title>)' | head -5 | tr '\n' '; ' || echo "unavailable")
 
-# Bitfinex announcements
-BITFINEX_NEWS=$(curl -sL --max-time 10 "https://www.bitfinex.com/feed" 2>/dev/null | \
-    grep -oP '(?<=<title>).*?(?=</title>)' | head -3 | tr '\n' '; ' || echo "feed unavailable")
-
-# Bitcoin Fear & Greed (alternativní endpoint)
 FEAR_GREED=$(curl -sL --max-time 10 "https://api.alternative.me/fng/?limit=1" 2>/dev/null | \
     python3 -c "import sys,json; d=json.load(sys.stdin); print(f\"{d['data'][0]['value']} ({d['data'][0]['value_classification']})\")" 2>/dev/null || echo "unavailable")
 
-log "  Headlines: $(echo "$COINDESK_RSS" | head -c 100)..."
 log "  Fear & Greed: $FEAR_GREED"
+log "  Headlines: $(echo "$COINDESK" | head -c 80)..."
 
-# ── 3. GEMINI 3.1 PRO ANALÝZA ────────────────────────────────
+# ── 3. GEMINI 3.1 PRO ────────────────────────────────────────
 log "[3/5] Invoking Gemini 3.1 Pro..."
 
-ORACLE_PROMPT="You are the Senior Risk Manager of HFT fund 'Beroun Sniper'.
+ORACLE_PROMPT="You are the Strategic Oracle for HFT system 'Beroun Sniper'.
+Your goal: SURVIVAL and long-term profitability.
 
-=== BOT STATUS (last 26h) ===
-Live State (JSON): $BOT_STATE
-Parameters: $CURRENT_PARAMS
-Recent Trades: $RECENT_TRADES
-Realized PnL events: $PNL_ENTRIES
-Local AI (L2) decisions: $AI_DECISIONS
+=== BOT STATE (live mmap snapshot) ===
+$BOT_STATE
+
+=== TRADING PERFORMANCE (26h) ===
+Total Trades: $RECENT_TRADES
+Net Realized PnL: \$$PNL_EVENTS
+Local AI (L1) last samples: $AI_SAMPLES
+Current Config: $CURRENT_PARAMS
 
 === MARKET INTELLIGENCE ===
-CoinDesk Headlines: $COINDESK_RSS
-CoinTelegraph Headlines: $COINTELEGRAPH_RSS
-Bitfinex Announcements: $BITFINEX_NEWS
+CoinDesk: $COINDESK
+CoinTelegraph: $COINTELEGRAPH
 Fear & Greed Index: $FEAR_GREED
 
-=== YOUR TASK ===
-1. Analyze market regime: Is it TRENDING, RANGING, or VOLATILE?
-2. Assess if current grid_step is appropriate for the detected regime.
-3. Recommend new grid_step (in USD). Current is ~\$5.
+=== ANALYSIS REQUIRED ===
+1. REGIME: Is BTC/USD TRENDING, RANGING, or VOLATILE right now?
+2. GRID: Is current grid_step optimal? Consider:
+   - VOLATILE/NEWS: widen to 8-15 USD (avoid adverse selection)
+   - RANGING/CALM: tighten to 3-6 USD (maximize spread capture)
+   - TRENDING: moderate 5-10 USD
+3. INVENTORY RISK: Should max position be adjusted?
+4. ADVERSE SELECTION: Are we losing on large moves? (check PnL vs trade count)
 
-Rules:
-- VOLATILE/NEWS regime: widen grid (8-15 USD) to avoid adverse selection
-- RANGING/CALM regime: tighten grid (3-6 USD) to maximize spread capture
-- TRENDING regime: moderate grid (5-10 USD) + note direction
+RESPOND WITH EXACTLY THIS JSON:
+{\"new_grid\": 5.0, \"max_position\": 0.005, \"risk_level\": \"low\", \"reasoning\": \"brief explanation\"}"
 
-RESPOND WITH EXACTLY THIS JSON FORMAT:
-{\"regime\": \"RANGING|TRENDING|VOLATILE\", \"grid_usd\": 5.0, \"reasoning\": \"brief explanation\", \"risk_alert\": false}"
+# Gemini call — pipe prompt, non-interactive
+GEMINI_RAW=$(echo "$ORACLE_PROMPT" | timeout 120 gemini -p "$(cat)" 2>/dev/null || echo '{"new_grid":5.0,"max_position":0.005,"risk_level":"unknown","reasoning":"gemini timeout"}')
 
-# Volání Gemini - jednorázový prompt (ne interaktivní)
-GEMINI_RESPONSE=$(echo "$ORACLE_PROMPT" | gemini -p "$(cat)" --yolo 2>/dev/null | tail -20 || echo '{"regime":"UNKNOWN","grid_usd":5.0,"reasoning":"gemini unavailable","risk_alert":false}')
+log "  Gemini response: $(echo "$GEMINI_RAW" | head -c 300)"
 
-log "  Gemini raw response: $(echo "$GEMINI_RESPONSE" | head -c 300)"
+# ── 4. PARSE & APPLY ─────────────────────────────────────────
+log "[4/5] Parsing and applying..."
 
-# ── 4. PARSE A APLIKUJ ───────────────────────────────────────
-log "[4/5] Parsing recommendation..."
-
-# Extrakce JSON z Gemini odpovědi
-RECOMMENDED_GRID=$(echo "$GEMINI_RESPONSE" | python3 -c "
+# Extract JSON from response, apply safety
+RESULT=$(echo "$GEMINI_RAW" | python3 -c "
 import sys, json, re
+
 text = sys.stdin.read()
-# Najdi JSON v odpovědi
-match = re.search(r'\{[^{}]*\"grid_usd\"[^{}]*\}', text)
+match = re.search(r'\{[^{}]*\"new_grid\"[^{}]*\}', text)
+
 if match:
     d = json.loads(match.group())
-    grid = float(d.get('grid_usd', 5.0))
-    # Safety clamp: grid musí být mezi 2 a 50 USD
-    grid = max(2.0, min(50.0, grid))
-    print(f'{grid:.1f}')
-    print(d.get('regime', 'UNKNOWN'), file=sys.stderr)
-    print(d.get('reasoning', 'no reason'), file=sys.stderr)
+    grid = max(2.0, min(50.0, float(d.get('new_grid', 5.0))))
+    pos = max(0.001, min(0.05, float(d.get('max_position', 0.005))))
+    risk = d.get('risk_level', 'unknown')
+    reason = d.get('reasoning', 'no reason')[:200]
+    print(json.dumps({'grid': grid, 'pos': pos, 'risk': risk, 'reason': reason}))
 else:
-    print('5.0')
-" 2>>/tmp/oracle_detail.log || echo "5.0")
+    print(json.dumps({'grid': 5.0, 'pos': 0.005, 'risk': 'parse_error', 'reason': 'no json found'}))
+" 2>/dev/null || echo '{"grid":5.0,"pos":0.005,"risk":"error","reason":"parse failed"}')
 
-REGIME=$(head -1 /tmp/oracle_detail.log 2>/dev/null || echo "UNKNOWN")
-REASONING=$(tail -1 /tmp/oracle_detail.log 2>/dev/null || echo "parse error")
+NEW_GRID=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['grid'])")
+NEW_POS=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['pos'])")
+RISK=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['risk'])")
+REASON=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['reason'])")
 
-log "  Regime: $REGIME"
-log "  Recommended grid: \$$RECOMMENDED_GRID"
-log "  Reasoning: $REASONING"
+log "  Regime: $RISK | Grid: \$$NEW_GRID | MaxPos: $NEW_POS BTC"
+log "  Reasoning: $REASON"
 
-# Aplikuj změnu přes beroun-config
-if [[ "$RECOMMENDED_GRID" =~ ^[0-9]+\.?[0-9]*$ ]]; then
-    $CONFIG set-grid "$RECOMMENDED_GRID" 2>&1 | tee -a "$LOG"
-    log "✅ Grid updated to \$$RECOMMENDED_GRID"
-else
-    log "⚠️  Invalid grid value, keeping current"
+# Apply via beroun-config (with built-in sanity checks)
+$CONFIG set-grid "$NEW_GRID" 2>&1 | tee -a "$LOG"
+$CONFIG set-max-inv "$NEW_POS" 2>&1 | tee -a "$LOG"
+
+# ── 5. TELEGRAM REPORT ───────────────────────────────────────
+log "[5/5] Sending report..."
+
+if [ -f /home/wwwenda/hft-sniper/.env ]; then
+    source /home/wwwenda/hft-sniper/.env
 fi
 
-# ── 5. TELEGRAM REPORT ────────────────────────────────────────
-log "[5/5] Sending Oracle report..."
-
-# Telegram notification (pokud je nastaven)
 if [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && [ -n "${TELEGRAM_CHAT_ID:-}" ]; then
-    MSG="🔮 *ORACLE v7.1 Report*
+    MSG="🔮 *ORACLE v7.1*
 
-📊 Regime: \`$REGIME\`
-📐 Grid: \`\$$RECOMMENDED_GRID\`
+📊 Regime: \`$RISK\`
+📐 Grid: \`\$$NEW_GRID\`
+📦 MaxPos: \`$NEW_POS BTC\`
 😱 Fear/Greed: \`$FEAR_GREED\`
+📈 Trades (26h): \`$RECENT_TRADES\`
+💰 PnL (26h): \`\$$PNL_EVENTS\`
 
-💡 $REASONING"
+💡 _${REASON}_"
 
     curl -s "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
         -d chat_id="$TELEGRAM_CHAT_ID" \

@@ -10,20 +10,23 @@ use beroun_types::{EngineState, RiskState, ENGINE_STATE_PATH, RISK_STATE_PATH, P
 // ── AI INFERENCE (LM Studio v0.4.7 on localhost:1234) ──
 
 async fn fetch_ai_bias(client: &reqwest::Client, obi: f64, spread: f64, vol: f64, pos: f64) -> Result<i64> {
-    let prompt = format!(
-        "Market: OBI={:.3}, Spread={:.2}, Grid={:.2}, Pos={:.5}. Predict price direction bias in USD (-200 to 200). RETURN ONLY THE NUMBER.",
-        obi, spread, vol, pos
-    );
+    // Ultra-compact prompt for minimal tokenization overhead
+    let prompt = format!("OBI:{:+.2},SPR:{:.1},G:{:.1},P:{:+.4}", obi, spread, vol, pos);
 
     let res = client.post("http://localhost:1234/v1/chat/completions")
         .json(&json!({
             "model": "phi-3.5-mini-instruct",
             "messages": [
-                {"role": "system", "content": "You are an HFT alphagen. Output only a signed integer. No text."},
+                {"role": "system", "content": "You are a quant signal. Output only a single integer from -200 to 200."},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.0,
-            "max_tokens": 8
+            // Greedy Sampling — fastest possible inference (2026 best practice)
+            "temperature": 0.0,       // Greedy decoding, no randomness
+            "top_p": 0.1,             // Nucleus sampling — top candidates only
+            "max_tokens": 5,          // "-200" = 4 tokens max
+            "presence_penalty": 0.0,  // No penalty overhead
+            "frequency_penalty": 0.0,
+            "stream": false           // Full response, no chunking
         }))
         .send()
         .await?;
@@ -49,7 +52,7 @@ async fn main() -> Result<()> {
     let risk = unsafe { &*(r_mmap.as_ptr() as *const RiskState) };
 
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_millis(500))
+        .timeout(Duration::from_millis(300)) // Greedy inference: ~60ms warm, ~200ms cold
         .build()?;
 
     println!("🐺 BEROUN SOVEREIGN AI v7.0 — LM Studio Sidecar");
