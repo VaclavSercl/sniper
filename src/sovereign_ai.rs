@@ -55,17 +55,39 @@ async fn main() -> Result<()> {
         .timeout(Duration::from_millis(300)) // Greedy inference: ~60ms warm, ~200ms cold
         .build()?;
 
-    println!("🐺 BEROUN SOVEREIGN AI v7.0 — LM Studio Sidecar");
+    println!("🐺 BEROUN SOVEREIGN AI v8.0 — LM Studio Sidecar");
     println!("   Model: phi-3.5-mini-instruct (localhost:1234)");
-    println!("   Cycle: 5s | GPU: GTX 1060 6GB");
+    println!("   Cycle: 5s (normal) / 10s (thermal) | GPU: GTX 1060 6GB");
     println!("─────────────────────────────────────────────────");
 
     let mut consecutive_errors: u32 = 0;
     let mut last_bias: i64 = 0;
+    let mut thermal_throttle = false;
 
     loop {
-        // Adaptive sleep: 5s normal, extend on errors
-        let sleep_ms = if consecutive_errors > 3 { 10_000 } else { 5_000 };
+        // GPU Thermal Guard: read temperature via nvidia-smi
+        let gpu_temp = std::process::Command::new("nvidia-smi")
+            .args(["--query-gpu=temperature.gpu", "--format=csv,noheader,nounits"])
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok())
+            .and_then(|s| s.trim().parse::<u32>().ok())
+            .unwrap_or(0);
+
+        if gpu_temp >= 82 && !thermal_throttle {
+            thermal_throttle = true;
+            println!("🌡️ THERMAL THROTTLE ON: {}°C ≥ 82°C → cycle 10s", gpu_temp);
+        } else if gpu_temp < 75 && thermal_throttle {
+            thermal_throttle = false;
+            println!("❄️ THERMAL NORMAL: {}°C < 75°C → cycle 5s", gpu_temp);
+        }
+
+        // Adaptive sleep: 5s normal, 10s thermal, extend on errors
+        let sleep_ms = match (thermal_throttle, consecutive_errors > 3) {
+            (_, true) => 15_000,   // Error backoff
+            (true, _) => 10_000,   // Thermal throttle
+            _ => 5_000,            // Normal
+        };
         tokio::time::sleep(Duration::from_millis(sleep_ms)).await;
 
         if risk.paused.load(Ordering::Acquire) != 0 { continue; }
