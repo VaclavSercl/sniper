@@ -25,7 +25,7 @@ TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 AUTHORIZED_CHAT_ID = int(os.environ.get("TELEGRAM_CHAT_ID", "0"))
 CONFIG_BIN = "/home/wwwenda/hft-sniper/target/release/beroun-config"
 ORACLE_SCRIPT = "/home/wwwenda/hft-sniper/scripts/oracle_brain.sh"
-STATE_JSON = "/home/wwwenda/hft-sniper/runtime/state.json"
+STATE_JSON = "/dev/shm/beroun/state.json"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [TG] %(message)s")
 log = logging.getLogger("beroun-tg")

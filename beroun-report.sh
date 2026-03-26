@@ -3,7 +3,7 @@
 # (c) 2026 Sovereign HFT Systems
 
 PROJECT_ROOT="/home/wwwenda/hft-sniper"
-STATE_FILE="$PROJECT_ROOT/runtime/engine_state.bin"
+STATE_FILE="/dev/shm/beroun/engine_state.bin"
 source $PROJECT_ROOT/.env
 
 # 1. Collect real-time data from project runtime

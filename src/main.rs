@@ -62,7 +62,7 @@ impl AsyncNotifier {
                         tokio::task::spawn_blocking(|| {
                             let _ = std::process::Command::new("/home/wwwenda/hft-sniper/target/release/beroun-config")
                                 .arg("export-json")
-                                .stdout(std::fs::File::create("/home/wwwenda/hft-sniper/runtime/state.json").unwrap_or_else(|_| std::fs::File::create("/dev/null").unwrap()))
+                                .stdout(std::fs::File::create("/dev/shm/beroun/state.json").unwrap_or_else(|_| std::fs::File::create("/dev/null").unwrap()))
                                 .status(); // .status() waits for child — prevents zombie
                         });
                     }
@@ -248,7 +248,20 @@ fn calculate_checksum(engine: &beroun_types::EngineState, debug: bool) -> i32 {
 
 fn main() -> Result<()> {
     dotenv().ok();
-    tracing_subscriber::registry().with(fmt::layer().with_target(false).json()).with(EnvFilter::from_default_env().add_directive(Level::INFO.into())).init();
+
+    // ═══ NON-BLOCKING DAILY LOG ROTATION (L2 Audit Trail) ═══
+    // Sniper writes to a lock-free channel → background thread flushes to disk
+    // Zero impact on L0 hot path latency
+    let log_dir = "/home/wwwenda/hft-sniper/logs";
+    let file_appender = tracing_appender::rolling::daily(log_dir, "trading.log");
+    let (non_blocking, _log_guard) = tracing_appender::non_blocking(file_appender);
+    tracing_subscriber::registry()
+        .with(fmt::layer().with_target(false).json().with_writer(non_blocking))
+        .with(EnvFilter::from_default_env().add_directive(Level::INFO.into()))
+        .init();
+
+    // ═══ VRSTVA 1: /dev/shm/beroun/ for mmap IPC (RAM-backed) ═══
+    std::fs::create_dir_all("/dev/shm/beroun").context("Failed to create /dev/shm/beroun")?;
 
     // ═══ SINGLE-INSTANCE LOCK (Ghost-in-the-Machine prevention) ═══
     let lock_file = std::fs::File::create("/tmp/beroun-sniper.lock")

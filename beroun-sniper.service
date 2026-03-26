@@ -10,24 +10,21 @@ User=wwwenda
 WorkingDirectory=/home/wwwenda/hft-sniper
 
 # ═══ DEZINFEKČNÍ PROTOKOL (Ghost-in-the-Machine prevention) ═══
-# 1. Kill any orphaned beroun-core processes before starting
 ExecStartPre=-/usr/bin/pkill -9 -f beroun-core
-# 2. Kill orphaned sub-services
 ExecStartPre=-/usr/bin/pkill -9 -f beroun-sovereign-ai
 ExecStartPre=-/usr/bin/pkill -9 -f beroun-tele-brain
 ExecStartPre=-/usr/bin/pkill -9 -f beroun-dashboard
-# 3. Remove stale lock file (fs2 will re-create it atomically)
 ExecStartPre=-/usr/bin/rm -f /tmp/beroun-sniper.lock
-# 4. Brief pause to let OS reap killed processes
 ExecStartPre=/usr/bin/sleep 1
 
 ExecStart=/home/wwwenda/hft-sniper/beroun-start.sh
 Restart=always
 RestartSec=3
 
-# Centralized Logging in Project Root
-StandardOutput=append:/home/wwwenda/hft-sniper/logs/beroun_trading.log
-StandardError=append:/home/wwwenda/hft-sniper/logs/beroun_trading.log
+# Logging handled by tracing-appender (non-blocking daily rotation)
+# stdout/stderr only for crash diagnostics
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target

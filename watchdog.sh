@@ -13,7 +13,7 @@
 #   journalctl --user -u beroun-sniper -f
 #   journalctl --user -u beroun-sniper | jq 'select(.fields.event | startswith("watchdog"))'
 
-STATE_FILE="/home/wwwenda/hft-sniper/runtime/engine_state.bin"
+STATE_FILE="/dev/shm/beroun/engine_state.bin"
 LOG_FILE="/home/wwwenda/hft-sniper/logs/watchdog.log"
 
 echo "[$(date)] External Watchdog v8.1 (backup monitor) ONLINE" >> $LOG_FILE

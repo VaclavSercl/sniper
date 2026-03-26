@@ -1,15 +1,15 @@
 #!/bin/bash
-# BEROUN SNIPER v5.1 - MASTER STARTUP & ORCHESTRATOR
+# BEROUN SNIPER v8.1 - MASTER STARTUP & ORCHESTRATOR
 # (c) 2026 Sovereign HFT Systems
 
 PROJECT_ROOT="/home/wwwenda/hft-sniper"
 BIN_DIR="$PROJECT_ROOT/target/release"
 
-echo "🐺 Starting Beroun Sovereign Suite..."
+echo "🐺 Starting Beroun Sovereign Suite v8.1..."
 cd $PROJECT_ROOT
 
-# Clear old runtime state (Commented for persistence)
-# rm -f $PROJECT_ROOT/runtime/*.bin
+# ═══ VRSTVA 1: Ensure RAM-backed IPC directory exists ═══
+mkdir -p /dev/shm/beroun
 
 # 1. Start core Sniper (The Heart)
 $BIN_DIR/beroun-core &
@@ -19,19 +19,19 @@ echo "-> Sniper started (PID: $SNIPER_PID)"
 # 2. Wait for mmap initialization
 sleep 2
 
-# 3. Start AI Manager (The Eyes)
-$BIN_DIR/beroun-ai &
-echo "-> AI Manager started"
+# 3. Start Dashboard (The Eyes)
+$BIN_DIR/beroun-dashboard &
+echo "-> Dashboard started"
 
-# 5. Start Sovereign AI (The Brain)
+# 4. Start Sovereign AI (The Brain)
 $BIN_DIR/beroun-sovereign-ai &
 echo "-> Sovereign AI started"
 
-# 6. Start Telegram Brain (Communication)
+# 5. Start Telegram Brain (Communication)
 $BIN_DIR/beroun-tele-brain &
 echo "-> Telegram Brain started"
 
-# 7. Start Watchdog (The Guardian)
+# 6. Start Watchdog (The Guardian)
 $PROJECT_ROOT/watchdog.sh &
 
 echo "✅ All systems operational."
