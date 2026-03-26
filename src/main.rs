@@ -484,26 +484,32 @@ async fn async_main() -> Result<()> {
                                         let now = Instant::now();
                                         if now.duration_since(last_upd).as_millis() > 3000 {
                                             if risk.paused.load(Ordering::Acquire) == 0 {
-                                                let mid_i = ((best_bid as i64) + (best_ask as i64)) / 2;
-                                                let mid_f = mid_i as f64 / beroun_types::PRICE_SCALE;
+                                                // Micro-Price: volume-weighted mid
+                                                let bid_vol = eng.bids[0].amount.load(Ordering::SeqCst).unsigned_abs() as f64;
+                                                let ask_vol = eng.asks[0].amount.load(Ordering::SeqCst).unsigned_abs() as f64;
+                                                let total_vol = bid_vol + ask_vol;
+                                                let micro_i = if total_vol > 0.0 {
+                                                    ((best_bid as f64 * ask_vol + best_ask as f64 * bid_vol) / total_vol).round() as i64
+                                                } else {
+                                                    ((best_bid as i64) + (best_ask as i64)) / 2
+                                                };
+                                                let micro_f = micro_i as f64 / beroun_types::PRICE_SCALE;
+
                                                 let order_usd = risk.order_usd.load(Ordering::Acquire) as i64;
                                                 let grid = risk.grid_step.load(Ordering::Acquire) as i64;
                                                 let bias = risk.bias_offset.load(Ordering::Acquire);
 
-                                                // Inventory Skew: adjust prices based on BTC position
-                                                // Positive position (long BTC) → negative skew → push prices down
-                                                // Negative position (short BTC) → positive skew → push prices up
+                                                // Inventory Skew
                                                 let current_pos = eng.net_position.load(Ordering::Acquire);
                                                 let max_pos = risk.max_inv_delta.load(Ordering::Acquire) as i64;
                                                 let inv_skew = if max_pos > 0 {
                                                     let ratio = (current_pos as f64 / max_pos as f64).clamp(-1.0, 1.0);
-                                                    let max_skew = grid as f64 * 2.0;
-                                                    (-ratio * max_skew).round() as i64
+                                                    (-ratio * grid as f64 * 2.0).round() as i64
                                                 } else { 0 };
 
                                                 let final_bias = bias + inv_skew;
-                                                let buy_i = (mid_i - grid + final_bias).max(0);
-                                                let sell_i = (mid_i + grid + final_bias).max(0);
+                                                let buy_i = (micro_i - grid + final_bias).max(0);
+                                                let sell_i = (micro_i + grid + final_bias).max(0);
                                                 let lb = eng.last_buy_price.load(Ordering::SeqCst);
                                                 let ls = eng.last_sell_price.load(Ordering::SeqCst);
                                                 let db = (buy_i - lb).abs();
@@ -511,7 +517,7 @@ async fn async_main() -> Result<()> {
                                                 if db >= MIN_TICK || ds >= MIN_TICK || lb == 0 {
                                                     let bp = buy_i as f64 / beroun_types::PRICE_SCALE;
                                                     let sp = sell_i as f64 / beroun_types::PRICE_SCALE;
-                                                    let amt = (order_usd as f64 / mid_f / beroun_types::PRICE_SCALE).max(0.00015);
+                                                    let amt = (order_usd as f64 / micro_f / beroun_types::PRICE_SCALE).max(0.00015);
                                                     let msg = format!(
                                                         r#"[0,"ox_multi",null,[["oc_multi",{{"all":1}}],["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}],["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]]]"#,
                                                         amt, bp, -amt, sp
@@ -521,7 +527,8 @@ async fn async_main() -> Result<()> {
                                                     eng.last_sell_price.store(sell_i, Ordering::SeqCst);
                                                     last_upd = now;
                                                     info!(event = "sniper_fire", bid = best_bid, ask = best_ask,
-                                                          buy = bp, sell = sp, delta_buy = db, delta_sell = ds,
+                                                          micro = micro_i, buy = bp, sell = sp,
+                                                          delta_buy = db, delta_sell = ds,
                                                           inv_skew = inv_skew, position = current_pos);
                                                 }
                                             }
