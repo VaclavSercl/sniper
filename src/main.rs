@@ -12,6 +12,7 @@ use tracing::{info, Level};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use memmap2::MmapMut;
 use anyhow::{Context, Result};
+use std::collections::VecDeque;
 
 use beroun_types::{EngineState, RiskState, ENGINE_STATE_PATH, RISK_STATE_PATH};
 
@@ -244,11 +245,50 @@ async fn async_main() -> Result<()> {
         }
     });
 
+    // ═══ VOLATILITY ENGINE (Dynamic Grid Step) ═══
+    let vol_engine_ptr = engine_ptr as usize;
+    let vol_risk_ptr = risk as *const RiskState as usize;
+    tokio::spawn(async move {
+        let mut price_history: VecDeque<i64> = VecDeque::with_capacity(61);
+        let base_grid: i64 = 200_000_000;    // $2 base spread
+        let max_grid: i64 = 5_000_000_000;   // $50 max spread
+        let vol_mult: f64 = 0.15;            // 15% of price range
+        let default_grid: u64 = 300_000_000; // $3 fallback
+        loop {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+            let engine = unsafe { &*(vol_engine_ptr as *const EngineState) };
+            let risk = unsafe { &*(vol_risk_ptr as *const RiskState) };
+            if risk.paused.load(Ordering::Acquire) != 0 { continue; }
+            let bb = engine.best_bid.load(Ordering::Acquire);
+            let ba = engine.best_ask.load(Ordering::Acquire);
+            if bb > 0 && ba > 0 {
+                let mid = ((bb as i64) + (ba as i64)) / 2;
+                price_history.push_back(mid);
+                if price_history.len() > 60 { price_history.pop_front(); }
+                if price_history.len() >= 10 {
+                    let min_p = *price_history.iter().min().unwrap();
+                    let max_p = *price_history.iter().max().unwrap();
+                    let range = max_p - min_p;
+                    let dynamic = (range as f64 * vol_mult) as i64;
+                    let new_grid = (base_grid + dynamic).min(max_grid) as u64;
+                    risk.grid_step.store(new_grid, Ordering::Release);
+                    if range > 5_000_000_000 {
+                        tracing::info!(event = "volatility_spike",
+                            range_usd = range / beroun_types::PRICE_SCALE_I,
+                            new_grid_usd = new_grid as i64 / beroun_types::PRICE_SCALE_I);
+                    }
+                } else {
+                    risk.grid_step.store(default_grid, Ordering::Release);
+                }
+            }
+        }
+    });
+
     let key = std::env::var("BITFINEX_API_KEY").context("Missing API KEY")?;
     let sec = std::env::var("BITFINEX_API_SECRET").context("Missing API SECRET")?;
 
-    info!(event = "system_start", version = "5.3.0-dual-ws-watchdog");
-    notifier.send("🐺 Beroun Sniper v5.3.0 Dual-WS ONLINE".to_string());
+    info!(event = "system_start", version = "5.4.0-volatility-engine");
+    notifier.send("🐺 Beroun Sniper v5.4.0 ONLINE".to_string());
 
     // SIGTERM listener (systemd, Docker)
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
@@ -529,7 +569,8 @@ async fn async_main() -> Result<()> {
                                                     info!(event = "sniper_fire", bid = best_bid, ask = best_ask,
                                                           micro = micro_i, buy = bp, sell = sp,
                                                           delta_buy = db, delta_sell = ds,
-                                                          inv_skew = inv_skew, position = current_pos);
+                                                          inv_skew = inv_skew, position = current_pos,
+                                                          dynamic_grid = grid);
                                                 }
                                             }
                                         }

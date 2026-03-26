@@ -1,8 +1,8 @@
-# 🐺 Beroun Sniper v5.3 — HFT Trading Bot
+# 🐺 Beroun Sniper v5.4 — HFT Trading Bot
 
 Vysokofrekvenční obchodní bot pro Bitfinex BTC/USD. Rust 2024, zero-copy architektura, sub-millisecond tick-to-trade.
 
-## Architektura v5.3 — Dual WebSocket + Watchdog
+## Architektura v5.4 — Dual WebSocket + Watchdog + Trading Intelligence
 
 ```mermaid
 graph TB
@@ -11,7 +11,7 @@ graph TB
             WS_PUB[Market Data WS<br/>TCP_NODELAY<br/>15s watchdog] --> PARSE[simd_json<br/>zero-copy parse]
             PARSE --> BOOK[Order Book<br/>25 bids + 25 asks]
             BOOK --> BBA[Update BBA]
-            BBA --> SNIPER[Sniper Logic<br/>MIN_TICK $1 + 3s cooldown]
+            BBA --> SNIPER["Sniper Logic<br/>Micro-Price + Inv Skew + Dynamic Grid"]
         end
         subgraph "Task 1: Exec Writer (spawned)"
             WRITER[Order Writer<br/>unbounded_channel recv]
@@ -60,6 +60,36 @@ Při markentím volume přijímáš stovky book updatů, a tvůj order čeká ve
 | Execution | Ordery + notifikace | ✅ Ano | ❌ Ne |
 
 Order string se formátuje na hot path a posílá přes `unbounded_channel` — **nanosekunda**, ne milisekunda čekání na TCP.
+
+## Trading Intelligence (v5.4)
+
+### Micro-Price (Volume-Weighted Mid)
+```
+micro = (bid_price × ask_vol + ask_price × bid_vol) / total_vol
+```
+Na rozdíl od hloupého `(bid+ask)/2`, micro-price predikuje směr z volume imbalance.
+Velký bid volume → cena se posune k asku (předpovídá růst) → bot se posune dřív než trh.
+
+### Inventory Skew (Řízení zásob)
+```
+skew = -(position / max_position) × 2 × grid
+```
+| Pozice | Ratio | Skew | Efekt |
+|--------|-------|------|-------|
+| 0 BTC | 0.0 | $0 | Symetrický market making |
+| +50% max | +0.5 | -1×grid | Brzdí nákupy, zlevňuje prodeje |
+| +100% max | +1.0 | -2×grid | Maximální obranný posun |
+| -50% max | -0.5 | +1×grid | Brzdí prodeje, zlevňuje nákupy |
+
+### Volatility Engine (Dynamický Grid)
+Background task (500ms polling): sbírá mid-price do 60-slot ring bufferu (30s okno).
+```
+dynamic_grid = base($2) + 15% × price_range(30s)
+clamped to [$2, $50]
+```
+- Nízká volatilita → tight spread ($2-3) → více obchodů
+- Vysoká volatilita → wide spread ($5-50) → ochrana před adverse selection
+- Loguje `volatility_spike` při range > $50
 
 ## Watchdog
 
@@ -178,6 +208,9 @@ count    AtomicU64   8B     0x10
 | **15s watchdog** | timeout() na obou WS | Detekce half-open |
 | **abort() handles** | Zombie task prevention | Zero memory leaks |
 | **Book zeroing** | Reconnect → clean slate | No stale data trading |
+| **Micro-Price** | Volume-weighted mid | ~1-2 tick prediction edge |
+| **Inventory Skew** | Position-based bias | Prevents inventory blowup |
+| **Volatility Engine** | Dynamic grid from 30s window | Adaptive spread width |
 
 ## Bezpečnostní opravy
 
@@ -205,15 +238,14 @@ TELEGRAM_CHAT_ID=...       # optional
 
 | Parametr | Default | Popis |
 |---|---|---|
-| grid_step | $3 | Vzdálenost limitky od mid-price |
+| grid_step | $2-50 (dynamic) | Volatility Engine dynamicky řídí |
 | grid_size | 2 | Počet párů objednávek |
 | order_usd | $50 | Velikost objednávky v USD |
-| max_inv_delta | 0.005 BTC | Max inventory delta |
+| max_inv_delta | 0.005 BTC | Max inventory delta (pro skew) |
 | bias_offset | 0 | Directional bias (signed) |
 
 ## Známé Limitace
 
 1. **`into_data().to_vec()`** — tungstenite 0.26 vrací `Bytes`, true zero-copy by vyžadoval `fastwebsockets`
 2. **`oc_multi all`** ruší všechny ordery → ideálně trackovat order IDs
-3. **Grid je statický** — dynamický `spread/2` grid_step by lépe sledoval trh
-4. **Sell ordery** mohou selhat bez BTC balance na exchange walletce
+3. **Sell ordery** mohou selhat bez BTC balance na exchange walletce
