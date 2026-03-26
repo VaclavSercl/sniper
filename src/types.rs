@@ -8,19 +8,31 @@ pub const PRICE_SCALE: f64 = 100_000_000.0;
 pub const PRICE_SCALE_I: i64 = 100_000_000;
 pub const BOOK_LEVELS: usize = 25;
 
-#[repr(C)]
+/// Each level gets its own 64-byte cache line.
+/// Without this, two 24-byte levels pack into one line → false sharing
+/// when different cores update adjacent levels via mmap.
+#[repr(C, align(64))]
 pub struct OrderBookLevel {
     pub price: AtomicU64,
     pub amount: AtomicI64, // Positive for bids, negative for asks
     pub count: AtomicU64,
+    pub _pad: [u8; 40],    // 24 → 64 bytes
 }
 
+/// Fields grouped by access pattern to prevent false sharing:
+/// - HOT: best_bid/ask, bids[], asks[] (updated every tick)
+/// - COLD: latency_ns (heartbeat, 1/s), wallets (on wu msg), anti-spam
+/// Cache line padding separates hot from cold.
 #[repr(C, align(64))]
 pub struct EngineState {
+    // --- HOT: updated on every book tick ---
     pub best_bid: AtomicU64,
     pub best_ask: AtomicU64,
     pub bids: [OrderBookLevel; BOOK_LEVELS],
     pub asks: [OrderBookLevel; BOOK_LEVELS],
+    // --- cache line boundary ---
+    pub _hot_cold_pad: [u8; 64],
+    // --- COLD: updated infrequently ---
     pub latency_ns: AtomicU64,
     pub net_position: AtomicI64,
     pub realized_pnl: AtomicI64,
@@ -28,8 +40,6 @@ pub struct EngineState {
     pub wallet_usd: AtomicU64,
     pub checksum: AtomicU32,
     pub _padding: [u8; 4],
-    // Anti-spam: track last submitted order prices (scaled i64).
-    // Orders are only re-submitted when price changes by >= MIN_TICK.
     pub last_buy_price: AtomicI64,
     pub last_sell_price: AtomicI64,
 }
@@ -40,6 +50,7 @@ impl Default for OrderBookLevel {
             price: AtomicU64::new(0),
             amount: AtomicI64::new(0),
             count: AtomicU64::new(0),
+            _pad: [0; 40],
         }
     }
 }
@@ -50,12 +61,14 @@ impl Default for EngineState {
             price: AtomicU64::new(0),
             amount: AtomicI64::new(0),
             count: AtomicU64::new(0),
+            _pad: [0; 40],
         };
         Self {
             best_bid: AtomicU64::new(0),
             best_ask: AtomicU64::new(0),
             bids: [LEVEL_DEFAULT; BOOK_LEVELS],
             asks: [LEVEL_DEFAULT; BOOK_LEVELS],
+            _hot_cold_pad: [0; 64],
             latency_ns: AtomicU64::new(0),
             net_position: AtomicI64::new(0),
             realized_pnl: AtomicI64::new(0),

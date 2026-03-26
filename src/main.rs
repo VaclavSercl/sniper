@@ -231,13 +231,13 @@ fn calculate_checksum(engine: &beroun_types::EngineState, debug: bool) -> i32 {
     h.finalize() as i32
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     dotenv().ok();
     tracing_subscriber::registry().with(fmt::layer().with_target(false).json()).with(EnvFilter::from_default_env().add_directive(Level::INFO.into())).init();
 
-    // Pin main thread to CPU core 1 (leave core 0 for OS/interrupts)
-    // Reduces L1/L2 cache misses from thread migration → stable latency
+    // Pin BEFORE Tokio starts — guarantees all async tasks run on this core.
+    // #[tokio::main] spawns a multi-thread pool first, then pins — which means
+    // Tokio can migrate our hot loop to an unpinned worker thread.
     if let Some(core_ids) = core_affinity::get_core_ids() {
         if core_ids.len() > 1 {
             core_affinity::set_for_current(core_ids[1]);
@@ -245,6 +245,17 @@ async fn main() -> Result<()> {
         }
     }
 
+    // Single-thread runtime: all async code runs on our pinned core.
+    // spawn_blocking (disk I/O) uses a separate OS thread pool — unaffected.
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .context("Failed to build Tokio runtime")?;
+
+    rt.block_on(async_main())
+}
+
+async fn async_main() -> Result<()> {
     let notifier = Arc::new(AsyncNotifier::new());
     let mut engine_mmap = init_mmap_ptr::<EngineState>(&ENGINE_STATE_PATH)?;
     let risk_mmap = init_mmap_ptr::<RiskState>(&RISK_STATE_PATH)?;
