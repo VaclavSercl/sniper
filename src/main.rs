@@ -79,7 +79,7 @@ async fn get_sig(sec: &str, payload: &str) -> String {
     hex::encode(mac.finalize().into_bytes())
 }
 
-use std::fmt::Write as FmtWrite;
+use std::fmt::Write;
 use std::sync::atomic::fence;
 use simd_json::prelude::*;
 use simd_json::BorrowedValue;
@@ -160,22 +160,33 @@ fn sort_book(levels: *mut [beroun_types::OrderBookLevel; beroun_types::BOOK_LEVE
     });
 }
 
-fn format_bfx(val: f64) -> String {
+/// Write Bitfinex-format number directly into a Write target.
+/// Avoids String allocation per level — writes in-place.
+/// Bitfinex format: no trailing zeros, integers without decimal point.
+#[inline]
+fn write_bfx(w: &mut impl std::fmt::Write, val: f64) -> std::fmt::Result {
     if val == val.trunc() {
-        format!("{:.0}", val)
+        write!(w, "{:.0}", val)
     } else {
-        let s = format!("{:.12}", val);
-        let s = s.trim_end_matches('0').trim_end_matches('.').to_string();
-        s
+        // Write with 12 decimal places into a stack buffer
+        let mut buf = [0u8; 32];
+        let n = {
+            use std::io::Write;
+            let mut cursor = std::io::Cursor::new(&mut buf[..]);
+            write!(cursor, "{:.12}", val).unwrap();
+            cursor.position() as usize
+        };
+        // Trim trailing zeros and decimal point
+        let s = unsafe { std::str::from_utf8_unchecked(&buf[..n]) };
+        let trimmed = s.trim_end_matches('0').trim_end_matches('.');
+        w.write_str(trimmed)
     }
 }
 
 fn calculate_checksum(engine: &beroun_types::EngineState, debug: bool) -> i32 {
     // Bitfinex P0 checksum: interleave bid[i] and ask[i] for i=0..25
     // Format: "bid0_price:bid0_amount:ask0_price:ask0_amount:bid1_price:..."
-    // Bids sorted DESC by price, asks sorted ASC by price
-    // Amounts: positive for bids, negative for asks (as stored)
-    fence(Ordering::SeqCst); // Ensure all prior writes are visible
+    fence(Ordering::SeqCst);
     let mut s = String::with_capacity(1024);
     let mut levels_found = 0;
     for i in 0..25 {
@@ -192,14 +203,18 @@ fn calculate_checksum(engine: &beroun_types::EngineState, debug: bool) -> i32 {
             let p = bp as f64 / beroun_types::PRICE_SCALE;
             let a = bid.amount.load(Ordering::SeqCst) as f64 / beroun_types::PRICE_SCALE;
             if !s.is_empty() { s.push(':'); }
-            let _ = write!(s, "{}:{}", format_bfx(p), format_bfx(a));
+            let _ = write_bfx(&mut s, p);
+            s.push(':');
+            let _ = write_bfx(&mut s, a);
         }
         if ac > 0 && ap > 0 {
             levels_found += 1;
             let p = ap as f64 / beroun_types::PRICE_SCALE;
             let a = ask.amount.load(Ordering::SeqCst) as f64 / beroun_types::PRICE_SCALE;
             if !s.is_empty() { s.push(':'); }
-            let _ = write!(s, "{}:{}", format_bfx(p), format_bfx(a));
+            let _ = write_bfx(&mut s, p);
+            s.push(':');
+            let _ = write_bfx(&mut s, a);
         }
     }
     if debug || levels_found == 0 {
@@ -220,6 +235,15 @@ fn calculate_checksum(engine: &beroun_types::EngineState, debug: bool) -> i32 {
 async fn main() -> Result<()> {
     dotenv().ok();
     tracing_subscriber::registry().with(fmt::layer().with_target(false).json()).with(EnvFilter::from_default_env().add_directive(Level::INFO.into())).init();
+
+    // Pin main thread to CPU core 1 (leave core 0 for OS/interrupts)
+    // Reduces L1/L2 cache misses from thread migration → stable latency
+    if let Some(core_ids) = core_affinity::get_core_ids() {
+        if core_ids.len() > 1 {
+            core_affinity::set_for_current(core_ids[1]);
+            info!(event = "cpu_pinned", core = 1, total_cores = core_ids.len());
+        }
+    }
 
     let notifier = Arc::new(AsyncNotifier::new());
     let mut engine_mmap = init_mmap_ptr::<EngineState>(&ENGINE_STATE_PATH)?;
