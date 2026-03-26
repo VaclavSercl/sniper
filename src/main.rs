@@ -18,44 +18,80 @@ use beroun_types::{EngineState, RiskState, ENGINE_STATE_PATH, RISK_STATE_PATH};
 
 type HmacSha384 = Hmac<Sha384>;
 
-// Background Notifier Task to keep Hot Path clean
+// Background Notifier Task — BotEvent-based aggregation
+pub enum BotEvent {
+    Alert(String),
+    Trade { amount: f64, price: f64 },
+}
+
 struct AsyncNotifier {
-    tx: mpsc::UnboundedSender<String>,
+    tx: mpsc::UnboundedSender<BotEvent>,
 }
 
 impl AsyncNotifier {
     fn new() -> Self {
-        let (tx, mut rx) = mpsc::unbounded_channel::<String>();
+        let (tx, mut rx) = mpsc::unbounded_channel::<BotEvent>();
         let token = std::env::var("TELEGRAM_BOT_TOKEN").unwrap_or_default();
         let chat_id = std::env::var("TELEGRAM_CHAT_ID").unwrap_or_default();
         let client = reqwest::Client::builder().timeout(Duration::from_secs(10)).build().unwrap();
         let alerts_log = "/home/wwwenda/hft-sniper/logs/alerts.log".to_string();
 
         tokio::spawn(async move {
-            while let Some(msg) = rx.recv().await {
-                info!(event = "async_alert", message = msg);
-                let log_path = alerts_log.clone();
-                let log_msg = msg.clone();
-                tokio::task::spawn_blocking(move || {
-                    use std::fs::OpenOptions;
-                    use std::io::Write;
-                    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&log_path) {
-                        let _ = writeln!(file, "[{:?}] {}", SystemTime::now(), log_msg);
+            let mut report_interval = tokio::time::interval(Duration::from_secs(3600));
+            let mut buys: u32 = 0;
+            let mut sells: u32 = 0;
+            let mut volume: f64 = 0.0;
+            let mut last_price: f64 = 0.0;
+
+            loop {
+                tokio::select! {
+                    _ = report_interval.tick() => {
+                        if buys + sells > 0 {
+                            let msg = format!(
+                                "📊 *Hodinový Report*\n📈 Obchodů: `{}` ({} nákup / {} prodej)\n💰 Objem: `{:.5}` BTC\n💲 Posl. cena: `${:.2}`",
+                                buys + sells, buys, sells, volume, last_price
+                            );
+                            if !token.is_empty() && !chat_id.is_empty() {
+                                let url = format!("https://api.telegram.org/bot{}/sendMessage", token);
+                                let _ = client.post(&url).json(&json!({"chat_id": &chat_id, "text": format!("🐺 {}", msg), "parse_mode": "Markdown"})).send().await;
+                            }
+                            buys = 0; sells = 0; volume = 0.0;
+                        }
                     }
-                });
-                if token.is_empty() || chat_id.is_empty() { continue; }
-                let url = format!("https://api.telegram.org/bot{}/sendMessage", token);
-                let _ = client.post(url)
-                    .json(&json!({"chat_id": chat_id, "text": format!("🐺 *BEROUN*\n`{}`", msg), "parse_mode": "Markdown"}))
-                    .send().await;
+                    Some(event) = rx.recv() => {
+                        match event {
+                            BotEvent::Alert(msg) => {
+                                info!(event = "async_alert", message = %msg);
+                                let log_path = alerts_log.clone();
+                                let log_msg = msg.clone();
+                                tokio::task::spawn_blocking(move || {
+                                    use std::fs::OpenOptions;
+                                    use std::io::Write;
+                                    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&log_path) {
+                                        let _ = writeln!(f, "[{:?}] {}", SystemTime::now(), log_msg);
+                                    }
+                                });
+                                if !token.is_empty() && !chat_id.is_empty() {
+                                    let url = format!("https://api.telegram.org/bot{}/sendMessage", token);
+                                    let _ = client.post(&url).json(&json!({"chat_id": &chat_id, "text": format!("🐺 {}", msg), "parse_mode": "Markdown"})).send().await;
+                                }
+                            },
+                            BotEvent::Trade { amount, price } => {
+                                if amount > 0.0 { buys += 1; } else { sells += 1; }
+                                volume += amount.abs();
+                                last_price = price;
+                                info!(event = "trade_aggregated", amount = amount, price = price, buys = buys, sells = sells);
+                            }
+                        }
+                    }
+                }
             }
         });
         Self { tx }
     }
 
-    fn send(&self, msg: String) {
-        let _ = self.tx.send(msg);
-    }
+    fn alert(&self, msg: String) { let _ = self.tx.send(BotEvent::Alert(msg)); }
+    fn trade(&self, amount: f64, price: f64) { let _ = self.tx.send(BotEvent::Trade { amount, price }); }
 }
 
 fn init_mmap_ptr<T: Default>(path: &str) -> Result<MmapMut> {
@@ -287,33 +323,8 @@ async fn async_main() -> Result<()> {
     let key = std::env::var("BITFINEX_API_KEY").context("Missing API KEY")?;
     let sec = std::env::var("BITFINEX_API_SECRET").context("Missing API SECRET")?;
 
-    info!(event = "system_start", version = "5.4.0-volatility-engine");
-    notifier.send("🐺 *Beroun Sniper v5.4.0 ONLINE*\n`Dual-WS + Watchdog + Vol Engine`".to_string());
-
-    // ═══ HOURLY STATUS REPORT ═══
-    let hourly_engine = engine_ptr as usize;
-    let hourly_risk_ptr = risk as *const RiskState as usize;
-    let hourly_notifier = notifier.clone();
-    tokio::spawn(async move {
-        // Wait 5 min on startup before first report
-        tokio::time::sleep(Duration::from_secs(300)).await;
-        loop {
-            tokio::time::sleep(Duration::from_secs(3600)).await;
-            let eng = unsafe { &*(hourly_engine as *const EngineState) };
-            let risk = unsafe { &*(hourly_risk_ptr as *const RiskState) };
-            let bb = eng.best_bid.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
-            let ba = eng.best_ask.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
-            let pos = eng.net_position.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
-            let pnl = eng.realized_pnl.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
-            let w_btc = eng.wallet_btc.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
-            let w_usd = eng.wallet_usd.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
-            let grid = risk.grid_step.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
-            hourly_notifier.send(format!(
-                "📊 *HOURLY REPORT*\n💲 `${:.2}` / `${:.2}`\n📏 Grid: `${:.2}`\n📊 Pos: `{:.5}` BTC\n📈 PnL: `${:.2}`\n💼 `{:.5}` ₿ / `${:.2}` USD",
-                bb, ba, grid, pos, pnl, w_btc, w_usd
-            ));
-        }
-    });
+    info!(event = "system_start", version = "6.0.0-sovereign");
+    notifier.alert("*Beroun Sniper v6.0 ONLINE*\n`Dual-WS + Watchdog + Vol Engine + Trade Aggregation`".to_string());
 
     // SIGTERM listener (systemd, Docker)
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
@@ -395,16 +406,8 @@ async fn async_main() -> Result<()> {
                                     if let Some(trade) = arr[2].as_array() {
                                         if let (Some(amount), Some(price)) = (safe_as_f64(&trade[4]), safe_as_f64(&trade[5])) {
                                             engine.net_position.fetch_add((amount * beroun_types::PRICE_SCALE) as i64, Ordering::SeqCst);
-                                            let pos = engine.net_position.load(Ordering::SeqCst) as f64 / beroun_types::PRICE_SCALE;
-                                            let pnl = engine.realized_pnl.load(Ordering::SeqCst) as f64 / beroun_types::PRICE_SCALE;
-                                            let w_btc = engine.wallet_btc.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
-                                            let w_usd = engine.wallet_usd.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
-                                            let side = if amount > 0.0 { "BUY" } else { "SELL" };
                                             info!(event = "trade_executed", amount = amount, price = price);
-                                            exec_notifier.send(format!(
-                                                "💰 *TRADE*\n`{} {:.5} BTC @ ${:.2}`\n📊 Pos: `{:.5}` BTC\n💼 `{:.5}` ₿ / `${:.2}` USD\n📈 PnL: `${:.2}`",
-                                                side, amount.abs(), price, pos, w_btc, w_usd, pnl
-                                            ));
+                                            exec_notifier.trade(amount, price);
                                         }
                                     }
                                 }
@@ -598,6 +601,11 @@ async fn async_main() -> Result<()> {
                                                     let _ = order_tx.send(msg);
                                                     eng.last_buy_price.store(buy_i, Ordering::SeqCst);
                                                     eng.last_sell_price.store(sell_i, Ordering::SeqCst);
+                                                    // Dashboard metrics
+                                                    let t2t_us = now.elapsed().as_micros() as u64;
+                                                    eng.t2t_micros.store(t2t_us, Ordering::SeqCst);
+                                                    eng.micro_price.store(micro_i as u64, Ordering::SeqCst);
+                                                    eng.current_skew.store(inv_skew, Ordering::SeqCst);
                                                     last_upd = now;
                                                     info!(event = "sniper_fire", bid = best_bid, ask = best_ask,
                                                           micro = micro_i, buy = bp, sell = sp,
@@ -646,7 +654,7 @@ async fn async_main() -> Result<()> {
         eng.last_buy_price.store(0, Ordering::SeqCst);
         eng.last_sell_price.store(0, Ordering::SeqCst);
 
-        notifier.send(format!("⚠️ *RECONNECT*\n`Reason: {}`", shutdown_reason));
+        notifier.alert(format!("⚠️ *RECONNECT*\n`Reason: {}`", shutdown_reason));
         tokio::time::sleep(Duration::from_secs(3)).await;
     }
 }
@@ -656,7 +664,7 @@ async fn graceful_shutdown(
     order_tx: &tokio::sync::mpsc::UnboundedSender<String>,
     notifier: &AsyncNotifier,
 ) {
-    notifier.send("🛑 Shutdown: cancelling all orders...".to_string());
+    notifier.alert("🛑 *Shutdown*: cancelling all orders...".to_string());
     let cancel_all = r#"[0,"oc_multi",null,{"all":1}]"#.to_string();
     if let Err(e) = order_tx.send(cancel_all) {
         tracing::error!(event = "shutdown_cancel_failed", error = %e);
@@ -665,7 +673,7 @@ async fn graceful_shutdown(
     }
     tokio::time::sleep(Duration::from_millis(500)).await;
     info!(event = "system_shutdown_complete");
-    notifier.send("💤 Shutdown complete.".to_string());
+    notifier.alert("💤 Shutdown complete.".to_string());
 }
 
 /// TCP+TLS+WebSocket with TCP_NODELAY

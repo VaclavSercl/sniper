@@ -159,7 +159,7 @@
     <header class="header">
         <div class="header-left">
             <div class="logo">🐺 <span>BEROUN</span> SNIPER</div>
-            <span class="version" id="ver">v5.4.0</span>
+            <span class="version" id="ver">v6.0.0</span>
         </div>
         <div class="header-right">
             <div class="ws-status">
@@ -171,7 +171,7 @@
     </header>
 
     <!-- Row 1: Price metrics -->
-    <div class="metrics-grid" style="grid-template-columns: repeat(5, 1fr);">
+    <div class="metrics-grid" style="grid-template-columns: repeat(6, 1fr);">
         <div class="metric-card">
             <div class="metric-label">Best Bid</div>
             <div class="metric-value positive" id="best-bid">---</div>
@@ -181,17 +181,20 @@
             <div class="metric-value negative" id="best-ask">---</div>
         </div>
         <div class="metric-card">
+            <div class="metric-label">Micro-Price</div>
+            <div class="metric-value purple" id="micro-price">---</div>
+        </div>
+        <div class="metric-card">
             <div class="metric-label">Spread</div>
             <div class="metric-value yellow" id="spread">---</div>
         </div>
         <div class="metric-card">
             <div class="metric-label">Dynamic Grid</div>
             <div class="metric-value cyan" id="grid-step">---</div>
-            <div class="metric-sub" id="grid-sub"></div>
         </div>
         <div class="metric-card">
-            <div class="metric-label">Latence</div>
-            <div class="metric-value" id="latency">---</div>
+            <div class="metric-label">T2T Latence</div>
+            <div class="metric-value" id="t2t">---</div>
         </div>
     </div>
 
@@ -385,16 +388,17 @@ function connectWS() {
         document.getElementById('best-bid').textContent = '$' + fmt(d.best_bid);
         document.getElementById('best-ask').textContent = '$' + fmt(d.best_ask);
         document.getElementById('spread').textContent = '$' + fmt(d.spread, 1);
+        document.getElementById('micro-price').textContent = d.micro_price > 0 ? '$' + fmt(d.micro_price) : '---';
 
         // Grid
         document.getElementById('grid-step').textContent = '$' + fmt(d.grid_step, 2);
         currentGrid = { base: d.grid_base, step: d.grid_step, size: d.grid_size || 2 };
 
-        // Latency
-        const latEl = document.getElementById('latency');
-        const latMs = d.latency_ms || 0;
-        latEl.textContent = latMs < 1000 ? fmt(latMs, 1) + ' ms' : fmt(latMs/1000, 1) + ' s';
-        latEl.className = 'metric-value' + (latMs > 5000 ? ' negative' : latMs > 1000 ? ' yellow' : '');
+        // T2T Latency
+        const t2tEl = document.getElementById('t2t');
+        const t2t = d.t2t_micros || 0;
+        t2tEl.textContent = t2t > 0 ? t2t + ' µs' : '---';
+        t2tEl.className = 'metric-value' + (t2t > 1000 ? ' negative' : t2t > 500 ? ' yellow' : '');
 
         // Trading
         document.getElementById('position').textContent = (d.position >= 0 ? '+' : '') + d.position.toFixed(5);

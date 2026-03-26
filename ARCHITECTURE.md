@@ -1,8 +1,8 @@
-# 🐺 Beroun Sniper v5.4 — HFT Trading Bot
+# 🐺 Beroun Sniper v6.0 — HFT Trading Bot
 
 Vysokofrekvenční obchodní bot pro Bitfinex BTC/USD. Rust 2024, zero-copy architektura, sub-millisecond tick-to-trade.
 
-## Architektura v5.4 — Dual WebSocket + Watchdog + Trading Intelligence
+## Architektura v6.0 — Dual WS + TUI Monitor + Trade Aggregation
 
 ```mermaid
 graph TB
@@ -61,7 +61,7 @@ Při markentím volume přijímáš stovky book updatů, a tvůj order čeká ve
 
 Order string se formátuje na hot path a posílá přes `unbounded_channel` — **nanosekunda**, ne milisekunda čekání na TCP.
 
-## Trading Intelligence (v5.4)
+## Trading Intelligence (v6.0)
 
 ### Micro-Price (Volume-Weighted Mid)
 ```
@@ -127,17 +127,59 @@ clamped to [$2, $50]
 ├── src/
 │   ├── main.rs              # Core: async_main, 3 tasks, watchdog, shutdown
 │   ├── types.rs              # EngineState, RiskState, OrderBookLevel
-│   └── sovereign_ai.rs      # AI risk module (separate binary)
+│   ├── ai_manager.rs         # Dashboard WS server (:3000)
+│   ├── monitor.rs            # TUI dashboard (ANSI, 5 FPS, mmap reader)
+│   └── sovereign_ai.rs       # AI risk module (separate binary)
 ├── runtime/
 │   ├── engine_state.bin      # mmap shared state (auto-generated)
 │   └── risk_state.bin        # mmap risk params (auto-generated)
 ├── logs/
-│   ├── alerts.log            # Telegram + file alerts
-│   └── watchdog.log          # Legacy external watchdog
+│   └── alerts.log            # Telegram + file alerts
+├── dashboard.html            # Web dashboard (glassmorphism, uPlot)
 ├── .env                      # BITFINEX_API_KEY, BITFINEX_API_SECRET
 ├── Cargo.toml
-├── watchdog.sh               # Legacy (in-process watchdog replaced it)
 └── ARCHITECTURE.md           # This file
+```
+
+## Telegram Notifikace (v6.0)
+
+### BotEvent Enum
+```rust
+pub enum BotEvent {
+    Alert(String),            // Okamžité odeslání (startup, shutdown, reconnect)
+    Trade { amount, price },  // Agregováno do hodinového reportu
+}
+```
+
+| Událost | Typ | Chování |
+|---------|-----|--------|
+| Startup | Alert | Okamžitě: `*Beroun Sniper v6.0 ONLINE*` |
+| Trade | Trade | Agreguje se: buys/sells/volume/poslední cena |
+| Hodinový report | Timer | Každou hodinu: počet obchodů, objem, posl. cena |
+| Reconnect | Alert | Okamžitě s důvodem |
+| Shutdown | Alert | Okamžitě: cancel_all + flush |
+
+### Hodinový Report (ukázka)
+```
+🐺 📊 *Hodinový Report*
+📈 Obchodů: `20` (12 nákup / 8 prodej)
+💰 Objem: `0.01440` BTC
+💲 Posl. cena: `$69,752.50`
+```
+
+## TUI Monitor (`cargo run --release --bin beroun-monitor`)
+ANSI terminálový dashboard, 5 FPS, čte mmap přímo.
+```
+══════════════════════════════════════════════════════════════════════
+ 🐺 BEROUN SNIPER v6.0          🟢 RUNNING
+══════════════════════════════════════════════════════════════════════
+ ┌─ TRH: tBTCUSD ───────────┐  ┌─ BOT METRIKY ───────────┐
+ │ Best Ask:    $ 69,640.00  │  │ T2T Latence:    42 µs │
+ │ Micro-Price: $ 69,639.50  │  │ Dyn Grid:    $ 4.25  │
+ │ Mid-Price:   $ 69,639.00  │  │ Inv Skew:    $+1.73  │
+ │ Best Bid:    $ 69,638.00  │  │ PnL:         $+2.15  │
+ │ Spread:      $ 2.00       │  │                      │
+ └────────────────────────────┘  └──────────────────────┘
 ```
 
 ## Operační příkazy
@@ -156,7 +198,10 @@ systemctl --user restart beroun-sniper
 systemctl --user stop beroun-sniper
 
 # Sledování obchodů
-journalctl --user -u beroun-sniper -f | jq 'select(.fields.event == "sniper_fire")'
+journalctl --user -u beroun-sniper -f | jq 'select(.fields.event == "sniper_fire" or .fields.event == "trade_aggregated")'
+
+# TUI Monitor (druhé SSH okno)
+cargo run --release --bin beroun-monitor
 
 # Sledování watchdogu
 journalctl --user -u beroun-sniper -f | jq 'select(.fields.event | startswith("watchdog") or startswith("reconnect") or startswith("shutdown"))'

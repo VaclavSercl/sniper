@@ -40,8 +40,13 @@ pub struct EngineState {
     pub bids: [OrderBookLevel; BOOK_LEVELS],
     pub asks: [OrderBookLevel; BOOK_LEVELS],
 
+    // --- DASHBOARD METRICS (written by main loop on sniper_fire) ---
+    pub t2t_micros: AtomicU64,    // Tick-to-Trade latency (µs)
+    pub micro_price: AtomicU64,   // Volume-weighted mid-price
+    pub current_skew: AtomicI64,  // Inventory Skew bias (signed)
+
     // --- cache line boundary ---
-    pub _pad_hot_cold: [u8; 64],
+    pub _pad_hot_cold: [u8; 40],  // 64-24=40 (3 atomics = 24 bytes)
 
     // --- COLD: updated infrequently ---
     pub net_position: AtomicI64,
@@ -78,7 +83,10 @@ impl Default for EngineState {
             best_ask: AtomicU64::new(0),
             bids: [LEVEL_DEFAULT; BOOK_LEVELS],
             asks: [LEVEL_DEFAULT; BOOK_LEVELS],
-            _pad_hot_cold: [0; 64],
+            t2t_micros: AtomicU64::new(0),
+            micro_price: AtomicU64::new(0),
+            current_skew: AtomicI64::new(0),
+            _pad_hot_cold: [0; 40],
             net_position: AtomicI64::new(0),
             realized_pnl: AtomicI64::new(0),
             wallet_btc: AtomicU64::new(0),

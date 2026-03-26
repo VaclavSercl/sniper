@@ -35,9 +35,13 @@ struct DashboardData {
     grid_size: u64,
     // System
     latency_ms: f64,
+    t2t_micros: u64,
     uptime_secs: u64,
     timestamp: u64,
     version: String,
+    // Advanced
+    micro_price: f64,
+    current_skew: f64,
     // Order Book depth (top 5 levels for visualization)
     bid_prices: Vec<f64>,
     bid_amounts: Vec<f64>,
@@ -64,7 +68,7 @@ async fn ws_handler(ws: WebSocketUpgrade, dashboard: Arc<Mutex<DashboardData>>) 
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv().ok();
-    println!("--- BEROUN AI MANAGER v5.4.0 ---");
+    println!("--- BEROUN AI MANAGER v6.0.0 ---");
     let dashboard = Arc::new(Mutex::<DashboardData>::default());
     let d_clone = dashboard.clone();
     let start_time = Instant::now();
@@ -92,10 +96,13 @@ async fn main() -> Result<()> {
         let mid = (bb + ba) / 2.0;
         let spread = ba - bb;
         let latency_ns = engine.latency_ns.load(Ordering::Acquire);
+        let t2t = engine.t2t_micros.load(Ordering::Acquire);
         let pos = engine.net_position.load(Ordering::Acquire) as f64 / scale;
         let pnl = engine.realized_pnl.load(Ordering::Acquire) as f64 / scale;
         let w_btc = engine.wallet_btc.load(Ordering::Acquire) as f64 / scale;
         let w_usd = engine.wallet_usd.load(Ordering::Acquire) as f64 / scale;
+        let micro_p = engine.micro_price.load(Ordering::Acquire) as f64 / scale;
+        let skew = engine.current_skew.load(Ordering::Acquire) as f64 / scale;
 
         let g_step = risk.grid_step.load(Ordering::Acquire) as f64 / scale;
         let g_size = risk.grid_size.load(Ordering::Acquire);
@@ -136,9 +143,12 @@ async fn main() -> Result<()> {
             db.grid_step = g_step;
             db.grid_size = g_size;
             db.latency_ms = latency_ns as f64 / 1_000_000.0;
+            db.t2t_micros = t2t;
             db.uptime_secs = start_time.elapsed().as_secs();
             db.timestamp = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-            db.version = "5.4.0".to_string();
+            db.version = "6.0.0".to_string();
+            db.micro_price = micro_p;
+            db.current_skew = skew;
             db.bid_prices = bp;
             db.bid_amounts = ba_v;
             db.ask_prices = ap;
