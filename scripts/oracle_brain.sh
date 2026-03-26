@@ -21,7 +21,10 @@ log "═══════ ORACLE v7.1 ACTIVATED ═══════"
 # ── 1. SBĚR LOKÁLNÍCH DAT ────────────────────────────────────
 log "[1/5] Collecting bot metrics..."
 
-# Aktuální risk parametry
+# Aktuální stav bota (JSON snapshot z mmap)
+BOT_STATE=$($CONFIG export-json 2>/dev/null || echo '{"error":"unavailable"}')
+
+# Aktuální risk parametry (human-readable)
 CURRENT_PARAMS=$($CONFIG show 2>/dev/null || echo "unavailable")
 
 # Posledních 26h obchody a alerty
@@ -61,7 +64,8 @@ log "[3/5] Invoking Gemini 3.1 Pro..."
 ORACLE_PROMPT="You are the Senior Risk Manager of HFT fund 'Beroun Sniper'.
 
 === BOT STATUS (last 26h) ===
-Current Parameters: $CURRENT_PARAMS
+Live State (JSON): $BOT_STATE
+Parameters: $CURRENT_PARAMS
 Recent Trades: $RECENT_TRADES
 Realized PnL events: $PNL_ENTRIES
 Local AI (L2) decisions: $AI_DECISIONS
