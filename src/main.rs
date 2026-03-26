@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use futures_util::{StreamExt, SinkExt};
 use serde_json::json;
-use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+use tokio_tungstenite::tungstenite::protocol::Message;
 use hmac::{Hmac, Mac};
 use sha2::Sha384;
 use dotenvy::dotenv;
@@ -15,7 +15,6 @@ use anyhow::{Context, Result};
 
 use beroun_types::{EngineState, RiskState, ENGINE_STATE_PATH, RISK_STATE_PATH};
 
-const BITFINEX_AUTH_URL: &str = "wss://api.bitfinex.com/ws/2";
 type HmacSha384 = Hmac<Sha384>;
 
 // Background Notifier Task to keep Hot Path clean
@@ -79,7 +78,6 @@ async fn get_sig(sec: &str, payload: &str) -> String {
     hex::encode(mac.finalize().into_bytes())
 }
 
-use std::fmt::Write;
 use std::sync::atomic::fence;
 use simd_json::prelude::*;
 use simd_json::BorrowedValue;
@@ -286,10 +284,28 @@ async fn async_main() -> Result<()> {
     notifier.send("🐺 Beroun Sniper v5.2.0 Sovereign HFT ONLINE".to_string());
 
     loop {
-        let ws_result = connect_async(BITFINEX_AUTH_URL).await;
-        let (ws, _) = match ws_result {
+        // Manual TCP → TLS → WebSocket with TCP_NODELAY
+        // Disables Nagle's algorithm: sends packets immediately instead of
+        // buffering for up to 40ms. Critical for order submission latency.
+        let ws_result = async {
+            let tcp = tokio::net::TcpStream::connect("api.bitfinex.com:443").await?;
+            tcp.set_nodelay(true)?; // TCP_NODELAY: no Nagle buffering
+            let connector = tokio_native_tls::TlsConnector::from(
+                native_tls::TlsConnector::new().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
+            );
+            let tls = connector.connect("api.bitfinex.com", tcp).await
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            let (ws, _) = tokio_tungstenite::client_async("wss://api.bitfinex.com/ws/2", tls).await
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+            Ok::<_, std::io::Error>(ws)
+        }.await;
+        let ws = match ws_result {
             Ok(v) => v,
-            Err(_) => { tokio::time::sleep(Duration::from_secs(10)).await; continue; }
+            Err(e) => {
+                info!(event = "ws_connect_failed", error = %e);
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                continue;
+            }
         };
 
         let (mut write, mut read) = ws.split();

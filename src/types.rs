@@ -8,32 +8,42 @@ pub const PRICE_SCALE: f64 = 100_000_000.0;
 pub const PRICE_SCALE_I: i64 = 100_000_000;
 pub const BOOK_LEVELS: usize = 25;
 
-/// Each level gets its own 64-byte cache line.
-/// Without this, two 24-byte levels pack into one line → false sharing
-/// when different cores update adjacent levels via mmap.
-#[repr(C, align(64))]
+/// Compact repr(C) — NO per-level cache line alignment.
+/// All 25 levels = 600 bytes = ~10 cache lines → excellent spatial locality
+/// for sort_unstable_by sequential scan. False sharing between adjacent
+/// levels is not an issue because they're updated by the same pinned thread.
+#[repr(C)]
 pub struct OrderBookLevel {
     pub price: AtomicU64,
     pub amount: AtomicI64, // Positive for bids, negative for asks
     pub count: AtomicU64,
-    pub _pad: [u8; 40],    // 24 → 64 bytes
 }
 
-/// Fields grouped by access pattern to prevent false sharing:
-/// - HOT: best_bid/ask, bids[], asks[] (updated every tick)
-/// - COLD: latency_ns (heartbeat, 1/s), wallets (on wu msg), anti-spam
-/// Cache line padding separates hot from cold.
+/// Memory layout optimized for mmap IPC — false sharing prevention.
+///
+/// Access pattern groups separated by 64-byte cache line padding:
+///   1. HEARTBEAT zone: latency_ns (written 1/s by background task)
+///   2. HOT zone: best_bid/ask, bids[], asks[] (written 100s/s by main loop)
+///   3. COLD zone: wallets, anti-spam, checksum (written infrequently)
+///
+/// Without padding, heartbeat writing latency_ns would invalidate the
+/// cache line containing best_bid → cache miss on every sniper_fire.
 #[repr(C, align(64))]
 pub struct EngineState {
-    // --- HOT: updated on every book tick ---
+    // --- HEARTBEAT: written by background task every 1s ---
+    pub latency_ns: AtomicU64,
+    pub _pad_heartbeat: [u8; 56], // 8 → 64 bytes (own cache line)
+
+    // --- HOT: updated on every book tick by main loop ---
     pub best_bid: AtomicU64,
     pub best_ask: AtomicU64,
     pub bids: [OrderBookLevel; BOOK_LEVELS],
     pub asks: [OrderBookLevel; BOOK_LEVELS],
+
     // --- cache line boundary ---
-    pub _hot_cold_pad: [u8; 64],
+    pub _pad_hot_cold: [u8; 64],
+
     // --- COLD: updated infrequently ---
-    pub latency_ns: AtomicU64,
     pub net_position: AtomicI64,
     pub realized_pnl: AtomicI64,
     pub wallet_btc: AtomicU64,
@@ -50,7 +60,6 @@ impl Default for OrderBookLevel {
             price: AtomicU64::new(0),
             amount: AtomicI64::new(0),
             count: AtomicU64::new(0),
-            _pad: [0; 40],
         }
     }
 }
@@ -61,15 +70,15 @@ impl Default for EngineState {
             price: AtomicU64::new(0),
             amount: AtomicI64::new(0),
             count: AtomicU64::new(0),
-            _pad: [0; 40],
         };
         Self {
+            latency_ns: AtomicU64::new(0),
+            _pad_heartbeat: [0; 56],
             best_bid: AtomicU64::new(0),
             best_ask: AtomicU64::new(0),
             bids: [LEVEL_DEFAULT; BOOK_LEVELS],
             asks: [LEVEL_DEFAULT; BOOK_LEVELS],
-            _hot_cold_pad: [0; 64],
-            latency_ns: AtomicU64::new(0),
+            _pad_hot_cold: [0; 64],
             net_position: AtomicI64::new(0),
             realized_pnl: AtomicI64::new(0),
             wallet_btc: AtomicU64::new(0),
@@ -84,25 +93,30 @@ impl Default for EngineState {
 
 #[repr(C, align(64))]
 pub struct RiskState {
+    // --- Written by risk-control process ---
+    pub paused: AtomicU64,
+    pub _pad_paused: [u8; 56], // own cache line
+
+    // --- Read-only from main loop (written rarely by risk-control) ---
     pub grid_step: AtomicU64,
     pub grid_size: AtomicU64,
     pub order_usd: AtomicU64,
     pub max_inv_delta: AtomicU64,
     pub bias_offset: AtomicI64,
-    pub paused: AtomicU64,
-    pub _padding: [u8; 16],
+    pub _padding: [u8; 24],
 }
 
 impl Default for RiskState {
     fn default() -> Self {
         Self { 
+            paused: AtomicU64::new(0),
+            _pad_paused: [0; 56],
             grid_step: AtomicU64::new((3.0 * PRICE_SCALE) as u64),
             grid_size: AtomicU64::new(2),
             order_usd: AtomicU64::new((50.0 * PRICE_SCALE) as u64),
             max_inv_delta: AtomicU64::new((0.005 * PRICE_SCALE) as u64),
             bias_offset: AtomicI64::new(0),
-            paused: AtomicU64::new(0),
-            _padding: [0; 16]
+            _padding: [0; 24],
         }
     }
 }
