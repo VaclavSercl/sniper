@@ -454,7 +454,7 @@ async fn async_main() -> Result<()> {
         let exec_notifier = notifier.clone();
         let reader_handle = tokio::spawn(async move {
             loop {
-                match tokio::time::timeout(Duration::from_secs(15), exec_read.next()).await {
+                match tokio::time::timeout(Duration::from_secs(30), exec_read.next()).await {
                     Ok(Some(Ok(msg))) if msg.is_text() => {
                         let mut bytes = msg.into_data().to_vec();
                         let v = match simd_json::to_borrowed_value(&mut bytes) {
@@ -847,18 +847,25 @@ async fn async_main() -> Result<()> {
                                                     let amt = (final_order_usd / micro_f / beroun_types::PRICE_SCALE).max(MIN_ORDER_BTC);
 
                                                     // ═══ CAPITAL GUARD (v9.0) ═══
-                                                    // Enforce authorized capital: bot may only use this much USD total
+                                                    // Enforce authorized capital for position-INCREASING orders.
+                                                    // Position-CLOSING orders (buy when short, sell when long) always allowed.
                                                     let auth_cap = risk.authorized_capital.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
                                                     let mid_price = micro_i as f64 / beroun_types::PRICE_SCALE;
-                                                    // Current position value (positive = capital in use)
-                                                    let pos_value = (current_pos as f64 / beroun_types::PRICE_SCALE).abs() * mid_price;
-                                                    // Capital available for new orders
-                                                    let cap_available = if auth_cap > 0.0 {
-                                                        (auth_cap - pos_value).max(0.0).min(w_usd)
+                                                    let pos_f64 = current_pos as f64 / beroun_types::PRICE_SCALE;
+                                                    let pos_value = pos_f64.abs() * mid_price;
+
+                                                    // Buy cap: if short (pos < 0), buys CLOSE position → use full wallet
+                                                    //          if long/neutral, buys INCREASE position → cap by auth_capital
+                                                    let cap_available = if pos_f64 < 0.0 || auth_cap <= 0.0 {
+                                                        w_usd // Closing short or unlimited: full wallet
                                                     } else {
-                                                        w_usd // 0 = unlimited
+                                                        (auth_cap - pos_value).max(0.0).min(w_usd)
                                                     };
-                                                    let btc_cap = if auth_cap > 0.0 && mid_price > 0.0 {
+                                                    // Sell cap: if long (pos > 0), sells CLOSE position → use full wallet_btc
+                                                    //           if short/neutral, sells INCREASE position → cap by auth_capital
+                                                    let btc_cap = if pos_f64 > 0.0 || auth_cap <= 0.0 {
+                                                        w_btc // Closing long or unlimited: full BTC wallet
+                                                    } else if mid_price > 0.0 {
                                                         (auth_cap / mid_price).min(w_btc)
                                                     } else {
                                                         w_btc

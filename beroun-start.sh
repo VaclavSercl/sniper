@@ -1,11 +1,11 @@
 #!/bin/bash
-# BEROUN SNIPER v8.1 - MASTER STARTUP & ORCHESTRATOR
+# BEROUN SNIPER v9.0 HYDRA - MASTER STARTUP & ORCHESTRATOR
 # (c) 2026 Sovereign HFT Systems
 
 PROJECT_ROOT="/home/wwwenda/hft-sniper"
 BIN_DIR="$PROJECT_ROOT/target/release"
 
-echo "🐺 Starting Beroun Sovereign Suite v8.1..."
+echo "🐺 Starting Beroun Sovereign Suite v9.0 Hydra..."
 cd $PROJECT_ROOT
 
 # ═══ VRSTVA 1: Ensure RAM-backed IPC directory exists ═══
@@ -17,7 +17,13 @@ SNIPER_PID=$!
 echo "-> Sniper started (PID: $SNIPER_PID)"
 
 # 2. Wait for mmap initialization
-sleep 2
+sleep 3
+
+# ═══ AUTO-CONFIG: Apply saved parameters to fresh mmap ═══
+$BIN_DIR/beroun-config set-capital 400 2>/dev/null || true
+$BIN_DIR/beroun-config set-loss 20 2>/dev/null || true
+$BIN_DIR/beroun-config set-levels 3 2>/dev/null || true
+echo "-> Config applied (Capital: $400, DLL: $20, Levels: 3)"
 
 # 3. Start Dashboard (The Eyes)
 $BIN_DIR/beroun-dashboard &
