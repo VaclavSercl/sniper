@@ -8,10 +8,10 @@ pub const PRICE_SCALE: f64 = 100_000_000.0;
 pub const PRICE_SCALE_I: i64 = 100_000_000;
 pub const BOOK_LEVELS: usize = 25;
 
-#[repr(C, align(64))]
+#[repr(C)]
 pub struct OrderBookLevel {
     pub price: AtomicU64,
-    pub amount: AtomicI64, // Positive for bids, negative for asks (Bitfinex style)
+    pub amount: AtomicI64, // Positive for bids, negative for asks
     pub count: AtomicU64,
 }
 

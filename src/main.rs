@@ -122,8 +122,12 @@ fn sort_book(levels: &mut [beroun_types::OrderBookLevel], is_bid: bool) {
     levels.sort_by(|a, b| {
         let pa = a.price.load(Ordering::Acquire);
         let pb = b.price.load(Ordering::Acquire);
+        
+        // Push 0 price to the very end
+        if pa == 0 && pb == 0 { return std::cmp::Ordering::Equal; }
         if pa == 0 { return std::cmp::Ordering::Greater; }
         if pb == 0 { return std::cmp::Ordering::Less; }
+        
         if is_bid { pb.cmp(&pa) } else { pa.cmp(&pb) }
     });
 }
@@ -140,20 +144,29 @@ fn format_bfx(val: f64) -> String {
 
 fn calculate_checksum(engine: &beroun_types::EngineState) -> i32 {
     let mut s = String::with_capacity(1024);
+    let mut levels_found = 0;
     for i in 0..25 {
         let bid = &engine.bids[i];
         let ask = &engine.asks[i];
         
-        if bid.count.load(Ordering::Acquire) > 0 {
-            let p = bid.price.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
+        let bp = bid.price.load(Ordering::Acquire);
+        let ap = ask.price.load(Ordering::Acquire);
+
+        if bid.count.load(Ordering::Acquire) > 0 && bp > 0 {
+            levels_found += 1;
+            let p = bp as f64 / beroun_types::PRICE_SCALE;
             let a = bid.amount.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
             let _ = write!(s, "{}:{}:", format_bfx(p), format_bfx(a));
         }
-        if ask.count.load(Ordering::Acquire) > 0 {
-            let p = ask.price.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
+        if ask.count.load(Ordering::Acquire) > 0 && ap > 0 {
+            levels_found += 1;
+            let p = ap as f64 / beroun_types::PRICE_SCALE;
             let a = ask.amount.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
             let _ = write!(s, "{}:{}:", format_bfx(p), format_bfx(a));
         }
+    }
+    if levels_found == 0 {
+        // info!(event = "checksum_debug", bids0_p = engine.bids[0].price.load(Ordering::Acquire), asks0_p = engine.asks[0].price.load(Ordering::Acquire));
     }
     if s.ends_with(':') { s.pop(); }
     let mut h = Hasher::new();
