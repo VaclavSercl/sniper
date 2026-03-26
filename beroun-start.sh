@@ -8,8 +8,8 @@ BIN_DIR="$PROJECT_ROOT/target/release"
 echo "🐺 Starting Beroun Sovereign Suite..."
 cd $PROJECT_ROOT
 
-# Clear old runtime state
-rm -f $PROJECT_ROOT/runtime/*.bin
+# Clear old runtime state (Commented for persistence)
+# rm -f $PROJECT_ROOT/runtime/*.bin
 
 # 1. Start core Sniper (The Heart)
 $BIN_DIR/beroun-core &

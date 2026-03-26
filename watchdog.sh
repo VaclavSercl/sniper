@@ -1,26 +1,26 @@
 #!/bin/bash
-# BEROUN SMART WATCHDOG v5.1
-# Monitoring project-local runtime for heartbeat
+# BEROUN WATCHDOG v5.3 — In-process watchdog replaced this script.
+# The bot now has built-in 15s timeout detection on both WebSocket
+# connections, error channel between tasks, and automatic reconnect
+# with order book zeroing.
+#
+# This script is DEPRECATED and kept only for backward compatibility.
+# The in-process watchdog (tokio::time::timeout + err_tx channel)
+# provides sub-second failure detection, compared to this script's
+# 20-second polling interval.
+#
+# To monitor the bot externally, use:
+#   journalctl --user -u beroun-sniper -f
+#   journalctl --user -u beroun-sniper | jq 'select(.fields.event | startswith("watchdog"))'
 
 STATE_FILE="/home/wwwenda/hft-sniper/runtime/engine_state.bin"
 LOG_FILE="/home/wwwenda/hft-sniper/logs/watchdog.log"
 
-echo "[$(date)] Watchdog Guardian ONLINE" >> $LOG_FILE
+echo "[$(date)] External Watchdog v5.3 (backup monitor) ONLINE" >> $LOG_FILE
 
 while true; do
     if ! pgrep -f "beroun-core" > /dev/null; then
-        echo "[$(date)] ALERT: Sniper core DEAD." >> $LOG_FILE
+        echo "[$(date)] ALERT: Sniper core not running. systemd should auto-restart." >> $LOG_FILE
     fi
-
-    if [ -f "$STATE_FILE" ]; then
-        LAST_PRICE=$(od -An -N8 -t u8 "$STATE_FILE" | tr -d ' ')
-        sleep 5
-        NEW_PRICE=$(od -An -N8 -t u8 "$STATE_FILE" | tr -d ' ')
-        
-        if [ "$LAST_PRICE" == "$NEW_PRICE" ] && [ "$LAST_PRICE" != "0" ]; then
-            echo "[$(date)] WARNING: Stale data detected in project runtime. Restarting..." >> $LOG_FILE
-            pkill -f "beroun-core"
-        fi
-    fi
-    sleep 10
+    sleep 30
 done

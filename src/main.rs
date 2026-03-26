@@ -33,8 +33,6 @@ impl AsyncNotifier {
         tokio::spawn(async move {
             while let Some(msg) = rx.recv().await {
                 info!(event = "async_alert", message = msg);
-                // Delegate blocking file I/O to a dedicated thread pool
-                // to avoid stalling the Tokio executor (critical for HFT latency)
                 let log_path = alerts_log.clone();
                 let log_msg = msg.clone();
                 tokio::task::spawn_blocking(move || {
@@ -83,18 +81,11 @@ use simd_json::prelude::*;
 use simd_json::BorrowedValue;
 use crc32fast::Hasher;
 
-/// Safe extraction of i64 from simd_json BorrowedValue.
-/// Bitfinex may send COUNT as integer (5) or float (5.0).
-/// simd_json's as_i64() returns None for floats, so we fallback.
 #[inline(always)]
 fn safe_as_i64(v: &BorrowedValue) -> Option<i64> {
     v.as_i64().or_else(|| v.as_f64().map(|f| f as i64))
 }
 
-/// Safe extraction of f64 from simd_json BorrowedValue.
-/// CRITICAL: simd_json's as_f64() returns None for INTEGER values!
-/// Bitfinex sends prices like 69516 (no decimal) which simd_json parses
-/// as integer, making as_f64() return None. We must try as_i64/as_u64 first.
 #[inline(always)]
 fn safe_as_f64(v: &BorrowedValue) -> Option<f64> {
     v.as_f64()
@@ -102,15 +93,9 @@ fn safe_as_f64(v: &BorrowedValue) -> Option<f64> {
         .or_else(|| v.as_u64().map(|u| u as f64))
 }
 
-/// CRITICAL: All book functions take raw pointers to avoid &mut aliasing.
-/// The Rust optimizer with LTO=fat and opt-level=3 uses &mut exclusivity
-/// to eliminate stores it considers "dead" — which breaks mmap-backed atomics.
-///
-/// Using *mut pointer + unsafe { &*ptr } for each access prevents this.
 fn update_book(levels: *mut [beroun_types::OrderBookLevel; beroun_types::BOOK_LEVELS], price: u64, amount: i64, count: u64) {
     let levels = unsafe { &*levels };
     if count > 0 {
-        // Update or Insert
         let mut found = false;
         for lvl in levels.iter() {
             if lvl.price.load(Ordering::SeqCst) == price {
@@ -131,7 +116,6 @@ fn update_book(levels: *mut [beroun_types::OrderBookLevel; beroun_types::BOOK_LE
             }
         }
     } else {
-        // Delete
         for lvl in levels.iter() {
             if lvl.price.load(Ordering::SeqCst) == price {
                 lvl.price.store(0, Ordering::SeqCst);
@@ -148,25 +132,18 @@ fn sort_book(levels: *mut [beroun_types::OrderBookLevel; beroun_types::BOOK_LEVE
     levels.sort_unstable_by(|a, b| {
         let pa = a.price.load(Ordering::Acquire);
         let pb = b.price.load(Ordering::Acquire);
-        
-        // Push 0 price to the very end
         if pa == 0 && pb == 0 { return std::cmp::Ordering::Equal; }
         if pa == 0 { return std::cmp::Ordering::Greater; }
         if pb == 0 { return std::cmp::Ordering::Less; }
-        
         if is_bid { pb.cmp(&pa) } else { pa.cmp(&pb) }
     });
 }
 
-/// Write Bitfinex-format number directly into a Write target.
-/// Avoids String allocation per level — writes in-place.
-/// Bitfinex format: no trailing zeros, integers without decimal point.
 #[inline]
 fn write_bfx(w: &mut impl std::fmt::Write, val: f64) -> std::fmt::Result {
     if val == val.trunc() {
         write!(w, "{:.0}", val)
     } else {
-        // Write with 12 decimal places into a stack buffer
         let mut buf = [0u8; 32];
         let n = {
             use std::io::Write;
@@ -174,7 +151,6 @@ fn write_bfx(w: &mut impl std::fmt::Write, val: f64) -> std::fmt::Result {
             write!(cursor, "{:.12}", val).unwrap();
             cursor.position() as usize
         };
-        // Trim trailing zeros and decimal point
         let s = unsafe { std::str::from_utf8_unchecked(&buf[..n]) };
         let trimmed = s.trim_end_matches('0').trim_end_matches('.');
         w.write_str(trimmed)
@@ -182,20 +158,16 @@ fn write_bfx(w: &mut impl std::fmt::Write, val: f64) -> std::fmt::Result {
 }
 
 fn calculate_checksum(engine: &beroun_types::EngineState, debug: bool) -> i32 {
-    // Bitfinex P0 checksum: interleave bid[i] and ask[i] for i=0..25
-    // Format: "bid0_price:bid0_amount:ask0_price:ask0_amount:bid1_price:..."
     fence(Ordering::SeqCst);
     let mut s = String::with_capacity(1024);
     let mut levels_found = 0;
     for i in 0..25 {
         let bid = &engine.bids[i];
         let ask = &engine.asks[i];
-        
         let bp = bid.price.load(Ordering::SeqCst);
         let bc = bid.count.load(Ordering::SeqCst);
         let ap = ask.price.load(Ordering::SeqCst);
         let ac = ask.count.load(Ordering::SeqCst);
-
         if bc > 0 && bp > 0 {
             levels_found += 1;
             let p = bp as f64 / beroun_types::PRICE_SCALE;
@@ -233,9 +205,6 @@ fn main() -> Result<()> {
     dotenv().ok();
     tracing_subscriber::registry().with(fmt::layer().with_target(false).json()).with(EnvFilter::from_default_env().add_directive(Level::INFO.into())).init();
 
-    // Pin BEFORE Tokio starts — guarantees all async tasks run on this core.
-    // #[tokio::main] spawns a multi-thread pool first, then pins — which means
-    // Tokio can migrate our hot loop to an unpinned worker thread.
     if let Some(core_ids) = core_affinity::get_core_ids() {
         if core_ids.len() > 1 {
             core_affinity::set_for_current(core_ids[1]);
@@ -243,8 +212,6 @@ fn main() -> Result<()> {
         }
     }
 
-    // Single-thread runtime: all async code runs on our pinned core.
-    // spawn_blocking (disk I/O) uses a separate OS thread pool — unaffected.
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -253,25 +220,25 @@ fn main() -> Result<()> {
     rt.block_on(async_main())
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// ASYNC MAIN — Dual-WS architecture with Watchdog + Graceful Shutdown
+// ═══════════════════════════════════════════════════════════════════════
+
 async fn async_main() -> Result<()> {
     let notifier = Arc::new(AsyncNotifier::new());
     let mut engine_mmap = init_mmap_ptr::<EngineState>(&ENGINE_STATE_PATH)?;
     let risk_mmap = init_mmap_ptr::<RiskState>(&RISK_STATE_PATH)?;
-    
-    // CRITICAL: Use raw pointer, NOT &mut reference!
-    // &mut EngineState tells the optimizer it has exclusive access,
-    // allowing it to eliminate atomic stores as "dead" writes.
-    // Raw *mut preserves all stores through mmap.
+
     let engine_ptr: *mut EngineState = engine_mmap.as_mut_ptr() as *mut EngineState;
     let risk = unsafe { &*(risk_mmap.as_ptr() as *const RiskState) };
 
-    // Background Heartbeat Task
-    let engine_heartbeat = engine_ptr as usize;
+    // Background Heartbeat (latency_ns in its own cache line)
+    let engine_hb = engine_ptr as usize;
     tokio::spawn(async move {
-        let engine_ptr = unsafe { &*(engine_heartbeat as *const EngineState) };
         loop {
             if let Ok(now) = SystemTime::now().duration_since(UNIX_EPOCH) {
-                engine_ptr.latency_ns.store(now.as_nanos() as u64, Ordering::Release);
+                unsafe { &*(engine_hb as *const EngineState) }
+                    .latency_ns.store(now.as_nanos() as u64, Ordering::Release);
             }
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
@@ -280,264 +247,342 @@ async fn async_main() -> Result<()> {
     let key = std::env::var("BITFINEX_API_KEY").context("Missing API KEY")?;
     let sec = std::env::var("BITFINEX_API_SECRET").context("Missing API SECRET")?;
 
-    info!(event = "system_start", version = "5.2.0-sovereign-hft");
-    notifier.send("🐺 Beroun Sniper v5.2.0 Sovereign HFT ONLINE".to_string());
+    info!(event = "system_start", version = "5.3.0-dual-ws-watchdog");
+    notifier.send("🐺 Beroun Sniper v5.3.0 Dual-WS ONLINE".to_string());
 
+    // SIGTERM listener (systemd, Docker)
+    let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+        .context("Failed to setup SIGTERM")?;
+
+    // ═══ OUTER RECONNECT LOOP ═══
     loop {
-        // Manual TCP → TLS → WebSocket with TCP_NODELAY
-        // Disables Nagle's algorithm: sends packets immediately instead of
-        // buffering for up to 40ms. Critical for order submission latency.
-        let ws_result = async {
-            let tcp = tokio::net::TcpStream::connect("api.bitfinex.com:443").await?;
-            tcp.set_nodelay(true)?; // TCP_NODELAY: no Nagle buffering
-            let connector = tokio_native_tls::TlsConnector::from(
-                native_tls::TlsConnector::new().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
-            );
-            let tls = connector.connect("api.bitfinex.com", tcp).await
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-            let (ws, _) = tokio_tungstenite::client_async("wss://api.bitfinex.com/ws/2", tls).await
-                .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-            Ok::<_, std::io::Error>(ws)
-        }.await;
-        let ws = match ws_result {
+        info!(event = "connecting_dual_ws");
+
+        let ws_mdata = match connect_ws().await {
             Ok(v) => v,
-            Err(e) => {
-                info!(event = "ws_connect_failed", error = %e);
-                tokio::time::sleep(Duration::from_secs(10)).await;
-                continue;
-            }
+            Err(e) => { info!(event = "mdata_connect_failed", error = %e); tokio::time::sleep(Duration::from_secs(5)).await; continue; }
         };
+        info!(event = "mdata_ws_connected");
 
-        let (mut write, mut read) = ws.split();
-        
-        // 0. Configuration: Enable OB_CHECKSUM (131072) and BULK_UPDATES (536870912)
-        let conf_msg = json!({ "event": "conf", "flags": 131072 | 536870912 });
-        write.send(Message::Text(conf_msg.to_string().into())).await?;
-        info!(event = "bitfinex_conf_sent", flags = 131072 | 536870912);
+        let ws_exec = match connect_ws().await {
+            Ok(v) => v,
+            Err(e) => { info!(event = "exec_connect_failed", error = %e); tokio::time::sleep(Duration::from_secs(5)).await; continue; }
+        };
+        info!(event = "exec_ws_connected");
 
-        let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis().to_string();
-        let auth_payload = format!("AUTH{}", nonce);
-        let sig = get_sig(&sec, &auth_payload).await;
+        let (mut mdata_write, mut mdata_read) = ws_mdata.split();
+        let (exec_write, exec_read) = ws_exec.split();
 
-        let auth_msg = json!({ "event": "auth", "apiKey": key, "authSig": sig, "authPayload": auth_payload, "authNonce": nonce, "dms": 4 });
-        write.send(Message::Text(auth_msg.to_string().into())).await?;
-        
-        // Subscribe to P0 Book (Top 25)
-        write.send(Message::Text(json!({"event": "subscribe", "channel": "book", "symbol": "tBTCUSD", "prec": "P0", "freq": "F0", "len": "25"}).to_string().into())).await?;
+        // Configure Market Data WS (public, no auth)
+        let _ = mdata_write.send(Message::Text(json!({"event":"conf","flags":131072|536870912}).to_string().into())).await;
+        let _ = mdata_write.send(Message::Text(json!({"event":"subscribe","channel":"book","symbol":"tBTCUSD","prec":"P0","freq":"F0","len":"25"}).to_string().into())).await;
 
-        let mut chan_id: Option<i64> = None;
-        let mut last_upd = Instant::now();
-        let mut authed = false;
-        let mut snapshot_loaded = false;
-        let mut cs_debug_count: u32 = 0;
+        // Order channel: HFT loop → exec writer
+        let (order_tx, mut order_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+        // Error channel: any task → main loop (watchdog kill switch)
+        let (err_tx, mut err_rx) = tokio::sync::mpsc::unbounded_channel::<&'static str>();
 
-        while let Some(msg) = read.next().await {
-            let msg = match msg { Ok(m) => m, Err(_) => break };
-            
-            if msg.is_text() {
-                // Consume Message → Bytes → Vec<u8> for simd_json mutation.
-                // tungstenite 0.26 returns immutable Bytes from into_data(),
-                // so one to_vec() is needed. Still better than the old double-buffer.
-                let mut bytes = msg.into_data().to_vec();
-                let v = match simd_json::to_borrowed_value(&mut bytes) {
-                    Ok(v) => v,
-                    Err(_) => continue,
-                };
-                
-                if let BorrowedValue::Array(arr) = v {
-                    // Access engine via raw pointer for each operation
-                    let engine = unsafe { &*engine_ptr };
-                    
-                    if arr[0].as_i64() == Some(0) {
-                        let msg_type = arr[1].as_str().unwrap_or("");
-                        
-                        if msg_type == "te" {
-                            if let Some(trade) = arr[2].as_array() {
-                                if let (Some(amount), Some(_price)) = (safe_as_f64(&trade[4]), safe_as_f64(&trade[5])) {
-                                    engine.net_position.fetch_add((amount * beroun_types::PRICE_SCALE) as i64, Ordering::SeqCst);
-                                }
-                            }
-                        }
+        // ── TASK 1: EXEC WRITER ──
+        let mut exec_write = exec_write;
+        let err_tx_w = err_tx.clone();
+        let key_c = key.clone();
+        let sec_c = sec.clone();
+        let writer_handle = tokio::spawn(async move {
+            let nonce = match SystemTime::now().duration_since(UNIX_EPOCH) {
+                Ok(d) => d.as_millis().to_string(),
+                Err(_) => { let _ = err_tx_w.send("writer_time_error"); return; }
+            };
+            let auth_payload = format!("AUTH{}", nonce);
+            let sig = get_sig(&sec_c, &auth_payload).await;
+            let _ = exec_write.send(Message::Text(json!({"event":"conf","flags":131072}).to_string().into())).await;
+            let auth_msg = json!({"event":"auth","apiKey":key_c,"authSig":sig,"authPayload":auth_payload,"authNonce":nonce,"dms":4});
+            if exec_write.send(Message::Text(auth_msg.to_string().into())).await.is_err() {
+                let _ = err_tx_w.send("writer_auth_failed");
+                return;
+            }
+            while let Some(order_msg) = order_rx.recv().await {
+                if exec_write.send(Message::Text(order_msg.into())).await.is_err() {
+                    let _ = err_tx_w.send("writer_socket_error");
+                    break;
+                }
+            }
+        });
 
-                        if msg_type == "wu" || msg_type == "ws" {
-                            let wallet_data: Vec<&BorrowedValue> = if msg_type == "wu" { 
-                                vec![&arr[2]] 
-                            } else { 
-                                arr[2].as_array().map(|a: &Vec<BorrowedValue>| a.iter().collect()).unwrap_or_default()
-                            };
-                            for w in wallet_data {
-                                if let (Some(w_type), Some(currency), Some(balance)) = (w[0].as_str(), w[1].as_str(), safe_as_f64(&w[2])) {
-                                    if w_type == "exchange" {
-                                        if currency == "BTC" {
-                                            engine.wallet_btc.store((balance * beroun_types::PRICE_SCALE) as u64, Ordering::SeqCst);
-                                        } else if currency == "USD" || currency == "UST" {
-                                            engine.wallet_usd.store((balance * beroun_types::PRICE_SCALE) as u64, Ordering::SeqCst);
+        // ── TASK 2: EXEC READER (te, wu, n + 15s watchdog) ──
+        let mut exec_read = exec_read;
+        let err_tx_r = err_tx.clone();
+        let exec_engine = engine_ptr as usize;
+        let exec_notifier = notifier.clone();
+        let reader_handle = tokio::spawn(async move {
+            loop {
+                match tokio::time::timeout(Duration::from_secs(15), exec_read.next()).await {
+                    Ok(Some(Ok(msg))) if msg.is_text() => {
+                        let mut bytes = msg.into_data().to_vec();
+                        let v = match simd_json::to_borrowed_value(&mut bytes) {
+                            Ok(v) => v,
+                            Err(_) => continue,
+                        };
+                        if let BorrowedValue::Array(arr) = v {
+                            let engine = unsafe { &*(exec_engine as *const EngineState) };
+                            if arr[0].as_i64() == Some(0) {
+                                let mt = arr[1].as_str().unwrap_or("");
+                                if mt == "te" {
+                                    if let Some(trade) = arr[2].as_array() {
+                                        if let (Some(amount), Some(price)) = (safe_as_f64(&trade[4]), safe_as_f64(&trade[5])) {
+                                            engine.net_position.fetch_add((amount * beroun_types::PRICE_SCALE) as i64, Ordering::SeqCst);
+                                            info!(event = "trade_executed", amount = amount, price = price);
+                                            exec_notifier.send(format!("💰 TRADE: {:.5} BTC @ ${:.2}", amount, price));
                                         }
                                     }
                                 }
-                            }
-                        }
-
-                        // Track Bitfinex notifications (order confirmations, errors, rate limits)
-                        if msg_type == "n" {
-                            if let Some(notif) = arr[2].as_array() {
-                                let ntype = notif[1].as_str().unwrap_or("?");
-                                let nstatus = notif[6].as_str().unwrap_or("?");
-                                let ntext = notif[7].as_str().unwrap_or("");
-                                info!(event = "bitfinex_notification", ntype = ntype, status = nstatus, text = ntext);
-                            }
-                        }
-                    }
-
-                    if arr[0].as_i64() == chan_id && chan_id.is_some() {
-                        if arr[1].as_str() == Some("hb") { continue; }
-                        
-                        if arr[1].as_str() == Some("cs") {
-                            let remote_cs = arr[2].as_i64().unwrap_or(0) as i32;
-                            let do_debug = cs_debug_count < 5;
-                            let local_cs = calculate_checksum(unsafe { &*engine_ptr }, do_debug);
-                            cs_debug_count += 1;
-                            if remote_cs != local_cs {
-                                info!(event = "checksum_mismatch", remote = remote_cs, local = local_cs);
-                                // Reconnect on persistent mismatch (after initial debug)
-                                if cs_debug_count > 10 { break; }
-                            } else {
-                                info!(event = "checksum_ok", cs = remote_cs);
-                            }
-                            continue;
-                        }
-
-                        // Handle Book Update (snapshot or bulk update: [[P,C,A],...] )
-                        if let Some(top_arr) = arr[1].as_array() {
-                            // Check if first element is an array → [[P,C,A],...] format
-                            // vs [P,C,A] format (single update without BULK_UPDATES)
-                            let is_nested = top_arr.first().map_or(false, |e| e.as_array().is_some());
-                            
-                            if is_nested {
-                                // Snapshot or bulk update: [[P,C,A],[P,C,A],...]
-                                let mut bid_count = 0u32;
-                                let mut ask_count = 0u32;
-                                for entry in top_arr {
-                                    if let Some(update) = entry.as_array() {
-                                        if let (Some(price), Some(count), Some(amount)) = (safe_as_f64(&update[0]), safe_as_i64(&update[1]), safe_as_f64(&update[2])) {
-                                            let p_u64 = (price * beroun_types::PRICE_SCALE).round() as u64;
-                                            let a_i64 = (amount * beroun_types::PRICE_SCALE).round() as i64;
-                                            let c_u64 = count as u64;
-                                            if amount > 0.0 {
-                                                update_book(unsafe { &raw mut (*engine_ptr).bids }, p_u64, a_i64, c_u64);
-                                                bid_count += 1;
-                                            } else {
-                                                update_book(unsafe { &raw mut (*engine_ptr).asks }, p_u64, a_i64, c_u64);
-                                                ask_count += 1;
+                                if mt == "wu" || mt == "ws" {
+                                    let wd: Vec<&BorrowedValue> = if mt == "wu" { vec![&arr[2]] }
+                                    else { arr[2].as_array().map(|a: &Vec<BorrowedValue>| a.iter().collect()).unwrap_or_default() };
+                                    for w in wd {
+                                        if let (Some(wt), Some(cur), Some(bal)) = (w[0].as_str(), w[1].as_str(), safe_as_f64(&w[2])) {
+                                            if wt == "exchange" {
+                                                if cur == "BTC" { engine.wallet_btc.store((bal * beroun_types::PRICE_SCALE) as u64, Ordering::SeqCst); }
+                                                else if cur == "USD" || cur == "UST" { engine.wallet_usd.store((bal * beroun_types::PRICE_SCALE) as u64, Ordering::SeqCst); }
                                             }
                                         }
                                     }
                                 }
-                                fence(Ordering::SeqCst);
-                                sort_book(unsafe { &raw mut (*engine_ptr).bids }, true);
-                                sort_book(unsafe { &raw mut (*engine_ptr).asks }, false);
+                                if mt == "n" {
+                                    if let Some(n) = arr[2].as_array() {
+                                        info!(event = "bitfinex_notification",
+                                              ntype = n[1].as_str().unwrap_or("?"),
+                                              status = n[6].as_str().unwrap_or("?"),
+                                              text = n[7].as_str().unwrap_or(""));
+                                    }
+                                }
+                            }
+                        } else if let BorrowedValue::Object(obj) = v {
+                            if obj.get("event") == Some(&BorrowedValue::from("auth")) && obj.get("status") == Some(&BorrowedValue::from("OK")) {
+                                info!(event = "exec_auth_ok");
+                            }
+                        }
+                    }
+                    Ok(Some(Ok(_))) => {} // Ping/Pong
+                    Ok(Some(Err(_))) | Ok(None) => { let _ = err_tx_r.send("exec_socket_closed"); break; }
+                    Err(_) => { let _ = err_tx_r.send("exec_socket_timeout"); break; }
+                }
+            }
+        });
 
-                                if !snapshot_loaded && (bid_count + ask_count) > 10 {
-                                    snapshot_loaded = true;
+        // ── TASK 3: MARKET DATA HFT LOOP (inline, highest priority) ──
+        let mut chan_id: Option<i64> = None;
+        let mut last_upd = Instant::now();
+        let mut snapshot_loaded = false;
+        let mut cs_debug_count: u32 = 0;
+        let mut should_reconnect = false;
+        let mut shutdown_reason: &str = "unknown";
+
+        loop {
+            if should_reconnect { break; }
+            tokio::select! {
+                biased;
+                // ── GRACEFUL SHUTDOWN ──
+                _ = tokio::signal::ctrl_c() => {
+                    info!(event = "shutdown_initiated", signal = "SIGINT");
+                    graceful_shutdown(&order_tx, &notifier).await;
+                    writer_handle.abort();
+                    reader_handle.abort();
+                    return Ok(());
+                }
+                _ = sigterm.recv() => {
+                    info!(event = "shutdown_initiated", signal = "SIGTERM");
+                    graceful_shutdown(&order_tx, &notifier).await;
+                    writer_handle.abort();
+                    reader_handle.abort();
+                    return Ok(());
+                }
+                // ── WATCHDOG: task failure ──
+                Some(reason) = err_rx.recv() => {
+                    shutdown_reason = reason;
+                    info!(event = "watchdog_triggered", reason = reason);
+                    should_reconnect = true;
+                }
+                // ── MARKET DATA with 15s watchdog ──
+                res = tokio::time::timeout(Duration::from_secs(15), mdata_read.next()) => {
+                    match res {
+                        Ok(Some(Ok(msg))) if msg.is_text() => {
+                            let mut bytes = msg.into_data().to_vec();
+                            let v = match simd_json::to_borrowed_value(&mut bytes) {
+                                Ok(v) => v,
+                                Err(_) => continue,
+                            };
+                            if let BorrowedValue::Array(arr) = v {
+                                if arr[0].as_i64() == chan_id && chan_id.is_some() {
+                                    if arr[1].as_str() == Some("hb") { continue; }
+
+                                    if arr[1].as_str() == Some("cs") {
+                                        let remote_cs = arr[2].as_i64().unwrap_or(0) as i32;
+                                        let do_debug = cs_debug_count < 5;
+                                        let local_cs = calculate_checksum(unsafe { &*engine_ptr }, do_debug);
+                                        cs_debug_count += 1;
+                                        if remote_cs != local_cs {
+                                            info!(event = "checksum_mismatch", remote = remote_cs, local = local_cs);
+                                            if cs_debug_count > 10 { shutdown_reason = "checksum_persist"; should_reconnect = true; }
+                                        } else {
+                                            info!(event = "checksum_ok", cs = remote_cs);
+                                        }
+                                        continue;
+                                    }
+
+                                    // Book Update
+                                    if let Some(top_arr) = arr[1].as_array() {
+                                        let is_nested = top_arr.first().map_or(false, |e| e.as_array().is_some());
+                                        if is_nested {
+                                            let mut bc = 0u32;
+                                            let mut ac = 0u32;
+                                            for entry in top_arr {
+                                                if let Some(u) = entry.as_array() {
+                                                    if let (Some(price), Some(count), Some(amount)) = (safe_as_f64(&u[0]), safe_as_i64(&u[1]), safe_as_f64(&u[2])) {
+                                                        let p = (price * beroun_types::PRICE_SCALE).round() as u64;
+                                                        let a = (amount * beroun_types::PRICE_SCALE).round() as i64;
+                                                        let c = count as u64;
+                                                        if amount > 0.0 { update_book(unsafe { &raw mut (*engine_ptr).bids }, p, a, c); bc += 1; }
+                                                        else { update_book(unsafe { &raw mut (*engine_ptr).asks }, p, a, c); ac += 1; }
+                                                    }
+                                                }
+                                            }
+                                            fence(Ordering::SeqCst);
+                                            sort_book(unsafe { &raw mut (*engine_ptr).bids }, true);
+                                            sort_book(unsafe { &raw mut (*engine_ptr).asks }, false);
+                                            if !snapshot_loaded && (bc + ac) > 10 {
+                                                snapshot_loaded = true;
+                                                let eng = unsafe { &*engine_ptr };
+                                                info!(event = "snapshot_loaded", bids = bc, asks = ac,
+                                                      best_bid_p = eng.bids[0].price.load(Ordering::SeqCst),
+                                                      best_ask_p = eng.asks[0].price.load(Ordering::SeqCst),
+                                                      best_bid_a = eng.bids[0].amount.load(Ordering::SeqCst),
+                                                      best_ask_a = eng.asks[0].amount.load(Ordering::SeqCst),
+                                                      best_bid_c = eng.bids[0].count.load(Ordering::SeqCst),
+                                                      best_ask_c = eng.asks[0].count.load(Ordering::SeqCst));
+                                            }
+                                        } else {
+                                            if let (Some(price), Some(count), Some(amount)) = (safe_as_f64(&top_arr[0]), safe_as_i64(&top_arr[1]), safe_as_f64(&top_arr[2])) {
+                                                let p = (price * beroun_types::PRICE_SCALE).round() as u64;
+                                                let a = (amount * beroun_types::PRICE_SCALE).round() as i64;
+                                                let c = count as u64;
+                                                if amount > 0.0 { update_book(unsafe { &raw mut (*engine_ptr).bids }, p, a, c); sort_book(unsafe { &raw mut (*engine_ptr).bids }, true); }
+                                                else { update_book(unsafe { &raw mut (*engine_ptr).asks }, p, a, c); sort_book(unsafe { &raw mut (*engine_ptr).asks }, false); }
+                                            }
+                                        }
+                                    }
+
+                                    // Update BBA
                                     let eng = unsafe { &*engine_ptr };
-                                    info!(event = "snapshot_loaded", bids = bid_count, asks = ask_count,
-                                          best_bid_p = eng.bids[0].price.load(Ordering::SeqCst),
-                                          best_ask_p = eng.asks[0].price.load(Ordering::SeqCst),
-                                          best_bid_a = eng.bids[0].amount.load(Ordering::SeqCst),
-                                          best_ask_a = eng.asks[0].amount.load(Ordering::SeqCst),
-                                          best_bid_c = eng.bids[0].count.load(Ordering::SeqCst),
-                                          best_ask_c = eng.asks[0].count.load(Ordering::SeqCst));
-                                }
-                            } else {
-                                // Single update without BULK_UPDATES: [P,C,A]
-                                if let (Some(price), Some(count), Some(amount)) = (safe_as_f64(&top_arr[0]), safe_as_i64(&top_arr[1]), safe_as_f64(&top_arr[2])) {
-                                    let p_u64 = (price * beroun_types::PRICE_SCALE).round() as u64;
-                                    let a_i64 = (amount * beroun_types::PRICE_SCALE).round() as i64;
-                                    let c_u64 = count as u64;
-                                    if amount > 0.0 {
-                                        update_book(unsafe { &raw mut (*engine_ptr).bids }, p_u64, a_i64, c_u64);
-                                        sort_book(unsafe { &raw mut (*engine_ptr).bids }, true);
-                                    } else {
-                                        update_book(unsafe { &raw mut (*engine_ptr).asks }, p_u64, a_i64, c_u64);
-                                        sort_book(unsafe { &raw mut (*engine_ptr).asks }, false);
+                                    let best_bid = eng.bids[0].price.load(Ordering::SeqCst);
+                                    let best_ask = eng.asks[0].price.load(Ordering::SeqCst);
+                                    eng.best_bid.store(best_bid, Ordering::SeqCst);
+                                    eng.best_ask.store(best_ask, Ordering::SeqCst);
+
+                                    // SNIPER
+                                    const MIN_TICK: i64 = 100_000_000;
+                                    if best_bid > 0 && best_ask > 0 {
+                                        let now = Instant::now();
+                                        if now.duration_since(last_upd).as_millis() > 3000 {
+                                            if risk.paused.load(Ordering::Acquire) == 0 {
+                                                let mid_i = ((best_bid as i64) + (best_ask as i64)) / 2;
+                                                let mid_f = mid_i as f64 / beroun_types::PRICE_SCALE;
+                                                let order_usd = risk.order_usd.load(Ordering::Acquire) as i64;
+                                                let grid = risk.grid_step.load(Ordering::Acquire) as i64;
+                                                let bias = risk.bias_offset.load(Ordering::Acquire);
+                                                let buy_i = (mid_i - grid + bias).max(0);
+                                                let sell_i = (mid_i + grid + bias).max(0);
+                                                let lb = eng.last_buy_price.load(Ordering::SeqCst);
+                                                let ls = eng.last_sell_price.load(Ordering::SeqCst);
+                                                let db = (buy_i - lb).abs();
+                                                let ds = (sell_i - ls).abs();
+                                                if db >= MIN_TICK || ds >= MIN_TICK || lb == 0 {
+                                                    let bp = buy_i as f64 / beroun_types::PRICE_SCALE;
+                                                    let sp = sell_i as f64 / beroun_types::PRICE_SCALE;
+                                                    let amt = (order_usd as f64 / mid_f / beroun_types::PRICE_SCALE).max(0.00015);
+                                                    let msg = format!(
+                                                        r#"[0,"ox_multi",null,[["oc_multi",{{"all":1}}],["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}],["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]]]"#,
+                                                        amt, bp, -amt, sp
+                                                    );
+                                                    let _ = order_tx.send(msg);
+                                                    eng.last_buy_price.store(buy_i, Ordering::SeqCst);
+                                                    eng.last_sell_price.store(sell_i, Ordering::SeqCst);
+                                                    last_upd = now;
+                                                    info!(event = "sniper_fire", bid = best_bid, ask = best_ask,
+                                                          buy = bp, sell = sp, delta_buy = db, delta_sell = ds);
+                                                }
+                                            }
+                                        }
                                     }
+                                }
+                            } else if let BorrowedValue::Object(obj) = v {
+                                if obj.get("event") == Some(&BorrowedValue::from("subscribed")) {
+                                    chan_id = obj.get("chanId").and_then(|id: &BorrowedValue| id.as_i64());
+                                    info!(event = "mdata_subscribed", chan_id = ?chan_id);
+                                }
+                                if obj.get("event") == Some(&BorrowedValue::from("error")) {
+                                    info!(event = "mdata_error", msg = ?obj.get("msg"), code = ?obj.get("code"));
                                 }
                             }
                         }
-
-                        // Update Best Bid/Ask in EngineState
-                        let eng = unsafe { &*engine_ptr };
-                        let best_bid = eng.bids[0].price.load(Ordering::SeqCst);
-                        let best_ask = eng.asks[0].price.load(Ordering::SeqCst);
-                        eng.best_bid.store(best_bid, Ordering::SeqCst);
-                        eng.best_ask.store(best_ask, Ordering::SeqCst);
-
-                        // SNIPER LOGIC — Anti-spam: only submit when price moves ≥ MIN_TICK
-                        // Bitfinex rate limit is ~90 req/min for order operations.
-                        // Without this guard, we'd send ~300 cancel+replace/min → instant ban.
-                        const MIN_TICK_SCALED: i64 = 100_000_000; // $1 in scaled units
-                        if authed && best_bid > 0 && best_ask > 0 {
-                            let now = Instant::now();
-                            if now.duration_since(last_upd).as_millis() > 3000 {
-                                let is_paused = risk.paused.load(Ordering::Acquire) != 0;
-                                if !is_paused {
-                                    let mid_price_i = ((best_bid as i64) + (best_ask as i64)) / 2;
-                                    let mid_f = mid_price_i as f64 / beroun_types::PRICE_SCALE;
-                                    
-                                    let order_usd = risk.order_usd.load(Ordering::Acquire) as i64;
-                                    let grid_step = risk.grid_step.load(Ordering::Acquire) as i64;
-                                    let bias = risk.bias_offset.load(Ordering::Acquire);
-
-                                    let buy_price_i = (mid_price_i - grid_step + bias).max(0);
-                                    let sell_price_i = (mid_price_i + grid_step + bias).max(0);
-
-                                    // Compare against last submitted prices
-                                    let last_buy = eng.last_buy_price.load(Ordering::SeqCst);
-                                    let last_sell = eng.last_sell_price.load(Ordering::SeqCst);
-                                    let buy_delta = (buy_price_i - last_buy).abs();
-                                    let sell_delta = (sell_price_i - last_sell).abs();
-
-                                    // Only re-submit if either price moved by ≥ MIN_TICK
-                                    if buy_delta >= MIN_TICK_SCALED || sell_delta >= MIN_TICK_SCALED || last_buy == 0 {
-                                        let buy_p = buy_price_i as f64 / beroun_types::PRICE_SCALE;
-                                        let sell_p = sell_price_i as f64 / beroun_types::PRICE_SCALE;
-                                        let btc_amount = (order_usd as f64 / mid_f / beroun_types::PRICE_SCALE).max(0.00015);
-
-                                        // Direct string formatting — avoids json! macro's
-                                        // intermediate Value tree allocation on hot path
-                                        let order_msg = format!(
-                                            r#"[0,"ox_multi",null,[["oc_multi",{{"all":1}}],["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}],["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]]]"#,
-                                            btc_amount, buy_p, -btc_amount, sell_p
-                                        );
-                                        
-                                        let _ = write.send(Message::Text(order_msg.into())).await;
-                                        // Persist last submitted prices
-                                        eng.last_buy_price.store(buy_price_i, Ordering::SeqCst);
-                                        eng.last_sell_price.store(sell_price_i, Ordering::SeqCst);
-                                        last_upd = now;
-                                        info!(event = "sniper_fire", bid = best_bid, ask = best_ask, 
-                                              buy = buy_p, sell = sell_p,
-                                              delta_buy = buy_delta, delta_sell = sell_delta);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else if let BorrowedValue::Object(obj) = v {
-                    if obj.get("event") == Some(&BorrowedValue::from("auth")) && obj.get("status") == Some(&BorrowedValue::from("OK")) { 
-                        authed = true; 
-                        info!(event = "bitfinex_auth_ok");
-                    }
-                    if obj.get("event") == Some(&BorrowedValue::from("subscribed")) { 
-                        chan_id = obj.get("chanId").and_then(|id: &BorrowedValue| id.as_i64()); 
-                        info!(event = "bitfinex_subscribed", chan_id = ?chan_id);
-                    }
-                    if obj.get("event") == Some(&BorrowedValue::from("error")) {
-                        info!(event = "bitfinex_error", msg = ?obj.get("msg"), code = ?obj.get("code"));
+                        Ok(Some(Ok(_))) => {} // Ping/Pong
+                        Ok(Some(Err(e))) => { info!(event = "mdata_read_error", error = %e); shutdown_reason = "mdata_error"; should_reconnect = true; }
+                        Ok(None) => { info!(event = "mdata_socket_closed"); shutdown_reason = "mdata_closed"; should_reconnect = true; }
+                        Err(_) => { info!(event = "mdata_timeout_15s"); shutdown_reason = "mdata_timeout"; should_reconnect = true; }
                     }
                 }
             }
         }
-        tokio::time::sleep(Duration::from_secs(5)).await;
+
+        // ═══ RECONNECT CLEANUP ═══
+        info!(event = "reconnecting", reason = shutdown_reason);
+        writer_handle.abort();
+        reader_handle.abort();
+
+        // Zero order book — sniper waits for fresh snapshot
+        let eng = unsafe { &*engine_ptr };
+        for i in 0..beroun_types::BOOK_LEVELS {
+            eng.bids[i].count.store(0, Ordering::SeqCst);
+            eng.bids[i].price.store(0, Ordering::SeqCst);
+            eng.asks[i].count.store(0, Ordering::SeqCst);
+            eng.asks[i].price.store(0, Ordering::SeqCst);
+        }
+        eng.best_bid.store(0, Ordering::SeqCst);
+        eng.best_ask.store(0, Ordering::SeqCst);
+        eng.last_buy_price.store(0, Ordering::SeqCst);
+        eng.last_sell_price.store(0, Ordering::SeqCst);
+
+        notifier.send("⚠️ Reconnecting...".to_string());
+        tokio::time::sleep(Duration::from_secs(3)).await;
     }
+}
+
+/// Graceful shutdown: cancel all orders, wait for TCP flush, exit.
+async fn graceful_shutdown(
+    order_tx: &tokio::sync::mpsc::UnboundedSender<String>,
+    notifier: &AsyncNotifier,
+) {
+    notifier.send("🛑 Shutdown: cancelling all orders...".to_string());
+    let cancel_all = r#"[0,"oc_multi",null,{"all":1}]"#.to_string();
+    if let Err(e) = order_tx.send(cancel_all) {
+        tracing::error!(event = "shutdown_cancel_failed", error = %e);
+    } else {
+        info!(event = "cancel_all_sent");
+    }
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    info!(event = "system_shutdown_complete");
+    notifier.send("💤 Shutdown complete.".to_string());
+}
+
+/// TCP+TLS+WebSocket with TCP_NODELAY
+async fn connect_ws() -> Result<tokio_tungstenite::WebSocketStream<tokio_native_tls::TlsStream<tokio::net::TcpStream>>, std::io::Error> {
+    let tcp = tokio::net::TcpStream::connect("api.bitfinex.com:443").await?;
+    tcp.set_nodelay(true)?;
+    let connector = tokio_native_tls::TlsConnector::from(
+        native_tls::TlsConnector::new().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
+    );
+    let tls = connector.connect("api.bitfinex.com", tcp).await
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    let (ws, _) = tokio_tungstenite::client_async("wss://api.bitfinex.com/ws/2", tls).await
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+    Ok(ws)
 }
