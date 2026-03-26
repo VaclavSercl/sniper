@@ -328,7 +328,7 @@ async fn main() -> Result<()> {
                                     let btc_amount = (order_usd as f64 / mid_f / beroun_types::PRICE_SCALE).max(0.00015);
 
                                     let order_msg = json!([0, "ox_multi", null, [
-                                        ["oc_multi", { "symbol": ["tBTCUSD"] }],
+                                        ["oc_multi", { "all": 1 }],
                                         ["on", { "symbol": "tBTCUSD", "amount": format!("{:.5}", btc_amount), "price": format!("{:.2}", buy_p), "type": "EXCHANGE LIMIT", "flags": 4096 }],
                                         ["on", { "symbol": "tBTCUSD", "amount": format!("{:.5}", -btc_amount), "price": format!("{:.2}", sell_p), "type": "EXCHANGE LIMIT", "flags": 4096 }]
                                     ]]);
