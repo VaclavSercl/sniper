@@ -1,8 +1,8 @@
-# 🐺 Beroun Sniper v6.0 — HFT Trading Bot
+# 🐺 Beroun Sniper v7.0 — HFT Trading Bot
 
 Vysokofrekvenční obchodní bot pro Bitfinex BTC/USD. Rust 2024, zero-copy architektura, sub-millisecond tick-to-trade.
 
-## Architektura v6.0 — Dual WS + TUI Monitor + Trade Aggregation
+## Architektura v7.0 — Dual WS + AI Node + TUI Monitor
 
 ```mermaid
 graph TB
@@ -331,6 +331,30 @@ te (executed)  → obchod proveden → aktualizuje net_position
 - Čte `active_buy_id` / `active_sell_id` z mmap
 - Posílá cílený cancel
 - Fallback na `cancel_all` pokud nejsou žádné trackované ID
+
+## Lokální AI Node (v7.0)
+
+### Stack
+| Komponenta | Hodnota |
+|-----------|--------|
+| Runtime | LM Studio v0.4.7 (llmster headless) |
+| Model | Phi-3.5-mini-instruct (3.8B, Q4_K_S) |
+| GPU | GTX 1060 6GB (VRAM: ~3.7 GB model + ~2.3 GB KV cache) |
+| API | `localhost:1234` (OpenAI-compatible) |
+| Systemd | `lmstudio.service` (system-level, Restart=always) |
+
+### Použití v botech
+```
+beroun-sovereign-ai čte OBI + micro_price z mmap
+    │
+    ├─► POST /v1/chat/completions (localhost:1234)
+    │   „OBI=+0.45. Predict direction."
+    │
+    └─► Zápis do risk.bias_offset (mmap)
+        Bot okamžitě posune grid
+```
+
+Dokumentace: [docs/AI_INFRASTRUCTURE.md](docs/AI_INFRASTRUCTURE.md)
 
 ## Známé Limitace
 

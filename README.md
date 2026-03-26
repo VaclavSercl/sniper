@@ -1,4 +1,4 @@
-# 🐺 Beroun Sniper v6.2
+# 🐺 Beroun Sniper v7.0
 
 Vysokofrekvenční (HFT) market-making bot pro Bitfinex BTC/USD.
 Rust 2024 • Zero-copy • Sub-ms latence • CPU-pinned • mmap IPC
@@ -72,6 +72,7 @@ cargo run --release --bin beroun-monitor    # TUI monitor
 |--------|-------|
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Kompletní architektura, memory layout, intelligence |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Coding standards (Rust HFT) |
+| [docs/AI_INFRASTRUCTURE.md](docs/AI_INFRASTRUCTURE.md) | LM Studio v0.4.7, GPU, model, API |
 | [docs/STRATEGY.md](docs/STRATEGY.md) | Obchodní strategie (OFI, Grid) |
 | [docs/HFT_AUDIT_2026.md](docs/HFT_AUDIT_2026.md) | Technické standardy a audit |
 | [docs/MONITORING.md](docs/MONITORING.md) | Monitoring stack a metriky |
