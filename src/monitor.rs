@@ -95,14 +95,16 @@ fn main() -> anyhow::Result<()> {
         println!(" {d}│{x}                                {d}│  │{x} {hb_c}AI Heart:   {x} {hb_c}{:<4}{x} {d}({hb_age_s}s ago) {x}{d}│{x}", hb_status);
         println!(" {d}└────────────────────────────────┘  └──────────────────────────────┘{x}");
         println!();
-        let buy_id = engine.active_buy_id.load(Ordering::Acquire);
-        let sell_id = engine.active_sell_id.load(Ordering::Acquire);
+        let n_buys = engine.active_buy_ids.iter().filter(|s| s.load(Ordering::Acquire) > 0).count();
+        let n_sells = engine.active_sell_ids.iter().filter(|s| s.load(Ordering::Acquire) > 0).count();
+        let grid_size = risk.grid_size.load(Ordering::Acquire);
 
-        println!(" {d}┌─ AKTIVNÍ GRID ─────────────────┐  ┌─ PORTFOLIO ───────────────────┐{x}");
+        println!(" {d}┌─ HYDRA GRID v9.0 ──────────────┐  ┌─ PORTFOLIO ───────────────────┐{x}");
         println!(" {d}│{x} {r}Prodej (Ask): ${x} {w}{:<12.2}{x}  {d}│  │{x} Net Pozice:  {pos_c}{:>+10.5}{x} BTC  {d}│{x}", last_sell, net_pos);
-        println!(" {d}│{x}    {d}└─ ID: {:<18}{x}  {d}│  │{x} BTC Wallet:  {w}{:>10.5}{x} BTC  {d}│{x}", sell_id, btc_w);
+        println!(" {d}│{x}    {d}└─ Active: {g}B×{}{x} {r}S×{}{x} / {:<2}{d}│  │{x} BTC Wallet:  {w}{:>10.5}{x} BTC  {d}│{x}", n_buys, n_sells, grid_size, btc_w);
         println!(" {d}│{x} {g}Nákup  (Bid): ${x} {w}{:<12.2}{x}  {d}│  │{x} USD Wallet:  {w}${:>10.2}{x}      {d}│{x}", last_buy, usd_w);
-        println!(" {d}│{x}    {d}└─ ID: {:<18}{x}  {d}│  │{x} {pnl_c}PnL:         ${x} {pnl_c}{:<+10.2}{x}     {d}│{x}", buy_id, pnl);
+        println!(" {d}│{x}    {d}└─ Levels: {:<12}{x}  {d}│  │{x} {pnl_c}PnL:         ${x} {pnl_c}{:<+10.2}{x}     {d}│{x}",
+                 format!("{}/{}", n_buys + n_sells, grid_size * 2), pnl);
         println!(" {d}└────────────────────────────────┘  └──────────────────────────────┘{x}");
         println!("{line}");
 

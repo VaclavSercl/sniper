@@ -7,6 +7,11 @@ pub static ENGINE_STATE_PATH: LazyLock<String> = LazyLock::new(|| "/dev/shm/bero
 pub const PRICE_SCALE: f64 = 100_000_000.0;
 pub const PRICE_SCALE_I: i64 = 100_000_000;
 pub const BOOK_LEVELS: usize = 25;
+pub const MAX_GRID_LEVELS: usize = 5;
+
+/// Fibonacci-like spacing multipliers for grid levels
+/// Level 1: 1.0x grid, Level 2: 2.5x, Level 3: 4.5x, Level 4: 7.0x, Level 5: 10.0x
+pub const LEVEL_SPACING: [f64; MAX_GRID_LEVELS] = [1.0, 2.5, 4.5, 7.0, 10.0];
 
 /// Compact repr(C) — NO per-level cache line alignment.
 /// All 25 levels = 600 bytes = ~10 cache lines → excellent spatial locality
@@ -45,9 +50,9 @@ pub struct EngineState {
     pub micro_price: AtomicU64,   // Volume-weighted mid-price
     pub current_skew: AtomicI64,  // Inventory Skew bias (signed)
 
-    // --- ORDER TRACKING (v6.1) ---
-    pub active_buy_id: AtomicU64,   // Bitfinex order ID for active buy
-    pub active_sell_id: AtomicU64,  // Bitfinex order ID for active sell
+    // --- ORDER TRACKING (v9.0 Hydra Grid: multi-level) ---
+    pub active_buy_ids: [AtomicU64; MAX_GRID_LEVELS],
+    pub active_sell_ids: [AtomicU64; MAX_GRID_LEVELS],
 
     // --- INTELLIGENCE METRICS (v6.2: OBI + Dynamic Sizing) ---
     pub l2_imbalance: AtomicI64,      // OBI (-1.0..1.0) * PRICE_SCALE
@@ -102,8 +107,8 @@ impl Default for EngineState {
             t2t_micros: AtomicU64::new(0),
             micro_price: AtomicU64::new(0),
             current_skew: AtomicI64::new(0),
-            active_buy_id: AtomicU64::new(0),
-            active_sell_id: AtomicU64::new(0),
+            active_buy_ids: [const { AtomicU64::new(0) }; MAX_GRID_LEVELS],
+            active_sell_ids: [const { AtomicU64::new(0) }; MAX_GRID_LEVELS],
             l2_imbalance: AtomicI64::new(0),
             current_order_usd: AtomicU64::new(0),
             _pad_hot_cold: [0; 8],
@@ -144,7 +149,7 @@ impl Default for RiskState {
             paused: AtomicU64::new(0),
             _pad_paused: [0; 56],
             grid_step: AtomicU64::new((3.0 * PRICE_SCALE) as u64),
-            grid_size: AtomicU64::new(2),
+            grid_size: AtomicU64::new(3),  // v9.0 Hydra: 3 levels per side
             order_usd: AtomicU64::new((50.0 * PRICE_SCALE) as u64),
             max_inv_delta: AtomicU64::new((0.005 * PRICE_SCALE) as u64),
             bias_offset: AtomicI64::new(0),

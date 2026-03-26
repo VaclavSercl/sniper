@@ -246,6 +246,36 @@ fn calculate_checksum(engine: &beroun_types::EngineState, debug: bool) -> i32 {
     h.finalize() as i32
 }
 
+// ═══ HYDRA ORDER SLOT HELPERS (v9.0) ═══
+#[inline]
+fn store_order_slot(ids: &[std::sync::atomic::AtomicU64; beroun_types::MAX_GRID_LEVELS], id: u64) {
+    for slot in ids {
+        if slot.compare_exchange(0, id, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
+            return;
+        }
+    }
+}
+
+#[inline]
+fn clear_order_slot(ids: &[std::sync::atomic::AtomicU64; beroun_types::MAX_GRID_LEVELS], id: u64) {
+    for slot in ids {
+        let _ = slot.compare_exchange(id, 0, Ordering::SeqCst, Ordering::SeqCst);
+    }
+}
+
+fn collect_all_order_ids(eng: &EngineState) -> Vec<u64> {
+    eng.active_buy_ids.iter().chain(eng.active_sell_ids.iter())
+        .map(|s| s.load(Ordering::SeqCst))
+        .filter(|&id| id > 0)
+        .collect()
+}
+
+fn zero_all_order_slots(eng: &EngineState) {
+    for slot in eng.active_buy_ids.iter().chain(eng.active_sell_ids.iter()) {
+        slot.store(0, Ordering::SeqCst);
+    }
+}
+
 fn main() -> Result<()> {
     dotenv().ok();
 
@@ -521,8 +551,8 @@ async fn async_main() -> Result<()> {
                                                     o[3].as_str(), safe_as_f64(&o[6]), o[13].as_str()
                                                 ) {
                                                     if sym == "tBTCUSD" && (status.contains("ACTIVE") || status.contains("PARTIALLY")) {
-                                                        if amt > 0.0 { engine.active_buy_id.store(id, Ordering::SeqCst); }
-                                                        else { engine.active_sell_id.store(id, Ordering::SeqCst); }
+                                                        if amt > 0.0 { store_order_slot(&engine.active_buy_ids, id); }
+                                                        else { store_order_slot(&engine.active_sell_ids, id); }
                                                         info!(event = "order_recovered", id = id, side = if amt > 0.0 { "buy" } else { "sell" });
                                                     }
                                                 }
@@ -539,14 +569,14 @@ async fn async_main() -> Result<()> {
                                         ) {
                                             if sym == "tBTCUSD" {
                                                 if status.contains("ACTIVE") || status.contains("PARTIALLY") {
-                                                    if amt > 0.0 { engine.active_buy_id.store(id, Ordering::SeqCst); }
-                                                    else { engine.active_sell_id.store(id, Ordering::SeqCst); }
+                                                    if amt > 0.0 { store_order_slot(&engine.active_buy_ids, id); }
+                                                    else { store_order_slot(&engine.active_sell_ids, id); }
                                                     info!(event = "order_tracked", mt = mt, id = id, side = if amt > 0.0 { "buy" } else { "sell" });
                                                 } else if status.contains("CANCELED") || status.contains("EXECUTED") {
                                                     if amt > 0.0 {
-                                                        let _ = engine.active_buy_id.compare_exchange(id, 0, Ordering::SeqCst, Ordering::SeqCst);
+                                                        clear_order_slot(&engine.active_buy_ids, id);
                                                     } else {
-                                                        let _ = engine.active_sell_id.compare_exchange(id, 0, Ordering::SeqCst, Ordering::SeqCst);
+                                                        clear_order_slot(&engine.active_sell_ids, id);
                                                     }
                                                     info!(event = "order_cleared", mt = mt, id = id, status = status);
                                                 }
@@ -765,53 +795,79 @@ async fn async_main() -> Result<()> {
                                                 let ds = (sell_i - ls).abs();
 
                                                 if db >= MIN_TICK || ds >= MIN_TICK || lb == 0 {
-                                                    // 6. TARGETED CANCEL + NEW ORDERS
-                                                    let buy_id = eng.active_buy_id.load(Ordering::SeqCst);
-                                                    let sell_id = eng.active_sell_id.load(Ordering::SeqCst);
-                                                    let oc_payload = match (buy_id > 0, sell_id > 0) {
-                                                        (true, true) => format!(r#"["oc_multi",{{"id":[{},{}]}}],"#, buy_id, sell_id),
-                                                        (true, false) => format!(r#"["oc_multi",{{"id":[{}]}}],"#, buy_id),
-                                                        (false, true) => format!(r#"["oc_multi",{{"id":[{}]}}],"#, sell_id),
-                                                        _ => String::new(),
+                                                    // ═══ HYDRA GRID v9.0 (Multi-Level + Inventory Throttling) ═══
+                                                    let grid_levels = risk.grid_size.load(Ordering::Acquire).clamp(1, beroun_types::MAX_GRID_LEVELS as u64) as usize;
+                                                    let pos_ratio = if max_pos > 0 {
+                                                        (current_pos as f64 / max_pos as f64).clamp(-1.0, 1.0)
+                                                    } else { 0.0 };
+
+                                                    // INVENTORY THROTTLING: asymmetric levels
+                                                    let (n_buy, n_sell) = if pos_ratio > 0.8 {
+                                                        (0, grid_levels)       // Hard cap long → sell only
+                                                    } else if pos_ratio > 0.4 {
+                                                        (1, grid_levels)       // Soft cap → 1 buy
+                                                    } else if pos_ratio < -0.8 {
+                                                        (grid_levels, 0)       // Hard cap short → buy only
+                                                    } else if pos_ratio < -0.4 {
+                                                        (grid_levels, 1)       // Soft cap → 1 sell
+                                                    } else {
+                                                        (grid_levels, grid_levels) // Neutral: full both sides
                                                     };
 
-                                                    let bp = buy_i as f64 / beroun_types::PRICE_SCALE;
-                                                    let sp = sell_i as f64 / beroun_types::PRICE_SCALE;
-                                                    let amt = (final_order_usd / micro_f / beroun_types::PRICE_SCALE).max(0.00015);
+                                                    // 6a. CANCEL ALL TRACKED ORDERS
+                                                    let cancel_ids = collect_all_order_ids(eng);
+                                                    let oc_payload = if !cancel_ids.is_empty() {
+                                                        let ids_str: Vec<String> = cancel_ids.iter().map(|id| id.to_string()).collect();
+                                                        format!(r#"["oc_multi",{{"id":[{}]}}],"#, ids_str.join(","))
+                                                    } else { String::new() };
 
-                                                    // v8.1: Balance-aware order sizing — prevent "not enough exchange balance"
+                                                    // 6b. BUILD MULTI-LEVEL ORDERS
                                                     const MIN_ORDER_BTC: f64 = 0.00015;
                                                     let w_btc = eng.wallet_btc.load(Ordering::Relaxed) as f64 / beroun_types::PRICE_SCALE;
                                                     let w_usd = eng.wallet_usd.load(Ordering::Relaxed) as f64 / beroun_types::PRICE_SCALE;
-                                                    let can_buy = w_usd > bp * MIN_ORDER_BTC;
-                                                    let buy_amt = if can_buy { amt.min(w_usd / bp * 0.95) } else { 0.0 };
-                                                    let can_sell = w_btc > MIN_ORDER_BTC;
-                                                    let sell_amt = if can_sell { amt.min(w_btc * 0.95) } else { 0.0 };
+                                                    let amt = (final_order_usd / micro_f / beroun_types::PRICE_SCALE).max(MIN_ORDER_BTC);
 
-                                                    let msg = if buy_amt >= MIN_ORDER_BTC && sell_amt >= MIN_ORDER_BTC {
-                                                        // Both sides
-                                                        format!(
-                                                            r#"[0,"ox_multi",null,[{}["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}],["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]]]"#,
-                                                            oc_payload, buy_amt, bp, -sell_amt, sp
-                                                        )
-                                                    } else if buy_amt >= MIN_ORDER_BTC {
-                                                        // Buy only (insufficient BTC for sell)
-                                                        format!(
-                                                            r#"[0,"ox_multi",null,[{}["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]]]"#,
-                                                            oc_payload, buy_amt, bp
-                                                        )
-                                                    } else if sell_amt >= MIN_ORDER_BTC {
-                                                        // Sell only (insufficient USD for buy)
-                                                        format!(
-                                                            r#"[0,"ox_multi",null,[{}["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]]]"#,
-                                                            oc_payload, -sell_amt, sp
-                                                        )
-                                                    } else {
-                                                        // Neither side has sufficient balance — skip
-                                                        info!(event = "order_skipped", reason = "insufficient_balance",
-                                                              wallet_btc = w_btc, wallet_usd = w_usd, amt = amt);
+                                                    let mut order_parts: Vec<String> = Vec::with_capacity(10);
+                                                    let mut total_buy_usd = 0.0;
+                                                    let mut total_sell_btc = 0.0;
+
+                                                    // BUY LEVELS (fibonacci spacing from micro-price)
+                                                    for i in 0..n_buy {
+                                                        let spacing = (grid as f64 * beroun_types::LEVEL_SPACING[i]) as i64;
+                                                        let bp_i = (micro_i - spacing + final_bias).max(0).min(ba_i - MIN_TICK);
+                                                        let bp = bp_i as f64 / beroun_types::PRICE_SCALE;
+                                                        let cost = amt * bp;
+                                                        if total_buy_usd + cost <= w_usd * 0.95 && amt >= MIN_ORDER_BTC {
+                                                            order_parts.push(format!(
+                                                                r#"["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
+                                                                amt, bp
+                                                            ));
+                                                            total_buy_usd += cost;
+                                                        }
+                                                    }
+
+                                                    // SELL LEVELS (fibonacci spacing from micro-price)
+                                                    for i in 0..n_sell {
+                                                        let spacing = (grid as f64 * beroun_types::LEVEL_SPACING[i]) as i64;
+                                                        let sp_i = (micro_i + spacing + final_bias).max(0).max(bb_i + MIN_TICK);
+                                                        let sp = sp_i as f64 / beroun_types::PRICE_SCALE;
+                                                        if total_sell_btc + amt <= w_btc * 0.95 && amt >= MIN_ORDER_BTC {
+                                                            order_parts.push(format!(
+                                                                r#"["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
+                                                                -amt, sp
+                                                            ));
+                                                            total_sell_btc += amt;
+                                                        }
+                                                    }
+
+                                                    if order_parts.is_empty() {
+                                                        info!(event = "hydra_skipped", reason = "no_valid_levels",
+                                                              wallet_btc = w_btc, wallet_usd = w_usd, pos_ratio = format!("{:.2}", pos_ratio));
                                                         continue;
-                                                    };
+                                                    }
+
+                                                    let orders_str = order_parts.join(",");
+                                                    let msg = format!(r#"[0,"ox_multi",null,[{}{}]]"#, oc_payload, orders_str);
                                                     let _ = order_tx.send(msg);
 
                                                     // 7. DASHBOARD METRICS
@@ -824,12 +880,13 @@ async fn async_main() -> Result<()> {
                                                     eng.l2_imbalance.store((obi * beroun_types::PRICE_SCALE) as i64, Ordering::SeqCst);
                                                     eng.current_order_usd.store(final_order_usd as u64, Ordering::SeqCst);
                                                     last_upd = now;
-                                                    info!(event = "sniper_fire", bid = best_bid, ask = best_ask,
-                                                          micro = micro_i, buy = bp, sell = sp,
+                                                    info!(event = "hydra_fire", bid = best_bid, ask = best_ask,
+                                                          micro = micro_i, levels_buy = n_buy, levels_sell = n_sell,
                                                           obi = format!("{:.3}", obi),
                                                           order_usd = final_order_usd as f64 / beroun_types::PRICE_SCALE,
                                                           inv_skew = inv_skew, position = current_pos,
-                                                          dynamic_grid = grid);
+                                                          pos_ratio = format!("{:.2}", pos_ratio),
+                                                          dynamic_grid = grid, total_orders = order_parts.len());
                                                 }
                                             }
                                         }
@@ -871,8 +928,7 @@ async fn async_main() -> Result<()> {
         eng.best_ask.store(0, Ordering::SeqCst);
         eng.last_buy_price.store(0, Ordering::SeqCst);
         eng.last_sell_price.store(0, Ordering::SeqCst);
-        eng.active_buy_id.store(0, Ordering::SeqCst);
-        eng.active_sell_id.store(0, Ordering::SeqCst);
+        zero_all_order_slots(eng);
 
         notifier.alert(format!("⚠️ *RECONNECT*\n`Reason: {}`", shutdown_reason));
         tokio::time::sleep(Duration::from_secs(3)).await;
@@ -887,15 +943,12 @@ async fn graceful_shutdown(
 ) {
     notifier.alert("🛑 *Shutdown*: cancelling orders...".to_string());
     let eng = unsafe { &*engine_ptr };
-    let buy_id = eng.active_buy_id.load(Ordering::SeqCst);
-    let sell_id = eng.active_sell_id.load(Ordering::SeqCst);
+    let active_ids = collect_all_order_ids(eng);
 
-    let cancel_msg = if buy_id > 0 || sell_id > 0 {
-        let mut ids = Vec::new();
-        if buy_id > 0 { ids.push(buy_id.to_string()); }
-        if sell_id > 0 { ids.push(sell_id.to_string()); }
-        info!(event = "shutdown_cancel_targeted", buy_id = buy_id, sell_id = sell_id);
-        format!(r#"[0,"oc_multi",null,{{"id":[{}]}}]"#, ids.join(","))
+    let cancel_msg = if !active_ids.is_empty() {
+        let ids_str: Vec<String> = active_ids.iter().map(|id| id.to_string()).collect();
+        info!(event = "shutdown_cancel_targeted", count = active_ids.len(), ids = ?active_ids);
+        format!(r#"[0,"oc_multi",null,{{"id":[{}]}}]"#, ids_str.join(","))
     } else {
         // Fallback: no tracked IDs → cancel all as safety net
         info!(event = "shutdown_cancel_all_fallback");
