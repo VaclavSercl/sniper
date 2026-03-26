@@ -795,6 +795,25 @@ async fn async_main() -> Result<()> {
                                                 let ds = (sell_i - ls).abs();
 
                                                 if db >= MIN_TICK || ds >= MIN_TICK || lb == 0 {
+                                                    // ═══ DAILY LOSS LIMIT — Circuit Breaker ═══
+                                                    let dll = risk.daily_loss_limit.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
+                                                    let r_pnl = eng.realized_pnl.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
+                                                    if dll > 0.0 && r_pnl < -dll {
+                                                        // EMERGENCY STOP: cancel all, pause, alert
+                                                        let cancel_ids = collect_all_order_ids(eng);
+                                                        if !cancel_ids.is_empty() {
+                                                            let ids_str: Vec<String> = cancel_ids.iter().map(|id| id.to_string()).collect();
+                                                            let _ = order_tx.send(format!(r#"[0,"oc_multi",null,{{"id":[{}]}}]"#, ids_str.join(",")));
+                                                        }
+                                                        risk.paused.store(1, Ordering::SeqCst);
+                                                        notifier.alert(format!(
+                                                            "🛑 *EMERGENCY STOP*\nDaily Loss Limit reached: `${:.2}` (limit `-${:.2}`)\nAll orders cancelled. System *LOCKED*.\n_Dnes to trh vyhrál, odpočiň si, admirále._",
+                                                            r_pnl, dll
+                                                        ));
+                                                        info!(event = "dll_triggered", realized_pnl = r_pnl, limit = -dll);
+                                                        continue;
+                                                    }
+
                                                     // ═══ HYDRA GRID v9.0 (Multi-Level + Inventory Throttling) ═══
                                                     let grid_levels = risk.grid_size.load(Ordering::Acquire).clamp(1, beroun_types::MAX_GRID_LEVELS as u64) as usize;
                                                     let pos_ratio = if max_pos > 0 {
@@ -821,11 +840,29 @@ async fn async_main() -> Result<()> {
                                                         format!(r#"["oc_multi",{{"id":[{}]}}],"#, ids_str.join(","))
                                                     } else { String::new() };
 
-                                                    // 6b. BUILD MULTI-LEVEL ORDERS
+                                                    // 6b. BUILD MULTI-LEVEL ORDERS (with Capital Guard)
                                                     const MIN_ORDER_BTC: f64 = 0.00015;
                                                     let w_btc = eng.wallet_btc.load(Ordering::Relaxed) as f64 / beroun_types::PRICE_SCALE;
                                                     let w_usd = eng.wallet_usd.load(Ordering::Relaxed) as f64 / beroun_types::PRICE_SCALE;
                                                     let amt = (final_order_usd / micro_f / beroun_types::PRICE_SCALE).max(MIN_ORDER_BTC);
+
+                                                    // ═══ CAPITAL GUARD (v9.0) ═══
+                                                    // Enforce authorized capital: bot may only use this much USD total
+                                                    let auth_cap = risk.authorized_capital.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
+                                                    let mid_price = micro_i as f64 / beroun_types::PRICE_SCALE;
+                                                    // Current position value (positive = capital in use)
+                                                    let pos_value = (current_pos as f64 / beroun_types::PRICE_SCALE).abs() * mid_price;
+                                                    // Capital available for new orders
+                                                    let cap_available = if auth_cap > 0.0 {
+                                                        (auth_cap - pos_value).max(0.0).min(w_usd)
+                                                    } else {
+                                                        w_usd // 0 = unlimited
+                                                    };
+                                                    let btc_cap = if auth_cap > 0.0 && mid_price > 0.0 {
+                                                        (auth_cap / mid_price).min(w_btc)
+                                                    } else {
+                                                        w_btc
+                                                    };
 
                                                     let mut order_parts: Vec<String> = Vec::with_capacity(10);
                                                     let mut total_buy_usd = 0.0;
@@ -837,7 +874,7 @@ async fn async_main() -> Result<()> {
                                                         let bp_i = (micro_i - spacing + final_bias).max(0).min(ba_i - MIN_TICK);
                                                         let bp = bp_i as f64 / beroun_types::PRICE_SCALE;
                                                         let cost = amt * bp;
-                                                        if total_buy_usd + cost <= w_usd * 0.95 && amt >= MIN_ORDER_BTC {
+                                                        if total_buy_usd + cost <= cap_available * 0.95 && amt >= MIN_ORDER_BTC {
                                                             order_parts.push(format!(
                                                                 r#"["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
                                                                 amt, bp
@@ -851,7 +888,7 @@ async fn async_main() -> Result<()> {
                                                         let spacing = (grid as f64 * beroun_types::LEVEL_SPACING[i]) as i64;
                                                         let sp_i = (micro_i + spacing + final_bias).max(0).max(bb_i + MIN_TICK);
                                                         let sp = sp_i as f64 / beroun_types::PRICE_SCALE;
-                                                        if total_sell_btc + amt <= w_btc * 0.95 && amt >= MIN_ORDER_BTC {
+                                                        if total_sell_btc + amt <= btc_cap * 0.95 && amt >= MIN_ORDER_BTC {
                                                             order_parts.push(format!(
                                                                 r#"["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
                                                                 -amt, sp

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🐺 BEROUN SNIPER v8.0 — Telegram Oracle Interface
+🐺 BEROUN SNIPER v9.0 — Telegram Oracle Interface
 Bi-directional command & control via encrypted Telegram channel.
 
 Commands:
@@ -59,11 +59,13 @@ def run_config(*args):
 @bot.message_handler(commands=["start", "help"])
 def cmd_help(message):
     if not auth(message): return
-    bot.reply_to(message, """🐺 *Beroun Sniper v8.0 — Oracle Interface*
+    bot.reply_to(message, """🐺 *Beroun Sniper v9.0 — Oracle Interface*
 
-📊 `/status` — Live stav (PnL, pozice, AI bias)
+📊 `/status` — Live stav (PnL, pozice, Capital Guard)
 🔍 `/analyze` — Gemini 3.1 Pro analýza trhu
 📐 `/grid 8.5` — Nastavit grid (s sanity check)
+💰 `/capital 400` — Nastavit autorizovaný kapitál ($)
+🛑 `/loss 20` — Nastavit denní loss limit ($)
 ⏸️ `/pause` — Nouzové zastavení
 ▶️ `/resume` — Obnovit trading
 🔮 `/oracle` — Vynutit Oracle cyklus
@@ -103,9 +105,13 @@ def cmd_status(message):
   T2T:     `{intel.get('t2t_micros', 0)}` µs
 
 ⚙️ *Risk:*
-  Grid: `${risk.get('grid_step_usd', 0):.2f}`
+  Grid: `${risk.get('grid_step_usd', 0):.2f}` ({risk.get('grid_levels', '?')} levels)
   MaxInv: `{risk.get('max_inv_delta_btc', 0):.4f}` BTC
-  Paused: `{'YES ⏸️' if risk.get('paused') else 'NO ▶️'}`"""
+  Paused: `{'YES ⏸️' if risk.get('paused') else 'NO ▶️'}`
+
+🛡️ *Capital Guard:*
+  Auth Capital: `${risk.get('authorized_capital_usd', 0):.2f}`
+  Loss Limit:   `-${risk.get('daily_loss_limit_usd', 0):.2f}`"""
         bot.reply_to(message, msg)
     except json.JSONDecodeError:
         bot.reply_to(message, f"```\n{raw[:500]}\n```")
@@ -171,6 +177,38 @@ def cmd_resume(message):
     log.info("Bot resumed via Telegram")
 
 
+@bot.message_handler(commands=["capital"])
+def cmd_capital(message):
+    if not auth(message): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        bot.reply_to(message, "Usage: `/capital 400`")
+        return
+    try:
+        value = float(parts[1])
+        result = run_config("set-capital", str(value))
+        bot.reply_to(message, f"🛡️ {result}")
+        log.info(f"Capital set to ${value} via Telegram")
+    except ValueError:
+        bot.reply_to(message, "❌ Neplatné číslo")
+
+
+@bot.message_handler(commands=["loss"])
+def cmd_loss(message):
+    if not auth(message): return
+    parts = message.text.split()
+    if len(parts) < 2:
+        bot.reply_to(message, "Usage: `/loss 20`")
+        return
+    try:
+        value = float(parts[1])
+        result = run_config("set-loss", str(value))
+        bot.reply_to(message, f"🛡️ {result}")
+        log.info(f"Daily loss limit set to ${value} via Telegram")
+    except ValueError:
+        bot.reply_to(message, "❌ Neplatné číslo")
+
+
 @bot.message_handler(commands=["oracle"])
 def cmd_oracle(message):
     if not auth(message): return
@@ -213,7 +251,7 @@ Answer concisely in Czech as a Senior HFT Trading Advisor. Max 5 sentences."""
 
 # ── MAIN ────────────────────────────────────────────────────
 if __name__ == "__main__":
-    log.info(f"🐺 Beroun Telegram Interface v8.0 starting...")
+    log.info(f"🐺 Beroun Telegram Interface v9.0 starting...")
     log.info(f"   Authorized chat_id: {AUTHORIZED_CHAT_ID}")
     log.info(f"   Config binary: {CONFIG_BIN}")
 

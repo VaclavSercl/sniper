@@ -16,7 +16,7 @@ const MAX_CHANGE_PCT: f64 = 50.0; // Max 50% change per update
 
 #[derive(Parser)]
 #[command(name = "beroun-config")]
-#[command(about = "🐺 Beroun Sniper v7.1 — Safe live parameter modifier (mmap)")]
+#[command(about = "🐺 Beroun Sniper v9.0 — Safe live parameter modifier (mmap)")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -32,6 +32,12 @@ enum Commands {
     SetMaxInv { value: f64 },
     /// Zastaví/spustí bota (true=pause, false=resume)
     Pause { state: bool },
+    /// Nastaví autorizovaný kapitál v USD
+    SetCapital { value: f64 },
+    /// Nastaví denní loss limit v USD (circuit breaker)
+    SetLoss { value: f64 },
+    /// Nastaví počet pater Hydra gridu (1-5)
+    SetLevels { value: u64 },
     /// Zobrazí aktuální parametry
     Show,
     /// Exportuje stav do JSON (pro Oracle/Gemini)
@@ -94,12 +100,36 @@ fn main() -> Result<()> {
             risk.paused.store(if state { 1 } else { 0 }, Ordering::SeqCst);
             println!("✅ Bot {}", if state { "⏸️  PAUSED" } else { "▶️  RESUMED" });
         }
+        Commands::SetCapital { value } => {
+            if value < 10.0 || value > 50_000.0 {
+                bail!("❌ Capital ${value} mimo rozsah ($10-$50,000)");
+            }
+            risk.authorized_capital.store((value * s) as u64, Ordering::SeqCst);
+            println!("✅ Authorized Capital: ${value:.2}");
+        }
+        Commands::SetLoss { value } => {
+            if value < 1.0 || value > 10_000.0 {
+                bail!("❌ Loss limit ${value} mimo rozsah ($1-$10,000)");
+            }
+            risk.daily_loss_limit.store((value * s) as u64, Ordering::SeqCst);
+            println!("✅ Daily Loss Limit: -${value:.2}");
+        }
+        Commands::SetLevels { value } => {
+            if value < 1 || value > 5 {
+                bail!("❌ Grid levels {value} mimo rozsah (1-5)");
+            }
+            risk.grid_size.store(value, Ordering::SeqCst);
+            println!("✅ Grid Levels: {value}");
+        }
         Commands::Show => {
-            println!("🐺 Beroun Sniper — RiskState Live");
+            println!("🐺 Beroun Sniper v9.0 — RiskState Live");
             println!("─────────────────────────────────");
             println!("  Grid Step:     ${:.2}", risk.grid_step.load(Ordering::Acquire) as f64 / s);
+            println!("  Grid Levels:   {}", risk.grid_size.load(Ordering::Acquire));
             println!("  Bias Offset:   ${:.2}", risk.bias_offset.load(Ordering::Acquire) as f64 / s);
             println!("  Max Inv Delta: {:.6} BTC", risk.max_inv_delta.load(Ordering::Acquire) as f64 / s);
+            println!("  Auth Capital:  ${:.2}", risk.authorized_capital.load(Ordering::Acquire) as f64 / s);
+            println!("  Loss Limit:    -${:.2}", risk.daily_loss_limit.load(Ordering::Acquire) as f64 / s);
             println!("  Paused:        {}", if risk.paused.load(Ordering::Acquire) != 0 { "YES ⏸️" } else { "NO ▶️" });
         }
         Commands::ExportJson => {
@@ -161,8 +191,11 @@ fn main() -> Result<()> {
                 },
                 "risk_params": {
                     "grid_step_usd": grid,
+                    "grid_levels": risk.grid_size.load(Ordering::Acquire),
                     "bias_offset_usd": bias,
                     "max_inv_delta_btc": max_inv,
+                    "authorized_capital_usd": risk.authorized_capital.load(Ordering::Acquire) as f64 / s,
+                    "daily_loss_limit_usd": risk.daily_loss_limit.load(Ordering::Acquire) as f64 / s,
                     "paused": risk.paused.load(Ordering::Acquire) != 0
                 }
             });

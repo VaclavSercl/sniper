@@ -124,6 +124,20 @@ fn main() -> anyhow::Result<()> {
         println!(" {d}│{x} {r_c}Realized PnL:   ${x} {r_c}{:<+10.2}{x}  {d}│{x}  {u_c}Unrealized PnL: ${x} {u_c}{:<+10.2}{x}  {d}│{x}  {total_c}TOTAL: ${x} {total_c}{:<+10.2}{x} {d}│{x}", r_pnl, u_pnl, total_pnl);
         println!(" {d}│{x} {d}Avg Entry:      ${x} {w}{:<10.2}{x}  {d}│{x}  {alpha_c}AI Alpha:       ${x} {alpha_c}{:<+10.4}{x}  {d}│{x}              {d}│{x}", aep, alpha);
         println!(" {d}└────────────────────────────────────────────────────────────────────┘{x}");
+
+        // ── CAPITAL GUARD (v9.0) ──
+        let auth_cap = risk.authorized_capital.load(Ordering::Acquire) as f64 / scale;
+        let dll = risk.daily_loss_limit.load(Ordering::Acquire) as f64 / scale;
+        let pos_val = net_pos.abs() * micro_p;
+        let cap_used_pct = if auth_cap > 0.0 { (pos_val / auth_cap * 100.0).min(100.0) } else { 0.0 };
+        let dll_pct = if dll > 0.0 && r_pnl < 0.0 { (r_pnl.abs() / dll * 100.0).min(100.0) } else { 0.0 };
+        let dll_c = if dll_pct > 80.0 { r } else if dll_pct > 50.0 { y } else { g };
+        let cap_bar: String = (0..20).map(|i| if (i as f64) < cap_used_pct / 5.0 { '█' } else { '░' }).collect();
+
+        println!(" {d}┌─ CAPITAL GUARD ─────────────────────────────────────────────────────┐{x}");
+        println!(" {d}│{x} {c}Auth Capital: ${x} {w}{:<10.2}{x}  {d}│{x}  {c}In Use: ${x} {w}{:<8.2}{x} ({cap_used_pct:.0}%) {y}{cap_bar}{x} {d}│{x}", auth_cap, pos_val);
+        println!(" {d}│{x} {dll_c}Daily PnL:   ${x} {dll_c}{:<+10.2}{x}  {d}│{x}  {dll_c}Loss Limit: -${x} {dll_c}{:<8.2}{x} ({dll_pct:.0}% used)     {d}│{x}", r_pnl, dll);
+        println!(" {d}└────────────────────────────────────────────────────────────────────┘{x}");
         println!("{line}");
         println!(" {d}Press Ctrl+C to exit{x}");
 

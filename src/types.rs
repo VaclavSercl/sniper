@@ -140,7 +140,9 @@ pub struct RiskState {
     pub order_usd: AtomicU64,
     pub max_inv_delta: AtomicU64,
     pub bias_offset: AtomicI64,
-    pub _padding: [u8; 24],
+    pub authorized_capital: AtomicU64,  // Capital Guard: max USD the bot may use (0 = unlimited)
+    pub daily_loss_limit: AtomicU64,    // Daily Loss Limit: auto-pause if PnL drops below -this (0 = disabled)
+    pub _padding: [u8; 8],
 }
 
 impl Default for RiskState {
@@ -153,7 +155,9 @@ impl Default for RiskState {
             order_usd: AtomicU64::new((50.0 * PRICE_SCALE) as u64),
             max_inv_delta: AtomicU64::new((0.005 * PRICE_SCALE) as u64),
             bias_offset: AtomicI64::new(0),
-            _padding: [0; 24],
+            authorized_capital: AtomicU64::new((400.0 * PRICE_SCALE) as u64), // $400 default
+            daily_loss_limit: AtomicU64::new((20.0 * PRICE_SCALE) as u64),    // $20 default
+            _padding: [0; 8],
         }
     }
 }
