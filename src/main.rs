@@ -13,6 +13,7 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use memmap2::MmapMut;
 use anyhow::{Context, Result};
 use std::collections::VecDeque;
+use fs2::FileExt;
 
 use beroun_types::{EngineState, RiskState, ENGINE_STATE_PATH, RISK_STATE_PATH};
 
@@ -62,7 +63,7 @@ impl AsyncNotifier {
                             let _ = std::process::Command::new("/home/wwwenda/hft-sniper/target/release/beroun-config")
                                 .arg("export-json")
                                 .stdout(std::fs::File::create("/home/wwwenda/hft-sniper/runtime/state.json").unwrap_or_else(|_| std::fs::File::create("/dev/null").unwrap()))
-                                .spawn();
+                                .status(); // .status() waits for child — prevents zombie
                         });
                     }
                     Some(event) = rx.recv() => {
@@ -249,6 +250,18 @@ fn main() -> Result<()> {
     dotenv().ok();
     tracing_subscriber::registry().with(fmt::layer().with_target(false).json()).with(EnvFilter::from_default_env().add_directive(Level::INFO.into())).init();
 
+    // ═══ SINGLE-INSTANCE LOCK (Ghost-in-the-Machine prevention) ═══
+    let lock_file = std::fs::File::create("/tmp/beroun-sniper.lock")
+        .context("Failed to create lock file")?;
+    if lock_file.try_lock_exclusive().is_err() {
+        tracing::error!(event = "dual_instance_blocked",
+            msg = "Another beroun-core is already running! Aborting to prevent dual-trading.");
+        std::process::exit(1);
+    }
+    info!(event = "instance_lock_acquired", lock = "/tmp/beroun-sniper.lock");
+    // lock_file must stay alive (held open) for the entire process lifetime
+    let _lock_guard = lock_file;
+
     if let Some(core_ids) = core_affinity::get_core_ids() {
         if core_ids.len() > 1 {
             core_affinity::set_for_current(core_ids[1]);
@@ -330,8 +343,8 @@ async fn async_main() -> Result<()> {
     let key = std::env::var("BITFINEX_API_KEY").context("Missing API KEY")?;
     let sec = std::env::var("BITFINEX_API_SECRET").context("Missing API SECRET")?;
 
-    info!(event = "system_start", version = "6.0.0-sovereign");
-    notifier.alert("*Beroun Sniper v6.0 ONLINE*\n`Dual-WS + Watchdog + Vol Engine + Trade Aggregation`".to_string());
+    info!(event = "system_start", version = "8.1.0-sovereign");
+    notifier.alert("*Beroun Sniper v8.1 ONLINE*\n`Dual-WS + Balance-Aware Sizing + Vol Engine + AI Safety Fuse`".to_string());
 
     // SIGTERM listener (systemd, Docker)
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
@@ -711,8 +724,28 @@ async fn async_main() -> Result<()> {
                                                     raw_bias
                                                 };
                                                 let final_bias = bias + inv_skew;
-                                                let buy_i = (micro_i - grid + final_bias).max(0);
-                                                let sell_i = (micro_i + grid + final_bias).max(0);
+                                                let mut buy_i = (micro_i - grid + final_bias).max(0);
+                                                let mut sell_i = (micro_i + grid + final_bias).max(0);
+
+                                                // ═══ ANTI-CROSS GUARD (L0 Safety) ═══
+                                                // Prevent POSTONLY CANCELED: bid must be below best ask, ask must be above best bid
+                                                let ba_i = best_ask as i64;
+                                                let bb_i = best_bid as i64;
+                                                if buy_i >= ba_i {
+                                                    buy_i = ba_i - MIN_TICK;
+                                                    info!(event = "anti_cross_guard", side = "buy", clamped_to = buy_i as f64 / beroun_types::PRICE_SCALE, best_ask = ba_i as f64 / beroun_types::PRICE_SCALE);
+                                                }
+                                                if sell_i <= bb_i {
+                                                    sell_i = bb_i + MIN_TICK;
+                                                    info!(event = "anti_cross_guard", side = "sell", clamped_to = sell_i as f64 / beroun_types::PRICE_SCALE, best_bid = bb_i as f64 / beroun_types::PRICE_SCALE);
+                                                }
+                                                // Spread integrity: if inverted after clamping, skip cycle
+                                                if buy_i >= sell_i {
+                                                    info!(event = "spread_inverted", buy = buy_i as f64 / beroun_types::PRICE_SCALE,
+                                                          sell = sell_i as f64 / beroun_types::PRICE_SCALE, grid = grid, bias = final_bias);
+                                                    continue;
+                                                }
+
                                                 let lb = eng.last_buy_price.load(Ordering::SeqCst);
                                                 let ls = eng.last_sell_price.load(Ordering::SeqCst);
                                                 let db = (buy_i - lb).abs();
@@ -732,10 +765,40 @@ async fn async_main() -> Result<()> {
                                                     let bp = buy_i as f64 / beroun_types::PRICE_SCALE;
                                                     let sp = sell_i as f64 / beroun_types::PRICE_SCALE;
                                                     let amt = (final_order_usd / micro_f / beroun_types::PRICE_SCALE).max(0.00015);
-                                                    let msg = format!(
-                                                        r#"[0,"ox_multi",null,[{}["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}],["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]]]"#,
-                                                        oc_payload, amt, bp, -amt, sp
-                                                    );
+
+                                                    // v8.1: Balance-aware order sizing — prevent "not enough exchange balance"
+                                                    const MIN_ORDER_BTC: f64 = 0.00015;
+                                                    let w_btc = eng.wallet_btc.load(Ordering::Relaxed) as f64 / beroun_types::PRICE_SCALE;
+                                                    let w_usd = eng.wallet_usd.load(Ordering::Relaxed) as f64 / beroun_types::PRICE_SCALE;
+                                                    let can_buy = w_usd > bp * MIN_ORDER_BTC;
+                                                    let buy_amt = if can_buy { amt.min(w_usd / bp * 0.95) } else { 0.0 };
+                                                    let can_sell = w_btc > MIN_ORDER_BTC;
+                                                    let sell_amt = if can_sell { amt.min(w_btc * 0.95) } else { 0.0 };
+
+                                                    let msg = if buy_amt >= MIN_ORDER_BTC && sell_amt >= MIN_ORDER_BTC {
+                                                        // Both sides
+                                                        format!(
+                                                            r#"[0,"ox_multi",null,[{}["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}],["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]]]"#,
+                                                            oc_payload, buy_amt, bp, -sell_amt, sp
+                                                        )
+                                                    } else if buy_amt >= MIN_ORDER_BTC {
+                                                        // Buy only (insufficient BTC for sell)
+                                                        format!(
+                                                            r#"[0,"ox_multi",null,[{}["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]]]"#,
+                                                            oc_payload, buy_amt, bp
+                                                        )
+                                                    } else if sell_amt >= MIN_ORDER_BTC {
+                                                        // Sell only (insufficient USD for buy)
+                                                        format!(
+                                                            r#"[0,"ox_multi",null,[{}["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]]]"#,
+                                                            oc_payload, -sell_amt, sp
+                                                        )
+                                                    } else {
+                                                        // Neither side has sufficient balance — skip
+                                                        info!(event = "order_skipped", reason = "insufficient_balance",
+                                                              wallet_btc = w_btc, wallet_usd = w_usd, amt = amt);
+                                                        continue;
+                                                    };
                                                     let _ = order_tx.send(msg);
 
                                                     // 7. DASHBOARD METRICS

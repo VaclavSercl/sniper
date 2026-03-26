@@ -1,5 +1,5 @@
 [Unit]
-Description=Beroun Sniper v5.1 Sovereign HFT Suite
+Description=Beroun Sniper v8.1 Sovereign HFT Suite
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=0
@@ -8,6 +8,19 @@ StartLimitIntervalSec=0
 Type=simple
 User=wwwenda
 WorkingDirectory=/home/wwwenda/hft-sniper
+
+# ═══ DEZINFEKČNÍ PROTOKOL (Ghost-in-the-Machine prevention) ═══
+# 1. Kill any orphaned beroun-core processes before starting
+ExecStartPre=-/usr/bin/pkill -9 -f beroun-core
+# 2. Kill orphaned sub-services
+ExecStartPre=-/usr/bin/pkill -9 -f beroun-sovereign-ai
+ExecStartPre=-/usr/bin/pkill -9 -f beroun-tele-brain
+ExecStartPre=-/usr/bin/pkill -9 -f beroun-dashboard
+# 3. Remove stale lock file (fs2 will re-create it atomically)
+ExecStartPre=-/usr/bin/rm -f /tmp/beroun-sniper.lock
+# 4. Brief pause to let OS reap killed processes
+ExecStartPre=/usr/bin/sleep 1
+
 ExecStart=/home/wwwenda/hft-sniper/beroun-start.sh
 Restart=always
 RestartSec=3

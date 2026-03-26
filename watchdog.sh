@@ -1,5 +1,5 @@
 #!/bin/bash
-# BEROUN WATCHDOG v5.3 — In-process watchdog replaced this script.
+# BEROUN WATCHDOG v8.1 — In-process watchdog replaced this script.
 # The bot now has built-in 15s timeout detection on both WebSocket
 # connections, error channel between tasks, and automatic reconnect
 # with order book zeroing.
@@ -16,7 +16,7 @@
 STATE_FILE="/home/wwwenda/hft-sniper/runtime/engine_state.bin"
 LOG_FILE="/home/wwwenda/hft-sniper/logs/watchdog.log"
 
-echo "[$(date)] External Watchdog v5.3 (backup monitor) ONLINE" >> $LOG_FILE
+echo "[$(date)] External Watchdog v8.1 (backup monitor) ONLINE" >> $LOG_FILE
 
 while true; do
     if ! pgrep -f "beroun-core" > /dev/null; then
