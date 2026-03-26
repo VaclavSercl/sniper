@@ -83,7 +83,7 @@ pub struct RiskState {
 impl Default for RiskState {
     fn default() -> Self {
         Self { 
-            grid_step: AtomicU64::new((10.0 * PRICE_SCALE) as u64),
+            grid_step: AtomicU64::new((3.0 * PRICE_SCALE) as u64),
             grid_size: AtomicU64::new(2),
             order_usd: AtomicU64::new((50.0 * PRICE_SCALE) as u64),
             max_inv_delta: AtomicU64::new((0.005 * PRICE_SCALE) as u64),

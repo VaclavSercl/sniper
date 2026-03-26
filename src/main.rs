@@ -323,6 +323,16 @@ async fn main() -> Result<()> {
                                 }
                             }
                         }
+
+                        // Track Bitfinex notifications (order confirmations, errors, rate limits)
+                        if msg_type == "n" {
+                            if let Some(notif) = arr[2].as_array() {
+                                let ntype = notif[1].as_str().unwrap_or("?");
+                                let nstatus = notif[6].as_str().unwrap_or("?");
+                                let ntext = notif[7].as_str().unwrap_or("");
+                                info!(event = "bitfinex_notification", ntype = ntype, status = nstatus, text = ntext);
+                            }
+                        }
                     }
 
                     if arr[0].as_i64() == chan_id && chan_id.is_some() {
@@ -414,7 +424,7 @@ async fn main() -> Result<()> {
                         const MIN_TICK_SCALED: i64 = 100_000_000; // $1 in scaled units
                         if authed && best_bid > 0 && best_ask > 0 {
                             let now = Instant::now();
-                            if now.duration_since(last_upd).as_millis() > 500 {
+                            if now.duration_since(last_upd).as_millis() > 3000 {
                                 let is_paused = risk.paused.load(Ordering::Acquire) != 0;
                                 if !is_paused {
                                     let mid_price_i = ((best_bid as i64) + (best_ask as i64)) / 2;
