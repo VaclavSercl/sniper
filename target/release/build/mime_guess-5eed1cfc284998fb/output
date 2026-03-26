@@ -1,1 +1,0 @@
-cargo:rustc-env=MIME_TYPES_GENERATED_PATH=/home/wwwenda/beroun-projects/beroun-core/target/release/build/mime_guess-5eed1cfc284998fb/out/mime_types_generated.rs
