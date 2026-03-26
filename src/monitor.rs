@@ -93,6 +93,21 @@ fn main() -> anyhow::Result<()> {
         println!(" {d}│{x}    {d}└─ ID: {:<18}{x}  {d}│  │{x} {pnl_c}PnL:         ${x} {pnl_c}{:<+10.2}{x}     {d}│{x}", buy_id, pnl);
         println!(" {d}└────────────────────────────────┘  └──────────────────────────────┘{x}");
         println!("{line}");
+
+        // ── PnL TRACKER (v7.0) ──
+        let aep = engine.average_entry_price.load(Ordering::Acquire) as f64 / scale;
+        let r_pnl = engine.realized_pnl.load(Ordering::Acquire) as f64 / scale;
+        let u_pnl = if aep > 0.0 && net_pos.abs() > 1e-8 { (micro_p - aep) * net_pos } else { 0.0 };
+        let total_pnl = r_pnl + u_pnl;
+        let total_c = if total_pnl > 0.0 { g } else if total_pnl < 0.0 { r } else { d };
+        let r_c = if r_pnl > 0.0 { g } else if r_pnl < 0.0 { r } else { d };
+        let u_c = if u_pnl > 0.0 { g } else if u_pnl < 0.0 { r } else { d };
+
+        println!(" {d}┌─ FINANČNÍ VÝSLEDEK ────────────────────────────────────────────────┐{x}");
+        println!(" {d}│{x} {r_c}Realized PnL:   ${x} {r_c}{:<+10.2}{x}  {d}│{x}  {u_c}Unrealized PnL: ${x} {u_c}{:<+10.2}{x}  {d}│{x}  {total_c}TOTAL: ${x} {total_c}{:<+10.2}{x} {d}│{x}", r_pnl, u_pnl, total_pnl);
+        println!(" {d}│{x} {d}Avg Entry:      ${x} {w}{:<10.2}{x}  {d}│{x}  {d}Break-even:     ${x} {w}{:<10.2}{x}  {d}│{x}              {d}│{x}", aep, aep);
+        println!(" {d}└────────────────────────────────────────────────────────────────────┘{x}");
+        println!("{line}");
         println!(" {d}Press Ctrl+C to exit{x}");
 
         use std::io::Write;

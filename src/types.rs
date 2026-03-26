@@ -65,6 +65,9 @@ pub struct EngineState {
     pub _padding: [u8; 4],
     pub last_buy_price: AtomicI64,
     pub last_sell_price: AtomicI64,
+
+    // --- PnL TRACKER (v7.0) ---
+    pub average_entry_price: AtomicI64, // WAP of current position × PRICE_SCALE
 }
 
 impl Default for OrderBookLevel {
@@ -107,6 +110,7 @@ impl Default for EngineState {
             _padding: [0; 4],
             last_buy_price: AtomicI64::new(0),
             last_sell_price: AtomicI64::new(0),
+            average_entry_price: AtomicI64::new(0),
         }
     }
 }

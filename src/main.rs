@@ -404,10 +404,47 @@ async fn async_main() -> Result<()> {
                                 let mt = arr[1].as_str().unwrap_or("");
                                 if mt == "te" {
                                     if let Some(trade) = arr[2].as_array() {
-                                        if let (Some(amount), Some(price)) = (safe_as_f64(&trade[4]), safe_as_f64(&trade[5])) {
-                                            engine.net_position.fetch_add((amount * beroun_types::PRICE_SCALE) as i64, Ordering::SeqCst);
-                                            info!(event = "trade_executed", amount = amount, price = price);
-                                            exec_notifier.trade(amount, price);
+                                        if let (Some(trade_amt), Some(trade_price)) = (safe_as_f64(&trade[4]), safe_as_f64(&trade[5])) {
+                                            let scale = beroun_types::PRICE_SCALE;
+                                            let old_pos_i = engine.net_position.load(Ordering::SeqCst);
+                                            let old_pos = old_pos_i as f64 / scale;
+                                            let old_aep_i = engine.average_entry_price.load(Ordering::SeqCst);
+                                            let old_aep = old_aep_i as f64 / scale;
+
+                                            // 1. REALIZED PnL (trade reduces/closes position)
+                                            if (old_pos > 0.0 && trade_amt < 0.0) || (old_pos < 0.0 && trade_amt > 0.0) {
+                                                let closed_amt = trade_amt.abs().min(old_pos.abs());
+                                                let pnl_gain = if old_pos > 0.0 {
+                                                    (trade_price - old_aep) * closed_amt
+                                                } else {
+                                                    (old_aep - trade_price) * closed_amt
+                                                };
+                                                engine.realized_pnl.fetch_add((pnl_gain * scale).round() as i64, Ordering::SeqCst);
+                                                info!(event = "pnl_realized", gain = pnl_gain, closed = closed_amt, aep = old_aep);
+                                            }
+
+                                            // 2. AVERAGE ENTRY PRICE (WAP)
+                                            let new_pos = old_pos + trade_amt;
+                                            if new_pos.abs() > 1e-8 {
+                                                if (old_pos >= 0.0 && trade_amt > 0.0) || (old_pos <= 0.0 && trade_amt < 0.0) {
+                                                    // Enlarging position → weighted average
+                                                    let new_aep = (old_pos.abs() * old_aep + trade_amt.abs() * trade_price) / new_pos.abs();
+                                                    engine.average_entry_price.store((new_aep * scale).round() as i64, Ordering::SeqCst);
+                                                } else if (old_pos > 0.0 && new_pos < 0.0) || (old_pos < 0.0 && new_pos > 0.0) {
+                                                    // Position flipped → AEP = trade price
+                                                    engine.average_entry_price.store((trade_price * scale).round() as i64, Ordering::SeqCst);
+                                                }
+                                                // Partial close: AEP stays the same (no update needed)
+                                            } else {
+                                                // Position == 0 → reset AEP
+                                                engine.average_entry_price.store(0, Ordering::SeqCst);
+                                            }
+
+                                            // 3. Update net_position
+                                            engine.net_position.store((new_pos * scale).round() as i64, Ordering::SeqCst);
+                                            info!(event = "trade_executed", amount = trade_amt, price = trade_price,
+                                                  new_pos = new_pos, aep = engine.average_entry_price.load(Ordering::SeqCst) as f64 / scale);
+                                            exec_notifier.trade(trade_amt, trade_price);
                                         }
                                     }
                                 }
