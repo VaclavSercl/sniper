@@ -289,8 +289,32 @@ TELEGRAM_CHAT_ID=...       # optional
 | max_inv_delta | 0.005 BTC | Max inventory delta (pro skew) |
 | bias_offset | 0 | Directional bias (signed) |
 
+## Order Tracking (v6.1)
+
+### Životní cyklus objednávky
+```
+os (snapshot)  → načte existující ordery po připojení (state recovery)
+on (new)       → bot poslal nový order → uloží ID do active_buy/sell_id
+ou (update)    → order se částečně fillnul → aktualizuje ID
+oc (cancel)    → order zrušen → compare_exchange vymaže ID
+te (executed)  → obchod proveden → aktualizuje net_position
+```
+
+### Chirurgický cancel (vs. cancel all)
+```rust
+// PŘED (v6.0): ruší VŠECHNY objednávky na účtu
+["oc_multi", {"all": 1}]
+
+// PO (v6.1): ruší POUZE naše trackované objednávky
+["oc_multi", {"id": [234102741323, 234102741324]}]
+```
+
+### Graceful Shutdown
+- Čte `active_buy_id` / `active_sell_id` z mmap
+- Posílá cílený cancel
+- Fallback na `cancel_all` pokud nejsou žádné trackované ID
+
 ## Známé Limitace
 
 1. **`into_data().to_vec()`** — tungstenite 0.26 vrací `Bytes`, true zero-copy by vyžadoval `fastwebsockets`
-2. **`oc_multi all`** ruší všechny ordery → ideálně trackovat order IDs
-3. **Sell ordery** mohou selhat bez BTC balance na exchange walletce
+2. **Sell ordery** mohou selhat bez BTC balance na exchange walletce

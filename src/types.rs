@@ -45,8 +45,12 @@ pub struct EngineState {
     pub micro_price: AtomicU64,   // Volume-weighted mid-price
     pub current_skew: AtomicI64,  // Inventory Skew bias (signed)
 
+    // --- ORDER TRACKING (v6.1) ---
+    pub active_buy_id: AtomicU64,   // Bitfinex order ID for active buy
+    pub active_sell_id: AtomicU64,  // Bitfinex order ID for active sell
+
     // --- cache line boundary ---
-    pub _pad_hot_cold: [u8; 40],  // 64-24=40 (3 atomics = 24 bytes)
+    pub _pad_hot_cold: [u8; 24],  // 64-40=24 (5 atomics = 40 bytes)
 
     // --- COLD: updated infrequently ---
     pub net_position: AtomicI64,
@@ -86,7 +90,9 @@ impl Default for EngineState {
             t2t_micros: AtomicU64::new(0),
             micro_price: AtomicU64::new(0),
             current_skew: AtomicI64::new(0),
-            _pad_hot_cold: [0; 40],
+            active_buy_id: AtomicU64::new(0),
+            active_sell_id: AtomicU64::new(0),
+            _pad_hot_cold: [0; 24],
             net_position: AtomicI64::new(0),
             realized_pnl: AtomicI64::new(0),
             wallet_btc: AtomicU64::new(0),

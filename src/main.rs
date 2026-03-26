@@ -431,6 +431,49 @@ async fn async_main() -> Result<()> {
                                               text = n[7].as_str().unwrap_or(""));
                                     }
                                 }
+                                // --- ORDER SNAPSHOT (state recovery after connect) ---
+                                if mt == "os" {
+                                    if let Some(orders) = arr[2].as_array() {
+                                        for order in orders {
+                                            if let Some(o) = order.as_array() {
+                                                if let (Some(id), Some(sym), Some(amt), Some(status)) = (
+                                                    o[0].as_u64().or_else(|| o[0].as_f64().map(|f| f as u64)),
+                                                    o[3].as_str(), safe_as_f64(&o[6]), o[13].as_str()
+                                                ) {
+                                                    if sym == "tBTCUSD" && (status.contains("ACTIVE") || status.contains("PARTIALLY")) {
+                                                        if amt > 0.0 { engine.active_buy_id.store(id, Ordering::SeqCst); }
+                                                        else { engine.active_sell_id.store(id, Ordering::SeqCst); }
+                                                        info!(event = "order_recovered", id = id, side = if amt > 0.0 { "buy" } else { "sell" });
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                // --- ORDER LIFECYCLE (on=new, ou=update, oc=cancel) ---
+                                if mt == "on" || mt == "ou" || mt == "oc" {
+                                    if let Some(o) = arr[2].as_array() {
+                                        if let (Some(id), Some(sym), Some(amt), Some(status)) = (
+                                            o[0].as_u64().or_else(|| o[0].as_f64().map(|f| f as u64)),
+                                            o[3].as_str(), safe_as_f64(&o[6]), o[13].as_str()
+                                        ) {
+                                            if sym == "tBTCUSD" {
+                                                if status.contains("ACTIVE") || status.contains("PARTIALLY") {
+                                                    if amt > 0.0 { engine.active_buy_id.store(id, Ordering::SeqCst); }
+                                                    else { engine.active_sell_id.store(id, Ordering::SeqCst); }
+                                                    info!(event = "order_tracked", mt = mt, id = id, side = if amt > 0.0 { "buy" } else { "sell" });
+                                                } else if status.contains("CANCELED") || status.contains("EXECUTED") {
+                                                    if amt > 0.0 {
+                                                        let _ = engine.active_buy_id.compare_exchange(id, 0, Ordering::SeqCst, Ordering::SeqCst);
+                                                    } else {
+                                                        let _ = engine.active_sell_id.compare_exchange(id, 0, Ordering::SeqCst, Ordering::SeqCst);
+                                                    }
+                                                    info!(event = "order_cleared", mt = mt, id = id, status = status);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         } else if let BorrowedValue::Object(obj) = v {
                             if obj.get("event") == Some(&BorrowedValue::from("auth")) && obj.get("status") == Some(&BorrowedValue::from("OK")) {
@@ -460,14 +503,14 @@ async fn async_main() -> Result<()> {
                 // ── GRACEFUL SHUTDOWN ──
                 _ = tokio::signal::ctrl_c() => {
                     info!(event = "shutdown_initiated", signal = "SIGINT");
-                    graceful_shutdown(&order_tx, &notifier).await;
+                    graceful_shutdown(&order_tx, &notifier, engine_ptr).await;
                     writer_handle.abort();
                     reader_handle.abort();
                     return Ok(());
                 }
                 _ = sigterm.recv() => {
                     info!(event = "shutdown_initiated", signal = "SIGTERM");
-                    graceful_shutdown(&order_tx, &notifier).await;
+                    graceful_shutdown(&order_tx, &notifier, engine_ptr).await;
                     writer_handle.abort();
                     reader_handle.abort();
                     return Ok(());
@@ -591,12 +634,25 @@ async fn async_main() -> Result<()> {
                                                 let db = (buy_i - lb).abs();
                                                 let ds = (sell_i - ls).abs();
                                                 if db >= MIN_TICK || ds >= MIN_TICK || lb == 0 {
+                                                    // Targeted cancel: only our tracked orders
+                                                    let buy_id = eng.active_buy_id.load(Ordering::SeqCst);
+                                                    let sell_id = eng.active_sell_id.load(Ordering::SeqCst);
+                                                    let oc_payload = if buy_id > 0 && sell_id > 0 {
+                                                        format!(r#"["oc_multi",{{"id":[{},{}]}}],"#, buy_id, sell_id)
+                                                    } else if buy_id > 0 {
+                                                        format!(r#"["oc_multi",{{"id":[{}]}}],"#, buy_id)
+                                                    } else if sell_id > 0 {
+                                                        format!(r#"["oc_multi",{{"id":[{}]}}],"#, sell_id)
+                                                    } else {
+                                                        String::new()
+                                                    };
+
                                                     let bp = buy_i as f64 / beroun_types::PRICE_SCALE;
                                                     let sp = sell_i as f64 / beroun_types::PRICE_SCALE;
                                                     let amt = (order_usd as f64 / micro_f / beroun_types::PRICE_SCALE).max(0.00015);
                                                     let msg = format!(
-                                                        r#"[0,"ox_multi",null,[["oc_multi",{{"all":1}}],["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}],["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]]]"#,
-                                                        amt, bp, -amt, sp
+                                                        r#"[0,"ox_multi",null,[{}["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}],["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]]]"#,
+                                                        oc_payload, amt, bp, -amt, sp
                                                     );
                                                     let _ = order_tx.send(msg);
                                                     eng.last_buy_price.store(buy_i, Ordering::SeqCst);
@@ -653,23 +709,41 @@ async fn async_main() -> Result<()> {
         eng.best_ask.store(0, Ordering::SeqCst);
         eng.last_buy_price.store(0, Ordering::SeqCst);
         eng.last_sell_price.store(0, Ordering::SeqCst);
+        eng.active_buy_id.store(0, Ordering::SeqCst);
+        eng.active_sell_id.store(0, Ordering::SeqCst);
 
         notifier.alert(format!("⚠️ *RECONNECT*\n`Reason: {}`", shutdown_reason));
         tokio::time::sleep(Duration::from_secs(3)).await;
     }
 }
 
-/// Graceful shutdown: cancel all orders, wait for TCP flush, exit.
+/// Graceful shutdown: cancel tracked orders, wait for TCP flush, exit.
 async fn graceful_shutdown(
     order_tx: &tokio::sync::mpsc::UnboundedSender<String>,
     notifier: &AsyncNotifier,
+    engine_ptr: *const EngineState,
 ) {
-    notifier.alert("🛑 *Shutdown*: cancelling all orders...".to_string());
-    let cancel_all = r#"[0,"oc_multi",null,{"all":1}]"#.to_string();
-    if let Err(e) = order_tx.send(cancel_all) {
+    notifier.alert("🛑 *Shutdown*: cancelling orders...".to_string());
+    let eng = unsafe { &*engine_ptr };
+    let buy_id = eng.active_buy_id.load(Ordering::SeqCst);
+    let sell_id = eng.active_sell_id.load(Ordering::SeqCst);
+
+    let cancel_msg = if buy_id > 0 || sell_id > 0 {
+        let mut ids = Vec::new();
+        if buy_id > 0 { ids.push(buy_id.to_string()); }
+        if sell_id > 0 { ids.push(sell_id.to_string()); }
+        info!(event = "shutdown_cancel_targeted", buy_id = buy_id, sell_id = sell_id);
+        format!(r#"[0,"oc_multi",null,{{"id":[{}]}}]"#, ids.join(","))
+    } else {
+        // Fallback: no tracked IDs → cancel all as safety net
+        info!(event = "shutdown_cancel_all_fallback");
+        r#"[0,"oc_multi",null,{"all":1}]"#.to_string()
+    };
+
+    if let Err(e) = order_tx.send(cancel_msg) {
         tracing::error!(event = "shutdown_cancel_failed", error = %e);
     } else {
-        info!(event = "cancel_all_sent");
+        info!(event = "cancel_sent");
     }
     tokio::time::sleep(Duration::from_millis(500)).await;
     info!(event = "system_shutdown_complete");

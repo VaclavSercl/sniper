@@ -78,10 +78,14 @@ fn main() -> anyhow::Result<()> {
         println!(" {d}│{x} {y}Spread:      ${x} {w}{:<14.2}{x} {d}│  │{x}                              {d}│{x}", spread);
         println!(" {d}└────────────────────────────────┘  └──────────────────────────────┘{x}");
         println!();
+        let buy_id = engine.active_buy_id.load(Ordering::Acquire);
+        let sell_id = engine.active_sell_id.load(Ordering::Acquire);
+
         println!(" {d}┌─ AKTIVNÍ GRID ─────────────────┐  ┌─ PORTFOLIO ───────────────────┐{x}");
         println!(" {d}│{x} {r}Prodej (Ask): ${x} {w}{:<12.2}{x}  {d}│  │{x} Net Pozice:  {pos_c}{:>+10.5}{x} BTC  {d}│{x}", last_sell, net_pos);
-        println!(" {d}│{x} {g}Nákup  (Bid): ${x} {w}{:<12.2}{x}  {d}│  │{x} BTC Wallet:  {w}{:>10.5}{x} BTC  {d}│{x}", last_buy, btc_w);
-        println!(" {d}│{x} {y}Odstup:       ${x} {w}{:<12.2}{x}  {d}│  │{x} USD Wallet:  {w}${:>10.2}{x}      {d}│{x}", if last_sell > 0.0 && last_buy > 0.0 { last_sell - last_buy } else { 0.0 }, usd_w);
+        println!(" {d}│{x}    {d}└─ ID: {:<18}{x}  {d}│  │{x} BTC Wallet:  {w}{:>10.5}{x} BTC  {d}│{x}", sell_id, btc_w);
+        println!(" {d}│{x} {g}Nákup  (Bid): ${x} {w}{:<12.2}{x}  {d}│  │{x} USD Wallet:  {w}${:>10.2}{x}      {d}│{x}", last_buy, usd_w);
+        println!(" {d}│{x}    {d}└─ ID: {:<18}{x}  {d}│  │{x} {pnl_c}PnL:         ${x} {pnl_c}{:<+10.2}{x}     {d}│{x}", buy_id, pnl);
         println!(" {d}└────────────────────────────────┘  └──────────────────────────────┘{x}");
         println!("{line}");
         println!(" {d}Press Ctrl+C to exit{x}");
