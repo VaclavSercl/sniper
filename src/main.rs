@@ -326,7 +326,6 @@ async fn async_main() -> Result<()> {
         write.send(Message::Text(json!({"event": "subscribe", "channel": "book", "symbol": "tBTCUSD", "prec": "P0", "freq": "F0", "len": "25"}).to_string().into())).await?;
 
         let mut chan_id: Option<i64> = None;
-        let mut msg_buffer: Vec<u8> = Vec::with_capacity(4096);
         let mut last_upd = Instant::now();
         let mut authed = false;
         let mut snapshot_loaded = false;
@@ -335,10 +334,12 @@ async fn async_main() -> Result<()> {
         while let Some(msg) = read.next().await {
             let msg = match msg { Ok(m) => m, Err(_) => break };
             
-            if let Message::Text(text) = msg {
-                msg_buffer.clear();
-                msg_buffer.extend_from_slice(text.as_bytes());
-                let v = match simd_json::to_borrowed_value(&mut msg_buffer) {
+            if msg.is_text() {
+                // Consume Message → Bytes → Vec<u8> for simd_json mutation.
+                // tungstenite 0.26 returns immutable Bytes from into_data(),
+                // so one to_vec() is needed. Still better than the old double-buffer.
+                let mut bytes = msg.into_data().to_vec();
+                let v = match simd_json::to_borrowed_value(&mut bytes) {
                     Ok(v) => v,
                     Err(_) => continue,
                 };
