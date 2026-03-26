@@ -489,8 +489,21 @@ async fn async_main() -> Result<()> {
                                                 let order_usd = risk.order_usd.load(Ordering::Acquire) as i64;
                                                 let grid = risk.grid_step.load(Ordering::Acquire) as i64;
                                                 let bias = risk.bias_offset.load(Ordering::Acquire);
-                                                let buy_i = (mid_i - grid + bias).max(0);
-                                                let sell_i = (mid_i + grid + bias).max(0);
+
+                                                // Inventory Skew: adjust prices based on BTC position
+                                                // Positive position (long BTC) → negative skew → push prices down
+                                                // Negative position (short BTC) → positive skew → push prices up
+                                                let current_pos = eng.net_position.load(Ordering::Acquire);
+                                                let max_pos = risk.max_inv_delta.load(Ordering::Acquire) as i64;
+                                                let inv_skew = if max_pos > 0 {
+                                                    let ratio = (current_pos as f64 / max_pos as f64).clamp(-1.0, 1.0);
+                                                    let max_skew = grid as f64 * 2.0;
+                                                    (-ratio * max_skew).round() as i64
+                                                } else { 0 };
+
+                                                let final_bias = bias + inv_skew;
+                                                let buy_i = (mid_i - grid + final_bias).max(0);
+                                                let sell_i = (mid_i + grid + final_bias).max(0);
                                                 let lb = eng.last_buy_price.load(Ordering::SeqCst);
                                                 let ls = eng.last_sell_price.load(Ordering::SeqCst);
                                                 let db = (buy_i - lb).abs();
@@ -508,7 +521,8 @@ async fn async_main() -> Result<()> {
                                                     eng.last_sell_price.store(sell_i, Ordering::SeqCst);
                                                     last_upd = now;
                                                     info!(event = "sniper_fire", bid = best_bid, ask = best_ask,
-                                                          buy = bp, sell = sp, delta_buy = db, delta_sell = ds);
+                                                          buy = bp, sell = sp, delta_buy = db, delta_sell = ds,
+                                                          inv_skew = inv_skew, position = current_pos);
                                                 }
                                             }
                                         }
