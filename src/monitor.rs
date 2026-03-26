@@ -79,11 +79,20 @@ fn main() -> anyhow::Result<()> {
         let ai_bias = engine.current_ai_bias.load(Ordering::Acquire) as f64 / scale;
         let ai_c = if ai_bias > 0.0 { g } else if ai_bias < 0.0 { r } else { d };
 
+        // AI Heartbeat check
+        let ai_hb = engine.ai_heartbeat_ms.load(Ordering::Acquire);
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH).unwrap_or_default()
+            .as_millis() as u64;
+        let hb_age_s = if ai_hb > 0 { now_ms.saturating_sub(ai_hb) / 1000 } else { 999 };
+        let (hb_status, hb_c) = if hb_age_s < 10 { ("LIVE", g) } else if hb_age_s < 30 { ("SLOW", y) } else { ("DEAD", r) };
+
         println!(" {d}│{x} {m}Micro-Price: ${x} {w}{:<14.2}{x} {d}│  │{x} {c}Dyn Grid:   ${x} {w}{:<10.2}{x}     {d}│{x}", micro_p, dyn_grid);
         println!(" {d}│{x} {d}Mid-Price:   ${x} {w}{:<14.2}{x} {d}│  │{x} {m}Inv Skew:   ${x} {skew_c}{:<+10.2}{x}     {d}│{x}", mid, skew);
         println!(" {d}│{x} {g}Best Bid:    ${x} {w}{:<14.2}{x} {d}│  │{x} {obi_c}L2 OBI:      {x} {obi_c}{:<+10.3}{x}     {d}│{x}", best_bid, obi);
         println!(" {d}│{x} {y}Spread:      ${x} {w}{:<14.2}{x} {d}│  │{x} {c}Order:    $ {x} {w}{:<10.2}{x}     {d}│{x}", spread, cur_usd);
         println!(" {d}│{x}                                {d}│  │{x} {ai_c}AI Bias:  $ {x} {ai_c}{:<+10.2}{x}     {d}│{x}", ai_bias);
+        println!(" {d}│{x}                                {d}│  │{x} {hb_c}AI Heart:   {x} {hb_c}{:<4}{x} {d}({hb_age_s}s ago) {x}{d}│{x}", hb_status);
         println!(" {d}└────────────────────────────────┘  └──────────────────────────────┘{x}");
         println!();
         let buy_id = engine.active_buy_id.load(Ordering::Acquire);
@@ -106,9 +115,12 @@ fn main() -> anyhow::Result<()> {
         let r_c = if r_pnl > 0.0 { g } else if r_pnl < 0.0 { r } else { d };
         let u_c = if u_pnl > 0.0 { g } else if u_pnl < 0.0 { r } else { d };
 
+        let alpha = engine.ai_alpha_usd.load(Ordering::Acquire) as f64 / scale;
+        let alpha_c = if alpha > 0.0 { g } else if alpha < 0.0 { r } else { d };
+
         println!(" {d}┌─ FINANČNÍ VÝSLEDEK ────────────────────────────────────────────────┐{x}");
         println!(" {d}│{x} {r_c}Realized PnL:   ${x} {r_c}{:<+10.2}{x}  {d}│{x}  {u_c}Unrealized PnL: ${x} {u_c}{:<+10.2}{x}  {d}│{x}  {total_c}TOTAL: ${x} {total_c}{:<+10.2}{x} {d}│{x}", r_pnl, u_pnl, total_pnl);
-        println!(" {d}│{x} {d}Avg Entry:      ${x} {w}{:<10.2}{x}  {d}│{x}  {d}Break-even:     ${x} {w}{:<10.2}{x}  {d}│{x}              {d}│{x}", aep, aep);
+        println!(" {d}│{x} {d}Avg Entry:      ${x} {w}{:<10.2}{x}  {d}│{x}  {alpha_c}AI Alpha:       ${x} {alpha_c}{:<+10.4}{x}  {d}│{x}              {d}│{x}", aep, alpha);
         println!(" {d}└────────────────────────────────────────────────────────────────────┘{x}");
         println!("{line}");
         println!(" {d}Press Ctrl+C to exit{x}");

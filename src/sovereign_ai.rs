@@ -100,6 +100,12 @@ async fn main() -> Result<()> {
                     last_bias = clamped_usd;
                 }
 
+                // Heartbeat: write epoch millis so Sniper knows AI is alive
+                let now_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH).unwrap_or_default()
+                    .as_millis() as u64;
+                engine.ai_heartbeat_ms.store(now_ms, Ordering::SeqCst);
+
                 println!("AI │ OBI={:+.3} │ Spread=${:.2} │ Pos={:+.5} │ Raw={:+} │ Bias=${:+} │ Grid=${:.2}",
                     obi, spread, pos, raw_bias, clamped_usd, grid);
             }

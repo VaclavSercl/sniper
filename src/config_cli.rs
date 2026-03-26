@@ -128,6 +128,12 @@ fn main() -> Result<()> {
                 (micro_p - aep) * net_pos
             } else { 0.0 };
 
+            let ai_hb_ms = engine.ai_heartbeat_ms.load(Ordering::Acquire);
+            let now_epoch = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH).unwrap_or_default()
+                .as_millis() as u64;
+            let ai_alive = ai_hb_ms > 0 && now_epoch.saturating_sub(ai_hb_ms) < 30_000;
+
             let json = serde_json::json!({
                 "timestamp": chrono::Utc::now().to_rfc3339(),
                 "price": {
@@ -149,7 +155,9 @@ fn main() -> Result<()> {
                 "intelligence": {
                     "l2_obi": obi,
                     "ai_bias_usd": ai_bias,
-                    "t2t_micros": t2t
+                    "t2t_micros": t2t,
+                    "ai_heartbeat_ms": ai_hb_ms,
+                    "ai_alive": ai_alive
                 },
                 "risk_params": {
                     "grid_step_usd": grid,

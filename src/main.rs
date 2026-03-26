@@ -449,6 +449,16 @@ async fn async_main() -> Result<()> {
 
                                             // 3. Update net_position
                                             engine.net_position.store((new_pos * scale).round() as i64, Ordering::SeqCst);
+
+                                            // 4. ALPHA TRACKING: measure AI contribution
+                                            let ai_bias_now = engine.current_ai_bias.load(Ordering::Acquire) as f64 / scale;
+                                            if ai_bias_now.abs() > 0.01 {
+                                                // For buys: positive bias = bought higher = negative alpha
+                                                // For sells: positive bias = sold higher = positive alpha
+                                                let alpha = ai_bias_now * trade_amt.abs() * trade_amt.signum();
+                                                engine.ai_alpha_usd.fetch_add((alpha * scale).round() as i64, Ordering::SeqCst);
+                                            }
+
                                             info!(event = "trade_executed", amount = trade_amt, price = trade_price,
                                                   new_pos = new_pos, aep = engine.average_entry_price.load(Ordering::SeqCst) as f64 / scale);
                                             exec_notifier.trade(trade_amt, trade_price);
@@ -688,8 +698,18 @@ async fn async_main() -> Result<()> {
                                                     (-ratio * grid as f64 * 2.0).round() as i64
                                                 } else { 0 };
 
-                                                // 5. FINAL PRICES
-                                                let bias = risk.bias_offset.load(Ordering::Acquire);
+                                                // 5. FINAL PRICES (with AI Safety Fuse)
+                                                let raw_bias = risk.bias_offset.load(Ordering::Acquire);
+                                                let ai_hb = eng.ai_heartbeat_ms.load(Ordering::Acquire);
+                                                let now_ms = std::time::SystemTime::now()
+                                                    .duration_since(std::time::UNIX_EPOCH).unwrap_or_default()
+                                                    .as_millis() as u64;
+                                                // If AI heartbeat is >30s stale, zero bias (safety fuse)
+                                                let bias = if ai_hb > 0 && now_ms.saturating_sub(ai_hb) > 30_000 {
+                                                    0 // AI is dead, play safe
+                                                } else {
+                                                    raw_bias
+                                                };
                                                 let final_bias = bias + inv_skew;
                                                 let buy_i = (micro_i - grid + final_bias).max(0);
                                                 let sell_i = (micro_i + grid + final_bias).max(0);

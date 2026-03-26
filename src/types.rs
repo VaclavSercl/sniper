@@ -71,6 +71,8 @@ pub struct EngineState {
 
     // --- AI MANAGER (v7.0) ---
     pub current_ai_bias: AtomicI64,     // AI predicted bias × PRICE_SCALE
+    pub ai_heartbeat_ms: AtomicU64,     // epoch millis of last AI write (v8.0 safety fuse)
+    pub ai_alpha_usd: AtomicI64,        // Cumulative execution alpha from AI bias × PRICE_SCALE
 }
 
 impl Default for OrderBookLevel {
@@ -115,6 +117,8 @@ impl Default for EngineState {
             last_sell_price: AtomicI64::new(0),
             average_entry_price: AtomicI64::new(0),
             current_ai_bias: AtomicI64::new(0),
+            ai_heartbeat_ms: AtomicU64::new(0),
+            ai_alpha_usd: AtomicI64::new(0),
         }
     }
 }
