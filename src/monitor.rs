@@ -76,11 +76,14 @@ fn main() -> anyhow::Result<()> {
         let cur_usd = engine.current_order_usd.load(Ordering::Acquire) as f64 / scale;
         let obi_c = if obi > 0.1 { g } else if obi < -0.1 { r } else { d };
 
+        let ai_bias = engine.current_ai_bias.load(Ordering::Acquire) as f64 / scale;
+        let ai_c = if ai_bias > 0.0 { g } else if ai_bias < 0.0 { r } else { d };
+
         println!(" {d}│{x} {m}Micro-Price: ${x} {w}{:<14.2}{x} {d}│  │{x} {c}Dyn Grid:   ${x} {w}{:<10.2}{x}     {d}│{x}", micro_p, dyn_grid);
         println!(" {d}│{x} {d}Mid-Price:   ${x} {w}{:<14.2}{x} {d}│  │{x} {m}Inv Skew:   ${x} {skew_c}{:<+10.2}{x}     {d}│{x}", mid, skew);
         println!(" {d}│{x} {g}Best Bid:    ${x} {w}{:<14.2}{x} {d}│  │{x} {obi_c}L2 OBI:      {x} {obi_c}{:<+10.3}{x}     {d}│{x}", best_bid, obi);
         println!(" {d}│{x} {y}Spread:      ${x} {w}{:<14.2}{x} {d}│  │{x} {c}Order:    $ {x} {w}{:<10.2}{x}     {d}│{x}", spread, cur_usd);
-        println!(" {d}│{x}                                {d}│  │{x} {pnl_c}PnL:        ${x} {pnl_c}{:<+10.2}{x}     {d}│{x}", pnl);
+        println!(" {d}│{x}                                {d}│  │{x} {ai_c}AI Bias:  $ {x} {ai_c}{:<+10.2}{x}     {d}│{x}", ai_bias);
         println!(" {d}└────────────────────────────────┘  └──────────────────────────────┘{x}");
         println!();
         let buy_id = engine.active_buy_id.load(Ordering::Acquire);

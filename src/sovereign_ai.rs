@@ -1,84 +1,117 @@
 use std::time::Duration;
-use std::fs::{OpenOptions, self};
+use std::fs::OpenOptions;
 use std::sync::atomic::Ordering;
-use std::process::Command;
 use memmap2::MmapMut;
-use anyhow::{Result, Context};
-use serde_json::{Value, json};
+use anyhow::Result;
+use serde_json::json;
 
-use beroun_types::{EngineState, RiskState, ENGINE_STATE_PATH, RISK_STATE_PATH, PRICE_SCALE_I};
+use beroun_types::{EngineState, RiskState, ENGINE_STATE_PATH, RISK_STATE_PATH, PRICE_SCALE};
 
-fn init_mmap_ptr<T: Default>(path: &str) -> Result<MmapMut> {
+// ── AI INFERENCE (LM Studio v0.4.7 on localhost:1234) ──
+
+async fn fetch_ai_bias(client: &reqwest::Client, obi: f64, spread: f64, vol: f64, pos: f64) -> Result<i64> {
+    let prompt = format!(
+        "Market: OBI={:.3}, Spread={:.2}, Grid={:.2}, Pos={:.5}. Predict price direction bias in USD (-200 to 200). RETURN ONLY THE NUMBER.",
+        obi, spread, vol, pos
+    );
+
+    let res = client.post("http://localhost:1234/v1/chat/completions")
+        .json(&json!({
+            "model": "phi-3.5-mini-instruct",
+            "messages": [
+                {"role": "system", "content": "You are an HFT alphagen. Output only a signed integer. No text."},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.0,
+            "max_tokens": 8
+        }))
+        .send()
+        .await?;
+
+    let json: serde_json::Value = res.json().await?;
+    let content = json["choices"][0]["message"]["content"].as_str().unwrap_or("0");
+    let cleaned: String = content.trim().chars().filter(|c| c.is_ascii_digit() || *c == '-').collect();
+    Ok(cleaned.parse::<i64>().unwrap_or(0))
+}
+
+fn init_mmap<T: Default>(path: &str) -> Result<MmapMut> {
     let file = OpenOptions::new().read(true).write(true).create(true).open(path)?;
     file.set_len(std::mem::size_of::<T>() as u64)?;
     Ok(unsafe { MmapMut::map_mut(&file)? })
 }
 
-async fn check_local_ai() -> Option<String> {
-    let client = reqwest::Client::builder().timeout(Duration::from_secs(2)).build().ok()?;
-    let res = client.get("http://localhost:11434/api/tags").send().await.ok()?;
-    if res.status().is_success() {
-        let json: Value = res.json().await.ok()?;
-        json["models"][0]["name"].as_str().map(|s| s.to_string())
-    } else {
-        None
-    }
-}
-
-async fn call_local_ai_filter(model: &str, price: f64, pos: f64) -> Result<String> {
-    let client = reqwest::Client::new();
-    let prompt = format!("You are an HFT Risk Assistant. Market Price: {}, Position: {}. Detect if there is extreme volatility or anomalous price action. Return JSON: {{\"risk_level\": \"LOW|HIGH\", \"reasoning\": \"...\"}}", price, pos);
-    
-    let res = client.post("http://localhost:11434/api/generate")
-        .json(&json!({
-            "model": model,
-            "prompt": prompt,
-            "stream": false,
-            "format": "json"
-        }))
-        .send()
-        .await?;
-
-    let json: Value = res.json().await?;
-    Ok(json["response"].as_str().unwrap_or("{}").to_string())
-}
-
 #[tokio::main]
 async fn main() -> Result<()> {
-    println!("--- BEROUN SNIPER SOVEREIGN AI (HYBRID EDITION) ---");
-    let e_mmap = init_mmap_ptr::<EngineState>(&ENGINE_STATE_PATH)?;
-    let r_mmap = init_mmap_ptr::<RiskState>(&RISK_STATE_PATH)?;
+    let e_mmap = init_mmap::<EngineState>(&ENGINE_STATE_PATH)?;
+    let r_mmap = init_mmap::<RiskState>(&RISK_STATE_PATH)?;
 
     let engine = unsafe { &*(e_mmap.as_ptr() as *const EngineState) };
     let risk = unsafe { &*(r_mmap.as_ptr() as *const RiskState) };
 
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_millis(500))
+        .build()?;
+
+    println!("🐺 BEROUN SOVEREIGN AI v7.0 — LM Studio Sidecar");
+    println!("   Model: phi-3.5-mini-instruct (localhost:1234)");
+    println!("   Cycle: 5s | GPU: GTX 1060 6GB");
+    println!("─────────────────────────────────────────────────");
+
+    let mut consecutive_errors: u32 = 0;
+    let mut last_bias: i64 = 0;
+
     loop {
-        let pos = engine.net_position.load(Ordering::Acquire) as f64 / PRICE_SCALE_I as f64;
-        let price = engine.best_bid.load(Ordering::Acquire) as f64 / PRICE_SCALE_I as f64;
-        
-        let mut local_risk_intel = String::from("No local data");
-        if let Some(local_model) = check_local_ai().await {
-            if let Ok(intel) = call_local_ai_filter(&local_model, price, pos).await {
-                local_risk_intel = intel;
+        // Adaptive sleep: 5s normal, extend on errors
+        let sleep_ms = if consecutive_errors > 3 { 10_000 } else { 5_000 };
+        tokio::time::sleep(Duration::from_millis(sleep_ms)).await;
+
+        if risk.paused.load(Ordering::Acquire) != 0 { continue; }
+
+        // Read market state from mmap
+        let scale = PRICE_SCALE;
+        let bb = engine.best_bid.load(Ordering::Acquire) as f64 / scale;
+        let ba = engine.best_ask.load(Ordering::Acquire) as f64 / scale;
+        if bb == 0.0 || ba == 0.0 { continue; }
+
+        let obi = engine.l2_imbalance.load(Ordering::Acquire) as f64 / scale;
+        let grid = risk.grid_step.load(Ordering::Acquire) as f64 / scale;
+        let pos = engine.net_position.load(Ordering::Acquire) as f64 / scale;
+        let spread = ba - bb;
+
+        // AI inference (GPU, ~50-200ms)
+        match fetch_ai_bias(&client, obi, spread, grid, pos).await {
+            Ok(raw_bias) => {
+                consecutive_errors = 0;
+
+                // Safety clamp in USD: max ±2× grid (grid is already in USD)
+                let max_bias_usd = (grid * 2.0) as i64;
+                let clamped_usd = raw_bias.clamp(-max_bias_usd, max_bias_usd);
+
+                // Scale to PRICE_SCALE for mmap (single scale, not double)
+                let bias_scaled = (clamped_usd as f64 * scale) as i64;
+
+                // Only update if bias changed
+                if clamped_usd != last_bias {
+                    risk.bias_offset.store(bias_scaled, Ordering::SeqCst);
+                    engine.current_ai_bias.store(bias_scaled, Ordering::SeqCst);
+                    last_bias = clamped_usd;
+                }
+
+                println!("AI │ OBI={:+.3} │ Spread=${:.2} │ Pos={:+.5} │ Raw={:+} │ Bias=${:+} │ Grid=${:.2}",
+                    obi, spread, pos, raw_bias, clamped_usd, grid);
+            }
+            Err(e) => {
+                consecutive_errors += 1;
+                eprintln!("⚠️  AI error (#{consecutive_errors}): {e}");
+
+                // After 5 consecutive errors, zero out bias for safety
+                if consecutive_errors >= 5 {
+                    risk.bias_offset.store(0, Ordering::SeqCst);
+                    engine.current_ai_bias.store(0, Ordering::SeqCst);
+                    last_bias = 0;
+                    eprintln!("🛑 AI bias zeroed (safety fallback)");
+                }
             }
         }
-
-        let mut final_bias = 0.0;
-        if pos > 0.001 { final_bias = -1.5; }
-        else if pos < -0.001 { final_bias = 1.5; }
-
-        let bias_scaled = (final_bias * PRICE_SCALE_I as f64) as i64;
-        risk.bias_offset.store(bias_scaled, Ordering::Release);
-
-        let lat = engine.latency_ns.load(Ordering::Acquire);
-        let pnl = engine.realized_pnl.load(Ordering::Acquire) as f64 / PRICE_SCALE_I as f64;
-
-        if price > 0.0 {
-            println!("SOVEREIGN AI | Price: {:.2} | Pos: {:.4} | Bias: {:.1} | Local AI: {} | PnL: {:.2}", 
-                price, pos, final_bias, local_risk_intel, pnl
-            );
-        }
-
-        tokio::time::sleep(Duration::from_millis(1000)).await;
     }
 }

@@ -68,6 +68,9 @@ pub struct EngineState {
 
     // --- PnL TRACKER (v7.0) ---
     pub average_entry_price: AtomicI64, // WAP of current position × PRICE_SCALE
+
+    // --- AI MANAGER (v7.0) ---
+    pub current_ai_bias: AtomicI64,     // AI predicted bias × PRICE_SCALE
 }
 
 impl Default for OrderBookLevel {
@@ -111,6 +114,7 @@ impl Default for EngineState {
             last_buy_price: AtomicI64::new(0),
             last_sell_price: AtomicI64::new(0),
             average_entry_price: AtomicI64::new(0),
+            current_ai_bias: AtomicI64::new(0),
         }
     }
 }
