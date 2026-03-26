@@ -57,6 +57,13 @@ impl AsyncNotifier {
                             }
                             buys = 0; sells = 0; volume = 0.0;
                         }
+                        // v7.1: Hourly state.json snapshot for Oracle
+                        tokio::task::spawn_blocking(|| {
+                            let _ = std::process::Command::new("/home/wwwenda/hft-sniper/target/release/beroun-config")
+                                .arg("export-json")
+                                .stdout(std::fs::File::create("/home/wwwenda/hft-sniper/runtime/state.json").unwrap_or_else(|_| std::fs::File::create("/dev/null").unwrap()))
+                                .spawn();
+                        });
                     }
                     Some(event) = rx.recv() => {
                         match event {

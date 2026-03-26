@@ -45566,3 +45566,748 @@ SOVEREIGN AI | Price: 69007.00 | Pos: 0.0005 | Bias: 0.0 | Local AI: No local da
 {"timestamp":"2026-03-26T17:24:22.449355Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344420,"side":"sell"}}
 {"timestamp":"2026-03-26T17:24:22.674894Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1140524931}}
 SOVEREIGN AI | Price: 69007.00 | Pos: 0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 69007.00 | Pos: 0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:24.920725Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344419,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:24.920828Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344420,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:24.920864Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214332,"side":"buy"}}
+{"timestamp":"2026-03-26T17:24:24.920895Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214333,"side":"sell"}}
+{"timestamp":"2026-03-26T17:24:25.235006Z","level":"INFO","fields":{"event":"checksum_ok","cs":219783227}}
+{"timestamp":"2026-03-26T17:24:25.476135Z","level":"INFO","fields":{"event":"sniper_fire","bid":6901000000000,"ask":6901100000000,"micro":6901041860465,"buy":69004.16411245,"sell":69014.61411245,"obi":"0.008","order_usd":50.0,"inv_skew":-102949220,"position":49258,"dynamic_grid":522500000}}
+{"timestamp":"2026-03-26T17:24:25.505226Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:24:25.505273Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:24:25.505296Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:24:25.505323Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:24:25.505348Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214332,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:25.505356Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214333,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:25.505370Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344421,"side":"buy"}}
+{"timestamp":"2026-03-26T17:24:25.505379Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344422,"side":"sell"}}
+SOVEREIGN AI | Price: 69010.00 | Pos: 0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 69009.00 | Pos: 0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:26.677655Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00072,"price":69004.0}}
+{"timestamp":"2026-03-26T17:24:26.677739Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344421,"status":"EXECUTED @ 69004.0(0.00072)"}}
+{"timestamp":"2026-03-26T17:24:26.677786Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00072,"price":69004.0,"buys":268,"sells":263}}
+SOVEREIGN AI | Price: 69003.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:27.862353Z","level":"INFO","fields":{"event":"checksum_ok","cs":-335798641}}
+{"timestamp":"2026-03-26T17:24:28.421133Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344422,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:28.421387Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214334,"side":"buy"}}
+{"timestamp":"2026-03-26T17:24:28.422033Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214335,"side":"sell"}}
+{"timestamp":"2026-03-26T17:24:28.465932Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00109,"price":69006.0}}
+{"timestamp":"2026-03-26T17:24:28.465991Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214334,"status":"EXECUTED @ 69006.0(0.00109)"}}
+{"timestamp":"2026-03-26T17:24:28.466023Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00109,"price":69006.0,"buys":269,"sells":263}}
+SOVEREIGN AI | Price: 69009.00 | Pos: 0.0023 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:28.713254Z","level":"INFO","fields":{"event":"sniper_fire","bid":6900300000000,"ask":6901000000000,"micro":6900300873941,"buy":68991.47134721,"sell":69001.92134721,"obi":"-0.363","order_usd":75.0,"inv_skew":-481239220,"position":230258,"dynamic_grid":522500000}}
+{"timestamp":"2026-03-26T17:24:28.735345Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:24:28.735416Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00109 BTCUSD at 68991.47"}}
+{"timestamp":"2026-03-26T17:24:28.735453Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:24:28.735501Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:24:28.735540Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214335,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:28.735866Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344423,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:24:29.618295Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00072,"price":68994.0}}
+{"timestamp":"2026-03-26T17:24:29.618341Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214297,"status":"EXECUTED @ 68994.0(0.00072)"}}
+{"timestamp":"2026-03-26T17:24:29.618355Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00072,"price":68994.0,"buys":270,"sells":263}}
+{"timestamp":"2026-03-26T17:24:29.624308Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00051,"price":68992.0}}
+{"timestamp":"2026-03-26T17:24:29.624346Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214303,"status":"EXECUTED @ 68992.0(0.00051)"}}
+{"timestamp":"2026-03-26T17:24:29.624357Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00051,"price":68992.0,"buys":271,"sells":263}}
+SOVEREIGN AI | Price: 69003.00 | Pos: 0.0023 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:30.566390Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1289201917}}
+SOVEREIGN AI | Price: 68988.00 | Pos: 0.0035 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:31.533031Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214336,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68990.00 | Pos: 0.0035 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:31.970183Z","level":"INFO","fields":{"event":"sniper_fire","bid":6899000000000,"ask":6899900000000,"micro":6899717075438,"buy":68981.25288818,"sell":68993.20288818,"obi":"-0.025","order_usd":50.0,"inv_skew":-844286620,"position":353258,"dynamic_grid":597500000}}
+{"timestamp":"2026-03-26T17:24:31.998351Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 0 order cancellations."}}
+{"timestamp":"2026-03-26T17:24:31.998424Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00072 BTCUSD at 68981.25"}}
+{"timestamp":"2026-03-26T17:24:31.998465Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:24:31.998509Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:24:31.998548Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344424,"side":"sell"}}
+SOVEREIGN AI | Price: 68988.00 | Pos: 0.0035 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:33.119581Z","level":"INFO","fields":{"event":"checksum_ok","cs":-630635618}}
+SOVEREIGN AI | Price: 68982.00 | Pos: 0.0035 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:34.511099Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344424,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:34.511186Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214337,"side":"buy"}}
+{"timestamp":"2026-03-26T17:24:34.511249Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214338,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68983.00 | Pos: 0.0035 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:35.068811Z","level":"INFO","fields":{"event":"sniper_fire","bid":6898300000000,"ask":6899300000000,"micro":6899098993565,"buy":68973.08131805,"sell":68986.68131805,"obi":"-0.053","order_usd":50.0,"inv_skew":-960861760,"position":353258,"dynamic_grid":680000000}}
+{"timestamp":"2026-03-26T17:24:35.091437Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:24:35.091536Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00072 BTCUSD at 68973.08"}}
+{"timestamp":"2026-03-26T17:24:35.091572Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:24:35.091625Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:24:35.091693Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214337,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:35.091755Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344425,"side":"sell"}}
+{"timestamp":"2026-03-26T17:24:35.148069Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00072,"price":68987.0}}
+{"timestamp":"2026-03-26T17:24:35.148152Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00072,"price":68987.0,"buys":271,"sells":264}}
+{"timestamp":"2026-03-26T17:24:35.148264Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344425,"status":"EXECUTED @ 68987.0(-0.00072)"}}
+{"timestamp":"2026-03-26T17:24:35.646049Z","level":"INFO","fields":{"event":"checksum_ok","cs":1945025834}}
+SOVEREIGN AI | Price: 68984.00 | Pos: 0.0028 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68985.00 | Pos: 0.0028 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:37.586145Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214339,"side":"buy"}}
+{"timestamp":"2026-03-26T17:24:37.586193Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214340,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68987.00 | Pos: 0.0028 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:38.229787Z","level":"INFO","fields":{"event":"sniper_fire","bid":6898900000000,"ask":6900300000000,"micro":6900299559624,"buy":68987.04537864,"sell":69000.64537864,"obi":"0.155","order_usd":50.0,"inv_skew":-765021760,"position":281258,"dynamic_grid":680000000}}
+{"timestamp":"2026-03-26T17:24:38.230028Z","level":"INFO","fields":{"event":"checksum_ok","cs":1526792819}}
+{"timestamp":"2026-03-26T17:24:38.252166Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:24:38.252270Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"ERROR","text":"Invalid order: not enough exchange balance for 0.00072 BTCUSD at 68987.05"}}
+{"timestamp":"2026-03-26T17:24:38.252313Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:24:38.252364Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:24:38.252429Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214339,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:38.252497Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344426,"side":"sell"}}
+{"timestamp":"2026-03-26T17:24:38.266934Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00072,"price":69001.0}}
+{"timestamp":"2026-03-26T17:24:38.267030Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344426,"status":"EXECUTED @ 69001.0(-0.00072)"}}
+{"timestamp":"2026-03-26T17:24:38.267075Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00072,"price":69001.0,"buys":271,"sells":265}}
+SOVEREIGN AI | Price: 68995.00 | Pos: 0.0021 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 69002.00 | Pos: 0.0021 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:40.654259Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214341,"side":"buy"}}
+{"timestamp":"2026-03-26T17:24:40.654295Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214342,"side":"sell"}}
+{"timestamp":"2026-03-26T17:24:40.851245Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1181119047}}
+SOVEREIGN AI | Price: 69002.00 | Pos: 0.0021 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:41.294847Z","level":"INFO","fields":{"event":"sniper_fire","bid":6900200000000,"ask":6900800000000,"micro":6900799752639,"buy":68994.00570879,"sell":69007.60570879,"obi":"0.282","order_usd":75.0,"inv_skew":-569181760,"position":209258,"dynamic_grid":680000000}}
+{"timestamp":"2026-03-26T17:24:41.316955Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:24:41.316989Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:24:41.317012Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:24:41.317040Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:24:41.317057Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214341,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:41.317071Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214342,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:41.317234Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344427,"side":"buy"}}
+{"timestamp":"2026-03-26T17:24:41.317278Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344428,"side":"sell"}}
+SOVEREIGN AI | Price: 69002.00 | Pos: 0.0021 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:42.643740Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00109,"price":69008.0}}
+{"timestamp":"2026-03-26T17:24:42.643773Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00109,"price":69008.0,"buys":271,"sells":266}}
+{"timestamp":"2026-03-26T17:24:42.644109Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344428,"status":"EXECUTED @ 69008.0(-0.00109)"}}
+SOVEREIGN AI | Price: 69003.00 | Pos: 0.0010 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:43.429750Z","level":"INFO","fields":{"event":"checksum_ok","cs":490552325}}
+{"timestamp":"2026-03-26T17:24:43.658650Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344427,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:43.658676Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214343,"side":"buy"}}
+{"timestamp":"2026-03-26T17:24:43.658694Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214344,"side":"sell"}}
+SOVEREIGN AI | Price: 69005.00 | Pos: 0.0010 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:44.540597Z","level":"INFO","fields":{"event":"sniper_fire","bid":6900500000000,"ask":6901000000000,"micro":6900632352941,"buy":68995.61174401,"sell":69008.76174401,"obi":"0.019","order_usd":50.0,"inv_skew":-263678540,"position":100258,"dynamic_grid":657500000}}
+{"timestamp":"2026-03-26T17:24:44.562813Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:24:44.562841Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:24:44.562864Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:24:44.562880Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:24:44.562891Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214343,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:44.562913Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214344,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:44.562930Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344429,"side":"buy"}}
+{"timestamp":"2026-03-26T17:24:44.562939Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344430,"side":"sell"}}
+SOVEREIGN AI | Price: 69003.00 | Pos: 0.0010 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 69005.00 | Pos: 0.0010 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:46.698758Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344429,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:46.698783Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344430,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:46.699582Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214345,"side":"buy"}}
+{"timestamp":"2026-03-26T17:24:46.705000Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214346,"side":"sell"}}
+SOVEREIGN AI | Price: 69000.00 | Pos: 0.0010 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:47.638272Z","level":"INFO","fields":{"event":"sniper_fire","bid":6900200000000,"ask":6900800000000,"micro":6900204378926,"buy":68991.96246826,"sell":69004.21246826,"obi":"-0.213","order_usd":75.0,"inv_skew":-245632100,"position":100258,"dynamic_grid":612500000}}
+{"timestamp":"2026-03-26T17:24:47.664299Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:24:47.664329Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:24:47.664352Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:24:47.664368Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:24:47.664403Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214345,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:47.664420Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214346,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:47.664439Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344431,"side":"buy"}}
+{"timestamp":"2026-03-26T17:24:47.664462Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344432,"side":"sell"}}
+SOVEREIGN AI | Price: 69000.00 | Pos: 0.0010 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:48.605419Z","level":"INFO","fields":{"event":"checksum_ok","cs":54149368}}
+SOVEREIGN AI | Price: 69000.00 | Pos: 0.0010 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:49.978853Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344431,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:49.978891Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344432,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:49.978901Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214347,"side":"buy"}}
+{"timestamp":"2026-03-26T17:24:49.979941Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214348,"side":"sell"}}
+SOVEREIGN AI | Price: 69001.00 | Pos: 0.0010 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:50.708288Z","level":"INFO","fields":{"event":"sniper_fire","bid":6900100000000,"ask":6900500000000,"micro":6900103731608,"buy":68991.16614988,"sell":69003.11614988,"obi":"0.008","order_usd":50.0,"inv_skew":-239616620,"position":100258,"dynamic_grid":597500000}}
+{"timestamp":"2026-03-26T17:24:50.730585Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:24:50.730633Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:24:50.730655Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:24:50.730671Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:24:50.736963Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214347,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:50.736994Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214348,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:50.737017Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344433,"side":"buy"}}
+{"timestamp":"2026-03-26T17:24:50.737025Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344434,"side":"sell"}}
+{"timestamp":"2026-03-26T17:24:51.132561Z","level":"INFO","fields":{"event":"checksum_ok","cs":66078334}}
+SOVEREIGN AI | Price: 69000.00 | Pos: 0.0010 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:51.552843Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00072,"price":69004.0}}
+{"timestamp":"2026-03-26T17:24:51.552891Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344434,"status":"EXECUTED @ 69004.0(-0.00072)"}}
+{"timestamp":"2026-03-26T17:24:51.552906Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00072,"price":69004.0,"buys":271,"sells":267}}
+SOVEREIGN AI | Price: 69001.00 | Pos: 0.0003 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:53.081064Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344433,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:53.081686Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214349,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:24:53.081795Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214350,"side":"sell"}}
+SOVEREIGN AI | Price: 69000.00 | Pos: 0.0003 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:53.685811Z","level":"INFO","fields":{"event":"checksum_ok","cs":310714021}}
+{"timestamp":"2026-03-26T17:24:54.052590Z","level":"INFO","fields":{"event":"sniper_fire","bid":6900100000000,"ask":6900800000000,"micro":6900661071703,"buy":69000.54469263,"sell":69011.44469263,"obi":"-0.018","order_usd":50.0,"inv_skew":-61602440,"position":28258,"dynamic_grid":545000000}}
+{"timestamp":"2026-03-26T17:24:54.075354Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:24:54.075426Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:24:54.075460Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:24:54.075511Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:24:54.075588Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214350,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:54.076050Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344435,"side":"buy"}}
+{"timestamp":"2026-03-26T17:24:54.076121Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344436,"side":"sell"}}
+SOVEREIGN AI | Price: 69001.00 | Pos: 0.0003 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:54.863430Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00072,"price":69000.0}}
+{"timestamp":"2026-03-26T17:24:54.863509Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344435,"status":"EXECUTED @ 69000.0(0.00072)"}}
+{"timestamp":"2026-03-26T17:24:54.863563Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00072,"price":69000.0,"buys":272,"sells":267}}
+SOVEREIGN AI | Price: 68995.00 | Pos: 0.0010 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:56.104004Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344436,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:56.104342Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214351,"side":"buy"}}
+{"timestamp":"2026-03-26T17:24:56.104809Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214352,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 69001.00 | Pos: 0.0010 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:56.427382Z","level":"INFO","fields":{"event":"checksum_ok","cs":-686042740}}
+{"timestamp":"2026-03-26T17:24:57.211546Z","level":"INFO","fields":{"event":"sniper_fire","bid":6899500000000,"ask":6900200000000,"micro":6899500514252,"buy":68986.18475032,"sell":68996.63475032,"obi":"-0.082","order_usd":50.0,"inv_skew":-209539220,"position":100258,"dynamic_grid":522500000}}
+{"timestamp":"2026-03-26T17:24:57.233742Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:24:57.233814Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:24:57.233849Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:24:57.233899Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:24:57.233973Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214351,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:57.234076Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344437,"side":"buy"}}
+{"timestamp":"2026-03-26T17:24:57.234142Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344438,"side":"sell"}}
+SOVEREIGN AI | Price: 68995.00 | Pos: 0.0010 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68996.00 | Pos: 0.0010 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:24:58.899241Z","level":"INFO","fields":{"event":"checksum_ok","cs":2127245873}}
+{"timestamp":"2026-03-26T17:24:58.985770Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00072,"price":68986.0}}
+{"timestamp":"2026-03-26T17:24:58.985848Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344437,"status":"EXECUTED @ 68986.0(0.00072)"}}
+{"timestamp":"2026-03-26T17:24:58.985905Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00072,"price":68986.0,"buys":273,"sells":267}}
+{"timestamp":"2026-03-26T17:24:59.158850Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344438,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:24:59.159859Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214353,"side":"buy"}}
+{"timestamp":"2026-03-26T17:24:59.160953Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214354,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68974.00 | Pos: 0.0017 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:00.374274Z","level":"INFO","fields":{"event":"sniper_fire","bid":6897400000000,"ask":6898700000000,"micro":6898144947577,"buy":68969.85750957,"sell":68981.80750957,"obi":"-0.068","order_usd":50.0,"inv_skew":-411696620,"position":172258,"dynamic_grid":597500000}}
+{"timestamp":"2026-03-26T17:25:00.398083Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:25:00.398154Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:00.398188Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:00.398271Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:25:00.398320Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214353,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:00.398351Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344439,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:00.398384Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344440,"side":"sell"}}
+SOVEREIGN AI | Price: 68974.00 | Pos: 0.0017 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:01.449734Z","level":"INFO","fields":{"event":"checksum_ok","cs":2136799585}}
+SOVEREIGN AI | Price: 68975.00 | Pos: 0.0017 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:02.271138Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344439,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:02.271388Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344440,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:02.271466Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214355,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:02.271727Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214356,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68977.00 | Pos: 0.0017 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68977.00 | Pos: 0.0017 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:04.078335Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1873986724}}
+{"timestamp":"2026-03-26T17:25:04.493787Z","level":"INFO","fields":{"event":"sniper_fire","bid":6897700000000,"ask":6898400000000,"micro":6897745172616,"buy":68964.97301816,"sell":68977.97301816,"obi":"0.018","order_usd":50.0,"inv_skew":-447870800,"position":172258,"dynamic_grid":650000000}}
+{"timestamp":"2026-03-26T17:25:04.515853Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:25:04.515909Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:04.515919Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:04.515936Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:25:04.515961Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214355,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:04.516113Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344441,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:04.516145Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344442,"side":"sell"}}
+SOVEREIGN AI | Price: 68977.00 | Pos: 0.0017 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:05.303499Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344441,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:05.303587Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344442,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:05.303657Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214357,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:05.303724Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214358,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68976.00 | Pos: 0.0017 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:06.621548Z","level":"INFO","fields":{"event":"checksum_ok","cs":408853735}}
+SOVEREIGN AI | Price: 68976.00 | Pos: 0.0017 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:07.646971Z","level":"INFO","fields":{"event":"sniper_fire","bid":6897100000000,"ask":6898200000000,"micro":6897101039508,"buy":68958.15165488,"sell":68971.60165488,"obi":"-0.078","order_usd":50.0,"inv_skew":-463374020,"position":172258,"dynamic_grid":672500000}}
+{"timestamp":"2026-03-26T17:25:07.669000Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:25:07.669031Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:07.669043Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:07.669062Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:25:07.669086Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214357,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:07.669097Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344443,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:07.669116Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344444,"side":"sell"}}
+SOVEREIGN AI | Price: 68971.00 | Pos: 0.0017 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:08.312350Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344443,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:08.312637Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344444,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:08.313153Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214359,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:08.313459Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214360,"side":"sell"}}
+SOVEREIGN AI | Price: 68967.00 | Pos: 0.0017 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:09.406836Z","level":"INFO","fields":{"event":"checksum_ok","cs":1784825568}}
+SOVEREIGN AI | Price: 68967.00 | Pos: 0.0017 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:10.653088Z","level":"INFO","fields":{"event":"sniper_fire","bid":6896800000000,"ask":6897400000000,"micro":6896926251770,"buy":68954.6302939,"sell":68970.1802939,"obi":"-0.298","order_usd":75.0,"inv_skew":-535722380,"position":172258,"dynamic_grid":777500000}}
+{"timestamp":"2026-03-26T17:25:10.676601Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:25:10.676676Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:25:10.676710Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:25:10.676764Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:25:10.676839Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214359,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:10.676878Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214360,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:10.676906Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344445,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:10.676935Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344446,"side":"sell"}}
+SOVEREIGN AI | Price: 68968.00 | Pos: 0.0017 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:11.689053Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344445,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:11.689104Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344446,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:11.690071Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214361,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:11.690090Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214362,"side":"sell"}}
+SOVEREIGN AI | Price: 68967.00 | Pos: 0.0017 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68967.00 | Pos: 0.0017 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:13.719551Z","level":"INFO","fields":{"event":"sniper_fire","bid":6896700000000,"ask":6897100000000,"micro":6897080437436,"buy":68956.04547316,"sell":68971.74547316,"obi":"-0.301","order_usd":35.0,"inv_skew":-540890120,"position":172258,"dynamic_grid":785000000}}
+{"timestamp":"2026-03-26T17:25:13.750918Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:25:13.751001Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:25:13.751037Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:25:13.751118Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:25:13.751161Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214361,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:13.751198Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214362,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:13.751251Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344447,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:13.751279Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344448,"side":"sell"}}
+SOVEREIGN AI | Price: 68967.00 | Pos: 0.0017 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:13.957280Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00051,"price":68972.0}}
+{"timestamp":"2026-03-26T17:25:13.957339Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344448,"status":"EXECUTED @ 68972.0(-0.00051)"}}
+{"timestamp":"2026-03-26T17:25:13.957376Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00051,"price":68972.0,"buys":273,"sells":268}}
+{"timestamp":"2026-03-26T17:25:14.563540Z","level":"INFO","fields":{"event":"checksum_ok","cs":-161445618}}
+{"timestamp":"2026-03-26T17:25:14.780678Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344447,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:14.780886Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214363,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:14.781156Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214364,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68968.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68967.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:16.874769Z","level":"INFO","fields":{"event":"sniper_fire","bid":6896700000000,"ask":6897700000000,"micro":6897273933057,"buy":68960.36147117,"sell":68975.01147117,"obi":"-0.012","order_usd":50.0,"inv_skew":-355285940,"position":121258,"dynamic_grid":732500000}}
+{"timestamp":"2026-03-26T17:25:16.897924Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:25:16.897996Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:16.898030Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:16.898080Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:25:16.898150Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214363,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:16.898239Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344449,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:16.898300Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344450,"side":"sell"}}
+SOVEREIGN AI | Price: 68967.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:17.097771Z","level":"INFO","fields":{"event":"checksum_ok","cs":1901304231}}
+{"timestamp":"2026-03-26T17:25:17.932502Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344449,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:17.932618Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344450,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:17.932709Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214365,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:17.933007Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214366,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68968.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68968.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:19.627122Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1982712680}}
+SOVEREIGN AI | Price: 68969.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:20.258491Z","level":"INFO","fields":{"event":"sniper_fire","bid":6896900000000,"ask":6897800000000,"micro":6897639075164,"buy":68964.01289224,"sell":68978.66289224,"obi":"0.019","order_usd":50.0,"inv_skew":-355285940,"position":121258,"dynamic_grid":732500000}}
+{"timestamp":"2026-03-26T17:25:20.282127Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:25:20.282198Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:20.282267Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:20.282318Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:25:20.282391Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214365,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:20.282457Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344451,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:20.282491Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344452,"side":"sell"}}
+SOVEREIGN AI | Price: 68969.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:21.272766Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344451,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:21.272877Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344452,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:21.272939Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214367,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:21.272997Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214368,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68969.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:22.125521Z","level":"INFO","fields":{"event":"checksum_ok","cs":534196102}}
+SOVEREIGN AI | Price: 68969.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:23.345131Z","level":"INFO","fields":{"event":"sniper_fire","bid":6896900000000,"ask":6897500000000,"micro":6897387279720,"buy":68961.4949378,"sell":68976.1449378,"obi":"0.240","order_usd":75.0,"inv_skew":-355285940,"position":121258,"dynamic_grid":732500000}}
+{"timestamp":"2026-03-26T17:25:23.372267Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:25:23.372296Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:25:23.372306Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:25:23.372321Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:25:23.372345Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214367,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:23.372363Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344453,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:23.372371Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344454,"side":"sell"}}
+SOVEREIGN AI | Price: 68969.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:24.454955Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344453,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:24.455034Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344454,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:24.455507Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214369,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:24.455671Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214370,"side":"sell"}}
+{"timestamp":"2026-03-26T17:25:24.630508Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1388753068}}
+SOVEREIGN AI | Price: 68972.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68972.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:26.446894Z","level":"INFO","fields":{"event":"sniper_fire","bid":6897200000000,"ask":6897600000000,"micro":6897203922131,"buy":68960.99789071,"sell":68973.84789071,"obi":"-0.049","order_usd":50.0,"inv_skew":-311633060,"position":121258,"dynamic_grid":642500000}}
+{"timestamp":"2026-03-26T17:25:26.472482Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:25:26.472556Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:26.472590Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:26.472646Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:25:26.472685Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214369,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:26.472714Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214370,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:26.472746Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344455,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:26.472771Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344456,"side":"sell"}}
+{"timestamp":"2026-03-26T17:25:27.234767Z","level":"INFO","fields":{"event":"checksum_ok","cs":874605234}}
+SOVEREIGN AI | Price: 68972.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:27.657378Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344455,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:27.657627Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344456,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:27.657930Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214371,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:27.658524Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214372,"side":"sell"}}
+SOVEREIGN AI | Price: 68973.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68973.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:29.486756Z","level":"INFO","fields":{"event":"sniper_fire","bid":6897300000000,"ask":6897600000000,"micro":6897302941598,"buy":68965.66353958,"sell":68973.56353958,"obi":"-0.072","order_usd":50.0,"inv_skew":-191587640,"position":121258,"dynamic_grid":395000000}}
+{"timestamp":"2026-03-26T17:25:29.509751Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:25:29.509792Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:29.509802Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:29.509831Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:25:29.509843Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214371,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:29.514349Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214372,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:29.514371Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344457,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:29.514380Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344458,"side":"sell"}}
+{"timestamp":"2026-03-26T17:25:29.738682Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00072,"price":68974.0}}
+{"timestamp":"2026-03-26T17:25:29.738770Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344458,"status":"EXECUTED @ 68974.0(-0.00072)"}}
+{"timestamp":"2026-03-26T17:25:29.738821Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00072,"price":68974.0,"buys":273,"sells":269}}
+{"timestamp":"2026-03-26T17:25:29.885486Z","level":"INFO","fields":{"event":"checksum_ok","cs":-728415623}}
+SOVEREIGN AI | Price: 68972.00 | Pos: 0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:30.855184Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344457,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:30.855293Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214373,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:30.855331Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214374,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68974.00 | Pos: 0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68974.00 | Pos: 0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:32.524541Z","level":"INFO","fields":{"event":"sniper_fire","bid":6897400000000,"ask":6898300000000,"micro":6898297276746,"buy":68978.42404586,"sell":68986.02404586,"obi":"0.012","order_usd":50.0,"inv_skew":-74872160,"position":49258,"dynamic_grid":380000000}}
+{"timestamp":"2026-03-26T17:25:32.524775Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1281298859}}
+{"timestamp":"2026-03-26T17:25:32.547505Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:25:32.547580Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:32.547616Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:32.547665Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:25:32.547733Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214373,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:32.547796Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344459,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:32.547825Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344460,"side":"sell"}}
+{"timestamp":"2026-03-26T17:25:33.318058Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00072,"price":68978.0}}
+{"timestamp":"2026-03-26T17:25:33.318145Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00072,"price":68978.0,"buys":274,"sells":269}}
+{"timestamp":"2026-03-26T17:25:33.318290Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344459,"status":"EXECUTED @ 68978.0(0.00072)"}}
+SOVEREIGN AI | Price: 68978.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:33.944345Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344460,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:33.946371Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214375,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:33.946472Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214376,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68974.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:35.028094Z","level":"INFO","fields":{"event":"checksum_ok","cs":1730105045}}
+SOVEREIGN AI | Price: 68977.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:35.635948Z","level":"INFO","fields":{"event":"sniper_fire","bid":6897900000000,"ask":6899200000000,"micro":6899199766887,"buy":68984.85454727,"sell":68992.45454727,"obi":"-0.136","order_usd":35.0,"inv_skew":-184312160,"position":121258,"dynamic_grid":380000000}}
+{"timestamp":"2026-03-26T17:25:35.659640Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:25:35.659710Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:25:35.659745Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:25:35.659795Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:25:35.659859Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214375,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:35.659921Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344461,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:35.661420Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344462,"side":"sell"}}
+SOVEREIGN AI | Price: 68984.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:37.121996Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344461,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:37.122091Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344462,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:37.122129Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214377,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:37.122163Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214378,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68984.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:37.635525Z","level":"INFO","fields":{"event":"checksum_ok","cs":560607662}}
+SOVEREIGN AI | Price: 68981.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:38.972836Z","level":"INFO","fields":{"event":"sniper_fire","bid":6898400000000,"ask":6899200000000,"micro":6898406034179,"buy":68975.35793659,"sell":68985.05793659,"obi":"-0.021","order_usd":50.0,"inv_skew":-235240520,"position":121258,"dynamic_grid":485000000}}
+{"timestamp":"2026-03-26T17:25:38.995068Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:25:38.995101Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:38.995111Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:38.995128Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:25:38.995150Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214377,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:38.995167Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344463,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:38.995454Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344464,"side":"sell"}}
+SOVEREIGN AI | Price: 68976.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:40.107986Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344463,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:40.108040Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344464,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:40.108853Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214379,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:40.108906Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214380,"side":"sell"}}
+{"timestamp":"2026-03-26T17:25:40.304527Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1236507209}}
+SOVEREIGN AI | Price: 68981.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68976.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:42.022368Z","level":"INFO","fields":{"event":"sniper_fire","bid":6897600000000,"ask":6898300000000,"micro":6897728985504,"buy":68968.58744984,"sell":68978.28744984,"obi":"-0.050","order_usd":50.0,"inv_skew":-235240520,"position":121258,"dynamic_grid":485000000}}
+{"timestamp":"2026-03-26T17:25:42.045316Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:25:42.045390Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:42.045425Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:42.045479Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:25:42.045519Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214379,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:42.045576Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214380,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:42.045634Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344465,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:42.045693Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344466,"side":"sell"}}
+SOVEREIGN AI | Price: 68976.00 | Pos: 0.0012 | Bias: -1.5 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:42.764079Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00072,"price":68979.0}}
+{"timestamp":"2026-03-26T17:25:42.764163Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344466,"status":"EXECUTED @ 68979.0(-0.00072)"}}
+{"timestamp":"2026-03-26T17:25:42.764242Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00072,"price":68979.0,"buys":274,"sells":270}}
+{"timestamp":"2026-03-26T17:25:42.806872Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1701963751}}
+{"timestamp":"2026-03-26T17:25:43.292200Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344465,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:43.292311Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214381,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:43.292345Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214382,"side":"sell"}}
+SOVEREIGN AI | Price: 68976.00 | Pos: 0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68975.00 | Pos: 0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:45.104532Z","level":"INFO","fields":{"event":"sniper_fire","bid":6897500000000,"ask":6898300000000,"micro":6898130915174,"buy":68975.77287874,"sell":68985.02287874,"obi":"0.025","order_usd":50.0,"inv_skew":-91127300,"position":49258,"dynamic_grid":462500000}}
+{"timestamp":"2026-03-26T17:25:45.128892Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:25:45.128972Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:45.129006Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:45.129060Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:25:45.129099Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214381,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:45.129155Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214382,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:45.129242Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344467,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:45.129302Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344468,"side":"sell"}}
+SOVEREIGN AI | Price: 68976.00 | Pos: 0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:46.394955Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344467,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:46.395033Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344468,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:46.395523Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214383,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:46.395621Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214384,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68977.00 | Pos: 0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68980.00 | Pos: 0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:47.975952Z","level":"INFO","fields":{"event":"checksum_ok","cs":999228496}}
+{"timestamp":"2026-03-26T17:25:48.178432Z","level":"INFO","fields":{"event":"sniper_fire","bid":6898000000000,"ask":6898300000000,"micro":6898298898178,"buy":68977.45270878,"sell":68986.70270878,"obi":"0.025","order_usd":50.0,"inv_skew":-91127300,"position":49258,"dynamic_grid":462500000}}
+{"timestamp":"2026-03-26T17:25:48.201510Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:25:48.201565Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:48.201575Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:48.201593Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:25:48.201618Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214383,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:48.201633Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344469,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:48.201649Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344470,"side":"sell"}}
+SOVEREIGN AI | Price: 68979.00 | Pos: 0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:49.501054Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344469,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:49.501088Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344470,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:49.502139Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214385,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:49.502169Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214386,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68979.00 | Pos: 0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:50.621115Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1685487721}}
+SOVEREIGN AI | Price: 68979.00 | Pos: 0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:51.258910Z","level":"INFO","fields":{"event":"sniper_fire","bid":6898000000000,"ask":6898600000000,"micro":6898001651085,"buy":68974.48023785,"sell":68983.73023785,"obi":"0.226","order_usd":35.0,"inv_skew":-91127300,"position":49258,"dynamic_grid":462500000}}
+{"timestamp":"2026-03-26T17:25:51.283290Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:25:51.283320Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:25:51.283342Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:25:51.283373Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:25:51.283391Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214385,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:51.283418Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344471,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:51.283431Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344472,"side":"sell"}}
+{"timestamp":"2026-03-26T17:25:51.415234Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00051,"price":68984.0}}
+{"timestamp":"2026-03-26T17:25:51.415288Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344472,"status":"EXECUTED @ 68984.0(-0.00051)"}}
+{"timestamp":"2026-03-26T17:25:51.415303Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00051,"price":68984.0,"buys":274,"sells":271}}
+SOVEREIGN AI | Price: 68981.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:52.710835Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344471,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:52.711122Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214387,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:52.712779Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214388,"side":"sell"}}
+{"timestamp":"2026-03-26T17:25:52.724935Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00051,"price":68994.0}}
+{"timestamp":"2026-03-26T17:25:52.724982Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214388,"status":"EXECUTED @ 68994.0(-0.00051)"}}
+{"timestamp":"2026-03-26T17:25:52.725011Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00051,"price":68994.0,"buys":274,"sells":272}}
+SOVEREIGN AI | Price: 68984.00 | Pos: -0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:53.356000Z","level":"INFO","fields":{"event":"checksum_ok","cs":31775203}}
+SOVEREIGN AI | Price: 68990.00 | Pos: -0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:54.364362Z","level":"INFO","fields":{"event":"sniper_fire","bid":6899000000000,"ask":6899600000000,"micro":6899599403394,"buy":68991.75298694,"sell":69002.50298694,"obi":"0.099","order_usd":50.0,"inv_skew":113395300,"position":-52742,"dynamic_grid":537500000}}
+{"timestamp":"2026-03-26T17:25:54.386603Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:25:54.386637Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:54.386647Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:25:54.386665Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:25:54.387858Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214387,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:54.387882Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344473,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:54.389230Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344474,"side":"sell"}}
+SOVEREIGN AI | Price: 68992.00 | Pos: -0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:55.848855Z","level":"INFO","fields":{"event":"checksum_ok","cs":-415427248}}
+{"timestamp":"2026-03-26T17:25:55.875594Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344473,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:55.875630Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344474,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:55.875758Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214389,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:55.876221Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214390,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68992.00 | Pos: -0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68992.00 | Pos: -0.0005 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:57.371331Z","level":"INFO","fields":{"event":"sniper_fire","bid":6899100000000,"ask":6899600000000,"micro":6899475000000,"buy":68990.3314208,"sell":69001.5314208,"obi":"-0.332","order_usd":35.0,"inv_skew":118142080,"position":-52742,"dynamic_grid":560000000}}
+{"timestamp":"2026-03-26T17:25:57.393852Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:25:57.393896Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:25:57.393907Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:25:57.393924Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:25:57.393936Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214389,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:57.393953Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344475,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:57.393968Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344476,"side":"sell"}}
+{"timestamp":"2026-03-26T17:25:57.692492Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00051,"price":68990.0}}
+{"timestamp":"2026-03-26T17:25:57.692526Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344475,"status":"EXECUTED @ 68990.0(0.00051)"}}
+{"timestamp":"2026-03-26T17:25:57.692540Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00051,"price":68990.0,"buys":275,"sells":272}}
+SOVEREIGN AI | Price: 68988.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:25:58.380584Z","level":"INFO","fields":{"event":"checksum_ok","cs":1060404825}}
+{"timestamp":"2026-03-26T17:25:58.936295Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344476,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:25:58.936336Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214391,"side":"buy"}}
+{"timestamp":"2026-03-26T17:25:58.937004Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214392,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68988.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68974.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:00.411255Z","level":"INFO","fields":{"event":"sniper_fire","bid":6897400000000,"ask":6898100000000,"micro":6897403796745,"buy":68969.37071705,"sell":68978.77071705,"obi":"-0.522","order_usd":75.0,"inv_skew":3274960,"position":-1742,"dynamic_grid":470000000}}
+{"timestamp":"2026-03-26T17:26:00.435206Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:26:00.435261Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:26:00.435284Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:26:00.435313Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:26:00.435325Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214391,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:00.435333Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344477,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:00.435340Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344478,"side":"sell"}}
+{"timestamp":"2026-03-26T17:26:00.885259Z","level":"INFO","fields":{"event":"checksum_ok","cs":-743244181}}
+SOVEREIGN AI | Price: 68977.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68977.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:02.115837Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344477,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:02.115892Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344478,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:02.115901Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214393,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:02.115910Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214394,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68977.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:03.953726Z","level":"INFO","fields":{"event":"sniper_fire","bid":6897000000000,"ask":6897800000000,"micro":6897000000110,"buy":68965.1837959,"sell":68974.8837959,"obi":"-0.038","order_usd":50.0,"inv_skew":3379480,"position":-1742,"dynamic_grid":485000000}}
+{"timestamp":"2026-03-26T17:26:03.975728Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:26:03.975774Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:26:03.975799Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:26:03.975815Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:26:03.975840Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214393,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:03.975856Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344479,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:03.975864Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234101344480,"side":"sell"}}
+SOVEREIGN AI | Price: 68970.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68970.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:05.222658Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344479,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:05.222691Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234101344480,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:05.223431Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108214395,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:05.223491Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108214396,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68970.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:06.206685Z","level":"INFO","fields":{"event":"checksum_mismatch","remote":-709754835,"local":1122970015}}
+{"timestamp":"2026-03-26T17:26:06.206713Z","level":"INFO","fields":{"event":"reconnecting","reason":"checksum_persist"}}
+{"timestamp":"2026-03-26T17:26:06.207861Z","level":"INFO","fields":{"event":"async_alert","message":"⚠️ *RECONNECT*\n`Reason: checksum_persist`"}}
+{"timestamp":"2026-03-26T17:26:09.209288Z","level":"INFO","fields":{"event":"connecting_dual_ws"}}
+{"timestamp":"2026-03-26T17:26:09.319706Z","level":"INFO","fields":{"event":"mdata_ws_connected"}}
+{"timestamp":"2026-03-26T17:26:09.478526Z","level":"INFO","fields":{"event":"exec_ws_connected"}}
+{"timestamp":"2026-03-26T17:26:09.521344Z","level":"INFO","fields":{"event":"exec_auth_ok"}}
+{"timestamp":"2026-03-26T17:26:11.335910Z","level":"INFO","fields":{"event":"mdata_subscribed","chan_id":"Some(1631)"}}
+{"timestamp":"2026-03-26T17:26:11.335995Z","level":"INFO","fields":{"event":"snapshot_loaded","bids":25,"asks":25,"best_bid_p":6897300000000,"best_ask_p":6898100000000,"best_bid_a":27227623,"best_ask_a":-200000,"best_bid_c":2,"best_ask_c":1}}
+SOVEREIGN AI | Price: 68983.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:12.524120Z","level":"INFO","fields":{"event":"sniper_fire","bid":6898500000000,"ask":6899300000000,"micro":6899299882223,"buy":68987.73575263,"sell":68998.33575263,"obi":"0.285","order_usd":75.0,"inv_skew":3693040,"position":-1742,"dynamic_grid":530000000}}
+{"timestamp":"2026-03-26T17:26:12.568881Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:26:12.568911Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00109 BTC."}}
+{"timestamp":"2026-03-26T17:26:12.568924Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:26:12.568956Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330291,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:12.568978Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330292,"side":"sell"}}
+{"timestamp":"2026-03-26T17:26:13.021084Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330291,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:13.021134Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330292,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:13.021144Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234105818113,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:13.021152Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234105818114,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68985.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:13.902497Z","level":"INFO","fields":{"event":"checksum_debug","levels":50,"bids0_p":6898400000000,"bids0_c":1,"asks0_p":6899800000000,"asks0_c":1,"cs_str_preview":"68984:0.00148:68998:-0.26140836:68983:0.41947002:68999:-0.39794437:68982:0.07248262:69000:-0.05751701:68981:0.07265049:69003:-0.07246271:68980:0.26943819:69004:-0.07246061:68979:0.07248577:69005:-0.07"}}
+{"timestamp":"2026-03-26T17:26:13.902526Z","level":"INFO","fields":{"event":"checksum_mismatch","remote":-2140408038,"local":-1494122265}}
+SOVEREIGN AI | Price: 68984.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68984.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:15.680769Z","level":"INFO","fields":{"event":"sniper_fire","bid":6898400000000,"ask":6899400000000,"micro":6899189568423,"buy":68986.63261463,"sell":68997.23261463,"obi":"-0.058","order_usd":50.0,"inv_skew":3693040,"position":-1742,"dynamic_grid":530000000}}
+{"timestamp":"2026-03-26T17:26:15.716037Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:26:15.716066Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:26:15.716090Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:26:15.716105Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:26:15.716130Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234105818113,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:15.716138Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330293,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:15.716156Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330294,"side":"sell"}}
+{"timestamp":"2026-03-26T17:26:16.093337Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330293,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:16.093391Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330294,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:16.093560Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234105818115,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:16.093628Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234105818116,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68984.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:16.432755Z","level":"INFO","fields":{"event":"checksum_debug","levels":50,"bids0_p":6898400000000,"bids0_c":2,"asks0_p":6899300000000,"asks0_c":1,"cs_str_preview":"68984:0.27091819:68993:-0.00022001:68983:0.49195138:68994:-0.07247019:68982:0.0001719:68995:-0.35387792:68981:0.07248278:68997:-0.07246778:68979:0.07248577:68999:-0.39794437:68977:0.00005:69000:-0.057"}}
+{"timestamp":"2026-03-26T17:26:16.432815Z","level":"INFO","fields":{"event":"checksum_mismatch","remote":-368237777,"local":-516910370}}
+SOVEREIGN AI | Price: 68984.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68984.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:18.695768Z","level":"INFO","fields":{"event":"sniper_fire","bid":6898600000000,"ask":6899800000000,"micro":6899630088892,"buy":68991.03781932,"sell":69001.63781932,"obi":"-0.141","order_usd":35.0,"inv_skew":3693040,"position":-1742,"dynamic_grid":530000000}}
+{"timestamp":"2026-03-26T17:26:18.761089Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:26:18.761135Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:26:18.761145Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:26:18.761174Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:26:18.761186Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234105818115,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:18.761194Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330295,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:18.761202Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330296,"side":"sell"}}
+{"timestamp":"2026-03-26T17:26:19.057284Z","level":"INFO","fields":{"event":"checksum_debug","levels":50,"bids0_p":6899100000000,"bids0_c":1,"asks0_p":6899800000000,"asks0_c":1,"cs_str_preview":"68991:0.00051:68998:-0.0724668:68987:0.26943819:68999:-0.07286091:68986:0.43933117:69000:-0.0726839:68984:0.07496037:69002:-0.00051:68983:0.07284376:69004:-0.28140836:68982:0.07265247:69006:-0.0727776"}}
+{"timestamp":"2026-03-26T17:26:19.057312Z","level":"INFO","fields":{"event":"checksum_mismatch","remote":-697529365,"local":-1204148222}}
+SOVEREIGN AI | Price: 68991.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68991.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:20.941714Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330295,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:20.941752Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330296,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:20.941764Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234105818117,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:20.941773Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234105818118,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68991.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:21.677338Z","level":"INFO","fields":{"event":"checksum_debug","levels":50,"bids0_p":6898500000000,"bids0_c":2,"asks0_p":6899700000000,"asks0_c":1,"cs_str_preview":"68985:0.07257007:68997:-0.28140836:68984:0.07395855:68998:-0.07446586:68983:0.0004124:68999:-0.07286042:68982:0.07265443:69000:-0.49171466:68981:0.26943819:69004:-0.12849657:68980:0.00005:69006:-0.000"}}
+{"timestamp":"2026-03-26T17:26:21.677366Z","level":"INFO","fields":{"event":"checksum_ok","cs":2004092086}}
+{"timestamp":"2026-03-26T17:26:21.872995Z","level":"INFO","fields":{"event":"sniper_fire","bid":6898500000000,"ask":6899700000000,"micro":6898746015228,"buy":68982.19708268,"sell":68992.79708268,"obi":"-0.023","order_usd":50.0,"inv_skew":3693040,"position":-1742,"dynamic_grid":530000000}}
+{"timestamp":"2026-03-26T17:26:21.908726Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:26:21.908760Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:26:21.908776Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:26:21.908799Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:26:21.908817Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234105818117,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:21.908831Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330297,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:21.908842Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330298,"side":"sell"}}
+SOVEREIGN AI | Price: 68985.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68985.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:24.056749Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330297,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:24.056831Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330298,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:24.057008Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234105818119,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:24.057070Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234105818120,"status":"POSTONLY CANCELED"}}
+{"timestamp":"2026-03-26T17:26:24.258909Z","level":"INFO","fields":{"event":"checksum_debug","levels":50,"bids0_p":6898600000000,"bids0_c":1,"asks0_p":6899300000000,"asks0_c":1,"cs_str_preview":"68986:0.26943819:68993:-0.008:68985:0.07457007:68998:-0.07246627:68984:0.07395855:68999:-0.07286042:68983:0.07284192:69000:-0.4192488:68982:0.07265142:69001:-0.35387111:68980:0.05608701:69004:-0.07245"}}
+{"timestamp":"2026-03-26T17:26:24.258938Z","level":"INFO","fields":{"event":"checksum_ok","cs":853677052}}
+SOVEREIGN AI | Price: 68986.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:25.049536Z","level":"INFO","fields":{"event":"sniper_fire","bid":6898700000000,"ask":6899700000000,"micro":6899696973621,"buy":68991.70666661,"sell":69002.30666661,"obi":"-0.478","order_usd":35.0,"inv_skew":3693040,"position":-1742,"dynamic_grid":530000000}}
+{"timestamp":"2026-03-26T17:26:25.079667Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:26:25.079749Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:26:25.079812Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00051 BTC."}}
+{"timestamp":"2026-03-26T17:26:25.079865Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:26:25.079906Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234105818119,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:25.079941Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330299,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:25.079970Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330300,"side":"sell"}}
+SOVEREIGN AI | Price: 68991.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 68991.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:26.845143Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1202413336}}
+{"timestamp":"2026-03-26T17:26:27.078048Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330299,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:27.078130Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330300,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:27.078167Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234105818121,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:27.078198Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234105818122,"status":"POSTONLY CANCELED"}}
+SOVEREIGN AI | Price: 68991.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:28.261708Z","level":"INFO","fields":{"event":"sniper_fire","bid":6899000000000,"ask":6899900000000,"micro":6899018013352,"buy":68984.84258652,"sell":68995.59258652,"obi":"0.040","order_usd":50.0,"inv_skew":3745300,"position":-1742,"dynamic_grid":537500000}}
+{"timestamp":"2026-03-26T17:26:28.288528Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 1 order cancellations."}}
+{"timestamp":"2026-03-26T17:26:28.288603Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:26:28.288639Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:26:28.288688Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:26:28.288726Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234105818121,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:28.288755Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330301,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:28.289799Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330302,"side":"sell"}}
+SOVEREIGN AI | Price: 68990.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:29.445382Z","level":"INFO","fields":{"event":"checksum_ok","cs":-818258818}}
+SOVEREIGN AI | Price: 68990.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:30.073395Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330301,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:30.073478Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330302,"status":"CANCELED"}}
+SOVEREIGN AI | Price: 68990.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:31.312356Z","level":"INFO","fields":{"event":"sniper_fire","bid":6899200000000,"ask":6900300000000,"micro":6900299773252,"buy":68997.66018552,"sell":69008.41018552,"obi":"0.196","order_usd":50.0,"inv_skew":3745300,"position":-1742,"dynamic_grid":537500000}}
+{"timestamp":"2026-03-26T17:26:31.392480Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:26:31.392556Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:26:31.392602Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 2 order operations."}}
+{"timestamp":"2026-03-26T17:26:31.392640Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330303,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:31.392669Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330304,"side":"sell"}}
+SOVEREIGN AI | Price: 68997.00 | Pos: -0.0000 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:31.724297Z","level":"INFO","fields":{"event":"trade_executed","amount":0.00072,"price":68997.0}}
+{"timestamp":"2026-03-26T17:26:31.724325Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330303,"status":"EXECUTED @ 68997.0(0.00072)"}}
+{"timestamp":"2026-03-26T17:26:31.724342Z","level":"INFO","fields":{"event":"trade_aggregated","amount":0.00072,"price":68997.0,"buys":276,"sells":272}}
+{"timestamp":"2026-03-26T17:26:32.208613Z","level":"INFO","fields":{"event":"checksum_ok","cs":1832711909}}
+SOVEREIGN AI | Price: 68998.00 | Pos: 0.0007 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 69001.00 | Pos: 0.0007 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:34.164069Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330304,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:34.264931Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108341291,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:34.265001Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108341292,"side":"sell"}}
+{"timestamp":"2026-03-26T17:26:34.438365Z","level":"INFO","fields":{"event":"sniper_fire","bid":6900500000000,"ask":6900900000000,"micro":6900806379719,"buy":68999.25670219,"sell":69013.00670219,"obi":"0.037","order_usd":50.0,"inv_skew":-193209500,"position":70258,"dynamic_grid":687500000}}
+{"timestamp":"2026-03-26T17:26:34.461376Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:26:34.461463Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:26:34.461498Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:26:34.461552Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:26:34.464351Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108341291,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:34.464449Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108341292,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:34.464486Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330305,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:34.464513Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330306,"side":"sell"}}
+{"timestamp":"2026-03-26T17:26:34.649527Z","level":"INFO","fields":{"event":"checksum_ok","cs":-1882813131}}
+SOVEREIGN AI | Price: 69001.00 | Pos: 0.0007 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 69005.00 | Pos: 0.0007 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 69000.00 | Pos: 0.0007 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:37.783191Z","level":"INFO","fields":{"event":"sniper_fire","bid":6900000000000,"ask":6900900000000,"micro":6900899421231,"buy":68999.80280771,"sell":69014.15280771,"obi":"0.065","order_usd":50.0,"inv_skew":-201640460,"position":70258,"dynamic_grid":717500000}}
+{"timestamp":"2026-03-26T17:26:37.807532Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:26:37.807626Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:26:37.807662Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:26:37.807715Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:26:37.807755Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330305,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:37.807785Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330306,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:37.807811Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330307,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:37.807837Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330308,"side":"sell"}}
+SOVEREIGN AI | Price: 69000.00 | Pos: 0.0007 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 69000.00 | Pos: 0.0007 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 69000.00 | Pos: 0.0007 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 69000.00 | Pos: 0.0007 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:41.728765Z","level":"INFO","fields":{"event":"sniper_fire","bid":6900000000000,"ask":6900900000000,"micro":6900899424595,"buy":69001.05184755,"sell":69013.45184755,"obi":"0.011","order_usd":50.0,"inv_skew":-174239840,"position":70258,"dynamic_grid":620000000}}
+{"timestamp":"2026-03-26T17:26:41.758271Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:26:41.758348Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:26:41.758385Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:26:41.758441Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:26:41.758484Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330307,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:41.758519Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330308,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:41.758551Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330309,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:41.758580Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330310,"side":"sell"}}
+{"timestamp":"2026-03-26T17:26:41.963575Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330309,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:41.963658Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108330310,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:41.963721Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108341293,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:41.963751Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108341294,"side":"sell"}}
+SOVEREIGN AI | Price: 69001.00 | Pos: 0.0007 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:42.544365Z","level":"INFO","fields":{"event":"checksum_ok","cs":-713932266}}
+SOVEREIGN AI | Price: 69003.00 | Pos: 0.0007 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 69003.00 | Pos: 0.0007 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:45.045121Z","level":"INFO","fields":{"event":"sniper_fire","bid":6900300000000,"ask":6900900000000,"micro":6900898225723,"buy":69002.86532943,"sell":69012.41532943,"obi":"0.005","order_usd":50.0,"inv_skew":-134192780,"position":70258,"dynamic_grid":477500000}}
+{"timestamp":"2026-03-26T17:26:45.045367Z","level":"INFO","fields":{"event":"checksum_ok","cs":2076016145}}
+{"timestamp":"2026-03-26T17:26:45.087206Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"oc_multi-req","status":"SUCCESS","text":"Submitting 2 order cancellations."}}
+{"timestamp":"2026-03-26T17:26:45.087309Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit buy order for 0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:26:45.087344Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"on-req","status":"SUCCESS","text":"Submitting exchange limit sell order for -0.00072 BTC."}}
+{"timestamp":"2026-03-26T17:26:45.087396Z","level":"INFO","fields":{"event":"bitfinex_notification","ntype":"ox_multi-req","status":"SUCCESS","text":"Submitting 3 order operations."}}
+{"timestamp":"2026-03-26T17:26:45.087436Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108341293,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:45.087467Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108341294,"status":"CANCELED"}}
+{"timestamp":"2026-03-26T17:26:45.087498Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330311,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:45.087524Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108330312,"side":"sell"}}
+{"timestamp":"2026-03-26T17:26:45.087549Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108341295,"side":"buy"}}
+{"timestamp":"2026-03-26T17:26:45.087576Z","level":"INFO","fields":{"event":"order_tracked","mt":"on","id":234108341296,"side":"sell"}}
+SOVEREIGN AI | Price: 69003.00 | Pos: 0.0007 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+SOVEREIGN AI | Price: 69005.00 | Pos: 0.0007 | Bias: 0.0 | Local AI: No local data | PnL: 0.00
+{"timestamp":"2026-03-26T17:26:46.361866Z","level":"INFO","fields":{"event":"trade_executed","amount":-0.00072,"price":69011.0}}
+{"timestamp":"2026-03-26T17:26:46.361948Z","level":"INFO","fields":{"event":"order_cleared","mt":"oc","id":234108341296,"status":"EXECUTED @ 69011.0(-0.00072)"}}
+{"timestamp":"2026-03-26T17:26:46.362006Z","level":"INFO","fields":{"event":"trade_aggregated","amount":-0.00072,"price":69011.0,"buys":276,"sells":273}}
