@@ -1,67 +1,55 @@
-# 🐺 Beroun Sniper v5.0 (Sovereign HFT)
+# 🐺 Beroun Sniper v5.2
 
-[![Language](https://img.shields.io/badge/Language-Rust_2024-orange.svg)](https://www.rust-lang.org/)
-[![Performance](https://img.shields.io/badge/Latency-Sub--Microsecond-green.svg)]()
-[![License](https://img.shields.io/badge/License-Proprietary-red.svg)]()
+Vysokofrekvenční (HFT) obchodní bot pro Bitfinex BTC/USD.  
+Rust 2024 • Zero-copy • Sub-ms latence • CPU-pinned • mmap IPC
 
-Ultra-nízko latenční obchodní engine pro Bitfinex, optimalizovaný pomocí **PGO (Profile-Guided Optimization)** a postavený na **Zero-copy mmap** architektuře pro rok 2026.
+## Quick Start
 
-## 🏗 Architektura systému
-
-```mermaid
-graph TD
-    subgraph "External Exchange"
-        BF[Bitfinex WebSocket]
-    end
-
-    subgraph "High Priority Hot Path"
-        Core[beroun-core Sniper]
-        Mmap[(Shared Mmap State)]
-    end
-
-    subgraph "Passive Intelligence"
-        AI[beroun-ai Manager]
-        SovAI[beroun-sovereign-ai]
-        Dash[Real-time Dashboard]
-    end
-
-    BF -- TCP/TLS --> Core
-    Core -- Atomic Store --> Mmap
-    Mmap -- Atomic Load --> AI
-    Mmap -- Atomic Load --> SovAI
-    AI -- WebSocket --> Dash
-    SovAI -- Bias Control --> Mmap
-    Core -- Telegram API --> TG[Telegram Alert]
-```
-
-## 🚀 Klíčové vlastnosti
-- **Zero-copy parsing:** Minimální režie při zpracování tickerů.
-- **Atomic Fixed-Point:** Eliminace jitterů FPU jednotky použitím celočíselné aritmetiky.
-- **Sovereign Risk Management:** AI upravuje grid bias v reálném čase podle čisté pozice.
-- **Watchdog Guardian:** Automatické sestřelení a restart při detekci stale dat v paměti.
-
-## 🛠 Instalace (Agentic Deployment)
-
-Systém využívá **Zero-Touch AI instalaci**. Místo psaní manuálních příkazů nebo řešení chybějících závislostí v Linuxu, pouze probudíte umělou inteligenci na prázdném serveru a ona systém kompletně sestaví a optimalizuje na míru vašemu hardware (vč. PGO kompilace).
-
-**Stačí spustit tento JEDINÝ PŘÍKAZ na čistém Ubuntu/Debian serveru:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/VaclavSercl/HFT-Sniper/main/bootstrap.sh | bash
+# 1. Konfigurace
+cp .env.example .env
+# Vyplň BITFINEX_API_KEY a BITFINEX_API_SECRET
+
+# 2. Build
+cargo build --release
+
+# 3. Spuštění jako systemd služba
+systemctl --user enable --now beroun-sniper
+
+# 4. Sledování logů
+journalctl --user -u beroun-sniper -f
 ```
 
-**Co tento příkaz udělá:**
-1. Nainstaluje základní mozek (`gemini-cli`).
-2. AI prozkoumá stroj a připraví ho (vytvoří SWAP, apod.).
-3. **GPU Detekce:** Pokud najde **NVIDIA GPU s min. 6GB VRAM**, automaticky stáhne systém **Ollama** s bleskovým lokálním modelem pro HFT filtrování.
-4. AI nainstaluje Rust, naklonuje tento repozitář, vyřeší Linux závislosti a zkompiluje hotové binárky.
+## Klíčové vlastnosti
 
-### Konfigurace
-Zkopírujte `.env.example` do `.env` a vyplňte své API klíče. Pro registraci démona do Linuxu proveďte zkopírování služby podle instrukcí na konci instalace.
+- **simd_json** — SIMD-akcelerovaný JSON parser
+- **mmap IPC** — sdílená paměť s atomickými operacemi
+- **TCP_NODELAY** — nulové zpoždění na síťové vrstvě
+- **CPU pinned** — single-thread Tokio runtime na dedikovaném jádru
+- **Anti-spam** — ochrana proti Bitfinex rate limitům
+- **Cache-line isolation** — prevence false sharing v mmap
 
-## 📚 Dokumentace
-- [Architektonické detaily](docs/ARCHITECTURE.md)
-- [Obchodní strategie](docs/STRATEGY.md)
-- [Pravidla pro AI agenty](GEMINI.md)
+## Dokumentace
 
----
-*Proprietární software pro autonomní obchodování.*
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — Kompletní architektura, memory layout, optimalizace
+- **[.env](.env)** — API klíče (BITFINEX_API_KEY, BITFINEX_API_SECRET)
+
+## Příkazy
+
+| Příkaz | Popis |
+|--------|-------|
+| `systemctl --user status beroun-sniper` | Status bota |
+| `systemctl --user restart beroun-sniper` | Restart |
+| `journalctl --user -u beroun-sniper -f` | Live logy |
+
+## Build
+
+```bash
+cargo build --release    # Optimalizovaný build
+```
+
+Binárky v `target/release/beroun-core`.
+
+## Licence
+
+Proprietární — VaclavSercl
