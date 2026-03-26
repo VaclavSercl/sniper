@@ -386,8 +386,8 @@ async fn async_main() -> Result<()> {
     let key = std::env::var("BITFINEX_API_KEY").context("Missing API KEY")?;
     let sec = std::env::var("BITFINEX_API_SECRET").context("Missing API SECRET")?;
 
-    info!(event = "system_start", version = "8.1.0-sovereign");
-    notifier.alert("*Beroun Sniper v8.1 ONLINE*\n`Dual-WS + Balance-Aware Sizing + Vol Engine + AI Safety Fuse`".to_string());
+    info!(event = "system_start", version = "9.0.0-hydra");
+    notifier.alert("*Beroun Sniper v9.0 HYDRA ONLINE*\n`Multi-Level Grid + Inventory Throttling + Anti-Cross Guard`".to_string());
 
     // SIGTERM listener (systemd, Docker)
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
