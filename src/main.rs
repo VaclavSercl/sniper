@@ -147,7 +147,7 @@ fn update_book(levels: *mut [beroun_types::OrderBookLevel; beroun_types::BOOK_LE
 
 fn sort_book(levels: *mut [beroun_types::OrderBookLevel; beroun_types::BOOK_LEVELS], is_bid: bool) {
     let levels = unsafe { &mut *levels };
-    levels.sort_by(|a, b| {
+    levels.sort_unstable_by(|a, b| {
         let pa = a.price.load(Ordering::Acquire);
         let pb = b.price.load(Ordering::Acquire);
         
@@ -275,6 +275,7 @@ async fn main() -> Result<()> {
         write.send(Message::Text(json!({"event": "subscribe", "channel": "book", "symbol": "tBTCUSD", "prec": "P0", "freq": "F0", "len": "25"}).to_string().into())).await?;
 
         let mut chan_id: Option<i64> = None;
+        let mut msg_buffer: Vec<u8> = Vec::with_capacity(4096);
         let mut last_upd = Instant::now();
         let mut authed = false;
         let mut snapshot_loaded = false;
@@ -284,8 +285,9 @@ async fn main() -> Result<()> {
             let msg = match msg { Ok(m) => m, Err(_) => break };
             
             if let Message::Text(text) = msg {
-                let mut bytes = text.as_bytes().to_vec();
-                let v = match simd_json::to_borrowed_value(&mut bytes) {
+                msg_buffer.clear();
+                msg_buffer.extend_from_slice(text.as_bytes());
+                let v = match simd_json::to_borrowed_value(&mut msg_buffer) {
                     Ok(v) => v,
                     Err(_) => continue,
                 };
@@ -449,13 +451,14 @@ async fn main() -> Result<()> {
                                         let sell_p = sell_price_i as f64 / beroun_types::PRICE_SCALE;
                                         let btc_amount = (order_usd as f64 / mid_f / beroun_types::PRICE_SCALE).max(0.00015);
 
-                                        let order_msg = json!([0, "ox_multi", null, [
-                                            ["oc_multi", { "all": 1 }],
-                                            ["on", { "symbol": "tBTCUSD", "amount": format!("{:.5}", btc_amount), "price": format!("{:.2}", buy_p), "type": "EXCHANGE LIMIT", "flags": 4096 }],
-                                            ["on", { "symbol": "tBTCUSD", "amount": format!("{:.5}", -btc_amount), "price": format!("{:.2}", sell_p), "type": "EXCHANGE LIMIT", "flags": 4096 }]
-                                        ]]);
+                                        // Direct string formatting — avoids json! macro's
+                                        // intermediate Value tree allocation on hot path
+                                        let order_msg = format!(
+                                            r#"[0,"ox_multi",null,[["oc_multi",{{"all":1}}],["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}],["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]]]"#,
+                                            btc_amount, buy_p, -btc_amount, sell_p
+                                        );
                                         
-                                        let _ = write.send(Message::Text(order_msg.to_string().into())).await;
+                                        let _ = write.send(Message::Text(order_msg.into())).await;
                                         // Persist last submitted prices
                                         eng.last_buy_price.store(buy_price_i, Ordering::SeqCst);
                                         eng.last_sell_price.store(sell_price_i, Ordering::SeqCst);
