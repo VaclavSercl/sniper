@@ -28,6 +28,10 @@ pub struct EngineState {
     pub wallet_usd: AtomicU64,
     pub checksum: AtomicU32,
     pub _padding: [u8; 4],
+    // Anti-spam: track last submitted order prices (scaled i64).
+    // Orders are only re-submitted when price changes by >= MIN_TICK.
+    pub last_buy_price: AtomicI64,
+    pub last_sell_price: AtomicI64,
 }
 
 impl Default for OrderBookLevel {
@@ -59,6 +63,8 @@ impl Default for EngineState {
             wallet_usd: AtomicU64::new(0),
             checksum: AtomicU32::new(0),
             _padding: [0; 4],
+            last_buy_price: AtomicI64::new(0),
+            last_sell_price: AtomicI64::new(0),
         }
     }
 }

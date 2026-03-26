@@ -1,11 +1,9 @@
 use std::time::{SystemTime, UNIX_EPOCH, Instant, Duration};
-use std::fs::{OpenOptions};
-use std::io::Write;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use futures_util::{StreamExt, SinkExt};
-use serde_json::{json, Value};
+use serde_json::json;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use hmac::{Hmac, Mac};
 use sha2::Sha384;
@@ -15,7 +13,7 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use memmap2::MmapMut;
 use anyhow::{Context, Result};
 
-use beroun_types::{EngineState, RiskState, ENGINE_STATE_PATH, RISK_STATE_PATH, PRICE_SCALE_I};
+use beroun_types::{EngineState, RiskState, ENGINE_STATE_PATH, RISK_STATE_PATH};
 
 const BITFINEX_AUTH_URL: &str = "wss://api.bitfinex.com/ws/2";
 type HmacSha384 = Hmac<Sha384>;
@@ -36,9 +34,17 @@ impl AsyncNotifier {
         tokio::spawn(async move {
             while let Some(msg) = rx.recv().await {
                 info!(event = "async_alert", message = msg);
-                if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&alerts_log) {
-                    let _ = writeln!(file, "[{:?}] {}", SystemTime::now(), msg);
-                }
+                // Delegate blocking file I/O to a dedicated thread pool
+                // to avoid stalling the Tokio executor (critical for HFT latency)
+                let log_path = alerts_log.clone();
+                let log_msg = msg.clone();
+                tokio::task::spawn_blocking(move || {
+                    use std::fs::OpenOptions;
+                    use std::io::Write;
+                    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&log_path) {
+                        let _ = writeln!(file, "[{:?}] {}", SystemTime::now(), log_msg);
+                    }
+                });
                 if token.is_empty() || chat_id.is_empty() { continue; }
                 let url = format!("https://api.telegram.org/bot{}/sendMessage", token);
                 let _ = client.post(url)
@@ -55,7 +61,7 @@ impl AsyncNotifier {
 }
 
 fn init_mmap_ptr<T: Default>(path: &str) -> Result<MmapMut> {
-    let file = OpenOptions::new().read(true).write(true).create(true).open(path)?;
+    let file = std::fs::OpenOptions::new().read(true).write(true).create(true).open(path)?;
     file.set_len(std::mem::size_of::<T>() as u64)?;
     let mut mmap = unsafe { MmapMut::map_mut(&file)? };
     if mmap.iter().all(|&b| b == 0) {
@@ -402,10 +408,13 @@ async fn main() -> Result<()> {
                         eng.best_bid.store(best_bid, Ordering::SeqCst);
                         eng.best_ask.store(best_ask, Ordering::SeqCst);
 
-                        // SNIPER LOGIC
+                        // SNIPER LOGIC — Anti-spam: only submit when price moves ≥ MIN_TICK
+                        // Bitfinex rate limit is ~90 req/min for order operations.
+                        // Without this guard, we'd send ~300 cancel+replace/min → instant ban.
+                        const MIN_TICK_SCALED: i64 = 100_000_000; // $1 in scaled units
                         if authed && best_bid > 0 && best_ask > 0 {
                             let now = Instant::now();
-                            if now.duration_since(last_upd).as_millis() > 200 {
+                            if now.duration_since(last_upd).as_millis() > 500 {
                                 let is_paused = risk.paused.load(Ordering::Acquire) != 0;
                                 if !is_paused {
                                     let mid_price_i = ((best_bid as i64) + (best_ask as i64)) / 2;
@@ -415,19 +424,36 @@ async fn main() -> Result<()> {
                                     let grid_step = risk.grid_step.load(Ordering::Acquire) as i64;
                                     let bias = risk.bias_offset.load(Ordering::Acquire);
 
-                                    let buy_p = (mid_price_i - grid_step + bias).max(0) as f64 / beroun_types::PRICE_SCALE;
-                                    let sell_p = (mid_price_i + grid_step + bias).max(0) as f64 / beroun_types::PRICE_SCALE;
-                                    let btc_amount = (order_usd as f64 / mid_f / beroun_types::PRICE_SCALE).max(0.00015);
+                                    let buy_price_i = (mid_price_i - grid_step + bias).max(0);
+                                    let sell_price_i = (mid_price_i + grid_step + bias).max(0);
 
-                                    let order_msg = json!([0, "ox_multi", null, [
-                                        ["oc_multi", { "all": 1 }],
-                                        ["on", { "symbol": "tBTCUSD", "amount": format!("{:.5}", btc_amount), "price": format!("{:.2}", buy_p), "type": "EXCHANGE LIMIT", "flags": 4096 }],
-                                        ["on", { "symbol": "tBTCUSD", "amount": format!("{:.5}", -btc_amount), "price": format!("{:.2}", sell_p), "type": "EXCHANGE LIMIT", "flags": 4096 }]
-                                    ]]);
-                                    
-                                    let _ = write.send(Message::Text(order_msg.to_string().into())).await;
-                                    last_upd = now;
-                                    info!(event = "sniper_fire", bid = best_bid, ask = best_ask, buy = buy_p, sell = sell_p);
+                                    // Compare against last submitted prices
+                                    let last_buy = eng.last_buy_price.load(Ordering::SeqCst);
+                                    let last_sell = eng.last_sell_price.load(Ordering::SeqCst);
+                                    let buy_delta = (buy_price_i - last_buy).abs();
+                                    let sell_delta = (sell_price_i - last_sell).abs();
+
+                                    // Only re-submit if either price moved by ≥ MIN_TICK
+                                    if buy_delta >= MIN_TICK_SCALED || sell_delta >= MIN_TICK_SCALED || last_buy == 0 {
+                                        let buy_p = buy_price_i as f64 / beroun_types::PRICE_SCALE;
+                                        let sell_p = sell_price_i as f64 / beroun_types::PRICE_SCALE;
+                                        let btc_amount = (order_usd as f64 / mid_f / beroun_types::PRICE_SCALE).max(0.00015);
+
+                                        let order_msg = json!([0, "ox_multi", null, [
+                                            ["oc_multi", { "all": 1 }],
+                                            ["on", { "symbol": "tBTCUSD", "amount": format!("{:.5}", btc_amount), "price": format!("{:.2}", buy_p), "type": "EXCHANGE LIMIT", "flags": 4096 }],
+                                            ["on", { "symbol": "tBTCUSD", "amount": format!("{:.5}", -btc_amount), "price": format!("{:.2}", sell_p), "type": "EXCHANGE LIMIT", "flags": 4096 }]
+                                        ]]);
+                                        
+                                        let _ = write.send(Message::Text(order_msg.to_string().into())).await;
+                                        // Persist last submitted prices
+                                        eng.last_buy_price.store(buy_price_i, Ordering::SeqCst);
+                                        eng.last_sell_price.store(sell_price_i, Ordering::SeqCst);
+                                        last_upd = now;
+                                        info!(event = "sniper_fire", bid = best_bid, ask = best_ask, 
+                                              buy = buy_p, sell = sell_p,
+                                              delta_buy = buy_delta, delta_sell = sell_delta);
+                                    }
                                 }
                             }
                         }
