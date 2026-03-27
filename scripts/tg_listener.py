@@ -134,7 +134,7 @@ def cmd_help(message):
     if not auth(message): return
     log.info("Help/Start requested")
     try:
-        bot.reply_to(message, """🐺 *SNIPER v10.7 — Sovereign Command Center*
+        bot.reply_to(message, """🐺 *SNIPER v11.1 — Delta Lead Command Center*
 
 🎯 *Intent (Strategické směry):*
 ⚡ /aggressive — Úzký grid, rychlá exekuce
@@ -143,13 +143,15 @@ def cmd_help(message):
 🧠 /sovereign — AI řídí vše (default)
 
 📊 *Monitoring:*
-/status — Live stav
+/status — Live stav engine
 /ai — AI Status (L1+L2+Ghost)
-/brain — Sniper Brain
+/macro — Macro Intelligence (bias, F&G, Binance)
+⚡ /delta — Delta Lead v11.1 (cross-venue)
 /analytics — Trade analytics
 /report — Denní report
 
-🧠 *AI:*
+🧠 *AI & Brain:*
+/brain — Sniper Brain (SQLite)
 /oracle — Vynutit AI cyklus
 /analyze — Gemini analýza
 /backtest — Neural Cross backtest
