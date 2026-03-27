@@ -16,7 +16,7 @@ const MAX_CHANGE_PCT: f64 = 50.0; // Max 50% change per update
 
 #[derive(Parser)]
 #[command(name = "beroun-config")]
-#[command(about = "🐺 Beroun Sniper v9.0 — Safe live parameter modifier (mmap)")]
+#[command(about = "🐺 Beroun Sniper v11.1 — Safe live parameter modifier (mmap)")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -122,7 +122,7 @@ fn main() -> Result<()> {
             println!("✅ Grid Levels: {value}");
         }
         Commands::Show => {
-            println!("🐺 Beroun Sniper v9.0 — RiskState Live");
+            println!("🐺 Beroun Sniper v11.1 — RiskState Live");
             println!("─────────────────────────────────");
             println!("  Grid Step:     ${:.2}", risk.grid_step.load(Ordering::Acquire) as f64 / s);
             println!("  Grid Levels:   {}", risk.grid_size.load(Ordering::Acquire));

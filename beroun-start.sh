@@ -1,12 +1,12 @@
 #!/bin/bash
-# 🐺 BEROUN SNIPER v11.0 "Sentinel Singularity" — MASTER STARTUP
+# 🐺 BEROUN SNIPER v11.1 "Delta Lead" — MASTER STARTUP
 # Three-Layer Architecture: L0 Rust | L1 Python Shield | L2 Gemini Oracle
 # Ghost Orders | Sentinel Defense | Fair Value | Macro Intelligence
 
 PROJECT_ROOT="/home/wwwenda/hft-sniper"
 BIN_DIR="$PROJECT_ROOT/target/release"
 
-echo "🐺 Starting SNIPER v11.0 (Sentinel Singularity)..."
+echo "🐺 Starting SNIPER v11.1 (Delta Lead)..."
 cd $PROJECT_ROOT
 
 # ═══ DEZINSEKCE: Kill ALL old processes ═══
@@ -79,5 +79,5 @@ if [ -f "$PROJECT_ROOT/watchdog.sh" ]; then
     echo "-> Watchdog started"
 fi
 
-echo "✅ All systems operational — SNIPER v11.0 (Sentinel Singularity)"
+echo "✅ All systems operational — SNIPER v11.1 (Delta Lead)"
 wait

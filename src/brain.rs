@@ -1,4 +1,4 @@
-//! 🐺 BEROUN SNIPER BRAIN v10.4 "Lesson Validator"
+//! 🐺 BEROUN SNIPER BRAIN v11.1 "Delta Lead"
 //! ═══════════════════════════════════════════════
 //! Permanent memory + self-learning + lesson validation.
 //! Closed-loop: learn → apply → validate → adjust.
@@ -575,7 +575,7 @@ fn main() -> Result<()> {
 
     match cli.command {
         Commands::Init => {
-            println!("🧠 Sniper Brain v10.4 initialized: {}", cli.db.display());
+            println!("🧠 Sniper Brain v11.1 initialized: {}", cli.db.display());
             println!("   Tables: cycles, alerts, patterns, experiments, lessons, lesson_validations");
         }
         Commands::LogCycle { json } => cmd_log_cycle(&conn, &json)?,

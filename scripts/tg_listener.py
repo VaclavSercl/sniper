@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🐺 BEROUN SNIPER v10.7 — Telegram Sovereign Command Center
+🐺 BEROUN SNIPER v11.1 — Telegram Delta Lead Command Center
 Bi-directional command & control via encrypted Telegram channel.
 Includes AI L1/L2 telemetry, Shadow Mode, Ghost Mode, and Sovereign Intent.
 
@@ -188,7 +188,7 @@ def cmd_status(message):
         eq = state.get("equity", {})
         total_eq = eq.get('total_usd', 0)
 
-        msg = f"""📊 *SNIPER v10.4 — Live Status*
+        msg = f"""📊 *SNIPER v11.1 — Live Status*
 
 💎 *Total Equity:* `${total_eq:.2f}`
   ├─ Cash:  `${eq.get('wallet_usd', 0):.2f}`
@@ -232,7 +232,7 @@ def cmd_analyze(message):
     except Exception:
         pass
 
-    prompt = f"""You are SNIPER, the AI commander of Beroun Sniper v10.4 HFT system.
+    prompt = f"""You are SNIPER, the AI commander of Beroun Sniper v11.1 HFT system.
 Architecture: L0=Rust Engine, L1=Python Shield, L2=YOU with permanent SQLite memory.
 Bot state: {state}
 Permanent memory: {brain_ctx}
@@ -618,7 +618,7 @@ def cmd_oracle(message):
         except Exception:
             pass
 
-        prompt = f"""You are SNIPER, the AI commander of Beroun Sniper v10.4.
+        prompt = f"""You are SNIPER, the AI commander of Beroun Sniper v11.1.
 Bot state: {state}
 Permanent memory: {brain_ctx}
 Do a quick strategic analysis: 1) Market regime 2) Optimal grid 3) Risk assessment.
@@ -629,7 +629,7 @@ Output a concise report in Czech, max 8 sentences."""
             capture_output=True, text=True, timeout=120
         )
         response = result.stdout.strip()[:3500]
-        bot.send_message(message.chat.id, f"🔮 *SNIPER Oracle v10.4:*\n\n{response}",
+        bot.send_message(message.chat.id, f"🔮 *SNIPER Oracle v11.1:*\n\n{response}",
                          parse_mode="Markdown")
     except subprocess.TimeoutExpired:
         bot.send_message(message.chat.id, "⚠️ Gemini timeout (120s)")

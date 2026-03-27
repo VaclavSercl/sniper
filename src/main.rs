@@ -417,8 +417,7 @@ async fn async_main() -> Result<()> {
                 }
 
                 if price_history.len() >= 10 {
-                    let min_p = *price_history.iter().min().unwrap();
-                    let max_p = *price_history.iter().max().unwrap();
+                if let (Some(&min_p), Some(&max_p)) = (price_history.iter().min(), price_history.iter().max()) {
                     let range = max_p - min_p;
                     let dynamic = (range as f64 * vol_mult) as i64;
                     let adapted = ((base_grid + dynamic) as f64 * grid_mult) as i64;
@@ -450,6 +449,7 @@ async fn async_main() -> Result<()> {
                                 new_grid_usd = new_grid as i64 / beroun_types::PRICE_SCALE_I);
                         }
                     }
+                } // if let min/max
                 } else {
                     risk.grid_step.store(default_grid, Ordering::Release);
                 }
@@ -460,8 +460,8 @@ async fn async_main() -> Result<()> {
     let key = std::env::var("BITFINEX_API_KEY").context("Missing API KEY")?;
     let sec = std::env::var("BITFINEX_API_SECRET").context("Missing API SECRET")?;
 
-    info!(event = "system_start", version = "10.0.0-apex-predator");
-    notifier.alert("*Beroun Sniper v10.4 NEURAL CROSS ONLINE*\n`Hydra Grid + L1 Shield + Neural Cross + Lesson Validator`".to_string());
+    info!(event = "system_start", version = "11.1.0-delta-lead");
+    notifier.alert("*Beroun Sniper v11.1 DELTA LEAD ONLINE*\n`Hydra Grid + L1 Shield + Delta Lead + Macro Intelligence`".to_string());
 
     // SIGTERM listener (systemd, Docker)
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())

@@ -497,7 +497,7 @@ async fn main() -> Result<()> {
     }
     let _lock_guard = lock_file;
 
-    println!("--- BEROUN DASHBOARD v11.0 (HTMX+SSE) ---");
+    println!("--- BEROUN DASHBOARD v11.1 (HTMX+SSE) ---");
 
     let state: SharedState = Arc::new(Mutex::new(DashboardState::default()));
     let state_for_server = state.clone();
