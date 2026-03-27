@@ -60,6 +60,9 @@ OFF_L1_SUCCESS_RATE = 1640
 OFF_L2_ACTION_MS = 1648
 OFF_LEARNING_TRIG = 1656
 
+# Legacy v8.0 fields (must keep alive for beroun-config ai_alive check)
+OFF_AI_HEARTBEAT = 1480  # ai_heartbeat_ms in EngineState (verified from repr(C) layout)
+
 # Auto-escalation limits
 MAX_POSITION_FLOOR = 0.001
 MAX_POSITION_CEIL = 0.010
@@ -570,7 +573,11 @@ def apply_decision(decision, mm, escalation_result=None):
     write_u64_mmap(mm, OFF_L2_REGIME, regime_id)
 
     # Update L2 action timestamp
-    write_u64_mmap(mm, OFF_L2_ACTION_MS, int(time.time() * 1000))
+    now_ms = int(time.time() * 1000)
+    write_u64_mmap(mm, OFF_L2_ACTION_MS, now_ms)
+
+    # Update legacy ai_heartbeat so beroun-config reports ai_alive=true
+    write_u64_mmap(mm, OFF_AI_HEARTBEAT, now_ms)
 
     # L1 learning trigger
     l1_advice = decision.get("l1_advice", "keep")

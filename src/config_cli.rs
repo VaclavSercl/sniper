@@ -162,7 +162,7 @@ fn main() -> Result<()> {
             let now_epoch = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH).unwrap_or_default()
                 .as_millis() as u64;
-            let ai_alive = ai_hb_ms > 0 && now_epoch.saturating_sub(ai_hb_ms) < 30_000;
+            let ai_alive = ai_hb_ms > 0 && now_epoch.saturating_sub(ai_hb_ms) < 600_000; // 10min (2× Oracle cycle)
 
             let w_btc = engine.wallet_btc.load(Ordering::Acquire) as f64 / s;
             let w_usd = engine.wallet_usd.load(Ordering::Acquire) as f64 / s;
