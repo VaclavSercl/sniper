@@ -23,6 +23,10 @@ path = "src/dashboard.rs"
 name = "beroun-config"
 path = "src/config_cli.rs"
 
+[[bin]]
+name = "dump-offsets"
+path = "src/dump_offsets.rs"
+
 [dependencies]
 chrono = "0.4.44"
 serde = { version = "1.0.228", features = ["derive"] }
