@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌙 Moonshot — Multi-Symbol Flash Crash Dashboard</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { background: #0a0a1a; color: #e0e0e0; font-family: 'JetBrains Mono', monospace; padding: 16px; }
+        h1 { color: #f5c842; font-size: 1.4em; margin-bottom: 8px; }
+        .status-bar { display: flex; gap: 24px; padding: 8px 12px; background: #111128; border-radius: 8px; margin-bottom: 12px; font-size: 0.85em; }
+        .status-bar .item { display: flex; gap: 6px; align-items: center; }
+        .badge { padding: 2px 8px; border-radius: 4px; font-size: 0.75em; font-weight: bold; }
+        .badge-live { background: #1a472a; color: #4ade80; }
+        .badge-paused { background: #4a1a1a; color: #f87171; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.8em; }
+        th { background: #1a1a2e; color: #818cf8; padding: 6px 8px; text-align: left; border-bottom: 2px solid #2d2d5e; }
+        td { padding: 5px 8px; border-bottom: 1px solid #1a1a2e; }
+        tr:hover { background: #1a1a2e; }
+        .pnl-pos { color: #4ade80; }
+        .pnl-neg { color: #f87171; }
+        .footer { margin-top: 12px; font-size: 0.7em; color: #555; text-align: center; }
+    </style>
+</head>
+<body>
+    <h1>🌙 Moonshot — Multi-Symbol Flash Crash</h1>
+
+    <div class="status-bar" id="status-bar">
+        <div class="item">Status: <span id="status-badge" class="badge badge-paused">LOADING</span></div>
+        <div class="item">Pairs: <span id="active-pairs">0</span>/20</div>
+        <div class="item">Total PnL: <span id="total-pnl">$0.00</span></div>
+        <div class="item">Daily PnL: <span id="daily-pnl">$0.00</span></div>
+        <div class="item">Fills: <span id="total-fills">0</span></div>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Symbol</th>
+                <th>Bid</th>
+                <th>Ask</th>
+                <th>Drop%</th>
+                <th>TP%</th>
+                <th>Order $</th>
+                <th>Buy Level</th>
+                <th>Position</th>
+                <th>PnL</th>
+                <th>Fills</th>
+                <th>Latency</th>
+            </tr>
+        </thead>
+        <tbody id="pairs-body">
+            <tr><td colspan="12" style="text-align:center; color:#555;">Waiting for data...</td></tr>
+        </tbody>
+    </table>
+
+    <div class="footer">Sniper Armada · Moonshot v1.0.0 · SSE :3001</div>
+
+    <script>
+        const es = new EventSource('/events');
+        es.onmessage = function(e) {
+            const d = JSON.parse(e.data);
+
+            // Status
+            const badge = document.getElementById('status-badge');
+            badge.textContent = d.paused ? 'PAUSED' : 'LIVE';
+            badge.className = 'badge ' + (d.paused ? 'badge-paused' : 'badge-live');
+
+            document.getElementById('active-pairs').textContent = d.active_pairs;
+            document.getElementById('total-fills').textContent = d.total_fills;
+
+            const totalPnl = parseFloat(d.total_pnl);
+            const el1 = document.getElementById('total-pnl');
+            el1.textContent = '$' + d.total_pnl;
+            el1.className = totalPnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+
+            const dailyPnl = parseFloat(d.daily_pnl);
+            const el2 = document.getElementById('daily-pnl');
+            el2.textContent = '$' + d.daily_pnl;
+            el2.className = dailyPnl >= 0 ? 'pnl-pos' : 'pnl-neg';
+
+            // Pairs table
+            const tbody = document.getElementById('pairs-body');
+            if (d.pairs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;color:#555;">No active pairs</td></tr>';
+                return;
+            }
+
+            let html = '';
+            for (const p of d.pairs) {
+                const pnlClass = parseFloat(p.pnl) >= 0 ? 'pnl-pos' : 'pnl-neg';
+                html += `<tr>
+                    <td>${p.idx}</td>
+                    <td style="color:#f5c842;font-weight:bold;">${p.symbol}</td>
+                    <td>${p.bid}</td>
+                    <td>${p.ask}</td>
+                    <td>${p.drop_pct}%</td>
+                    <td>${p.tp_pct}%</td>
+                    <td>$${p.order_usd}</td>
+                    <td style="color:#818cf8;">${p.buy_level}</td>
+                    <td>${p.position}</td>
+                    <td class="${pnlClass}">$${p.pnl}</td>
+                    <td>${p.fills}</td>
+                    <td>${p.latency_us}μs</td>
+                </tr>`;
+            }
+            tbody.innerHTML = html;
+        };
+    </script>
+</body>
+</html>
