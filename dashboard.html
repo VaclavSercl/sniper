@@ -3,443 +3,215 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Beroun Sniper v5.4 — HFT Dashboard</title>
+    <title>Beroun Sniper v10.1 — The War Room</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://unpkg.com/uplot@1.6.31/dist/uPlot.min.css">
-    <script src="https://unpkg.com/uplot@1.6.31/dist/uPlot.iife.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"></script>
+    <script src="https://unpkg.com/htmx-ext-sse@2.2.3/sse.js"></script>
     <style>
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
         :root {
-            --bg-primary: #0a0e17;
-            --bg-card: rgba(15, 20, 35, 0.75);
-            --bg-card-hover: rgba(20, 28, 50, 0.85);
-            --border: rgba(56, 78, 130, 0.3);
-            --border-glow: rgba(56, 130, 246, 0.4);
-            --text-primary: #e2e8f0;
-            --text-secondary: #64748b;
-            --text-muted: #475569;
-            --green: #22c55e;
-            --green-dim: rgba(34, 197, 94, 0.15);
+            --bg-void: #060a13;
+            --bg-card: rgba(12, 17, 32, 0.85);
+            --border: rgba(40, 60, 100, 0.25);
+            --text-primary: #e8edf5;
+            --text-muted: #4a5568;
+            --green: #10b981;
             --red: #ef4444;
-            --red-dim: rgba(239, 68, 68, 0.15);
             --blue: #3b82f6;
-            --blue-dim: rgba(59, 130, 246, 0.12);
-            --yellow: #eab308;
+            --yellow: #f59e0b;
             --purple: #a855f7;
             --cyan: #06b6d4;
         }
 
         body {
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            background: var(--bg-primary);
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg-void);
             color: var(--text-primary);
             min-height: 100vh;
-            padding: 1rem;
+            padding: 0.75rem;
             background-image:
-                radial-gradient(ellipse at 20% 50%, rgba(56, 130, 246, 0.03) 0%, transparent 50%),
-                radial-gradient(ellipse at 80% 50%, rgba(168, 85, 247, 0.03) 0%, transparent 50%);
+                radial-gradient(ellipse at 15% 20%, rgba(59,130,246,0.04) 0%, transparent 50%),
+                radial-gradient(ellipse at 85% 80%, rgba(168,85,247,0.03) 0%, transparent 50%);
         }
 
-        .container { max-width: 1400px; margin: 0 auto; }
+        .container { max-width: 1500px; margin: 0 auto; }
 
-        /* Header */
-        .header {
+        /* ═══ ROOT ═══ */
+        .root { }
+        .root.shadow-mode { }
+        .root.shadow-mode .hdr { border-color: rgba(168,85,247,0.4); }
+
+        /* ═══ HEADER ═══ */
+        .hdr {
             display: flex; justify-content: space-between; align-items: center;
-            padding: 0.75rem 1.25rem;
+            padding: 0.6rem 1.2rem;
             background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 12px;
-            backdrop-filter: blur(20px);
-            margin-bottom: 1rem;
-        }
-        .header-left { display: flex; align-items: center; gap: 1rem; }
-        .logo { font-family: 'JetBrains Mono', monospace; font-size: 1.1rem; font-weight: 700; letter-spacing: -0.5px; }
-        .logo span { color: var(--green); }
-        .version { font-size: 0.65rem; color: var(--text-muted); padding: 2px 8px; background: rgba(255,255,255,0.05); border-radius: 4px; }
-        .header-right { display: flex; align-items: center; gap: 1rem; }
-        .ws-status { display: flex; align-items: center; gap: 0.4rem; font-size: 0.7rem; font-family: 'JetBrains Mono', monospace; }
-        .ws-dot { width: 6px; height: 6px; border-radius: 50%; }
-        .ws-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
-        .ws-dot.offline { background: var(--red); box-shadow: 0 0 6px var(--red); }
-        .uptime { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-secondary); }
-
-        /* Metric Cards */
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 0.6rem;
-            margin-bottom: 1rem;
-        }
-        .metric-card {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 0.75rem 1rem;
-            backdrop-filter: blur(16px);
-            transition: border-color 0.2s, transform 0.15s;
-        }
-        .metric-card:hover { border-color: var(--border-glow); transform: translateY(-1px); }
-        .metric-label {
-            font-size: 0.6rem; font-weight: 600; text-transform: uppercase;
-            letter-spacing: 0.08em; color: var(--text-muted); margin-bottom: 0.3rem;
-        }
-        .metric-value {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 1.15rem; font-weight: 700; color: var(--text-primary);
-        }
-        .metric-value.positive { color: var(--green); }
-        .metric-value.negative { color: var(--red); }
-        .metric-value.blue { color: var(--blue); }
-        .metric-value.yellow { color: var(--yellow); }
-        .metric-value.purple { color: var(--purple); }
-        .metric-value.cyan { color: var(--cyan); }
-        .metric-sub { font-size: 0.6rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
-
-        /* Charts */
-        .chart-section {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 1rem 1.25rem;
-            backdrop-filter: blur(16px);
-            margin-bottom: 1rem;
-        }
-        .chart-header {
-            display: flex; justify-content: space-between; align-items: center;
+            border-radius: 14px;
+            backdrop-filter: blur(24px);
             margin-bottom: 0.75rem;
+            position: relative;
         }
-        .chart-title { font-size: 0.65rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); }
-        .chart-legend { display: flex; gap: 1rem; font-size: 0.6rem; }
-        .legend-item { display: flex; align-items: center; gap: 4px; color: var(--text-secondary); }
-        .legend-dot { width: 6px; height: 6px; border-radius: 50%; }
+        .hdr::before {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(59,130,246,0.3), rgba(168,85,247,0.3), transparent);
+        }
+        .hdr-l { display: flex; align-items: center; gap: 0.8rem; }
+        .hdr-r { display: flex; align-items: center; gap: 0.8rem; }
+        .logo { font-family: 'JetBrains Mono', monospace; font-size: 1rem; font-weight: 700; }
+        .logo .wolf { font-size: 1.15rem; }
+        .logo .b { background: linear-gradient(135deg, #ef4444, #f97316); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .logo .s { color: #8892a8; font-weight: 400; }
+        .ver { font-size: 0.55rem; padding: 2px 7px; border-radius: 5px; background: rgba(168,85,247,0.12); color: var(--purple); border: 1px solid rgba(168,85,247,0.2); font-family: 'JetBrains Mono', monospace; }
+        .mono-s { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: #8892a8; }
+        .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: glow 2s ease-in-out infinite; }
+        .paused-badge { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; font-weight: 700; color: var(--red); padding: 2px 8px; border-radius: 4px; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); }
 
-        /* Two-column layout */
-        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
-        @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+        /* Regime badges */
+        .regime { font-size: 0.6rem; font-family: 'JetBrains Mono', monospace; font-weight: 600; padding: 3px 10px; border-radius: 6px; letter-spacing: 0.05em; }
+        .regime.trending { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.3); }
+        .regime.ranging { background: rgba(245,158,11,0.12); color: var(--yellow); border: 1px solid rgba(245,158,11,0.2); }
+        .regime.chaos { background: rgba(239,68,68,0.15); color: #f87171; border: 1px solid rgba(239,68,68,0.3); animation: pulse-d 1.5s ease-in-out infinite; }
+        .regime.unknown { background: rgba(100,100,120,0.12); color: var(--text-muted); border: 1px solid rgba(100,100,120,0.2); }
 
-        /* Order Book */
-        .book-table { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; }
-        .book-table th { font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--border); }
-        .book-table td { padding: 4px 8px; text-align: right; }
-        .book-table .bid-row td:first-child { color: var(--green); }
-        .book-table .ask-row td:first-child { color: var(--red); }
-        .book-table .bar-cell { position: relative; }
-        .bar-fill { position: absolute; top: 0; right: 0; bottom: 0; opacity: 0.12; border-radius: 2px; }
-        .bar-fill.bid { background: var(--green); }
-        .bar-fill.ask { background: var(--red); }
-        .spread-row td { text-align: center; color: var(--yellow); font-size: 0.6rem; padding: 3px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        /* Shadow mode */
+        .shadow-banner { display: flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 6px; background: linear-gradient(90deg, rgba(168,85,247,0.15), rgba(168,85,247,0.25), rgba(168,85,247,0.15)); border: 1px solid rgba(168,85,247,0.3); border-radius: 10px; margin-bottom: 0.75rem; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--purple); font-weight: 600; letter-spacing: 0.1em; animation: pulse-d 2s ease-in-out infinite; }
+        .freeze-ind { position: fixed; top: 10px; right: 10px; padding: 6px 14px; border-radius: 8px; background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.5); font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: #f87171; font-weight: 600; animation: pulse-d 1s ease-in-out infinite; z-index: 100; }
 
-        /* Event Log */
-        .log-container { max-height: 280px; overflow-y: auto; }
-        .log-entry { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; padding: 3px 0; color: var(--text-secondary); border-bottom: 1px solid rgba(255,255,255,0.03); }
-        .log-entry .log-time { color: var(--text-muted); margin-right: 6px; }
-        .log-entry.trade { color: var(--green); }
-        .log-entry.error { color: var(--red); }
-        .log-entry.warn { color: var(--yellow); }
+        /* ═══ METRIC CARDS ═══ */
+        .row6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.6rem; margin-bottom: 0.75rem; }
+        @media (max-width: 1200px) { .row6 { grid-template-columns: repeat(3, 1fr); } }
+        @media (max-width: 700px) { .row6 { grid-template-columns: repeat(2, 1fr); } }
+
+        .mc {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 12px; padding: 0.6rem 0.85rem;
+            backdrop-filter: blur(16px);
+            transition: border-color 0.25s, transform 0.15s;
+        }
+        .mc:hover { border-color: rgba(59,130,246,0.4); transform: translateY(-1px); }
+        .ml { font-size: 0.53rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 0.2rem; }
+        .mv { font-family: 'JetBrains Mono', monospace; font-size: 1.05rem; font-weight: 700; color: var(--text-primary); }
+        .mv.pos, .pos .mv { color: var(--green); }
+        .mv.neg, .neg .mv { color: var(--red); }
+        .mv.blue, .blue .mv { color: var(--blue); }
+        .mv.yellow, .yellow .mv { color: var(--yellow); }
+        .mv.purple, .purple .mv { color: var(--purple); }
+        .mv.cyan, .cyan .mv { color: var(--cyan); }
+
+        /* Equity card */
+        .equity-card {
+            background: linear-gradient(135deg, rgba(12,17,32,0.9), rgba(16,22,42,0.95));
+            border: 1px solid var(--border); border-radius: 14px; padding: 0.9rem 1.1rem;
+            position: relative; overflow: hidden;
+        }
+        .equity-card::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--green), var(--blue), var(--purple)); opacity: 0.6; }
+        .eq-val { font-family: 'JetBrains Mono', monospace; font-size: 1.8rem; font-weight: 800; background: linear-gradient(135deg, #e8edf5, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .eq-sub { font-size: 0.55rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
+
+        /* ═══ AI PANEL ═══ */
+        .ai-panel {
+            background: rgba(16,22,42,0.9); border: 1px solid var(--border);
+            border-radius: 14px; padding: 0.85rem 0.95rem;
+            position: relative; overflow: hidden;
+        }
+        .ai-panel::before { content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 3px; background: linear-gradient(180deg, var(--blue), var(--purple)); }
+        .ai-title { font-size: 0.6rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-muted); margin-bottom: 0.5rem; }
+        .ai-sep { height: 1px; background: var(--border); margin: 0.4rem 0; }
+        .ai-label { font-size: 0.48rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px; }
+
+        /* Confidence bar */
+        .bar-row { display: flex; justify-content: space-between; font-size: 0.5rem; margin-bottom: 2px; }
+        .bar-label { color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+        .bar-val { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+        .conf-track { width: 100%; height: 7px; background: rgba(255,255,255,0.04); border-radius: 4px; overflow: hidden; margin-bottom: 0.4rem; }
+        .conf-fill { height: 100%; border-radius: 4px; transition: width 0.4s; }
+        .conf-fill.low { background: linear-gradient(90deg, var(--green), #34d399); }
+        .conf-fill.med { background: linear-gradient(90deg, var(--yellow), #f97316); }
+        .conf-fill.high { background: linear-gradient(90deg, #f97316, var(--red)); }
+
+        /* OBI bar */
+        .obi-container { width: 100%; height: 18px; background: rgba(255,255,255,0.03); border-radius: 6px; position: relative; margin: 4px 0; overflow: hidden; }
+        .obi-center { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px; background: rgba(255,255,255,0.12); }
+        .obi-fill { position: absolute; top: 2px; bottom: 2px; border-radius: 4px; transition: all 0.3s; }
+        .obi-fill.bid-pressure { background: linear-gradient(90deg, transparent, var(--green)); }
+        .obi-fill.ask-pressure { background: linear-gradient(270deg, transparent, var(--red)); }
+        .obi-l, .obi-r { position: absolute; top: 50%; transform: translateY(-50%); font-size: 0.45rem; font-family: 'JetBrains Mono', monospace; font-weight: 600; z-index: 2; }
+        .obi-l { left: 5px; color: #34d399; }
+        .obi-r { right: 5px; color: #f87171; }
+        .obi-val { text-align: center; font-size: 0.6rem; font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+
+        /* AI stat grid */
+        .ai-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.35rem; margin-top: 0.3rem; }
+        .ai-stat { background: rgba(255,255,255,0.025); border-radius: 7px; padding: 0.35rem 0.5rem; }
+        .ai-sl { font-size: 0.45rem; color: var(--text-muted); text-transform: uppercase; }
+        .ai-sv { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; font-weight: 700; }
+        .ai-sv.neg { color: var(--red); }
+        .ai-sv.pos { color: var(--green); }
+        .ai-sv.yellow { color: var(--yellow); }
+
+        /* ═══ CHARTS ═══ */
+        .chart-box {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: 14px; padding: 0.75rem 0.95rem; backdrop-filter: blur(16px);
+        }
+        .chart-hdr { font-size: 0.55rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-muted); margin-bottom: 0.5rem; }
+        .ev-count { font-size: 0.48rem; font-weight: 400; opacity: 0.5; margin-left: 0.5rem; }
+
+        /* ═══ LAYOUTS ═══ */
+        .layout3 { display: grid; grid-template-columns: 260px 1fr 260px; gap: 0.75rem; margin-bottom: 0.75rem; }
+        .layout2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+        @media (max-width: 1200px) { .layout3 { grid-template-columns: 1fr; } .layout2 { grid-template-columns: 1fr; } }
+
+        /* ═══ ORDER BOOK ═══ */
+        .book { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 0.63rem; }
+        .book th { font-size: 0.48rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); padding: 4px 7px; text-align: right; border-bottom: 1px solid var(--border); }
+        .book td { padding: 3px 7px; text-align: right; }
+        .bid-row .price { color: var(--green); }
+        .ask-row .price { color: var(--red); }
+        .depth { position: relative; }
+        .bar { position: absolute; top: 0; right: 0; bottom: 0; opacity: 0.1; border-radius: 2px; }
+        .bar.bid { background: var(--green); }
+        .bar.ask { background: var(--red); }
+        .spread-row td { text-align: center; color: var(--yellow); font-size: 0.5rem; padding: 2px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+
+        /* ═══ LOG ═══ */
+        .log-scroll { max-height: 220px; overflow-y: auto; }
+        .log-entry { font-family: 'JetBrains Mono', monospace; font-size: 0.57rem; padding: 2px 0; color: #8892a8; border-bottom: 1px solid rgba(255,255,255,0.02); }
+        .log-entry .log-time { color: var(--text-muted); margin-right: 5px; }
+        .log-entry.trade { color: #34d399; }
+        .log-entry.sweep { color: #f97316; }
+        .log-entry.error { color: #f87171; }
+
+        /* ═══ ANIMATIONS ═══ */
+        @keyframes glow { 0%, 100% { box-shadow: 0 0 8px var(--green); } 50% { box-shadow: 0 0 18px var(--green); } }
+        @keyframes pulse-d { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
 
         /* Scrollbar */
-        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar { width: 3px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-        /* uPlot overrides */
-        .uplot { background: transparent !important; }
-        .u-legend { display: none !important; }
-
-        /* Pulse animation */
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-        .pulse { animation: pulse 2s ease-in-out infinite; }
+        /* Loading */
+        .loading { text-align: center; padding: 4rem 1rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; }
+        .loading .wolf { font-size: 2rem; display: block; margin-bottom: 1rem; animation: pulse-d 1.5s ease-in-out infinite; }
     </style>
 </head>
 <body>
-<div class="container">
-    <!-- Header -->
-    <header class="header">
-        <div class="header-left">
-            <div class="logo">🐺 <span>BEROUN</span> SNIPER</div>
-            <span class="version" id="ver">v6.0.0</span>
-        </div>
-        <div class="header-right">
-            <div class="ws-status">
-                <span class="ws-dot online" id="ws-dot"></span>
-                <span id="ws-label">LIVE</span>
-            </div>
-            <div class="uptime" id="uptime">00:00:00</div>
-        </div>
-    </header>
+<div class="container"
+     hx-ext="sse"
+     sse-connect="/sse">
 
-    <!-- Row 1: Price metrics -->
-    <div class="metrics-grid" style="grid-template-columns: repeat(6, 1fr);">
-        <div class="metric-card">
-            <div class="metric-label">Best Bid</div>
-            <div class="metric-value positive" id="best-bid">---</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">Best Ask</div>
-            <div class="metric-value negative" id="best-ask">---</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">Micro-Price</div>
-            <div class="metric-value purple" id="micro-price">---</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">Spread</div>
-            <div class="metric-value yellow" id="spread">---</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">Dynamic Grid</div>
-            <div class="metric-value cyan" id="grid-step">---</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">T2T Latence</div>
-            <div class="metric-value" id="t2t">---</div>
+    <div sse-swap="dashboard"
+         hx-swap="innerHTML settle:0">
+        <div class="loading">
+            <span class="wolf">🐺</span>
+            Connecting to Beroun Sniper v10.1...
         </div>
     </div>
 
-    <!-- Row 2: Trading metrics -->
-    <div class="metrics-grid" style="grid-template-columns: repeat(5, 1fr);">
-        <div class="metric-card">
-            <div class="metric-label">Pozice (BTC)</div>
-            <div class="metric-value blue" id="position">0.00000</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">Inventory Skew</div>
-            <div class="metric-value purple" id="inv-skew">$0.00</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">Realized PnL</div>
-            <div class="metric-value" id="pnl">$0.00</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">Wallet BTC</div>
-            <div class="metric-value" id="wallet-btc">---</div>
-        </div>
-        <div class="metric-card">
-            <div class="metric-label">Wallet USD</div>
-            <div class="metric-value" id="wallet-usd">---</div>
-        </div>
-    </div>
-
-    <!-- Price Chart -->
-    <div class="chart-section">
-        <div class="chart-header">
-            <span class="chart-title">Real-time Price + Dynamic Grid</span>
-            <div class="chart-legend">
-                <span class="legend-item"><span class="legend-dot" style="background:var(--text-primary)"></span> Price</span>
-                <span class="legend-item"><span class="legend-dot" style="background:var(--green)"></span> Bid Grid</span>
-                <span class="legend-item"><span class="legend-dot" style="background:var(--red)"></span> Ask Grid</span>
-            </div>
-        </div>
-        <div id="chart-price"></div>
-    </div>
-
-    <!-- Two-column: Book + PnL -->
-    <div class="two-col">
-        <!-- Order Book Depth -->
-        <div class="chart-section">
-            <div class="chart-header">
-                <span class="chart-title">Order Book (Top 5)</span>
-            </div>
-            <table class="book-table">
-                <thead><tr><th>Price</th><th>Amount (BTC)</th><th style="width:40%">Depth</th></tr></thead>
-                <tbody id="book-body">
-                    <tr><td colspan="3" style="text-align:center;color:var(--text-muted);padding:2rem;">Waiting for data...</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- PnL Chart -->
-        <div class="chart-section">
-            <div class="chart-header">
-                <span class="chart-title">PnL Curve</span>
-            </div>
-            <div id="chart-pnl"></div>
-        </div>
-    </div>
-
-    <!-- Event Log -->
-    <div class="chart-section">
-        <div class="chart-header">
-            <span class="chart-title">System Events</span>
-            <span style="font-size:0.6rem;color:var(--text-muted)" id="event-count">0 events</span>
-        </div>
-        <div class="log-container" id="log">
-            <div class="log-entry"><span class="log-time">--:--:--</span> Waiting for connection...</div>
-        </div>
-    </div>
 </div>
-
-<script>
-const MAX_POINTS = 300;
-let ds = { ts: [], price: [], pnl: [] };
-let currentGrid = { base: 0, step: 0, size: 2 };
-let eventLog = [];
-let tickCount = 0;
-
-function fmt(n, d=2) { return n.toLocaleString('en-US', {minimumFractionDigits:d, maximumFractionDigits:d}); }
-function fmtTime(secs) {
-    const h = Math.floor(secs/3600), m = Math.floor((secs%3600)/60), s = secs%60;
-    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-}
-function nowStr() { return new Date().toLocaleTimeString('cs-CZ'); }
-
-function addLogEntry(text, cls='') {
-    eventLog.unshift({time: nowStr(), text, cls});
-    if (eventLog.length > 50) eventLog.pop();
-    const container = document.getElementById('log');
-    container.innerHTML = eventLog.map(e =>
-        `<div class="log-entry ${e.cls}"><span class="log-time">${e.time}</span>${e.text}</div>`
-    ).join('');
-    document.getElementById('event-count').textContent = `${eventLog.length} events`;
-}
-
-// Grid overlay plugin for uPlot
-function gridPlugin() {
-    return { hooks: { draw: (u) => {
-        if (currentGrid.base === 0 || currentGrid.step === 0) return;
-        const { ctx, bbox } = u;
-        ctx.save();
-        for (let i = 1; i <= currentGrid.size; i++) {
-            // Ask lines (red)
-            let yA = u.valToPos(currentGrid.base + (i * currentGrid.step), 'y');
-            ctx.strokeStyle = "rgba(239, 68, 68, 0.25)";
-            ctx.lineWidth = 1;
-            ctx.setLineDash([4, 4]);
-            ctx.beginPath(); ctx.moveTo(bbox.left, yA); ctx.lineTo(bbox.left + bbox.width, yA); ctx.stroke();
-            // Bid lines (green)
-            let yB = u.valToPos(currentGrid.base - (i * currentGrid.step), 'y');
-            ctx.strokeStyle = "rgba(34, 197, 94, 0.25)";
-            ctx.beginPath(); ctx.moveTo(bbox.left, yB); ctx.lineTo(bbox.left + bbox.width, yB); ctx.stroke();
-        }
-        ctx.restore();
-    }}};
-}
-
-const priceEl = document.getElementById('chart-price');
-const pnlEl = document.getElementById('chart-pnl');
-
-let priceChart = new uPlot({
-    width: priceEl.clientWidth - 20, height: 350,
-    plugins: [gridPlugin()],
-    scales: { x: { time: false }, y: { auto: true, range: (u,min,max) => [min-30, max+30] }},
-    series: [{}, { label: "Price", stroke: "#e2e8f0", width: 1.5 }],
-    axes: [{ stroke: "#334155", font: "10px Inter" }, { stroke: "#334155", size: 70, font: "10px JetBrains Mono" }]
-}, [[], []], priceEl);
-
-let pnlChart = new uPlot({
-    width: pnlEl.clientWidth - 20, height: 200,
-    scales: { x: { time: false }},
-    series: [{}, { label: "PnL", stroke: "#22c55e", width: 1.5, fill: "rgba(34,197,94,0.08)" }],
-    axes: [{ show: false }, { stroke: "#334155", size: 50, font: "10px JetBrains Mono" }]
-}, [[], []], pnlEl);
-
-function renderBook(d) {
-    if (!d.ask_prices || !d.bid_prices) return;
-    const asks = d.ask_prices.map((p,i) => ({p, a: d.ask_amounts[i]})).reverse();
-    const bids = d.bid_prices.map((p,i) => ({p, a: d.bid_amounts[i]}));
-    const maxVol = Math.max(...[...d.bid_amounts, ...d.ask_amounts].filter(v=>v>0), 0.001);
-
-    let html = '';
-    // Asks (high to low)
-    for (const a of asks) {
-        const pct = (a.a / maxVol * 100).toFixed(0);
-        html += `<tr class="ask-row"><td>${fmt(a.p)}</td><td>${a.a.toFixed(5)}</td><td class="bar-cell"><div class="bar-fill ask" style="width:${pct}%"></div>${pct}%</td></tr>`;
-    }
-    // Spread row
-    html += `<tr class="spread-row"><td colspan="3">▲ SPREAD $${fmt(d.spread)} ▼</td></tr>`;
-    // Bids (high to low)
-    for (const b of bids) {
-        const pct = (b.a / maxVol * 100).toFixed(0);
-        html += `<tr class="bid-row"><td>${fmt(b.p)}</td><td>${b.a.toFixed(5)}</td><td class="bar-cell"><div class="bar-fill bid" style="width:${pct}%"></div>${pct}%</td></tr>`;
-    }
-    document.getElementById('book-body').innerHTML = html;
-}
-
-// WebSocket connection
-let ws;
-let wsReconnectTimer;
-
-function connectWS() {
-    ws = new WebSocket(`ws://${window.location.hostname}:3000/ws`);
-
-    ws.onopen = () => {
-        document.getElementById('ws-dot').className = 'ws-dot online';
-        document.getElementById('ws-label').textContent = 'LIVE';
-        addLogEntry('WebSocket connected', 'trade');
-    };
-
-    ws.onclose = () => {
-        document.getElementById('ws-dot').className = 'ws-dot offline';
-        document.getElementById('ws-label').textContent = 'OFFLINE';
-        addLogEntry('WebSocket disconnected — reconnecting...', 'error');
-        wsReconnectTimer = setTimeout(connectWS, 3000);
-    };
-
-    ws.onerror = () => { ws.close(); };
-
-    ws.onmessage = (event) => {
-        const d = JSON.parse(event.data);
-        if (!d || d.mid_price === undefined) return;
-        tickCount++;
-
-        // Prices
-        document.getElementById('best-bid').textContent = '$' + fmt(d.best_bid);
-        document.getElementById('best-ask').textContent = '$' + fmt(d.best_ask);
-        document.getElementById('spread').textContent = '$' + fmt(d.spread, 1);
-        document.getElementById('micro-price').textContent = d.micro_price > 0 ? '$' + fmt(d.micro_price) : '---';
-
-        // Grid
-        document.getElementById('grid-step').textContent = '$' + fmt(d.grid_step, 2);
-        currentGrid = { base: d.grid_base, step: d.grid_step, size: d.grid_size || 2 };
-
-        // T2T Latency
-        const t2tEl = document.getElementById('t2t');
-        const t2t = d.t2t_micros || 0;
-        t2tEl.textContent = t2t > 0 ? t2t + ' µs' : '---';
-        t2tEl.className = 'metric-value' + (t2t > 1000 ? ' negative' : t2t > 500 ? ' yellow' : '');
-
-        // Trading
-        document.getElementById('position').textContent = (d.position >= 0 ? '+' : '') + d.position.toFixed(5);
-        const skewEl = document.getElementById('inv-skew');
-        skewEl.textContent = (d.inv_skew >= 0 ? '+$' : '-$') + fmt(Math.abs(d.inv_skew));
-        skewEl.className = 'metric-value ' + (d.inv_skew > 0 ? 'positive' : d.inv_skew < 0 ? 'negative' : 'purple');
-
-        // PnL
-        const pnlEl = document.getElementById('pnl');
-        pnlEl.textContent = (d.realized_pnl >= 0 ? '+$' : '-$') + fmt(Math.abs(d.realized_pnl));
-        pnlEl.className = 'metric-value ' + (d.realized_pnl >= 0 ? 'positive' : 'negative');
-
-        // Wallets
-        document.getElementById('wallet-btc').textContent = d.wallet_btc > 0 ? d.wallet_btc.toFixed(5) + ' ₿' : '---';
-        document.getElementById('wallet-usd').textContent = d.wallet_usd > 0 ? '$' + fmt(d.wallet_usd) : '---';
-
-        // Uptime
-        document.getElementById('uptime').textContent = fmtTime(d.uptime_secs || 0);
-
-        // Chart data
-        ds.ts.push(ds.ts.length);
-        ds.price.push(d.mid_price);
-        ds.pnl.push(d.realized_pnl || 0);
-        if (ds.ts.length > MAX_POINTS) {
-            ds.ts.shift(); ds.price.shift(); ds.pnl.shift();
-            ds.ts = ds.ts.map((_,i)=>i);
-        }
-        priceChart.setData([ds.ts, ds.price]);
-        pnlChart.setData([ds.ts, ds.pnl]);
-
-        // Order Book
-        if (tickCount % 5 === 0) renderBook(d);
-    };
-}
-
-connectWS();
-
-window.addEventListener("resize", () => {
-    priceChart.setSize({width: priceEl.clientWidth - 20, height: 350});
-    pnlChart.setSize({width: pnlEl.clientWidth - 20, height: 200});
-});
-</script>
 </body>
 </html>
