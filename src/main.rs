@@ -603,6 +603,7 @@ async fn async_main() -> Result<()> {
         let mut last_upd = Instant::now();
         let mut snapshot_loaded = false;
         let mut cs_debug_count: u32 = 0;
+        let mut cs_fail_count: u32 = 0;
         let mut should_reconnect = false;
         let mut shutdown_reason: &str = "unknown";
 
@@ -650,9 +651,11 @@ async fn async_main() -> Result<()> {
                                         let local_cs = calculate_checksum(unsafe { &*engine_ptr }, do_debug);
                                         cs_debug_count += 1;
                                         if remote_cs != local_cs {
-                                            info!(event = "checksum_mismatch", remote = remote_cs, local = local_cs);
-                                            if cs_debug_count > 10 { shutdown_reason = "checksum_persist"; should_reconnect = true; }
+                                            cs_fail_count += 1;
+                                            info!(event = "checksum_mismatch", remote = remote_cs, local = local_cs, consecutive = cs_fail_count);
+                                            if cs_fail_count >= 5 { shutdown_reason = "checksum_persist"; should_reconnect = true; }
                                         } else {
+                                            cs_fail_count = 0; // Reset on success
                                             info!(event = "checksum_ok", cs = remote_cs);
                                         }
                                         continue;

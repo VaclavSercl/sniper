@@ -1,12 +1,23 @@
 #!/bin/bash
-# BEROUN SNIPER v9.0 HYDRA - MASTER STARTUP & ORCHESTRATOR
+# BEROUN SNIPER v9.2 HYDRA - MASTER STARTUP & ORCHESTRATOR
 # (c) 2026 Sovereign HFT Systems
 
 PROJECT_ROOT="/home/wwwenda/hft-sniper"
 BIN_DIR="$PROJECT_ROOT/target/release"
 
-echo "🐺 Starting Beroun Sovereign Suite v9.0 Hydra..."
+echo "🐺 Starting Beroun Sovereign Suite v9.2 Hydra..."
 cd $PROJECT_ROOT
+
+# ═══ DEZINSEKCE: Kill ALL old processes first ═══
+pkill -9 -f beroun-core 2>/dev/null || true
+pkill -9 -f beroun-sovereign-ai 2>/dev/null || true
+pkill -9 -f beroun-tele-brain 2>/dev/null || true
+pkill -9 -f beroun-dashboard 2>/dev/null || true
+pkill -9 -f tg_listener 2>/dev/null || true
+pkill -9 -f watchdog.sh 2>/dev/null || true
+rm -f /tmp/beroun.lock 2>/dev/null || true
+sleep 1
+echo "-> Dezinsekce complete"
 
 # ═══ VRSTVA 1: Ensure RAM-backed IPC directory exists ═══
 mkdir -p /dev/shm/beroun
@@ -29,16 +40,18 @@ echo "-> Config applied (Capital: $400, DLL: $20, Levels: 3)"
 $BIN_DIR/beroun-dashboard &
 echo "-> Dashboard started"
 
-# 4. Start Sovereign AI (The Brain)
-$BIN_DIR/beroun-sovereign-ai &
-echo "-> Sovereign AI started"
+# 4. Start Telegram Listener (v9.0 Python C2)
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    set -a; source "$PROJECT_ROOT/.env"; set +a
+fi
+python3 $PROJECT_ROOT/scripts/tg_listener.py &
+echo "-> Telegram C2 started"
 
-# 5. Start Telegram Brain (Communication)
-$BIN_DIR/beroun-tele-brain &
-echo "-> Telegram Brain started"
+# 5. Start Watchdog (The Guardian)
+if [ -f "$PROJECT_ROOT/watchdog.sh" ]; then
+    $PROJECT_ROOT/watchdog.sh &
+    echo "-> Watchdog started"
+fi
 
-# 6. Start Watchdog (The Guardian)
-$PROJECT_ROOT/watchdog.sh &
-
-echo "✅ All systems operational."
+echo "✅ All systems operational — v9.2 Hydra"
 wait
