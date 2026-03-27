@@ -92,6 +92,7 @@ def cmd_help(message):
 
 📊 `/status` — Live stav (Equity, PnL, pozice)
 📅 `/report` — Denní report (obchody, PnL, equity)
+📊 `/analytics` — Trade analytics (Sharpe, win-rate, heatmap)
 🚨 `/close CONFIRM` — EMERGENCY CLOSE (market exit)
 🔍 `/analyze` — Gemini 3.1 Pro analýza trhu
 📐 `/grid 8.5` — Nastavit grid
@@ -450,6 +451,24 @@ def cmd_report(message):
     log.info("Daily report requested")
     report = generate_daily_report()
     bot.reply_to(message, report)
+
+
+@bot.message_handler(commands=["analytics"])
+def cmd_analytics(message):
+    if not auth(message): return
+    log.info("Analytics requested")
+    bot.reply_to(message, "📊 Analyzuji obchody...")
+    try:
+        today = datetime.now(CET).strftime("%Y-%m-%d")
+        log_file = f"{LOG_DIR}/trading.log.{today}"
+        result = subprocess.run(
+            ["python3", "/home/wwwenda/hft-sniper/scripts/analytics.py", log_file, "--telegram"],
+            capture_output=True, text=True, timeout=30
+        )
+        output = result.stdout.strip()[:3800]
+        bot.send_message(message.chat.id, output if output else "⚠️ No data")
+    except Exception as e:
+        bot.send_message(message.chat.id, f"❌ Analytics error: `{e}`")
 
 
 def auto_daily_report():
