@@ -869,8 +869,8 @@ def cmd_validate(message):
             if alpha.returncode == 0:
                 a = j4.loads(alpha.stdout)
                 ai = a.get("alpha", {})
-                verdict = ai.get("verdict", "?")
-                verdict_icon = "📈" if verdict == "EFFICIENT" else "📉" if verdict == "OVER_CAUTIOUS" else "➖"
+                verdict = ai.get("verdict", "?").replace("_", " ")
+                verdict_icon = "📈" if "EFFICIENT" in verdict else "📉" if "CAUTIOUS" in verdict else "➖"
                 amsg = (f"{verdict_icon} AI ALPHA REPORT (24h)\n\n"
                        f"PnL total: {a.get('total_pnl','?')} USD\n"
                        f"Cyklu: {a.get('total_cycles',0)} (W:{a.get('winners',0)} L:{a.get('losers',0)})\n"
@@ -879,7 +879,7 @@ def cmd_validate(message):
                        f"AI Missed: -{ai.get('missed_usd','0')} USD\n"
                        f"Net Alpha: {ai.get('net_alpha','0')} USD\n"
                        f"Verdict: {verdict}")
-                bot.send_message(message.chat.id, amsg)
+                bot.send_message(message.chat.id, amsg, parse_mode=None)
         except Exception as ae:
             log.warning(f"Alpha report display error: {ae}")
 
