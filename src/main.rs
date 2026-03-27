@@ -654,6 +654,8 @@ async fn async_main() -> Result<()> {
         let mut cs_fail_count: u32 = 0;
         let mut should_reconnect = false;
         let mut shutdown_reason: &str = "unknown";
+        let mut depth_history: VecDeque<f64> = VecDeque::with_capacity(61);
+        let mut was_in_hole: bool = false;
 
         loop {
             if should_reconnect { break; }
@@ -785,10 +787,39 @@ async fn async_main() -> Result<()> {
                                                     (sum_bid_vol - sum_ask_vol) / (sum_bid_vol + sum_ask_vol)
                                                 } else { 0.0 };
 
+                                                // ═══ LIQUIDITY HOLE DETECTION (v9.5) ═══
+                                                let total_depth = sum_bid_vol + sum_ask_vol;
+                                                let depth_btc = total_depth / beroun_types::PRICE_SCALE;
+                                                depth_history.push_back(total_depth);
+                                                if depth_history.len() > 60 { depth_history.pop_front(); }
+                                                let avg_depth = if !depth_history.is_empty() {
+                                                    depth_history.iter().sum::<f64>() / depth_history.len() as f64
+                                                } else { total_depth };
+
+                                                let liquidity_ratio = if avg_depth > 0.0 { total_depth / avg_depth } else { 1.0 };
+                                                let in_liquidity_hole = liquidity_ratio < 0.5;
+                                                let hole_recovering = liquidity_ratio >= 0.7;
+
+                                                if in_liquidity_hole && !was_in_hole {
+                                                    tracing::warn!(event = "liquidity_hole",
+                                                        depth_btc = format!("{:.4}", depth_btc),
+                                                        avg_depth_btc = format!("{:.4}", avg_depth / beroun_types::PRICE_SCALE),
+                                                        ratio = format!("{:.2}", liquidity_ratio));
+                                                    was_in_hole = true;
+                                                } else if hole_recovering && was_in_hole {
+                                                    tracing::info!(event = "liquidity_recovered",
+                                                        depth_btc = format!("{:.4}", depth_btc),
+                                                        ratio = format!("{:.2}", liquidity_ratio));
+                                                    was_in_hole = false;
+                                                }
+
                                                 // 3. DYNAMIC SIZING (signal convergence)
                                                 let base_usd = risk.order_usd.load(Ordering::Acquire) as f64;
                                                 let micro_bias = micro_i - mid_i;
-                                                let final_order_usd = if (obi > 0.2 && micro_bias > 0) || (obi < -0.2 && micro_bias < 0) {
+                                                let final_order_usd = if in_liquidity_hole {
+                                                    // Liquidity hole: reduce order size to 50%
+                                                    base_usd * 0.5
+                                                } else if (obi > 0.2 && micro_bias > 0) || (obi < -0.2 && micro_bias < 0) {
                                                     (base_usd * 1.5).clamp(base_usd * 0.5, base_usd * 2.0)
                                                 } else if (obi > 0.1 && micro_bias < 0) || (obi < -0.1 && micro_bias > 0) {
                                                     (base_usd * 0.7).clamp(base_usd * 0.5, base_usd * 2.0)
@@ -797,7 +828,11 @@ async fn async_main() -> Result<()> {
                                                 };
 
                                                 // 4. INVENTORY SKEW
-                                                let grid = risk.grid_step.load(Ordering::Acquire) as i64;
+                                                let mut grid = risk.grid_step.load(Ordering::Acquire) as i64;
+                                                // v9.5: Liquidity hole → emergency grid widening (3×)
+                                                if in_liquidity_hole {
+                                                    grid = (grid * 3).min(2_000_000_000); // Max $20
+                                                }
                                                 let current_pos = eng.net_position.load(Ordering::Acquire);
                                                 let max_pos = risk.max_inv_delta.load(Ordering::Acquire) as i64;
                                                 let inv_skew = if max_pos > 0 {
