@@ -596,7 +596,7 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-// ═══ v10.3 NEURAL CROSS ═══
+// ═══ v10.4 NEURAL CROSS + BACKTEST ═══
 
 fn cmd_backtest(conn: &Connection, days: u32, dry_run: bool) -> Result<()> {
     let hours = days * 24;

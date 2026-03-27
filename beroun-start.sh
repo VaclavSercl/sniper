@@ -1,11 +1,11 @@
 #!/bin/bash
-# 🐺 BEROUN SNIPER v10.3 "Neural Cross" — MASTER STARTUP
+# 🐺 BEROUN SNIPER v10.4 "Neural Cross" — MASTER STARTUP
 # Sovereign HFT Systems | SQLite Permanent Memory | Zero-JS Dashboard
 
 PROJECT_ROOT="/home/wwwenda/hft-sniper"
 BIN_DIR="$PROJECT_ROOT/target/release"
 
-echo "🐺 Starting SNIPER v10.3 (Neural Cross)..."
+echo "🐺 Starting SNIPER v10.4 (Neural Cross)..."
 cd $PROJECT_ROOT
 
 # ═══ DEZINSEKCE: Kill ALL old processes ═══
@@ -57,7 +57,7 @@ if [ -f "$PROJECT_ROOT/.env" ]; then
     set -a; source "$PROJECT_ROOT/.env"; set +a
 fi
 python3 $PROJECT_ROOT/scripts/tg_listener.py &
-echo "-> Telegram Command Center started (SNIPER v10.3)"
+echo "-> Telegram Command Center started (SNIPER v10.4)"
 
 # 7. Start Watchdog (The Guardian)
 if [ -f "$PROJECT_ROOT/watchdog.sh" ]; then
@@ -65,5 +65,5 @@ if [ -f "$PROJECT_ROOT/watchdog.sh" ]; then
     echo "-> Watchdog started"
 fi
 
-echo "✅ All systems operational — SNIPER v10.3 (Neural Cross)"
+echo "✅ All systems operational — SNIPER v10.4 (Neural Cross)"
 wait

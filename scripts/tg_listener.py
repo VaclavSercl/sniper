@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🐺 BEROUN SNIPER v10.3 — Telegram Neural Cross Command Center
+🐺 BEROUN SNIPER v10.4 — Telegram Neural Cross Command Center
 Bi-directional command & control via encrypted Telegram channel.
 Includes AI L1/L2 telemetry, Shadow Mode, and inline button callbacks.
 
@@ -47,7 +47,7 @@ DAILY_STATS_PATH = f"{LOG_DIR}/daily_stats.json"
 CET = timezone(timedelta(hours=1))
 PRICE_SCALE = 1e8
 
-# Mmap offsets for AI fields (v10.3)
+# Mmap offsets for AI fields (v10.4)
 OFF_SHADOW_MODE = 1616
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [TG] %(message)s")
@@ -145,7 +145,7 @@ def cmd_status(message):
         eq = state.get("equity", {})
         total_eq = eq.get('total_usd', 0)
 
-        msg = f"""📊 *SNIPER v10.3 — Live Status*
+        msg = f"""📊 *SNIPER v10.4 — Live Status*
 
 💎 *Total Equity:* `${total_eq:.2f}`
   ├─ Cash:  `${eq.get('wallet_usd', 0):.2f}`
@@ -189,7 +189,7 @@ def cmd_analyze(message):
     except Exception:
         pass
 
-    prompt = f"""You are SNIPER, the AI commander of Beroun Sniper v10.3 HFT system.
+    prompt = f"""You are SNIPER, the AI commander of Beroun Sniper v10.4 HFT system.
 Architecture: L0=Rust Engine, L1=Python Shield, L2=YOU with permanent SQLite memory.
 Bot state: {state}
 Permanent memory: {brain_ctx}
@@ -576,7 +576,7 @@ def cmd_oracle(message):
         except Exception:
             pass
 
-        prompt = f"""You are SNIPER, the AI commander of Beroun Sniper v10.3.
+        prompt = f"""You are SNIPER, the AI commander of Beroun Sniper v10.4.
 Bot state: {state}
 Permanent memory: {brain_ctx}
 Do a quick strategic analysis: 1) Market regime 2) Optimal grid 3) Risk assessment.
@@ -587,7 +587,7 @@ Output a concise report in Czech, max 8 sentences."""
             capture_output=True, text=True, timeout=120
         )
         response = result.stdout.strip()[:3500]
-        bot.send_message(message.chat.id, f"🔮 *SNIPER Oracle v10.3:*\n\n{response}",
+        bot.send_message(message.chat.id, f"🔮 *SNIPER Oracle v10.4:*\n\n{response}",
                          parse_mode="Markdown")
     except subprocess.TimeoutExpired:
         bot.send_message(message.chat.id, "⚠️ Gemini timeout (120s)")
@@ -651,7 +651,27 @@ def cmd_brain(message):
     except Exception:
         pass
 
-    bot.reply_to(message, f"🧠 *SNIPER BRAIN v10.3*\n\n{stats}{context}{lessons}",
+    # Get Alpha Audit (v10.4)
+    alpha = ""
+    try:
+        result = subprocess.run(
+            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "alpha-report"],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0:
+            import json as j3
+            a = j3.loads(result.stdout)
+            ai = a.get("alpha", {})
+            verdict_icon = "📈" if ai.get("verdict") == "EFFICIENT" else "📉" if ai.get("verdict") == "OVER_CAUTIOUS" else "➖"
+            alpha = (f"\n\n{verdict_icon} *Alpha Audit (24h):*\n"
+                    f"`  Saved:  +${ai.get('saved_usd','0')}`\n"
+                    f"`  Missed: -${ai.get('missed_usd','0')}`\n"
+                    f"`  Net:    ${ai.get('net_alpha','0')}`\n"
+                    f"`  Verdict: {ai.get('verdict','?')}`")
+    except Exception:
+        pass
+
+    bot.reply_to(message, f"🧠 *SNIPER BRAIN v10.4*\n\n{stats}{context}{lessons}{alpha}",
                  parse_mode="Markdown")
 
 
@@ -675,7 +695,7 @@ def cmd_backtest(message):
 
         d = j3.loads(result.stdout)
 
-        msg = (f"🌙 *Neural Cross Backtest v10.3*\n\n"
+        msg = (f"🌙 *Neural Cross Backtest v10.4*\n\n"
                f"`Status:   {d.get('status', '?')}`\n"
                f"`Cyklů:    {d.get('cycles_analyzed', 0)}`\n"
                f"`Regimes:  {', '.join(d.get('regimes', []))}`\n"
@@ -883,7 +903,7 @@ def cmd_freeform(message):
     except Exception:
         pass
 
-    prompt = f"""You are SNIPER, the AI brain of Beroun Sniper v10.3 HFT trading system.
+    prompt = f"""You are SNIPER, the AI brain of Beroun Sniper v10.4 HFT trading system.
 Architecture: L0=Rust HFT Engine, L1=Python Tactical Shield, L2=YOU (Sovereign Oracle with permanent SQLite memory).
 You control grid, position limits, and risk parameters. You have permanent memory of all past decisions.
 
@@ -950,7 +970,7 @@ def cmd_ai(message):
     except Exception:
         pass
 
-    msg = f"""🧠 *AI INTELLIGENCE STATUS v10.3*
+    msg = f"""🧠 *AI INTELLIGENCE STATUS v10.4*
 ━━━━━━━━━━━━━━━━━━━━━━━━
 
 🎤 *Mode:* `{shadow}`
@@ -1025,7 +1045,7 @@ Shadow PnL resetováno.
 
 # ── MAIN ────────────────────────────────────────────────────
 if __name__ == "__main__":
-    log.info("🐺 SNIPER v10.3 Neural Cross Telegram Command Center starting...")
+    log.info("🐺 SNIPER v10.4 Neural Cross Telegram Command Center starting...")
     log.info(f"   Authorized chat_id: {AUTHORIZED_CHAT_ID}")
     log.info(f"   Config binary: {CONFIG_BIN}")
 

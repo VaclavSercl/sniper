@@ -443,7 +443,7 @@ async fn async_main() -> Result<()> {
     let sec = std::env::var("BITFINEX_API_SECRET").context("Missing API SECRET")?;
 
     info!(event = "system_start", version = "10.0.0-apex-predator");
-    notifier.alert("*Beroun Sniper v10.0 APEX PREDATOR ONLINE*\n`Hydra Grid + L1 Shield + Adaptive Grid + Trade Analytics`".to_string());
+    notifier.alert("*Beroun Sniper v10.4 NEURAL CROSS ONLINE*\n`Hydra Grid + L1 Shield + Neural Cross + Lesson Validator`".to_string());
 
     // SIGTERM listener (systemd, Docker)
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())

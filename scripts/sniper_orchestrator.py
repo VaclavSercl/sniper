@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-🧠 SNIPER ORCHESTRATOR v10.3 — Neural Cross Oracle
+🧠 SNIPER ORCHESTRATOR v10.4 — Neural Cross Oracle
 ═══════════════════════════════════════════════════════════════════
 The Sovereign Oracle: Connects L1 (tactical) with L2 (strategic).
 Runs every 5 minutes, analyzes both layers, decides and acts.
 
-v10.3 NEURAL CROSS:
+v10.4 NEURAL CROSS:
   - OracleMemory: Cross-cycle persistent memory (12 cycles = 1 hour)
   - Tactical Alert Engine: 5 automated rules (inventory, spread, latency, FP, streak)
   - Auto-Escalation: Performance-based aggressivity tuning
@@ -587,7 +587,7 @@ RESPOND WITH EXACTLY THIS JSON (no markdown):
                 pass
 
         # Telegram report
-        report = (f"🌙 *Neural Cross Report v10.3*\n\n"
+        report = (f"🌙 *Neural Cross Report v10.4*\n\n"
                   f"🔍 *Sebekritika:*\n_{critique}_\n\n"
                   f"🎯 *Identifikovaný vzorec:*\n_{pattern}_\n\n"
                   f"📝 *Nové lekce:* {saved} uloženo do Brain")
@@ -626,7 +626,7 @@ IMPORTANT: 🔴 = MANDATORY (confidence ≥70%). Do NOT violate these.
 🟡 = SUGGESTED (30-70%). Use your judgment but lean towards following them.
 """
 
-    prompt = f"""You are SNIPER, the L2 Sovereign Oracle for Beroun Sniper v10.3 HFT bot.
+    prompt = f"""You are SNIPER, the L2 Sovereign Oracle for Beroun Sniper v10.4 HFT bot.
 Your role: Strategic commander of a high-frequency BTC/USD market maker.
 You have PERMANENT MEMORY — you remember every decision you've ever made and their outcomes.
 
@@ -778,7 +778,7 @@ def generate_apex_report(bot_state, l1_state, decision, market_intel,
 
     timestamp = datetime.now(CET).strftime("%H:%M")
 
-    report = f"""{health} *SNIPER v10.3 Neural Cross | STATUS* `{timestamp}`
+    report = f"""{health} *SNIPER v10.4 Neural Cross | STATUS* `{timestamp}`
 ━━━━━━━━━━━━━━━━━━━━━
 
 {regime_icon} *Režim:* `{regime}`
@@ -844,7 +844,7 @@ def check_shadow_recovery(mm, bot_state):
 
 # ── MAIN LOOP ───────────────────────────────────────────────
 def main():
-    log.info("═══ SNIPER v10.3 Neural Cross Oracle STARTING ═══")
+    log.info("═══ SNIPER v10.4 Neural Cross Oracle STARTING ═══")
     log.info(f"  Cycle: {ORACLE_CYCLE_SEC}s | L1 bridge: {L1_STATE_JSON}")
     log.info(f"  Engine: {ENGINE_MMAP}")
     log.info(f"  Brain: {BRAIN_BIN}")
@@ -866,7 +866,7 @@ def main():
     # Initialize Sniper Brain (Rust SQLite)
     try:
         subprocess.run([BRAIN_BIN, "init"], capture_output=True, timeout=5)
-        log.info("  🧠 Sniper Brain v10.3 (Neural Cross) initialized")
+        log.info("  🧠 Sniper Brain v10.4 (Neural Cross) initialized")
     except Exception as e:
         log.warning(f"  Sniper Brain init failed: {e}")
 
