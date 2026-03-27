@@ -7,8 +7,8 @@ StartLimitIntervalSec=0
 [Service]
 Type=simple
 User=wwwenda
-WorkingDirectory=/home/wwwenda/hft-sniper
-ExecStart=/home/wwwenda/hft-sniper/deploy_armada.sh
+WorkingDirectory=/home/wwwenda/sniper
+ExecStart=/home/wwwenda/sniper/deploy_armada.sh
 Restart=always
 RestartSec=5
 
@@ -18,7 +18,7 @@ LimitNOFILE=65535
 LimitMEMLOCK=infinity
 
 # Environment
-EnvironmentFile=/home/wwwenda/hft-sniper/.env
+EnvironmentFile=/home/wwwenda/sniper/.env
 
 # Logging
 StandardOutput=journal
