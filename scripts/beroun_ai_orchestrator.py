@@ -36,6 +36,7 @@ from pathlib import Path
 CET = timezone(timedelta(hours=1))
 LOG_DIR = "/home/wwwenda/hft-sniper/logs"
 CONFIG_BIN = "/home/wwwenda/hft-sniper/target/release/beroun-config"
+BRAIN_BIN = "/home/wwwenda/hft-sniper/target/release/beroun-brain"
 L1_STATE_JSON = "/dev/shm/beroun/l1_state.json"
 ENGINE_MMAP = "/dev/shm/beroun/engine_state.bin"
 ALERTS_LOG = f"{LOG_DIR}/alerts.log"
@@ -444,7 +445,7 @@ def analyze_regime(bot_state, l1_state):
         return 2, "RANGING"
 
 
-def generate_l2_prompt(bot_state, l1_state, market_intel, memory: OracleMemory):
+def generate_l2_prompt(bot_state, l1_state, market_intel, memory: OracleMemory, brain_context: str = ""):
     """Generate the Sovereign Oracle prompt with historical memory context."""
     analytics = bot_state.get("analytics", {})
     risk = bot_state.get("risk_params", {})
@@ -452,16 +453,17 @@ def generate_l2_prompt(bot_state, l1_state, market_intel, memory: OracleMemory):
     pnl = bot_state.get("pnl", {})
     equity = bot_state.get("equity", {})
 
-    # Memory context
-    history_summary = memory.get_history_summary(6)
+    # Memory context: prefer Sniper Brain (permanent), fallback to rolling memory
+    history_summary = brain_context if brain_context else memory.get_history_summary(6)
 
-    prompt = f"""You are the L2 Sovereign Oracle for Beroun Sniper v10.1.1 HFT bot.
+    prompt = f"""You are SNIPER, the L2 Sovereign Oracle for Beroun Sniper v10.2 HFT bot.
 Your role: Strategic commander of a high-frequency BTC/USD market maker.
+You have PERMANENT MEMORY — you remember every decision you've ever made and their outcomes.
 
 ═══ SYSTEM ARCHITECTURE ═══
 L0 = Rust HFT Engine (µs execution, Hydra Grid, atomic mmap IPC)
 L1 = Python Tactical Shield (50ms cycle, OBI skewing, sweep detection, ADAPTIVE learning)
-L2 = YOU (Strategic Oracle, 5min cycle, macro analysis, parameter control)
+L2 = YOU — SNIPER (Strategic Oracle, 5min cycle, macro analysis, parameter control, PERMANENT MEMORY)
 
 ═══ LIVE ENGINE STATE ═══
 BTC Price: ${price.get('micro_price', 0):.2f}
@@ -493,7 +495,7 @@ False Positive Rate: {l1_state.get('false_positive_rate', 0):.2%}
 Success Rate: {l1_state.get('success_rate', 0.5):.2%}
 Total Sweeps Detected: {l1_state.get('total_sweeps', 0)}
 
-═══ ORACLE MEMORY (recent history) ═══
+═══ SNIPER PERMANENT MEMORY ═══
 {history_summary}
 
 ═══ MARKET INTELLIGENCE ═══
@@ -668,9 +670,10 @@ def check_shadow_recovery(mm, bot_state):
 
 # ── MAIN LOOP ───────────────────────────────────────────────
 def main():
-    log.info("═══ BEROUN AI ORCHESTRATOR v10.1.1 (Sovereign Oracle + Memory) STARTING ═══")
+    log.info("═══ BEROUN SNIPER v10.2 (Sovereign Oracle + Permanent Brain) STARTING ═══")
     log.info(f"  Cycle: {ORACLE_CYCLE_SEC}s | L1 bridge: {L1_STATE_JSON}")
     log.info(f"  Engine: {ENGINE_MMAP}")
+    log.info(f"  Brain: {BRAIN_BIN}")
     log.info(f"  Memory: {MEMORY_FILE} (max {MAX_MEMORY_CYCLES} cycles)")
 
     if not os.path.exists(ENGINE_MMAP):
@@ -684,6 +687,13 @@ def main():
     memory = OracleMemory()
     alert_engine = TacticalAlertEngine(memory)
     escalation = AutoEscalation(memory)
+
+    # Initialize Sniper Brain (Rust SQLite)
+    try:
+        subprocess.run([BRAIN_BIN, "init"], capture_output=True, timeout=5)
+        log.info("  🧠 Sniper Brain (SQLite) initialized")
+    except Exception as e:
+        log.warning(f"  Sniper Brain init failed: {e}")
 
     cycle = 0
 
@@ -706,10 +716,23 @@ def main():
             # 2. Local regime analysis (fast fallback)
             regime_id, regime_name = analyze_regime(bot_state, l1_state)
             log.info(f"  Local regime: {regime_name} (id={regime_id})")
-            log.info(f"  Memory: {len(memory.snapshots)} cycles loaded")
+            log.info(f"  Memory: {len(memory.snapshots)} cycles (rolling) + SQLite (permanent)")
+
+            # 2.5. Get permanent memory context from Sniper Brain
+            brain_context = ""
+            try:
+                result = subprocess.run(
+                    [BRAIN_BIN, "context", "--cycles", "6"],
+                    capture_output=True, text=True, timeout=10
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    brain_context = result.stdout.strip()
+                    log.info(f"  🧠 Brain context loaded ({len(brain_context)} chars)")
+            except Exception as e:
+                log.warning(f"  Brain context failed: {e}")
 
             # 3. Consult L2 Oracle (Gemini) with memory context
-            prompt = generate_l2_prompt(bot_state, l1_state, market_intel, memory)
+            prompt = generate_l2_prompt(bot_state, l1_state, market_intel, memory, brain_context)
             decision = consult_gemini(prompt)
 
             if not decision:
@@ -758,7 +781,7 @@ def main():
             )
             send_telegram(report)
 
-            # 5.5. Save memory snapshot
+            # 5.5. Save memory snapshot (rolling + permanent)
             snapshot = {
                 "cycle": cycle,
                 "regime": decision.get("regime", "UNKNOWN"),
@@ -777,7 +800,35 @@ def main():
                 "escalation": escalation_result.get("action", "hold"),
             }
             memory.record(snapshot)
-            log.info(f"  Memory saved: {len(memory.snapshots)}/{MAX_MEMORY_CYCLES} cycles")
+            log.info(f"  Rolling memory: {len(memory.snapshots)}/{MAX_MEMORY_CYCLES} cycles")
+
+            # 5.6. Save to Sniper Brain (permanent SQLite)
+            brain_snapshot = {
+                "regime": decision.get("regime", "UNKNOWN"),
+                "grid_step": float(decision.get("grid_step", current_grid)),
+                "max_position": float(decision.get("max_position", current_max_pos)),
+                "spread": mmap_state.get("spread", 0),
+                "position": mmap_state.get("position", 0),
+                "pnl": mmap_state.get("pnl", 0),
+                "equity": bot_state.get("equity", {}).get("total_usd", 0),
+                "confidence": mmap_state.get("confidence", 0),
+                "fp_rate": mmap_state.get("fp_rate", 0),
+                "success_rate": mmap_state.get("success_rate", 0),
+                "toxic_hits": bot_state.get("analytics", {}).get("toxic_flow_hits", 0),
+                "t2t_micros": int(mmap_state.get("t2t_micros", 0)),
+                "fear_greed": market_intel.get("fear_greed", ""),
+                "reasoning": decision.get("reasoning", ""),
+                "tactical": decision.get("tactical_recommendation", ""),
+                "escalation": escalation_result.get("action", "hold"),
+            }
+            try:
+                subprocess.run(
+                    [BRAIN_BIN, "log-cycle", json.dumps(brain_snapshot)],
+                    capture_output=True, timeout=5
+                )
+                log.info("  🧠 Brain: cycle logged to SQLite")
+            except Exception as e:
+                log.warning(f"  Brain log failed: {e}")
 
             # 6. Log alert for historical analysis
             alert_entry = {

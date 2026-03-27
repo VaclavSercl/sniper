@@ -27,6 +27,10 @@ path = "src/config_cli.rs"
 name = "dump-offsets"
 path = "src/dump_offsets.rs"
 
+[[bin]]
+name = "beroun-brain"
+path = "src/brain.rs"
+
 [dependencies]
 chrono = "0.4.44"
 serde = { version = "1.0.228", features = ["derive"] }
@@ -54,6 +58,7 @@ zerocopy = { version = "0.8.14", features = ["derive"] }
 sysinfo = "0.33.1"
 tokio-stream = "0.1.18"
 feed-rs = "2.3.1"
+rusqlite = { version = "0.33", features = ["bundled"] }
 thiserror = "2.0"
 anyhow = "1.0"
 core_affinity = "0.8.3"
