@@ -28,12 +28,14 @@ import logging
 import threading
 from datetime import datetime, timedelta, timezone
 import telebot
+from telebot import apihelper
+apihelper.ENABLE_MIDDLEWARE = True
 
 # ── CONFIG ──────────────────────────────────────────────────
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 AUTHORIZED_CHAT_ID = int(os.environ.get("TELEGRAM_CHAT_ID", "0"))
 CONFIG_BIN = "/home/wwwenda/hft-sniper/target/release/beroun-config"
-ORACLE_SCRIPT = "/home/wwwenda/hft-sniper/scripts/oracle_brain.sh"
+ORACLE_SCRIPT = "/home/wwwenda/hft-sniper/scripts/beroun_ai_orchestrator.py"
 STATE_JSON = "/dev/shm/beroun/state.json"
 L1_STATE_JSON = "/dev/shm/beroun/l1_state.json"
 ENGINE_MMAP = "/dev/shm/beroun/engine_state.bin"
@@ -524,16 +526,37 @@ def auto_daily_report():
 @bot.message_handler(commands=["oracle"])
 def cmd_oracle(message):
     if not auth(message): return
-    bot.reply_to(message, "🔮 Spouštím Oracle cyklus... (2-3 min)")
-    log.info("Oracle forced via Telegram")
+    bot.reply_to(message, "🔮 Spouštím Sniper AI cyklus... (čekám na Gemini ~30s)")
+    log.info("Sniper AI cycle forced via Telegram")
     try:
+        # Get brain context + current state for a quick Gemini consultation
+        state = run_config("export-json")
+        brain_ctx = ""
+        try:
+            r = subprocess.run(
+                ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "context", "--cycles", "6"],
+                capture_output=True, text=True, timeout=10
+            )
+            if r.returncode == 0:
+                brain_ctx = r.stdout.strip()
+        except Exception:
+            pass
+
+        prompt = f"""You are SNIPER, the AI commander of Beroun Sniper v10.2.
+Bot state: {state}
+Permanent memory: {brain_ctx}
+Do a quick strategic analysis: 1) Market regime 2) Optimal grid 3) Risk assessment.
+Output a concise report in Czech, max 8 sentences."""
+
         result = subprocess.run(
-            [ORACLE_SCRIPT],
-            capture_output=True, text=True, timeout=300
+            ["gemini", "-p", prompt],
+            capture_output=True, text=True, timeout=120
         )
-        # Get last 5 lines of output
-        output = result.stdout.strip().split("\n")[-5:]
-        bot.send_message(message.chat.id, "✅ Oracle dokončen:\n```\n{}\n```".format("\n".join(output)))
+        response = result.stdout.strip()[:3500]
+        bot.send_message(message.chat.id, f"🔮 *SNIPER Oracle v10.2:*\n\n{response}",
+                         parse_mode="Markdown")
+    except subprocess.TimeoutExpired:
+        bot.send_message(message.chat.id, "⚠️ Gemini timeout (120s)")
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Oracle error: {e}")
 
@@ -743,42 +766,18 @@ Shadow PnL resetováno.
 
 # ── MAIN ────────────────────────────────────────────────────
 if __name__ == "__main__":
-    log.info("🐺 Beroun Telegram Interface v10.1 (Overlord) starting...")
+    log.info("🐺 SNIPER v10.2 Telegram Command Center starting...")
     log.info(f"   Authorized chat_id: {AUTHORIZED_CHAT_ID}")
     log.info(f"   Config binary: {CONFIG_BIN}")
-
-    backoff = 5
-    MAX_BACKOFF = 60
-    offset = None
 
     # Start auto daily report scheduler (08:00 CET)
     report_thread = threading.Thread(target=auto_daily_report, daemon=True)
     report_thread.start()
 
-    while True:
-        try:
-            updates = bot.get_updates(offset=offset, timeout=30, long_polling_timeout=25)
-            backoff = 5  # Reset on success
+    # Debug: log ALL incoming messages
+    @bot.middleware_handler(update_types=['message'])
+    def log_all_messages(bot_instance, message):
+        log.info(f"📩 IN: chat={message.chat.id} text='{message.text[:50] if message.text else 'N/A'}'")
 
-            for update in updates:
-                offset = update.update_id + 1
-                bot.process_new_updates([update])
-
-        except telebot.apihelper.ApiTelegramException as e:
-            if "409" in str(e):
-                log.warning(f"409 Conflict — waiting {backoff}s...")
-                time.sleep(backoff)
-                backoff = min(backoff * 2, MAX_BACKOFF)
-            else:
-                log.error(f"Telegram API error: {e}")
-                time.sleep(10)
-
-        except KeyboardInterrupt:
-            log.info("Shutting down...")
-            break
-
-        except Exception as e:
-            log.error(f"Polling error: {e}")
-            time.sleep(10)
-            backoff = 5
-
+    log.info("Starting polling...")
+    bot.infinity_polling(timeout=30, long_polling_timeout=25)
