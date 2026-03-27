@@ -1,5 +1,5 @@
 [Unit]
-Description=Beroun Oracle v9.2 Timer - 1h Symbiotic Cycle
+Description=Beroun Oracle v10.0 Timer - 1h Strategic Cycle
 Requires=beroun-oracle.service
 
 [Timer]

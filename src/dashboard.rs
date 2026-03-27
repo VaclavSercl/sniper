@@ -68,7 +68,7 @@ async fn ws_handler(ws: WebSocketUpgrade, dashboard: Arc<Mutex<DashboardData>>) 
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv().ok();
-    println!("--- BEROUN DASHBOARD v6.0.0 ---");
+    println!("--- BEROUN DASHBOARD v10.0.0 ---");
     let dashboard = Arc::new(Mutex::<DashboardData>::default());
     let d_clone = dashboard.clone();
     let start_time = Instant::now();
@@ -78,9 +78,33 @@ async fn main() -> Result<()> {
             .route("/", get(|| async { axum::response::Html(include_str!("../dashboard.html")) }))
             .route("/ws", get(move |ws| ws_handler(ws, d_clone)))
             .layer(CorsLayer::permissive());
-        let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+
+        // Retry bind up to 5 times (port may still be held by previous instance)
+        let listener = {
+            let mut last_err = None;
+            let mut bound = None;
+            for attempt in 1..=5 {
+                match tokio::net::TcpListener::bind("0.0.0.0:3000").await {
+                    Ok(l) => { bound = Some(l); break; }
+                    Err(e) => {
+                        eprintln!("[DASHBOARD] Bind attempt {}/5 failed: {} — retrying in 2s", attempt, e);
+                        last_err = Some(e);
+                        tokio::time::sleep(Duration::from_secs(2)).await;
+                    }
+                }
+            }
+            match bound {
+                Some(l) => l,
+                None => {
+                    eprintln!("[DASHBOARD] FATAL: Cannot bind :3000 after 5 attempts: {:?}", last_err);
+                    return;
+                }
+            }
+        };
         println!("[DASHBOARD] Online at http://0.0.0.0:3000");
-        axum::serve(listener, app).await.unwrap();
+        if let Err(e) = axum::serve(listener, app).await {
+            eprintln!("[DASHBOARD] Server error: {}", e);
+        }
     });
 
     let r_mmap = init_mmap_ptr::<RiskState>(&RISK_STATE_PATH)?;
@@ -146,7 +170,7 @@ async fn main() -> Result<()> {
             db.t2t_micros = t2t;
             db.uptime_secs = start_time.elapsed().as_secs();
             db.timestamp = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
-            db.version = "6.0.0".to_string();
+            db.version = "10.0.0".to_string();
             db.micro_price = micro_p;
             db.current_skew = skew;
             db.bid_prices = bp;

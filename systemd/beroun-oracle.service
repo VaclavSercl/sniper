@@ -1,5 +1,5 @@
 [Unit]
-Description=Beroun Oracle v9.2 - Symbiotic Strategic Intelligence (L2)
+Description=Beroun Oracle v10.0 - Strategic Intelligence (L2)
 After=beroun-sniper.service
 
 [Service]

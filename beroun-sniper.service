@@ -1,5 +1,5 @@
 [Unit]
-Description=Beroun Sniper v9.0 Hydra — Sovereign HFT Suite
+Description=Beroun Sniper v10.0 Apex Predator — Sovereign HFT Suite
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=0
@@ -11,11 +11,11 @@ WorkingDirectory=/home/wwwenda/hft-sniper
 
 # ═══ DEZINFEKČNÍ PROTOKOL (Ghost-in-the-Machine prevention) ═══
 ExecStartPre=-/usr/bin/pkill -9 -f beroun-core
-ExecStartPre=-/usr/bin/pkill -9 -f beroun-sovereign-ai
-ExecStartPre=-/usr/bin/pkill -9 -f beroun-tele-brain
 ExecStartPre=-/usr/bin/pkill -9 -f beroun-dashboard
+ExecStartPre=-/usr/bin/pkill -9 -f tg_listener
+ExecStartPre=-/usr/bin/pkill -9 -f l1_shield
 ExecStartPre=-/usr/bin/rm -f /tmp/beroun-sniper.lock
-ExecStartPre=/usr/bin/sleep 1
+ExecStartPre=/usr/bin/sleep 2
 
 ExecStart=/home/wwwenda/hft-sniper/beroun-start.sh
 Restart=always

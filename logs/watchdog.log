@@ -765,3 +765,6 @@
 [Fri 27. March 2026, 07:01:20 CET] External Watchdog v8.1 (backup monitor) ONLINE
 [Fri 27. March 2026, 07:57:04 CET] External Watchdog v8.1 (backup monitor) ONLINE
 [Fri 27. March 2026, 08:18:09 CET] External Watchdog v8.1 (backup monitor) ONLINE
+[Fri 27. March 2026, 08:56:25 CET] External Watchdog v8.1 (backup monitor) ONLINE
+[Fri 27. March 2026, 08:56:25 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 08:56:30 CET] External Watchdog v8.1 (backup monitor) ONLINE
