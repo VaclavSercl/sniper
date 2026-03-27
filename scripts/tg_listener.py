@@ -98,26 +98,29 @@ def bfx_rest(path, body=None):
 @bot.message_handler(commands=["start", "help"])
 def cmd_help(message):
     if not auth(message): return
-    bot.reply_to(message, """🐺 *SNIPER v10.2 — Command Center*
+    log.info("Help/Start requested")
+    try:
+        bot.reply_to(message, """🐺 *SNIPER v10.2 — Command Center*
 
-📊 `/status` — Live stav (Equity, PnL, pozice)
-🧠 `/ai` — AI Status (L1 Shield + L2 Oracle)
-🧠 `/brain` — Sniper Brain (trvalá paměť, statistiky)
-🌑 `/shadow` — Aktivovat Shadow Mode (simulace)
-🚀 `/golive` — Návrat do Live režimu
-📅 `/report` — Denní report (obchody, PnL, equity)
-📊 `/analytics` — Trade analytics (Sharpe, win-rate)
-🚨 `/close CONFIRM` — EMERGENCY CLOSE (market exit)
-🔍 `/analyze` — Gemini analýza s trvalou pamětí
-📐 `/grid 8.5` — Nastavit grid
-💰 `/capital 400` — Autorizovaný kapitál ($)
-🛑 `/loss 20` — Denní loss limit ($)
-⏸️ `/pause` / ▶️ `/resume`
-⚠️ `/cautious` — Macro-event defense (15 min)
-🔮 `/oracle` — Vynutit Sniper AI cyklus (okamžitá analýza)
-❓ `/help` — Tento přehled
-
-_Zabezpečeno: jen chat\\_id {}_""".format(AUTHORIZED_CHAT_ID))
+📊 /status — Live stav
+🧠 /ai — AI Status (L1 + L2)
+🧠 /brain — Sniper Brain (trvalá paměť)
+🌑 /shadow — Shadow Mode
+🚀 /golive — Návrat do Live
+📅 /report — Denní report
+📊 /analytics — Trade analytics
+🚨 /close CONFIRM — EMERGENCY CLOSE
+🔍 /analyze — Gemini analýza
+📐 /grid 8.5 — Nastavit grid
+💰 /capital 400 — Kapitál
+🛑 /loss 20 — Loss limit
+⏸️ /pause / ▶️ /resume
+⚠️ /cautious — Macro defense
+🔮 /oracle — Vynutit AI cyklus
+❓ /help — Tento přehled""")
+        log.info("Help sent OK")
+    except Exception as e:
+        log.error(f"Help send error: {e}")
 
 
 @bot.message_handler(commands=["status"])
