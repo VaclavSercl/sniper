@@ -344,15 +344,22 @@ async fn async_main() -> Result<()> {
         }
     });
 
-    // ═══ VOLATILITY ENGINE (Dynamic Grid Step) ═══
+    // ═══ VOLATILITY + ADAPTIVE GRID ENGINE (v9.5) ═══
     let vol_engine_ptr = engine_ptr as usize;
     let vol_risk_ptr = risk as *const RiskState as usize;
     tokio::spawn(async move {
         let mut price_history: VecDeque<i64> = VecDeque::with_capacity(61);
         let base_grid: i64 = 200_000_000;    // $2 base spread
-        let max_grid: i64 = 5_000_000_000;   // $50 max spread
+        let max_grid: i64 = 2_000_000_000;   // $20 max spread (clamped)
+        let min_grid: i64 = 200_000_000;     // $2 min spread (clamped)
         let vol_mult: f64 = 0.15;            // 15% of price range
         let default_grid: u64 = 300_000_000; // $3 fallback
+
+        // v9.5: Adaptive grid state
+        let mut fill_check_counter: u32 = 0;
+        let fill_check_interval: u32 = 120;  // Every 60s (120 × 500ms)
+        let mut grid_mult: f64 = 1.0;        // 0.7 (tight) → 1.5 (wide)
+
         loop {
             tokio::time::sleep(Duration::from_millis(500)).await;
             let engine = unsafe { &*(vol_engine_ptr as *const EngineState) };
@@ -364,12 +371,47 @@ async fn async_main() -> Result<()> {
                 let mid = ((bb as i64) + (ba as i64)) / 2;
                 price_history.push_back(mid);
                 if price_history.len() > 60 { price_history.pop_front(); }
+
+                // v9.5: Fill-rate adaptive grid (every 60s)
+                fill_check_counter += 1;
+                if fill_check_counter >= fill_check_interval {
+                    fill_check_counter = 0;
+                    let buys = engine.buy_fill_count.swap(0, Ordering::Relaxed);
+                    let sells = engine.sell_fill_count.swap(0, Ordering::Relaxed);
+                    let total = buys + sells;
+
+                    if total >= 4 {
+                        // Balance ratio: 1.0 = perfectly balanced, 0.0 = all one side
+                        let balance = 1.0 - ((buys as f64 - sells as f64).abs() / total as f64);
+                        // fill_rate: fills per minute
+                        let fill_rate = total as f64; // Already per 60s interval
+
+                        // High balance + high fill-rate → tighten grid (more spread capture)
+                        // Low balance (one-sided) → widen grid (reduce adverse selection)
+                        let target_mult = if balance > 0.6 && fill_rate > 10.0 {
+                            0.7  // Aggressive: balanced, active market
+                        } else if balance > 0.4 {
+                            1.0  // Normal
+                        } else {
+                            1.4  // Defensive: one-sided fills, widen
+                        };
+                        // Smooth transition (20% step toward target)
+                        grid_mult = grid_mult + (target_mult - grid_mult) * 0.2;
+                        grid_mult = grid_mult.clamp(0.7, 1.5);
+
+                        tracing::info!(event = "adaptive_grid",
+                            buys = buys, sells = sells, balance = format!("{:.2}", balance),
+                            fill_rate = total, grid_mult = format!("{:.2}", grid_mult));
+                    }
+                }
+
                 if price_history.len() >= 10 {
                     let min_p = *price_history.iter().min().unwrap();
                     let max_p = *price_history.iter().max().unwrap();
                     let range = max_p - min_p;
                     let dynamic = (range as f64 * vol_mult) as i64;
-                    let new_grid = (base_grid + dynamic).min(max_grid) as u64;
+                    let adapted = ((base_grid + dynamic) as f64 * grid_mult) as i64;
+                    let new_grid = adapted.clamp(min_grid, max_grid) as u64;
                     risk.grid_step.store(new_grid, Ordering::Release);
                     if range > 5_000_000_000 {
                         tracing::info!(event = "volatility_spike",
@@ -517,6 +559,12 @@ async fn async_main() -> Result<()> {
 
                                             info!(event = "trade_executed", amount = trade_amt, price = trade_price,
                                                   new_pos = new_pos, aep = engine.average_entry_price.load(Ordering::SeqCst) as f64 / scale);
+                                            // v9.5: Fill-rate tracking
+                                            if trade_amt > 0.0 {
+                                                engine.buy_fill_count.fetch_add(1, Ordering::Relaxed);
+                                            } else {
+                                                engine.sell_fill_count.fetch_add(1, Ordering::Relaxed);
+                                            }
                                             exec_notifier.trade(trade_amt, trade_price);
                                         }
                                     }

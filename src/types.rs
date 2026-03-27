@@ -78,6 +78,10 @@ pub struct EngineState {
     pub current_ai_bias: AtomicI64,     // AI predicted bias × PRICE_SCALE
     pub ai_heartbeat_ms: AtomicU64,     // epoch millis of last AI write (v8.0 safety fuse)
     pub ai_alpha_usd: AtomicI64,        // Cumulative execution alpha from AI bias × PRICE_SCALE
+
+    // --- FILL-RATE TRACKER (v9.5) ---
+    pub buy_fill_count: AtomicU64,      // Incremented on each buy fill (reset by vol engine)
+    pub sell_fill_count: AtomicU64,     // Incremented on each sell fill (reset by vol engine)
 }
 
 impl Default for OrderBookLevel {
@@ -124,6 +128,8 @@ impl Default for EngineState {
             current_ai_bias: AtomicI64::new(0),
             ai_heartbeat_ms: AtomicU64::new(0),
             ai_alpha_usd: AtomicI64::new(0),
+            buy_fill_count: AtomicU64::new(0),
+            sell_fill_count: AtomicU64::new(0),
         }
     }
 }
