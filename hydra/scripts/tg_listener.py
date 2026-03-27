@@ -35,7 +35,7 @@ apihelper.ENABLE_MIDDLEWARE = True
 # ── CONFIG ──────────────────────────────────────────────────
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 BOT_DIR = os.path.dirname(SCRIPT_DIR)  # hydra/
-PROJECT_ROOT = os.path.dirname(BOT_DIR)  # hft-sniper/
+PROJECT_ROOT = os.path.dirname(BOT_DIR)  # sniper/
 BIN_DIR = os.path.join(PROJECT_ROOT, "target", "release")
 
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")

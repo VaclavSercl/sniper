@@ -10,7 +10,7 @@ Before making ANY code changes to the Beroun Sniper project, ALWAYS:
 
 1. Read the change checklist:
 ```bash
-cat /home/wwwenda/hft-sniper/CHECKLIST.md
+cat /home/wwwenda/sniper/CHECKLIST.md
 ```
 
 2. Check current system status:

@@ -4,7 +4,7 @@
 # Runs alongside in-process watchdogs as secondary safety net.
 
 STALE_THRESHOLD_S=120  # 2 minutes = definitely dead
-LOG_DIR="/home/wwwenda/hft-sniper/logs"
+LOG_DIR="/home/wwwenda/sniper/logs"
 mkdir -p "$LOG_DIR"
 LOG_FILE="$LOG_DIR/watchdog.log"
 

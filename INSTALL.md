@@ -22,8 +22,8 @@ pip install --user websocket-client requests google-generativeai python-telegram
 ### 1. Klonování
 ```bash
 cd /home/$USER
-git clone git@github.com:VaclavSercl/HFT-Sniper.git hft-sniper
-cd hft-sniper
+git clone git@github.com:VaclavSercl/sniper.git sniper
+cd sniper
 ```
 
 ### 2. Konfigurace
