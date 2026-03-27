@@ -21,6 +21,8 @@ import hashlib
 import hmac
 import requests
 import logging
+import threading
+from datetime import datetime, timedelta, timezone
 import telebot
 
 # ── CONFIG ──────────────────────────────────────────────────
@@ -32,6 +34,9 @@ STATE_JSON = "/dev/shm/beroun/state.json"
 BFX_API_KEY = os.environ.get("BITFINEX_API_KEY", "")
 BFX_API_SECRET = os.environ.get("BITFINEX_API_SECRET", "")
 BFX_REST_URL = "https://api.bitfinex.com"
+LOG_DIR = "/home/wwwenda/hft-sniper/logs"
+DAILY_STATS_PATH = f"{LOG_DIR}/daily_stats.json"
+CET = timezone(timedelta(hours=1))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [TG] %(message)s")
 log = logging.getLogger("beroun-tg")
@@ -86,6 +91,7 @@ def cmd_help(message):
     bot.reply_to(message, """🐺 *Beroun Sniper v9.2 — Oracle Interface*
 
 📊 `/status` — Live stav (Equity, PnL, pozice)
+📅 `/report` — Denní report (obchody, PnL, equity)
 🚨 `/close CONFIRM` — EMERGENCY CLOSE (market exit)
 🔍 `/analyze` — Gemini 3.1 Pro analýza trhu
 📐 `/grid 8.5` — Nastavit grid
@@ -286,6 +292,117 @@ _Pro obnovení: `/resume`_""")
         log.error(f"Emergency close failed: {e}")
 
 
+def generate_daily_report():
+    """Generate daily trading report from logs and equity."""
+    today = datetime.now(CET).strftime("%Y-%m-%d")
+    log_file = f"{LOG_DIR}/trading.log.{today}"
+
+    # Count trades from log
+    buys, sells, volume = 0, 0, 0.0
+    try:
+        result = subprocess.run(
+            ["grep", "trade_executed", log_file],
+            capture_output=True, text=True, timeout=10
+        )
+        for line in result.stdout.strip().split("\n"):
+            if not line:
+                continue
+            try:
+                d = json.loads(line)
+                amt = d.get("fields", {}).get("amount", 0)
+                if amt > 0:
+                    buys += 1
+                else:
+                    sells += 1
+                volume += abs(amt)
+            except json.JSONDecodeError:
+                pass
+    except Exception:
+        pass
+
+    # Count reconnects
+    reconnects = 0
+    try:
+        result = subprocess.run(
+            ["grep", "-c", "reconnecting", log_file],
+            capture_output=True, text=True, timeout=5
+        )
+        reconnects = int(result.stdout.strip())
+    except Exception:
+        pass
+
+    # Get equity
+    raw = run_config("export-json")
+    try:
+        state = json.loads(raw)
+    except Exception:
+        state = {}
+
+    eq = state.get("equity", {})
+    pnl = state.get("pnl", {})
+    price = state.get("price", {})
+
+    # Save daily stats
+    stats = {
+        "date": today,
+        "trades": buys + sells,
+        "buys": buys,
+        "sells": sells,
+        "volume_btc": round(volume, 8),
+        "realized_pnl": pnl.get("realized_usd", 0),
+        "total_equity": eq.get("total_usd", 0),
+        "reconnects": reconnects,
+        "btc_price": price.get("micro_price", 0),
+    }
+    try:
+        with open(DAILY_STATS_PATH, "w") as f:
+            json.dump(stats, f, indent=2)
+    except Exception:
+        pass
+
+    total_trades = buys + sells
+    return f"""📅 *DENNÍ REPORT — {today}*
+
+💎 *Equity:* `${eq.get('total_usd', 0):.2f}`
+  ├─ Cash: `${eq.get('wallet_usd', 0):.2f}`
+  └─ BTC:  `${eq.get('btc_value_usd', 0):.2f}` (`{eq.get('wallet_btc', 0):.6f}`)
+
+📈 *Obchody:* `{total_trades}` ({buys} buy / {sells} sell)
+💰 *Objem:* `{volume:.5f}` BTC
+💲 *Realized PnL:* `${pnl.get('realized_usd', 0):.4f}`
+
+🔄 *Reconnecty:* `{reconnects}`
+💲 *BTC cena:* `${price.get('micro_price', 0):.2f}`"""
+
+
+@bot.message_handler(commands=["report"])
+def cmd_report(message):
+    if not auth(message): return
+    log.info("Daily report requested")
+    report = generate_daily_report()
+    bot.reply_to(message, report)
+
+
+def auto_daily_report():
+    """Send daily report at 08:00 CET."""
+    while True:
+        now = datetime.now(CET)
+        target = now.replace(hour=8, minute=0, second=0, microsecond=0)
+        if target <= now:
+            target += timedelta(days=1)
+        wait_secs = (target - now).total_seconds()
+        log.info(f"Daily report scheduled for {target.isoformat()} ({wait_secs:.0f}s)")
+        time.sleep(wait_secs)
+
+        try:
+            report = generate_daily_report()
+            if TOKEN and AUTHORIZED_CHAT_ID:
+                bot.send_message(AUTHORIZED_CHAT_ID, f"🐺 {report}", parse_mode="Markdown")
+                log.info("Auto daily report sent")
+        except Exception as e:
+            log.error(f"Auto daily report failed: {e}")
+
+
 @bot.message_handler(commands=["oracle"])
 def cmd_oracle(message):
     if not auth(message): return
@@ -335,6 +452,10 @@ if __name__ == "__main__":
     backoff = 5
     MAX_BACKOFF = 60
     offset = None
+
+    # Start auto daily report scheduler (08:00 CET)
+    report_thread = threading.Thread(target=auto_daily_report, daemon=True)
+    report_thread.start()
 
     while True:
         try:
