@@ -169,11 +169,24 @@ def cmd_analyze(message):
     # Get bot state
     state = run_config("export-json")
 
-    # Build Gemini prompt
-    prompt = f"""You are the CIO of HFT fund Beroun Sniper.
+    # Build Gemini prompt with brain context
+    brain_ctx = ""
+    try:
+        result = subprocess.run(
+            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "context", "--cycles", "6"],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0:
+            brain_ctx = result.stdout.strip()
+    except Exception:
+        pass
+
+    prompt = f"""You are SNIPER, the AI commander of Beroun Sniper v10.2 HFT system.
+Architecture: L0=Rust Engine, L1=Python Shield, L2=YOU with permanent SQLite memory.
 Bot state: {state}
-Analyze: 1) Current market regime 2) Is grid optimal? 3) Any risks?
-Answer in Czech, 3-5 sentences max."""
+Permanent memory: {brain_ctx}
+Analyze: 1) Current market regime 2) Is grid optimal based on your memory? 3) Any risks?
+Answer in Czech, 3-5 sentences max. Reference your permanent memory data."""
 
     try:
         result = subprocess.run(
@@ -530,9 +543,27 @@ def cmd_freeform(message):
     log.info(f"Free-form query: {message.text[:50]}")
     state = run_config("export-json")
 
-    prompt = f"""User asks: "{message.text}"
-Bot state: {state}
-Answer concisely in Czech as a Senior HFT Trading Advisor. Max 5 sentences."""
+    # Get Sniper Brain context for permanent memory
+    brain_ctx = ""
+    try:
+        result = subprocess.run(
+            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "context", "--cycles", "4"],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0:
+            brain_ctx = result.stdout.strip()
+    except Exception:
+        pass
+
+    prompt = f"""You are SNIPER, the AI brain of Beroun Sniper v10.2 HFT trading system.
+Architecture: L0=Rust HFT Engine, L1=Python Tactical Shield, L2=YOU (Sovereign Oracle with permanent SQLite memory).
+You control grid, position limits, and risk parameters. You have permanent memory of all past decisions.
+
+User asks: "{message.text}"
+Current bot state: {state}
+Permanent memory context: {brain_ctx}
+
+Answer concisely in Czech as the system's AI commander. Max 5 sentences. Be specific with numbers."""
 
     try:
         result = subprocess.run(
