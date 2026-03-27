@@ -1,5 +1,5 @@
 /// Shared logging/tracing setup for all Sniper bots.
-/// Centralizes tracing subscriber configuration so Hydra, Trigon, etc.
+/// Centralizes tracing subscriber configuration so Hydra, Moonshot, Grid, etc.
 /// all use the same format, rotation, and filtering.
 
 use tracing_subscriber::{EnvFilter, fmt};

@@ -1,6 +1,8 @@
 [Unit]
-Description=Sniper Armada v11.1 — Multi-Bot HFT Platform
-After=network.target
+Description=Sniper Armada v11.2 — 3-Bot HFT Platform (Hydra + Moonshot + Grid)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
@@ -17,6 +19,10 @@ LimitMEMLOCK=infinity
 
 # Environment
 EnvironmentFile=/home/wwwenda/hft-sniper/.env
+
+# Logging
+StandardOutput=journal
+StandardError=journal
 
 [Install]
 WantedBy=multi-user.target

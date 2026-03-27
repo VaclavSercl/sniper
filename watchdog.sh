@@ -1,27 +1,36 @@
 #!/bin/bash
-# BEROUN WATCHDOG v11.0 — mmap Heartbeat Monitor
-# Checks engine_state.bin heartbeat via mmap. Restarts if stale > 60s.
-# Runs alongside in-process 15s watchdog as a secondary safety net.
+# 🐺 SNIPER ARMADA v11.2 — Multi-Bot Heartbeat Watchdog
+# Monitors mmap heartbeat for all bots: Hydra, Moonshot, Grid
+# Runs alongside in-process watchdogs as secondary safety net.
 
-STATE_FILE="/dev/shm/beroun/engine_state.bin"
-LOG_FILE="/home/wwwenda/hft-sniper/logs/watchdog.log"
-STALE_THRESHOLD_S=120  # 2 minutes = definitely dead (in-process watchdog handles faster cases)
+STALE_THRESHOLD_S=120  # 2 minutes = definitely dead
+LOG_DIR="/home/wwwenda/hft-sniper/logs"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/watchdog.log"
 
-echo "[$(date)] Watchdog v11.0 (mmap heartbeat monitor) ONLINE" >> $LOG_FILE
+echo "[$(date)] Watchdog v11.2 (3-bot heartbeat monitor) ONLINE" >> $LOG_FILE
 
-while true; do
-    if ! pgrep -f "beroun-core" > /dev/null; then
-        echo "[$(date)] ALERT: Sniper core not running. systemd should auto-restart." >> $LOG_FILE
-    elif [ -f "$STATE_FILE" ]; then
-        # Check mmap heartbeat (first 8 bytes = latency_ns = epoch nanoseconds)
-        HEARTBEAT_NS=$(od -A n -t u8 -N 8 "$STATE_FILE" 2>/dev/null | tr -d ' ')
-        if [ -n "$HEARTBEAT_NS" ] && [ "$HEARTBEAT_NS" -gt 0 ] 2>/dev/null; then
-            NOW_NS=$(date +%s%N)
-            AGE_S=$(( (NOW_NS - HEARTBEAT_NS) / 1000000000 ))
-            if [ "$AGE_S" -gt "$STALE_THRESHOLD_S" ]; then
-                echo "[$(date)] CRITICAL: Heartbeat stale ${AGE_S}s > ${STALE_THRESHOLD_S}s threshold!" >> $LOG_FILE
-            fi
+check_heartbeat() {
+    local name="$1"
+    local state_file="$2"
+    local process="$3"
+
+    if ! pgrep -f "$process" > /dev/null 2>&1; then
+        echo "[$(date)] ⚠️ $name: process '$process' not running" >> $LOG_FILE
+        return
+    fi
+
+    if [ -f "$state_file" ]; then
+        local file_age=$(( $(date +%s) - $(stat -c %Y "$state_file") ))
+        if [ "$file_age" -gt "$STALE_THRESHOLD_S" ]; then
+            echo "[$(date)] 🚨 $name: mmap stale ${file_age}s > ${STALE_THRESHOLD_S}s!" >> $LOG_FILE
         fi
     fi
+}
+
+while true; do
+    check_heartbeat "Hydra"    "/dev/shm/beroun/engine_state.bin"    "hydra-core"
+    check_heartbeat "Moonshot" "/dev/shm/beroun/moonshot_engine.bin" "moonshot-core"
+    check_heartbeat "Grid"     "/dev/shm/beroun/grid_engine.bin"     "grid-core"
     sleep 30
 done

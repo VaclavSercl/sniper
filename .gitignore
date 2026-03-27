@@ -1,14 +1,35 @@
+# Build artifacts
 /target/
+
+# Runtime state
 /runtime/
 /logs/
 *.log
-.env
 nohup.out
+
+# Secrets
+.env
+
+# Temporary
+/tmp/
 *.swp
 *.swo
 *~
+
+# OS-specific
 .DS_Store
-/tmp/
+Thumbs.db
+
+# Python
 *.pyc
 __pycache__/
+.mypy_cache/
+.pytest_cache/
+
+# SQLite databases
 *.db
+*.db-journal
+*.db-wal
+
+# mmap state files (never track binary IPC)
+*.bin
