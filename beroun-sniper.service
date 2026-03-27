@@ -9,17 +9,19 @@ Type=simple
 User=wwwenda
 WorkingDirectory=/home/wwwenda/hft-sniper
 
-# ═══ DEZINFEKČNÍ PROTOKOL (Ghost-in-the-Machine prevention) ═══
+# ═══ DEZINFEKČNÍ PROTOKOL ═══
+# Kill old processes, wait for death, THEN remove lock
 ExecStartPre=-/usr/bin/pkill -9 -f beroun-core
 ExecStartPre=-/usr/bin/pkill -9 -f beroun-dashboard
 ExecStartPre=-/usr/bin/pkill -9 -f tg_listener
 ExecStartPre=-/usr/bin/pkill -9 -f l1_shield
-ExecStartPre=-/usr/bin/rm -f /tmp/beroun-sniper.lock
+ExecStartPre=-/usr/bin/pkill -9 -f macro_monitor
 ExecStartPre=/usr/bin/sleep 2
+ExecStartPre=-/usr/bin/rm -f /tmp/beroun-sniper.lock
 
 ExecStart=/home/wwwenda/hft-sniper/beroun-start.sh
 Restart=always
-RestartSec=3
+RestartSec=5
 
 # Logging handled by tracing-appender (non-blocking daily rotation)
 # stdout/stderr only for crash diagnostics

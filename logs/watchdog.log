@@ -812,3 +812,48 @@
 [Fri 27. March 2026, 16:07:15 CET] Watchdog v10.7 (mmap heartbeat monitor) ONLINE
 [Fri 27. March 2026, 16:13:52 CET] Watchdog v10.7 (mmap heartbeat monitor) ONLINE
 [Fri 27. March 2026, 16:34:19 CET] Watchdog v11.0 (mmap heartbeat monitor) ONLINE
+[Fri 27. March 2026, 16:34:49 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:35:19 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:37:20 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:37:50 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:38:20 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:38:50 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:39:20 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:40:50 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:41:20 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:41:50 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:42:20 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:42:50 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:44:20 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:44:50 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:45:20 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:45:50 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:47:20 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:47:50 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:48:20 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:48:50 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:50:20 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:50:50 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:51:20 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:51:51 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:52:21 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:53:21 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:53:51 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:54:21 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:54:51 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:55:21 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:56:51 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:57:21 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:57:51 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:58:21 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 16:58:51 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 17:00:21 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 17:00:51 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 17:01:21 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 17:01:51 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 17:02:21 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 17:03:27 CET] Watchdog v11.0 (mmap heartbeat monitor) ONLINE
+[Fri 27. March 2026, 17:03:27 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 17:04:57 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 17:05:36 CET] Watchdog v11.0 (mmap heartbeat monitor) ONLINE
+[Fri 27. March 2026, 17:21:36 CET] Watchdog v11.0 (mmap heartbeat monitor) ONLINE

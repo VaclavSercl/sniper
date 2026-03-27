@@ -15,13 +15,17 @@ pkill -9 -f beroun-dashboard 2>/dev/null || true
 pkill -9 -f tg_listener 2>/dev/null || true
 pkill -9 -f l1_shield 2>/dev/null || true
 pkill -9 -f sniper_orchestrator 2>/dev/null || true
+pkill -9 -f macro_monitor 2>/dev/null || true
 pkill -9 -f watchdog.sh 2>/dev/null || true
-rm -f /tmp/beroun.lock 2>/dev/null || true
 sleep 2
+# Lock MUST be removed AFTER processes are dead (flock released on fd close)
+rm -f /tmp/beroun-sniper.lock 2>/dev/null || true
 echo "-> Dezinsekce complete"
 
-# ═══ IPC: Ensure RAM-backed mmap directory ═══
+# ═══ IPC: Fresh mmap (prevents struct size mismatch after upgrades) ═══
 mkdir -p /dev/shm/beroun
+rm -f /dev/shm/beroun/engine_state.bin /dev/shm/beroun/risk_state.bin
+echo "-> mmap cleared (fresh struct layout)"
 
 # ═══ BRAIN: Initialize SQLite permanent memory ═══
 $BIN_DIR/beroun-brain init 2>/dev/null || true
@@ -32,8 +36,13 @@ $BIN_DIR/beroun-core &
 SNIPER_PID=$!
 echo "-> Sniper started (PID: $SNIPER_PID)"
 
-# 2. Wait for mmap initialization
-sleep 3
+# 2. Wait for mmap initialization + WebSocket connect
+sleep 5
+if ! kill -0 $SNIPER_PID 2>/dev/null; then
+    echo "❌ ERROR: beroun-core crashed during startup!"
+    exit 1
+fi
+echo "-> Engine alive, mmap ready"
 
 # ═══ AUTO-CONFIG: Apply saved parameters to fresh mmap ═══
 $BIN_DIR/beroun-config set-capital 400 2>/dev/null || true
@@ -47,22 +56,22 @@ echo "-> Dashboard started"
 
 # 4. Start L1 Shield (Tactical AI — Adaptive + Anti-Paralysis + Ghost Control)
 python3 $PROJECT_ROOT/scripts/l1_shield.py &
-echo "-> L1 Shield started (v10.5 Resurrection + Ghost)"
+echo "-> L1 Shield started"
 
 # 5. Start Sniper Orchestrator (L2 — Sovereign Oracle + Brain)
 python3 $PROJECT_ROOT/scripts/sniper_orchestrator.py &
-echo "-> Sniper Orchestrator started (L2 Oracle + SQLite Brain, 5min cycle)"
+echo "-> Sniper Orchestrator started (L2 Oracle, 5min cycle)"
 
 # 6. Start Telegram Sovereign Command Center
 if [ -f "$PROJECT_ROOT/.env" ]; then
     set -a; source "$PROJECT_ROOT/.env"; set +a
 fi
 python3 $PROJECT_ROOT/scripts/tg_listener.py &
-echo "-> Telegram Command Center started (v10.7 Sovereign)"
+echo "-> Telegram Command Center started"
 
 # 7. Start Macro Intelligence (v11.0 — The Eyes + Sentinel)
 python3 $PROJECT_ROOT/scripts/macro_monitor.py &
-echo "-> Macro Intelligence started (Binance + F&G + News RSS)"
+echo "-> Macro Intelligence started (Binance + F&G + RSS)"
 
 # 8. Start Watchdog (The Guardian)
 if [ -f "$PROJECT_ROOT/watchdog.sh" ]; then
@@ -70,5 +79,5 @@ if [ -f "$PROJECT_ROOT/watchdog.sh" ]; then
     echo "-> Watchdog started"
 fi
 
-echo "✅ All systems operational — SNIPER v10.9 (Omniscient Predator)"
+echo "✅ All systems operational — SNIPER v11.0 (Sentinel Singularity)"
 wait
