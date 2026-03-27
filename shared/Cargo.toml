@@ -1,0 +1,12 @@
+[package]
+name = "sniper-shared"
+version = "11.1.0"
+edition = "2024"
+
+[lib]
+name = "sniper_types"
+path = "src/lib.rs"
+
+[dependencies]
+memmap2 = "0.9.5"
+zerocopy = { version = "0.8.14", features = ["derive"] }

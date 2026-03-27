@@ -174,51 +174,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
 
 [[package]]
-name = "beroun-core"
-version = "11.1.0"
-dependencies = [
- "anyhow",
- "axum",
- "bytes",
- "chrono",
- "clap",
- "core_affinity",
- "crc32fast",
- "dotenvy",
- "fastwebsockets",
- "feed-rs",
- "fs2",
- "futures-util",
- "hex",
- "hmac",
- "http-body-util",
- "hyper",
- "hyper-util",
- "itoa",
- "memmap2",
- "native-tls",
- "rand 0.9.2",
- "reqwest",
- "rusqlite",
- "ryu",
- "serde",
- "serde_json",
- "sha2",
- "signal-hook",
- "simd-json",
- "sysinfo",
- "thiserror 2.0.18",
- "tokio",
- "tokio-native-tls",
- "tokio-stream",
- "tower-http",
- "tracing",
- "tracing-appender",
- "tracing-subscriber",
- "zerocopy",
-]
-
-[[package]]
 name = "bitflags"
 version = "2.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -850,6 +805,52 @@ name = "httpdate"
 version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
+
+[[package]]
+name = "hydra"
+version = "11.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bytes",
+ "chrono",
+ "clap",
+ "core_affinity",
+ "crc32fast",
+ "dotenvy",
+ "fastwebsockets",
+ "feed-rs",
+ "fs2",
+ "futures-util",
+ "hex",
+ "hmac",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "itoa",
+ "memmap2",
+ "native-tls",
+ "rand 0.9.2",
+ "reqwest",
+ "rusqlite",
+ "ryu",
+ "serde",
+ "serde_json",
+ "sha2",
+ "signal-hook",
+ "simd-json",
+ "sniper-shared",
+ "sysinfo",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-native-tls",
+ "tokio-stream",
+ "tower-http",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "zerocopy",
+]
 
 [[package]]
 name = "hyper"
@@ -1960,6 +1961,14 @@ name = "smallvec"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
+
+[[package]]
+name = "sniper-shared"
+version = "11.1.0"
+dependencies = [
+ "memmap2",
+ "zerocopy",
+]
 
 [[package]]
 name = "socket2"

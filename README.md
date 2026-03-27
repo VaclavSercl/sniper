@@ -1,108 +1,130 @@
-# 🐺 BEROUN SNIPER v11.0 — The Sentinel Singularity
+# 🐺 SNIPER ARMADA v11.1 — Multi-Bot HFT Platform
 
-**Autonomous HFT Market-Making Bot** for Bitfinex BTC/USD with cross-exchange intelligence, AI-driven grid management, and real-time macro awareness.
+**Modular high-frequency trading platform** for Bitfinex with cross-exchange intelligence, AI-driven grid management, and scalable multi-bot architecture.
 
 ## Architecture
 
-Three-layer lock-free architecture connected via mmap IPC (`/dev/shm/beroun/`):
+Cargo workspace divided into isolated bot modules sharing a common type system:
+
+```
+sniper/
+├── shared/              ← 🔧 Shared types crate (sniper_types)
+│   └── src/types.rs     ← EngineState, RiskState, mmap constants
+│
+├── hydra/               ← 🐍 Bot #1: BTC-USD Delta Lead HFT
+│   ├── src/
+│   │   ├── main.rs      ← L0 Engine: WebSocket, execution, ghost injection
+│   │   ├── dashboard.rs ← HTMX real-time dashboard (port 3000)
+│   │   ├── brain.rs     ← SQLite persistence, lesson engine
+│   │   └── config_cli.rs← Live parameter modifier (mmap)
+│   ├── scripts/
+│   │   ├── l1_shield.py         ← L1: OBI, sweep detection, ghost mode
+│   │   ├── sniper_orchestrator.py ← L2: Gemini Oracle + Fee Sentinel
+│   │   ├── tg_listener.py       ← Telegram command interface
+│   │   └── macro_monitor.py     ← Binance shadow stream + F&G + RSS
+│   └── dashboard.html   ← HTMX dashboard template
+│
+├── trigon/              ← 🔺 Bot #2: Triangular Arbitrage (PLANNED)
+├── architect/           ← 🏛️ Central orchestrator (PLANNED)
+│
+├── Cargo.toml           ← Workspace root
+├── .env                 ← API keys (shared)
+└── deploy_armada.sh     ← Master startup with CPU pinning (PLANNED)
+```
+
+## Three-Layer Architecture (per bot)
 
 | Layer | Runtime | Role | Latency |
 |-------|---------|------|---------|
-| **L0** | Rust (async) | Execution, orderbook, ghost injection | < 1ms |
+| **L0** | Rust (async) | Execution, orderbook, ghost injection, delta lead | < 1ms |
 | **L1** | Python | OBI Shield, sweep detection, ghost mode | ~50ms |
-| **L2** | Python + Gemini | Oracle, strategy, parameter tuning | ~5min |
+| **L2** | Python + Gemini | Oracle, strategy, parameter tuning, fee monitoring | ~5min |
 | **Macro** | Python | Binance sync, F&G, news sentiment | real-time |
 
-## Key Features (v11.0)
+## Key Features (Hydra v11.1)
 
-### Sentinel Defense Engine
-- **Global Fair Value**: Weighted composite from local micro-price (60%), Binance VWAP (30%), and macro sentiment (10%)
-- **Ghost Reposition**: Automatic shadow grid shift when fair value diverges > 0.05% from local
-- **Anti-Flicker Guard**: Minimum order lifetime prevents exchange surveillance flags
+### Delta Lead (v11.1) — Cross-Venue Arbitrage
+- **Binance Shadow Stream**: Real-time mid-price from Binance Futures
+- **Delta Calculation**: Binance vs Bitfinex delta in basis points
+- **Reactive Grid Shift**: Repositions grid center toward expected convergence
+- **Dashboard Overlay**: Buy/Sell grid lines + Binance mid on price chart
 
-### Macro Intelligence
-- **Binance Cross-Exchange**: WebSocket aggTrade stream detects large sells (> 1 BTC) and sweep events (> 5 BTC/10s)
-- **Fear & Greed Index**: Polled every 5 minutes from Alternative.me
-- **News RSS Sentiment**: 4 crypto feeds (CoinTelegraph, CoinDesk, Decrypt, Bitcoin Magazine) with keyword scoring
+### Fee Sentinel (v11.3) — Autonomous Fee Guard
+- **Hourly API Check**: Polls Bitfinex `/auth/r/summary` for current fees
+- **Profitability Guard**: Skips trades where spread < 2× round-trip fees
+- **Telegram Alert**: Instant notification if Bitfinex changes fee structure
+- **Current State**: Maker 0% / Taker 0% (zero fees since Dec 2025)
+
+### Sentinel Defense Engine (v11.0)
+- **Global Fair Value**: 60% local + 30% Binance VWAP + 10% sentiment
+- **Ghost Reposition**: Shadow grid shift when FV diverges > 0.05%
+- **Anti-Flicker Guard**: Minimum order lifetime prevents exchange flags
 
 ### Ghost Orders (Shadow Liquidity)
 - Only 1 public "tip" order visible per side
 - Shadow levels fire as IOC when micro-price enters trigger zone
 - Velocity-based anti-toxic rejection prevents adverse fills
 
-### Sovereign AI Control
-- **Intent Modes**: `/aggressive`, `/defensive`, `/scout`, `/sovereign` via Telegram
-- **Dynamic Registry**: All tactical params (grid, fire interval, ghost trigger) tunable via mmap atomics
-- **Safety Guardrails**: Hardcoded capital limits and DLL circuit breakers are non-overridable
-
 ## Telegram Commands
 
 | Command | Description |
 |---------|-------------|
 | `/status` | Live engine state + equity + PnL |
+| `/delta` | ⚡ Delta Lead cross-venue arbitrage status |
+| `/fees` | 💰 Fee Sentinel v11.3 status |
 | `/macro` | Macro intelligence (bias, F&G, Binance sweep) |
 | `/ai` | AI Shield + Ghost + Sovereign state |
-| `/aggressive` | Intent: tight grid, fast fire, no ghost |
-| `/defensive` | Intent: wide grid, slow fire, ghost ON |
-| `/scout` | Intent: shadow mode for data collection |
+| `/aggressive` | Intent: tight grid, fast fire |
+| `/defensive` | Intent: wide grid, ghost ON |
 | `/sovereign` | Intent: full AI autonomy (default) |
-| `/validate` | Compare AI decisions vs baseline |
-| `/daily` | Force daily PnL report |
+| `/close CONFIRM` | 🚨 Emergency close all positions |
 
 ## Quick Start
 
 ```bash
-# Build
-cargo build --release
+# Build entire workspace
+cargo build --release --workspace
 
-# Install Python dependency
-pip install --user websocket-client
-
-# Start all services
-./beroun-start.sh
+# Start Hydra bot
+cd hydra && ./hydra-start.sh
 
 # Or via systemd
-sudo systemctl start beroun-sniper.service
-```
-
-## File Structure
-
-```
-src/
-├── main.rs          # L0 Engine: WebSocket, execution, ghost injection, sentinel
-├── types.rs         # Shared mmap struct (EngineState, RiskState)
-├── brain.rs         # SQLite persistence, lesson engine, nightly analysis
-├── dashboard.rs     # HTMX real-time dashboard (port 3000)
-scripts/
-├── l1_shield.py     # L1: OBI monitoring, sweep detection, ghost mode control
-├── sniper_orchestrator.py  # L2: Gemini Oracle, strategic tuning cycles
-├── tg_listener.py   # Telegram command interface
-├── macro_monitor.py # Binance sync, F&G, news RSS sentiment → mmap
+sudo systemctl start sniper-armada.service
 ```
 
 ## mmap Layout (EngineState)
 
-All fields are lock-free atomics. Key v11.0 additions at end:
+All fields are lock-free atomics. Key offsets:
 
 | Offset | Type | Field | Description |
 |--------|------|-------|-------------|
-| 1824 | i64 | macro_bias | -10000..+10000 = -1.0..+1.0 |
-| 1832 | u64 | macro_source_ts | Last macro update (epoch ms) |
-| 1840 | u64 | binance_sweep_ts | Last BNB large sell (epoch ms) |
-| 1848 | u64 | macro_fear_greed | 0..100 |
 | 1856 | i64 | binance_mid_price | BNB VWAP × PRICE_SCALE |
 | 1864 | i64 | global_fair_value | Weighted FV × PRICE_SCALE |
-| 1872 | u64 | ai_min_order_lifetime_ms | Anti-flicker (default 100) |
-| 1880 | u64 | sentinel_repositions | Ghost reposition counter |
+| 1888 | i64 | delta_lead_signal | Cross-venue direction signal |
+| 1896 | i64 | delta_lead_raw_bps | Delta in basis points × 100 |
+| 1904 | u64 | delta_repositions | Grid shifts from delta lead |
+| 1928 | u64 | maker_fee_bps | Maker fee × 10000 |
+| 1936 | u64 | taker_fee_bps | Taker fee × 10000 |
+| 1952 | u64 | fee_kills | Trades skipped (fee > profit) |
 
 ## Safety
 
 - **DLL Circuit Breaker**: Hardcoded daily loss limit halts trading
-- **Capital Guard**: Position size never exceeds max_inv_delta
+- **Fee Sentinel**: Auto-stops if fees exceed spread profit
 - **Anti-Cross**: Bid always < best ask, ask always > best bid
 - **AI Heartbeat**: Stale AI (>30s) → bias zeroed automatically
-- **Anti-Flicker**: Orders stay in book minimum 100ms (configurable)
 - **Ghost Velocity**: Fast-moving toxic flow rejected from injection
+
+## Version History
+
+| Version | Codename | Key Feature |
+|---------|----------|-------------|
+| v11.1 | Delta Lead | Cross-venue arbitrage (Binance→Bitfinex) |
+| v11.3 | Fee Sentinel | Autonomous fee monitoring + profitability guard |
+| v11.0 | Sentinel Singularity | Fair Value + Anti-Flicker + Reactive defense |
+| v10.9 | Omniscient Predator | Macro monitor + Binance sync |
+| v10.6 | Ghost Shadow | Hidden liquidity (IOC injection) |
+| v10.0 | Apex Predator | Dynamic grid + analytics |
 
 ## License
 

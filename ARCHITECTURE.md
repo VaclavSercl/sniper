@@ -1,76 +1,79 @@
-# 🏗️ BEROUN SNIPER v11.0 — Architecture Document
+# 🏗️ SNIPER ARMADA v11.1 — Architecture Document
 
 ## System Overview
 
 ```
-                    ┌──────────────────────────────────────────────┐
-                    │              TELEGRAM                         │
-                    │   /status /macro /ai /sovereign               │
-                    └────────────────┬─────────────────────────────┘
-                                     │ telebot API
-                    ┌────────────────┴─────────────────────────────┐
-                    │         L2: GEMINI ORACLE (5 min cycle)       │
-                    │  sniper_orchestrator.py → beroun-config CLI   │
-                    └────────────────┬─────────────────────────────┘
-                                     │ mmap write (risk params)
-┌───────────────────┐ ┌──────────────┴──────────────┐ ┌────────────┐
-│  MACRO MONITOR    │ │  L1: PYTHON SHIELD (1s loop)│ │   BRAIN    │
-│ macro_monitor.py  │ │  l1_shield.py               │ │  brain.rs  │
-│                   │ │                              │ │  SQLite    │
-│ • Binance WS      │ │  • OBI skew calculation     │ │  sniper.db │
-│ • F&G Index       │ │  • Sweep detection          │ │            │
-│ • RSS Sentiment   │ │  • Ghost mode control       │ │  • Lessons │
-│                   │ │  • Uptime tracking          │ │  • Cycles  │
-└───────┬───────────┘ └──────────────┬──────────────┘ └────────────┘
-        │ mmap                       │ mmap
-        ▼                            ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                    /dev/shm/beroun/                               │
-│                                                                   │
-│  engine_state.bin (EngineState)  │  risk_state.bin (RiskState)   │
-│  ~1900 bytes, lock-free atomics  │  ~256 bytes, lock-free        │
-│                                                                   │
-│  Micro-Price  │ Orderbook │ Ghost Grid │ AI Registry │ Macro     │
-└──────────────────────────┬───────────────────────────────────────┘
-                           │ mmap read (Ordering::Relaxed)
-                           ▼
-┌──────────────────────────────────────────────────────────────────┐
-│                    L0: RUST ENGINE                                │
-│                    beroun-core (main.rs)                          │
-│                                                                   │
-│  ┌─────────────┐ ┌──────────────┐ ┌────────────────────────────┐ │
-│  │ DATA THREAD │ │ EXEC THREAD  │ │ HYDRA FIRE (inside exec)   │ │
-│  │ WS: book    │ │ WS: trades   │ │                            │ │
-│  │ OBI calc    │ │ position mgmt│ │ 1. Micro-Price             │ │
-│  │ depth       │ │ wallet sync  │ │ 2. Fair Value (v11.0)      │ │
-│  │ ghost check │ │ order track  │ │ 3. OBI Imbalance           │ │
-│  └─────────────┘ └──────────────┘ │ 4. Inventory Skew          │ │
-│                                    │ 5. Macro Bias (v10.9)      │ │
-│  ┌─────────────┐                  │ 6. Anti-Cross Guard        │ │
-│  │ DASHBOARD   │                  │ 7. Ghost Transparency      │ │
-│  │ :3000 HTMX  │                  │ 8. Sentinel Reposition     │ │
-│  └─────────────┘                  └────────────────────────────┘ │
-└──────────────────────────────────────────────────────────────────┘
+                  ┌─────────────────────────────────────┐
+                  │         TELEGRAM C2                   │
+                  │  /status /delta /fees /sovereign      │
+                  └────────────┬────────────────────────┘
+                               │ telebot API
+┌──────────────────────────────┴──────────────────────────────────────┐
+│                    SNIPER WORKSPACE (Cargo)                          │
+│                                                                      │
+│  ┌────────────────────────────────────────────────────────────────┐ │
+│  │  shared/ (sniper_types crate)                                   │ │
+│  │  EngineState │ RiskState │ PRICE_SCALE │ OrderBookLevel         │ │
+│  └────────────────────────────────────────────────────────────────┘ │
+│                               │                                      │
+│               ┌───────────────┴───────────────┐                      │
+│               ▼                               ▼                      │
+│  ┌────────────────────────┐    ┌────────────────────────┐           │
+│  │  hydra/ (Bot #1)       │    │  trigon/ (Bot #2)      │  PLANNED  │
+│  │  BTC-USD Delta Lead    │    │  Triangular Arb        │           │
+│  │  CPU Core 0            │    │  CPU Core 1            │           │
+│  │                        │    │                        │           │
+│  │  L0: Rust Engine       │    │  L0: Rust Engine       │           │
+│  │  L1: Python Shield     │    │  L1: Python Shield     │           │
+│  │  L2: Gemini Oracle     │    │  L2: Oracle            │           │
+│  │  Dashboard :3000       │    │  Dashboard :3001       │           │
+│  └──────────┬─────────────┘    └──────────┬─────────────┘           │
+│             │                              │                         │
+│             ▼                              ▼                         │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │            /dev/shm/beroun/                                    │   │
+│  │  engine_state.bin (Hydra) │ trigon_state.bin (Trigon)         │   │
+│  │  risk_state.bin           │ market_data.bin (shared MDF)      │   │
+│  │  Lock-free atomics · Zero-copy · <1μs access                  │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                               │                                      │
+│               ┌───────────────┴───────────────┐                      │
+│               ▼                               ▼                      │
+│  ┌────────────────────────┐    ┌────────────────────────┐           │
+│  │  architect/            │    │  Master Dashboard      │  PLANNED  │
+│  │  sniper_architect.py   │    │  Aggregated Multi-Bot  │           │
+│  │  Capital allocation    │    │  Total Equity + DD     │           │
+│  │  Health watchdog       │    │                        │           │
+│  └────────────────────────┘    └────────────────────────┘           │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
-## Data Flow: Order Lifecycle
+## Hydra Data Flow: Order Lifecycle
 
 ```
-Price Update → Micro-Price → Fair Value → Grid Calc → Anti-Cross → Order Send
-                                ↑                         ↑
-                         Binance VWAP              Safety Clamp
-                         Macro Bias
+Binance WS → Delta Lead → Fair Value → Grid Calc → Fee Guard → Anti-Cross → Order Send
+                ↑             ↑            ↑           ↑
+           BNB mid-price   Macro Bias   AI L2 Oracle  Fee Sentinel
 ```
 
-## Sentinel Pipeline (v11.0)
+## Delta Lead Pipeline (v11.1)
 
-Every fire cycle (~3s), the engine:
+Every fire cycle (~3s), the Hydra engine:
 
-1. **Reads** Binance mid-price from mmap (written by macro_monitor.py at ~100 trades/sec)
-2. **Computes** Global Fair Value = 60% local + 30% Binance + 10% sentiment
-3. **Checks** divergence: if |FV - local| > 0.05%, shifts ghost grid 50% toward FV
-4. **Checks** Binance sweep: if detected < 3s ago, forces ghost mode
-5. **Applies** Anti-Flicker: fire_interval = max(AI setting, min_order_lifetime)
+1. **Reads** Binance mid-price from mmap (written by macro_monitor.py)
+2. **Computes** Delta: Binance_mid - Bitfinex_mid in basis points
+3. **Evaluates** Signal: accumulated delta > threshold → directional bias
+4. **Repositions** Grid center (50%) toward expected convergence when delta > 3 bps
+5. **Dashboard** shows BUY/SELL grid lines + BNB mid as SVG overlay
+
+## Fee Sentinel Pipeline (v11.3)
+
+Hourly autonomous cycle:
+
+1. **Queries** Bitfinex `/auth/r/summary` for current maker/taker fees
+2. **Writes** fee values to mmap atomics (maker_fee_bps, taker_fee_bps)
+3. **Guards** L0 execution: if spread < 2× round-trip fees → skip cycle + increment fee_kills
+4. **Alerts** Telegram if fee structure changes from last known state
 
 ## Safety Architecture
 
@@ -79,7 +82,7 @@ Every fire cycle (~3s), the engine:
 │  • Daily Loss Limit (DLL) circuit breaker                     │
 │  • Max position size (capital guard)                          │
 │  • Anti-Cross Guard (bid < best_ask, ask > best_bid)         │
-│  • Spread inverted → skip cycle                              │
+│  • Fee Sentinel: spread < 2× fees → skip                     │
 │  • AI Heartbeat > 30s stale → zero bias                      │
 │  • Panic shutdown on WebSocket failure                        │
 └──────────────────────────────────────────────────────────────┘
@@ -92,16 +95,24 @@ Every fire cycle (~3s), the engine:
 └──────────────────────────────────────────────────────────────┘
 ```
 
+## Hardware Profile (Beroun Server)
+
+| Resource | Spec | Allocation |
+|----------|------|------------|
+| CPU | i5-6400 (4 cores, no HT) | Core 0: Hydra, Core 1: Trigon, Core 2-3: OS + AI |
+| RAM | 16 GB | ~3 GB used, 12 GB available |
+| GPU | GTX 1060 6GB | NVIDIA MPS for shared AI inference |
+| SHM | 7.6 GB tmpfs | mmap IPC between all processes |
+
 ## Version History
 
 | Version | Codename | Key Feature |
 |---------|----------|-------------|
-| v8.0 | Sovereign Intelligence | Three-layer architecture |
-| v9.2 | Hybrid Intelligence | L1 Python Shield + OBI |
-| v10.0 | Apex Predator | Dynamic grid + analytics |
-| v10.4 | Neural Cross | Lesson validation engine |
-| v10.5 | Anti-Paralysis | Adaptive sweep thresholds |
-| v10.6 | Ghost Shadow | Hidden liquidity (IOC injection) |
-| v10.7 | Sovereign AI | Dynamic registry via mmap |
-| v10.9 | Omniscient Predator | Macro monitor + Binance sync |
+| v11.1 | Delta Lead | Cross-venue arbitrage + Workspace migration |
+| v11.3 | Fee Sentinel | Autonomous fee monitoring + profitability guard |
 | v11.0 | Sentinel Singularity | Fair Value + Anti-Flicker + Reactive defense |
+| v10.9 | Omniscient Predator | Macro monitor + Binance sync |
+| v10.7 | Sovereign AI | Dynamic registry via mmap |
+| v10.6 | Ghost Shadow | Hidden liquidity (IOC injection) |
+| v10.0 | Apex Predator | Dynamic grid + analytics |
+| v8.0 | Sovereign Intelligence | Three-layer architecture |
