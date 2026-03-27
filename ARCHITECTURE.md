@@ -1,57 +1,55 @@
-# 🏗️ SNIPER ARMADA v11.1 — Architecture Document
+# 🏗️ SNIPER ARMADA v11.2 — Architecture Document
 
 ## System Overview
 
 ```
-                  ┌─────────────────────────────────────┐
-                  │         TELEGRAM C2                   │
-                  │  /status /delta /moonshot /mpairs     │
-                  └────────────┬────────────────────────┘
+                  ┌─────────────────────────────────────────┐
+                  │            TELEGRAM C2                    │
+                  │  /status /delta /moonshot /mpairs /grid   │
+                  └────────────┬─────────────────────────────┘
                                │ telebot API
-┌──────────────────────────────┴──────────────────────────────────────┐
-│                    SNIPER WORKSPACE (Cargo)                          │
-│                                                                      │
-│  ┌────────────────────────────────────────────────────────────────┐ │
-│  │  shared/ (sniper_types crate)                                   │ │
-│  │  EngineState │ RiskState │ MoonshotState │ PRICE_SCALE          │ │
-│  └────────────────────────────────────────────────────────────────┘ │
-│                               │                                      │
-│       ┌───────────────────────┴───────────────────┐                  │
-│       ▼                                           ▼                  │
-│  ┌────────────────────────┐    ┌────────────────────────┐           │
-│  │  hydra/ (Bot #1)       │    │  moonshot/ (Bot #2)    │           │
-│  │  BTC-USD Delta Lead    │    │  Multi-Symbol Spike    │           │
-│  │  CPU Core 0            │    │  CPU Core 1            │           │
-│  │                        │    │                        │           │
-│  │  L0: Rust Engine       │    │  L0: Rust Engine       │           │
-│  │  L1: Python Shield     │    │  L1: Python Shield     │           │
-│  │  L2: Gemini Oracle     │    │  L2: Gemini Oracle     │           │
-│  │  Dashboard :3000       │    │  Dashboard :3001       │           │
-│  │  Brain (SQLite)        │    │  Brain (SQLite)        │           │
-│  │  Config CLI            │    │  Config CLI            │           │
-│  └──────────┬─────────────┘    └──────────┬─────────────┘           │
-│             │                              │                         │
-│             ▼                              ▼                         │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │            /dev/shm/beroun/                                    │   │
-│  │  engine_state.bin (Hydra)   │ moonshot_engine.bin (Moonshot)  │   │
-│  │  risk_state.bin             │ moonshot_risk.bin                │   │
-│  │  Lock-free atomics · Zero-copy · <1μs access                  │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-│                               │                                      │
-│       ┌───────────────────────┴───────────────────┐                  │
-│       ▼                                           ▼                  │
-│  ┌────────────────────────┐    ┌────────────────────────┐           │
-│  │  trigon/ (Bot #3)      │    │  architect/            │  PLANNED  │
-│  │  Triangular Arb        │    │  sniper_architect.py   │           │
-│  │  CPU Core 1 (shared)   │    │  Capital allocation    │           │
-│  └────────────────────────┘    └────────────────────────┘           │
-└──────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────┴──────────────────────────────────────────┐
+│                     SNIPER WORKSPACE (Cargo)                            │
+│                                                                          │
+│  ┌────────────────────────────────────────────────────────────────────┐ │
+│  │  shared/ (sniper_types crate)                                       │ │
+│  │  EngineState │ MoonshotState │ GridState │ PRICE_SCALE              │ │
+│  └────────────────────────────────────────────────────────────────────┘ │
+│                               │                                          │
+│       ┌───────────────────────┼───────────────────────┐                  │
+│       ▼                       ▼                       ▼                  │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐         │
+│  │  hydra/ (Bot #1) │  │ moonshot/ (#2)  │  │  grid/ (Bot #3) │         │
+│  │  BTC-USD Delta   │  │ Multi-Symbol    │  │  Dynamic Grid   │         │
+│  │  CPU Core 0      │  │ CPU Core 1      │  │  CPU Core 2     │         │
+│  │                   │  │                 │  │                 │         │
+│  │ L0: Rust Engine  │  │ L0: Rust Engine │  │ L0: Rust Engine │         │
+│  │ L1: Python Shield│  │ L1: Python      │  │ L1: Python      │         │
+│  │ L2: Gemini Oracle│  │ L2: AI Pairs    │  │ L2: ATR Tuner   │         │
+│  │ Dashboard :3000  │  │ Dashboard :3001 │  │ Dashboard :3002 │         │
+│  │ Brain (SQLite)   │  │ Brain (SQLite)  │  │ Brain (SQLite)  │         │
+│  └──────┬───────────┘  └──────┬──────────┘  └──────┬──────────┘         │
+│         │                      │                     │                    │
+│         ▼                      ▼                     ▼                    │
+│  ┌────────────────────────────────────────────────────────────────────┐ │
+│  │                /dev/shm/beroun/                                      │ │
+│  │  engine_state.bin  │ moonshot_engine.bin │ grid_engine.bin           │ │
+│  │  risk_state.bin    │ moonshot_risk.bin   │ grid_risk.bin             │ │
+│  │  Lock-free atomics · Zero-copy · <1μs access                        │ │
+│  └────────────────────────────────────────────────────────────────────┘ │
+│                               │                                          │
+│                               ▼                                          │
+│                  ┌────────────────────────┐                              │
+│                  │  architect/ (PLANNED)   │                              │
+│                  │  Capital allocator      │                              │
+│                  │  Cross-bot correlation  │                              │
+│                  └────────────────────────┘                              │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ## Bot Template (Standard Structure)
 
-Every bot in the Armada follows this identical layout:
+Every bot follows this identical layout:
 
 ```
 bot/
@@ -71,21 +69,39 @@ bot/
 ```
 
 ## Hydra Data Flow: Order Lifecycle
-
 ```
 Binance WS → Delta Lead → Fair Value → Grid Calc → Fee Guard → Anti-Cross → Order Send
-                ↑             ↑            ↑           ↑
-           BNB mid-price   Macro Bias   AI L2 Oracle  Fee Sentinel
 ```
 
 ## Moonshot Data Flow: Spike Capture
-
 ```
 Bitfinex WS → Ticker → Price Update → Ghost BUY Check → Order Replace
-                                              ↑              ↑
-                                         AI Portfolio    Replace Delay
-                                      (sniper_orchestrator)  (l1_shield)
+                                              ↑
+                                      AI Portfolio (L2)
 ```
+
+## Grid Data Flow: Multi-Level Management
+```
+Bitfinex WS → Ticker → Mid Price → Grid Recalculate → Cancel All → Place N Levels
+                                          ↑                              ↑
+                                    ATR/2 Dynamic (L2)          Arithmetic / Geometric
+                                                               ↓
+                                                       BUY fills → place SELL
+                                                       SELL fills → place BUY
+```
+
+## Grid Strategy Details
+
+| Parameter | Default | AI-Tunable | Description |
+|-----------|---------|------------|-------------|
+| grid_spacing | $1,200 | ✅ | Distance between levels |
+| num_levels | 5+5 | ✅ | Number of BUY + SELL levels |
+| grid_mode | arithmetic | ✅ | Fixed $ vs fixed % spacing |
+| geometric_step | 1.5% | ✅ | Percentage step for geometric mode |
+| dynamic_spacing | ATR/2 | ✅ | AI calculates optimal spacing |
+| order_qty | 0.0005 BTC | ✅ | Per-level order size |
+| max_consecutive_losses | 3 | ❌ | Halt after N losses |
+| btc_vol_kill | 4%/h | ✅ | Volatility auto-pause |
 
 ## Safety Architecture
 
@@ -94,17 +110,13 @@ Bitfinex WS → Ticker → Price Update → Ghost BUY Check → Order Replace
 │  • Daily Loss Limit (DLL) circuit breaker                     │
 │  • Max position size (capital guard)                          │
 │  • Anti-Cross Guard (bid < best_ask, ask > best_bid)         │
-│  • Fee Sentinel: spread < 2× fees → skip                     │
-│  • AI Heartbeat > 30s stale → zero bias (Hydra)              │
+│  • Fee Sentinel: spread < 2× fees → skip (Hydra)             │
+│  • AI Heartbeat > 30s → zero bias (Hydra)                     │
 │  • AI Heartbeat > 120min → safe mode (Moonshot)              │
-│  • BTC Volatility Kill > 4%/h → pause (Moonshot)            │
-│  • Active Trade Lock: AI cannot rotate open positions         │
+│  • BTC Volatility Kill > 4%/h (Moonshot, Grid)              │
+│  • Active Trade Lock (Moonshot)                               │
+│  • Consecutive Loss Halt: 3 losses → 24h pause (Grid)       │
 │  • Panic shutdown on WebSocket failure                        │
-└──────────────────────────────────────────────────────────────┘
-
-┌─── AI-TUNABLE (via mmap registry) ───────────────────────────┐
-│  Hydra: grid step, fire interval, ghost trigger zone          │
-│  Moonshot: drop%, TP%, pair selection, replace delay          │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -112,18 +124,17 @@ Bitfinex WS → Ticker → Price Update → Ghost BUY Check → Order Replace
 
 | Resource | Spec | Allocation |
 |----------|------|------------|
-| CPU | i5-6400 (4 cores, no HT) | Core 0: Hydra, Core 1: Moonshot, Core 2-3: OS + AI |
-| RAM | 16 GB | ~3 GB used, 12 GB available |
+| CPU | i5-6400 (4 cores, no HT) | Core 0: Hydra, Core 1: Moonshot, Core 2: Grid, Core 3: OS + AI |
+| RAM | 16 GB | ~4 GB used (3 bots), 12 GB available |
 | GPU | GTX 1060 6GB | NVIDIA MPS for shared AI inference |
-| SHM | 7.6 GB tmpfs | mmap IPC between all processes |
+| SHM | 7.6 GB tmpfs | 6 mmap files for IPC |
 
 ## Version History
 
 | Version | Codename | Key Feature |
 |---------|----------|-------------|
-| v11.1 | Delta Lead + Moonshot | Cross-venue arb + Multi-symbol flash crash bot |
-| v11.0 | Sentinel Singularity | Fair Value + Anti-Flicker + Reactive defense |
+| v11.2 | Full Armada | 3-bot workspace (Hydra + Moonshot + Grid) |
+| v11.1 | Delta Lead + Moonshot | Cross-venue arb + flash crash |
+| v11.0 | Sentinel Singularity | Fair Value + Anti-Flicker |
 | v10.9 | Omniscient Predator | Macro monitor + Binance sync |
-| v10.6 | Ghost Shadow | Hidden liquidity (IOC injection) |
 | v10.0 | Apex Predator | Dynamic grid + analytics |
-| v8.0 | Sovereign Intelligence | Three-layer architecture |

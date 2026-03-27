@@ -1,0 +1,55 @@
+[package]
+name = "grid"
+version = "1.0.0"
+edition = "2024"
+
+[[bin]]
+name = "grid-core"
+path = "src/main.rs"
+
+[[bin]]
+name = "grid-dashboard"
+path = "src/dashboard.rs"
+
+[[bin]]
+name = "grid-config"
+path = "src/config_cli.rs"
+
+[[bin]]
+name = "grid-brain"
+path = "src/brain.rs"
+
+[dependencies]
+sniper-shared = { path = "../shared" }
+chrono = "0.4.44"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+simd-json = "0.14.3"
+itoa = "1.0.18"
+ryu = "1.0.19"
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["json", "env-filter"] }
+reqwest = { version = "0.12.12", features = ["json"] }
+axum = { version = "0.8.1", features = ["ws"] }
+tower-http = { version = "0.6.2", features = ["cors", "fs"] }
+tokio = { version = "1.50.0", features = ["full"] }
+futures-util = "0.3.31"
+bytes = "1.11.1"
+hmac = "0.12.1"
+sha2 = "0.10.8"
+hex = "0.4.3"
+dotenvy = "0.15.7"
+memmap2 = "0.9.5"
+zerocopy = { version = "0.8.14", features = ["derive"] }
+tokio-stream = "0.1.18"
+rusqlite = { version = "0.33", features = ["bundled"] }
+thiserror = "2.0"
+anyhow = "1.0"
+core_affinity = "0.8.3"
+signal-hook = "0.3"
+clap = { version = "4.5", features = ["derive"] }
+fs2 = "0.4.3"
+tracing-appender = "0.2"
+tokio-tungstenite = { version = "0.26.1", features = ["native-tls"] }
+native-tls = "0.2.18"
+tokio-native-tls = "0.3.1"

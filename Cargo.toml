@@ -3,6 +3,7 @@ members = [
     "shared",
     "hydra",
     "moonshot",
+    "grid",
 ]
 resolver = "3"
 

@@ -1,6 +1,6 @@
 #!/bin/bash
 # 🐺 SNIPER ARMADA — Master Deployment Script
-# Manages all bots: Hydra (Core 0), Moonshot (Core 1), Trigon (future)
+# Manages all bots: Hydra (Core 0), Moonshot (Core 1), Grid (Core 2)
 
 ARMADA_ROOT="$(cd "$(dirname "$0")" && pwd)"
 
@@ -35,19 +35,18 @@ echo "🌙 Launching Moonshot (Core 1 — Multi-Symbol Flash Crash)..."
 bash "$ARMADA_ROOT/moonshot/moonshot-start.sh" &
 MOONSHOT_PID=$!
 
-# ═══ LAUNCH TRIGON (Bot #3 — Future) ═══
-# Uncomment when Trigon is ready:
-# echo ""
-# echo "🔺 Launching Trigon (Core 1 — Triangular Arbitrage)..."
-# bash "$ARMADA_ROOT/trigon/trigon-start.sh" &
-# TRIGON_PID=$!
+# ═══ LAUNCH GRID (Bot #3) ═══
+echo ""
+echo "📐 Launching Grid (Core 2 — Dynamic Multi-Level Grid)..."
+bash "$ARMADA_ROOT/grid/grid-start.sh" &
+GRID_PID=$!
 
 echo ""
 echo "🐺 ═══════════════════════════════════════════"
 echo "   ARMADA ONLINE"
 echo "   Hydra:    Core 0 — BTC-USD Delta Lead    :3000"
 echo "   Moonshot: Core 1 — Multi-Symbol Spike    :3001"
-echo "   Trigon:   Core 1 — PENDING (not deployed)"
+echo "   Grid:     Core 2 — Multi-Level Grid      :3002"
 echo "═══════════════════════════════════════════════"
 
 wait

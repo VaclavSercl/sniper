@@ -666,6 +666,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "grid"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "bytes",
+ "chrono",
+ "clap",
+ "core_affinity",
+ "dotenvy",
+ "fs2",
+ "futures-util",
+ "hex",
+ "hmac",
+ "itoa",
+ "memmap2",
+ "native-tls",
+ "reqwest",
+ "rusqlite",
+ "ryu",
+ "serde",
+ "serde_json",
+ "sha2",
+ "signal-hook",
+ "simd-json",
+ "sniper-shared",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-native-tls",
+ "tokio-stream",
+ "tokio-tungstenite 0.26.2",
+ "tower-http",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "zerocopy",
+]
+
+[[package]]
 name = "h2"
 version = "0.4.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
