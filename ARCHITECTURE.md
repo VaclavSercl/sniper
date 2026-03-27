@@ -1,91 +1,107 @@
-# 🏗️ BEROUN SNIPER v10.7 — Architecture
+# 🏗️ BEROUN SNIPER v11.0 — Architecture Document
 
-## Execution Model
-
-```
-                    ┌──────────────────────────────────────┐
-                    │        Bitfinex WebSocket v2         │
-                    │    (orderbook + trades + auth)       │
-                    └──────────┬───────────────────────────┘
-                               │ fastwebsockets (zero-copy)
-                    ┌──────────▼───────────────────────────┐
-                    │     L0 RUST ENGINE (main.rs)         │
-                    │                                      │
-                    │  ┌───────────┐  ┌─────────────────┐  │
-                    │  │ Orderbook │  │ Ghost Proximity  │  │
-                    │  │ Parser    │→ │ Monitor (sub-ms) │  │
-                    │  └───────────┘  └────────┬────────┘  │
-                    │                          │           │
-                    │  ┌───────────────────────▼────────┐  │
-                    │  │     Hydra Fire Engine          │  │
-                    │  │ Public grid + Shadow ghost      │  │
-                    │  │ IOC Flash Injection             │  │
-                    │  └───────────────────────┬────────┘  │
-                    │                          │           │
-                    │  ┌───────────────────────▼────────┐  │
-                    │  │     Order TX Channel           │  │
-                    │  │  (mpsc → WebSocket write)      │  │
-                    │  └────────────────────────────────┘  │
-                    └──────────┬───────────────────────────┘
-                               │ mmap IPC (lock-free atomics)
-              ┌────────────────┼────────────────────────┐
-              │                │                        │
-   ┌──────────▼─────┐  ┌──────▼────────┐  ┌────────────▼────────┐
-   │ L1 SHIELD      │  │ DASHBOARD     │  │ L2 ORACLE           │
-   │ (Python, 50ms) │  │ (Rust, SSE)   │  │ (Python, 5min)      │
-   │                │  │               │  │                     │
-   │ Sweep detect   │  │ HTMX+SSE     │  │ Gemini 2.5 Pro      │
-   │ Ghost control  │  │ Real-time UI  │  │ Regime detection    │
-   │ Skew bias      │  │ Port 3000     │  │ Grid optimization   │
-   │ Anti-paralysis │  │               │  │ Neural Cross        │
-   └────────────────┘  └───────────────┘  │ SQLite Brain        │
-                                          │ Sovereign Registry  │
-                                          └─────────────────────┘
-```
-
-## IPC: Shared Memory Layout
+## System Overview
 
 ```
-/dev/shm/beroun/engine_state.bin (EngineState, ~1824 bytes)
-├─ Price fields (bid, ask, micro, spread)         offset 0-96
-├─ Position & PnL (realized, unrealized)          offset 96-256
-├─ OrderBook (25 bids + 25 asks × 24 bytes)       offset 256-1456
-├─ Analytics (fills, toxic, OBI)                  offset 1456-1568
-├─ AI Intelligence (confidence, regime, shadow)   offset 1568-1664
-├─ Anti-Paralysis (l1_uptime_pct)                 offset 1664
-├─ Ghost Orders (transparency, mask, prices)      offset 1672-1784
-└─ Sovereign Registry (freeze, fire, trigger, intent) offset 1784-1824
-
-/dev/shm/beroun/risk_state.bin (RiskState, ~256 bytes)
-├─ paused flag
-├─ authorized_capital, daily_loss_limit
-├─ grid_step, grid_levels, max_position
-└─ cap_floor (escalation)
+                    ┌──────────────────────────────────────────────┐
+                    │              TELEGRAM                         │
+                    │   /status /macro /ai /sovereign               │
+                    └────────────────┬─────────────────────────────┘
+                                     │ telebot API
+                    ┌────────────────┴─────────────────────────────┐
+                    │         L2: GEMINI ORACLE (5 min cycle)       │
+                    │  sniper_orchestrator.py → beroun-config CLI   │
+                    └────────────────┬─────────────────────────────┘
+                                     │ mmap write (risk params)
+┌───────────────────┐ ┌──────────────┴──────────────┐ ┌────────────┐
+│  MACRO MONITOR    │ │  L1: PYTHON SHIELD (1s loop)│ │   BRAIN    │
+│ macro_monitor.py  │ │  l1_shield.py               │ │  brain.rs  │
+│                   │ │                              │ │  SQLite    │
+│ • Binance WS      │ │  • OBI skew calculation     │ │  sniper.db │
+│ • F&G Index       │ │  • Sweep detection          │ │            │
+│ • RSS Sentiment   │ │  • Ghost mode control       │ │  • Lessons │
+│                   │ │  • Uptime tracking          │ │  • Cycles  │
+└───────┬───────────┘ └──────────────┬──────────────┘ └────────────┘
+        │ mmap                       │ mmap
+        ▼                            ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                    /dev/shm/beroun/                               │
+│                                                                   │
+│  engine_state.bin (EngineState)  │  risk_state.bin (RiskState)   │
+│  ~1900 bytes, lock-free atomics  │  ~256 bytes, lock-free        │
+│                                                                   │
+│  Micro-Price  │ Orderbook │ Ghost Grid │ AI Registry │ Macro     │
+└──────────────────────────┬───────────────────────────────────────┘
+                           │ mmap read (Ordering::Relaxed)
+                           ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                    L0: RUST ENGINE                                │
+│                    beroun-core (main.rs)                          │
+│                                                                   │
+│  ┌─────────────┐ ┌──────────────┐ ┌────────────────────────────┐ │
+│  │ DATA THREAD │ │ EXEC THREAD  │ │ HYDRA FIRE (inside exec)   │ │
+│  │ WS: book    │ │ WS: trades   │ │                            │ │
+│  │ OBI calc    │ │ position mgmt│ │ 1. Micro-Price             │ │
+│  │ depth       │ │ wallet sync  │ │ 2. Fair Value (v11.0)      │ │
+│  │ ghost check │ │ order track  │ │ 3. OBI Imbalance           │ │
+│  └─────────────┘ └──────────────┘ │ 4. Inventory Skew          │ │
+│                                    │ 5. Macro Bias (v10.9)      │ │
+│  ┌─────────────┐                  │ 6. Anti-Cross Guard        │ │
+│  │ DASHBOARD   │                  │ 7. Ghost Transparency      │ │
+│  │ :3000 HTMX  │                  │ 8. Sentinel Reposition     │ │
+│  └─────────────┘                  └────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-## Data Flow
+## Data Flow: Order Lifecycle
 
-1. **Book Tick** → L0 updates orderbook atomics → calculates micro-price
-2. **Ghost Check** (every tick) → if `|micro - ghost_level| < trigger_zone` → fire IOC
-3. **Hydra Fire** (every `ai_fire_interval_ms`) → build public + ghost grid → send orders
-4. **L1 Shield** (every 50ms) → read book from mmap → detect sweep → write freeze/ghost/skew
-5. **L2 Oracle** (every 5min) → Gemini analysis → write grid/position/registry to mmap
-6. **Dashboard** (every 500ms) → read all mmap fields → SSE push to browser
+```
+Price Update → Micro-Price → Fair Value → Grid Calc → Anti-Cross → Order Send
+                                ↑                         ↑
+                         Binance VWAP              Safety Clamp
+                         Macro Bias
+```
+
+## Sentinel Pipeline (v11.0)
+
+Every fire cycle (~3s), the engine:
+
+1. **Reads** Binance mid-price from mmap (written by macro_monitor.py at ~100 trades/sec)
+2. **Computes** Global Fair Value = 60% local + 30% Binance + 10% sentiment
+3. **Checks** divergence: if |FV - local| > 0.05%, shifts ghost grid 50% toward FV
+4. **Checks** Binance sweep: if detected < 3s ago, forces ghost mode
+5. **Applies** Anti-Flicker: fire_interval = max(AI setting, min_order_lifetime)
 
 ## Safety Architecture
 
 ```
-┌─ NON-OVERRIDABLE (L0 hardcoded) ─────────────────────┐
-│  DLL circuit breaker (daily loss limit auto-pause)    │
-│  Capital guard (max authorized capital)               │
-│  Anti-cross guard (bid < ask enforcement)             │
-│  Fire interval clamp (500ms-10000ms)                 │
-│  Freeze clamp (500ms-30000ms)                        │
-└───────────────────────────────────────────────────────┘
-┌─ AI-TUNABLE (Sovereign Registry) ─────────────────────┐
-│  Grid step, position limit                            │
-│  Freeze duration, fire interval                       │
-│  Ghost trigger zone, transparency                     │
-│  Intent mode (aggressive/defensive/scout/sovereign)   │
-└───────────────────────────────────────────────────────┘
+┌─── NON-OVERRIDABLE (Hardcoded) ──────────────────────────────┐
+│  • Daily Loss Limit (DLL) circuit breaker                     │
+│  • Max position size (capital guard)                          │
+│  • Anti-Cross Guard (bid < best_ask, ask > best_bid)         │
+│  • Spread inverted → skip cycle                              │
+│  • AI Heartbeat > 30s stale → zero bias                      │
+│  • Panic shutdown on WebSocket failure                        │
+└──────────────────────────────────────────────────────────────┘
+
+┌─── AI-TUNABLE (via mmap registry) ───────────────────────────┐
+│  • Grid step, fire interval, ghost trigger zone               │
+│  • Sweep freeze duration, intent mode                         │
+│  • Min order lifetime (anti-flicker)                          │
+│  • Ghost transparency (% of grid visible)                     │
+└──────────────────────────────────────────────────────────────┘
 ```
+
+## Version History
+
+| Version | Codename | Key Feature |
+|---------|----------|-------------|
+| v8.0 | Sovereign Intelligence | Three-layer architecture |
+| v9.2 | Hybrid Intelligence | L1 Python Shield + OBI |
+| v10.0 | Apex Predator | Dynamic grid + analytics |
+| v10.4 | Neural Cross | Lesson validation engine |
+| v10.5 | Anti-Paralysis | Adaptive sweep thresholds |
+| v10.6 | Ghost Shadow | Hidden liquidity (IOC injection) |
+| v10.7 | Sovereign AI | Dynamic registry via mmap |
+| v10.9 | Omniscient Predator | Macro monitor + Binance sync |
+| v11.0 | Sentinel Singularity | Fair Value + Anti-Flicker + Reactive defense |

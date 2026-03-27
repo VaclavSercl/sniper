@@ -1,12 +1,12 @@
 #!/bin/bash
-# 🐺 BEROUN SNIPER v10.7 "Sovereign AI Engine" — MASTER STARTUP
+# 🐺 BEROUN SNIPER v11.0 "Sentinel Singularity" — MASTER STARTUP
 # Three-Layer Architecture: L0 Rust | L1 Python Shield | L2 Gemini Oracle
-# Ghost Orders | Sovereign Control Registry | SQLite Brain
+# Ghost Orders | Sentinel Defense | Fair Value | Macro Intelligence
 
 PROJECT_ROOT="/home/wwwenda/hft-sniper"
 BIN_DIR="$PROJECT_ROOT/target/release"
 
-echo "🐺 Starting SNIPER v10.7 (Sovereign)..."
+echo "🐺 Starting SNIPER v11.0 (Sentinel Singularity)..."
 cd $PROJECT_ROOT
 
 # ═══ DEZINSEKCE: Kill ALL old processes ═══
@@ -60,7 +60,7 @@ fi
 python3 $PROJECT_ROOT/scripts/tg_listener.py &
 echo "-> Telegram Command Center started (v10.7 Sovereign)"
 
-# 7. Start Macro Intelligence (v10.9 — The Eyes)
+# 7. Start Macro Intelligence (v11.0 — The Eyes + Sentinel)
 python3 $PROJECT_ROOT/scripts/macro_monitor.py &
 echo "-> Macro Intelligence started (Binance + F&G + News RSS)"
 

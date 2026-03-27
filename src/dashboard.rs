@@ -20,7 +20,7 @@ const MAX_HISTORY: usize = 200;
 const MAX_EVENTS: usize = 60;
 
 fn init_mmap_ptr<T: Default>(path: &str) -> Result<MmapMut> {
-    let file = OpenOptions::new().read(true).write(true).create(true).open(path)?;
+    let file = OpenOptions::new().read(true).write(true).create(true).truncate(false).open(path)?;
     file.set_len(std::mem::size_of::<T>() as u64)?;
     Ok(unsafe { MmapMut::map_mut(&file)? })
 }
@@ -326,6 +326,11 @@ fn render_dashboard(db: &DashboardState) -> String {
 
     let pos_str = format!("{:+.5}", db.position);
     let skew_str = fmt_usd(db.inv_skew);
+    let macro_val_str = format!("{:+.2}", db.macro_bias);
+    let bnb_sweep_str = if db.macro_bnb_sweep_ago < 0 { "—".to_string() } else { format!("{}s", db.macro_bnb_sweep_ago) };
+    let shadow_pnl_str = if db.is_shadow_mode {
+        format!(r#"<div class="ai-sep"></div><div class="bar-row"><span class="bar-label">SHADOW PnL</span><span class="bar-val purple">${:.6}</span></div>"#, db.shadow_pnl)
+    } else { String::new() };
 
     format!(r##"<div class="root{shadow_class}">
 {freeze_html}
@@ -335,7 +340,7 @@ fn render_dashboard(db: &DashboardState) -> String {
 <header class="hdr">
 <div class="hdr-l">
 <div class="logo"><span class="wolf">🐺</span><span class="b">BEROUN</span><span class="s"> SNIPER</span></div>
-<span class="ver">v10.1.0</span>
+<span class="ver">v11.0</span>
 {regime}
 {paused_html}
 </div>
@@ -438,14 +443,12 @@ fn render_dashboard(db: &DashboardState) -> String {
         ghost_inj = db.ghost_injections,
         ghost_rej = db.ghost_velocity_rejects,
         ghost_html = ghost_html,
-        macro_val = format!("{:+.2}", db.macro_bias),
+        macro_val = macro_val_str,
         macro_cls = if db.macro_bias < -0.3 { "neg" } else if db.macro_bias > 0.3 { "pos" } else { "" },
         fng = db.macro_fear_greed,
-        bnb_sweep = if db.macro_bnb_sweep_ago < 0 { "—".to_string() } else { format!("{}s", db.macro_bnb_sweep_ago) },
+        bnb_sweep = bnb_sweep_str,
         bnb_cls = if db.macro_bnb_sweep_ago >= 0 && db.macro_bnb_sweep_ago < 10 { "neg" } else { "" },
-        shadow_pnl_block = if db.is_shadow_mode {
-            format!(r#"<div class="ai-sep"></div><div class="bar-row"><span class="bar-label">SHADOW PnL</span><span class="bar-val purple">${:.6}</span></div>"#, db.shadow_pnl)
-        } else { String::new() },
+        shadow_pnl_block = shadow_pnl_str,
         price_svg = price_svg,
         evcount = db.events.len(),
         events = render_events(&db.events),

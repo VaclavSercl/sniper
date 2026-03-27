@@ -115,7 +115,7 @@ impl AsyncNotifier {
 }
 
 fn init_mmap_ptr<T: Default>(path: &str) -> Result<MmapMut> {
-    let file = std::fs::OpenOptions::new().read(true).write(true).create(true).open(path)?;
+    let file = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(path)?;
     file.set_len(std::mem::size_of::<T>() as u64)?;
     let mut mmap = unsafe { MmapMut::map_mut(&file)? };
     if mmap.iter().all(|&b| b == 0) {
@@ -827,7 +827,7 @@ async fn async_main() -> Result<()> {
 
                                                     // Check ghost levels for proximity injection
                                                     // v10.7: Dynamic trigger zone from AI registry
-                                                    let ai_trigger = eng.ai_ghost_trigger_pct.load(Ordering::Relaxed).max(10).min(500) as f64 / 100000.0;
+                                                    let ai_trigger = eng.ai_ghost_trigger_pct.load(Ordering::Relaxed).clamp(10, 500) as f64 / 100000.0;
                                                     let trigger_dist = (micro_g as f64 * ai_trigger) as i64;
                                                     let velocity_safe = ghost_velocity < ghost_velocity_max;
                                                     let min_inject_interval = ghost_last_inject.elapsed().as_millis() > 200; // Rate limit: max 5/sec
@@ -902,8 +902,8 @@ async fn async_main() -> Result<()> {
                                             if best_bid > 0 && best_ask > 0 {
                                                 let now = Instant::now();
                                                 // v11.0: Fire interval = max(AI fire_interval, anti-flicker lifetime)
-                                                let fire_ai = eng.ai_fire_interval_ms.load(Ordering::Relaxed).max(500).min(10000);
-                                                let anti_flicker = eng.ai_min_order_lifetime_ms.load(Ordering::Relaxed).max(50).min(5000);
+                                                let fire_ai = eng.ai_fire_interval_ms.load(Ordering::Relaxed).clamp(500, 10000);
+                                                let anti_flicker = eng.ai_min_order_lifetime_ms.load(Ordering::Relaxed).clamp(50, 5000);
                                                 let fire_interval = fire_ai.max(anti_flicker);
                                                 if now.duration_since(last_upd).as_millis() > fire_interval as u128
                                                     && risk.paused.load(Ordering::Acquire) == 0 {
@@ -1189,8 +1189,8 @@ async fn async_main() -> Result<()> {
                                                             let ghost_trans = eng.ghost_transparency.load(Ordering::Relaxed) as f64 / 10000.0;
                                                             // n_public = how many levels are visible in orderbook
                                                             // At transparency=1.0 (100%): all public. At 0.1: only ~1 level public per side.
-                                                            let n_public_buy = ((n_buy as f64 * ghost_trans).ceil() as usize).max(1).min(n_buy);
-                                                            let n_public_sell = ((n_sell as f64 * ghost_trans).ceil() as usize).max(1).min(n_sell);
+                                                            let n_public_buy = ((n_buy as f64 * ghost_trans).ceil() as usize).clamp(1, n_buy);
+                                                            let n_public_sell = ((n_sell as f64 * ghost_trans).ceil() as usize).clamp(1, n_sell);
                                                             let ghost_mode = ghost_trans < 0.99;
 
                                                             // Clear old ghost prices
