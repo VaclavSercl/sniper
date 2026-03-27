@@ -94,7 +94,7 @@ INTENT_PRESETS = {
 }
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [TG] %(message)s")
-log = logging.getLogger("beroun-tg")
+log = logging.getLogger("hydra-tg")
 
 if not TOKEN:
     log.error("TELEGRAM_BOT_TOKEN not set!")
@@ -111,7 +111,7 @@ def auth(message):
     return True
 
 def run_config(*args):
-    """Run beroun-config and return output."""
+    """Run hydra-config and return output."""
     try:
         result = subprocess.run(
             [CONFIG_BIN] + list(args),
@@ -187,7 +187,7 @@ def cmd_status(message):
     if not auth(message): return
     log.info("Status requested")
 
-    # Get live state from beroun-config
+    # Get live state from hydra-config
     raw = run_config("export-json")
     try:
         state = json.loads(raw)
@@ -1188,7 +1188,7 @@ def _apply_intent(intent_id):
     # Increment registry version
     ver = _read_mmap_u64(OFF_AI_REGISTRY_VER)
     _write_mmap_u64(OFF_AI_REGISTRY_VER, ver + 1)
-    # Apply grid via beroun-config
+    # Apply grid via hydra-config
     raw = run_config("export-json")
     try:
         state = json.loads(raw)

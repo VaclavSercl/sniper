@@ -16,7 +16,7 @@ Architecture:
   ENGINE   → reads /dev/shm/beroun/engine_state.bin (from L0 Rust)
   GEMINI   → consults Gemini 3.1 Pro for macro-strategic decisions
   MEMORY   → persists to logs/oracle_memory.json (12-cycle rolling window)
-  OUTPUT   → writes parameters via beroun-config + Telegram reports
+  OUTPUT   → writes parameters via hydra-config + Telegram reports
 ═══════════════════════════════════════════════════════════════════
 """
 
@@ -66,7 +66,7 @@ OFF_L1_SUCCESS_RATE = 1640
 OFF_L2_ACTION_MS = 1648
 OFF_LEARNING_TRIG = 1656
 
-# Legacy v8.0 fields (must keep alive for beroun-config ai_alive check)
+# Legacy v8.0 fields (must keep alive for hydra-config ai_alive check)
 OFF_AI_HEARTBEAT = 1480  # ai_heartbeat_ms in EngineState (verified from repr(C) layout)
 
 # v11.3 Fee Sentinel
@@ -434,7 +434,7 @@ class AutoEscalation:
 
 # ── DATA COLLECTION ─────────────────────────────────────────
 def collect_bot_state():
-    """Collect current bot state from beroun-config."""
+    """Collect current bot state from hydra-config."""
     try:
         result = subprocess.run(
             [CONFIG_BIN, "export-json"],
@@ -784,7 +784,7 @@ def consult_gemini(prompt):
 
 # ── EXECUTION ───────────────────────────────────────────────
 def apply_decision(decision, mm, escalation_result=None):
-    """Apply L2 decision via beroun-config + mmap."""
+    """Apply L2 decision via hydra-config + mmap."""
     if not decision:
         return
 
@@ -813,7 +813,7 @@ def apply_decision(decision, mm, escalation_result=None):
     now_ms = int(time.time() * 1000)
     write_u64_mmap(mm, OFF_L2_ACTION_MS, now_ms)
 
-    # Update legacy ai_heartbeat so beroun-config reports ai_alive=true
+    # Update legacy ai_heartbeat so hydra-config reports ai_alive=true
     write_u64_mmap(mm, OFF_AI_HEARTBEAT, now_ms)
 
     # L1 learning trigger

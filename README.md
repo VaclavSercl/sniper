@@ -30,7 +30,8 @@ sniper/
 ├── hydra/               ← 🐍 Bot #1: BTC-USD Delta Lead HFT (Core 0)
 ├── moonshot/            ← 🌙 Bot #2: Multi-Symbol Flash Crash (Core 1)
 ├── grid/                ← 📐 Bot #3: Dynamic Multi-Level Grid (Core 2)
-├── architect/           ← 🏛️ Central orchestrator (PLANNED)
+├── architect/           ← 🏛️ Central orchestrator (Phase 6)
+├── trigon/              ← 🔺 Bot #4: Triangular Arbitrage (Phase 5)
 │
 ├── Cargo.toml           ← Workspace root
 ├── .env                 ← API keys (shared)
@@ -123,6 +124,15 @@ sudo systemctl start sniper-armada.service
 - **BTC Volatility Kill**: Moonshot/Grid auto-pause if BTC >4%/h
 - **Active Trade Lock**: AI cannot rotate pairs with open positions
 - **Consecutive Loss Halt**: Grid pauses after 3 consecutive losses
+
+## Roadmap
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| 4 | 🎯 Next | Deploy Moonshot + Grid na Beroun server |
+| 5 | 🔲 | Trigon (Bot #4) — Triangular Arbitrage |
+| 6 | 🔲 | Architect — multi-bot PnL dashboard |
+| 7 | 🔲 | Shared MDF — single WebSocket process |
 
 ## Version History
 

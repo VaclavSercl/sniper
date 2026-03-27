@@ -4,17 +4,17 @@
 //! Closed-loop: learn → apply → validate → adjust.
 //!
 //! Usage:
-//!   beroun-brain init              — Create/migrate DB
-//!   beroun-brain log-cycle <json>  — Store an Oracle cycle snapshot
-//!   beroun-brain log-alert <json>  — Store a tactical alert
-//!   beroun-brain query [--last Xh] [--regime R] [--limit N]
-//!   beroun-brain analyze           — Self-analysis: optimal params per regime
-//!   beroun-brain pattern <regime>  — Get learned optimal params
-//!   beroun-brain stats             — Overall statistics
-//!   beroun-brain context [--cycles N] — Generate Gemini prompt context
-//!   beroun-brain backtest [--days N]  — Run nightly Neural Cross analysis
-//!   beroun-brain lessons [--regime R] — Get active learned lessons
-//!   beroun-brain worst-cycles [--n 5] — Export worst cycles for AI critique
+//!   hydra-brain init              — Create/migrate DB
+//!   hydra-brain log-cycle <json>  — Store an Oracle cycle snapshot
+//!   hydra-brain log-alert <json>  — Store a tactical alert
+//!   hydra-brain query [--last Xh] [--regime R] [--limit N]
+//!   hydra-brain analyze           — Self-analysis: optimal params per regime
+//!   hydra-brain pattern <regime>  — Get learned optimal params
+//!   hydra-brain stats             — Overall statistics
+//!   hydra-brain context [--cycles N] — Generate Gemini prompt context
+//!   hydra-brain backtest [--days N]  — Run nightly Neural Cross analysis
+//!   hydra-brain lessons [--regime R] — Get active learned lessons
+//!   hydra-brain worst-cycles [--n 5] — Export worst cycles for AI critique
 
 use clap::{Parser, Subcommand};
 use rusqlite::{Connection, params};
