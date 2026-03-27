@@ -1189,8 +1189,8 @@ async fn async_main() -> Result<()> {
                                                             let ghost_trans = eng.ghost_transparency.load(Ordering::Relaxed) as f64 / 10000.0;
                                                             // n_public = how many levels are visible in orderbook
                                                             // At transparency=1.0 (100%): all public. At 0.1: only ~1 level public per side.
-                                                            let n_public_buy = ((n_buy as f64 * ghost_trans).ceil() as usize).clamp(1, n_buy);
-                                                            let n_public_sell = ((n_sell as f64 * ghost_trans).ceil() as usize).clamp(1, n_sell);
+                                                            let n_public_buy = ((n_buy as f64 * ghost_trans).ceil() as usize).max(1).min(n_buy.max(1));
+                                                            let n_public_sell = ((n_sell as f64 * ghost_trans).ceil() as usize).max(1).min(n_sell.max(1));
                                                             let ghost_mode = ghost_trans < 0.99;
 
                                                             // Clear old ghost prices

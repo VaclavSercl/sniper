@@ -863,3 +863,9 @@
 [Fri 27. March 2026, 17:26:15 CET] Watchdog v11.0 (mmap heartbeat monitor) ONLINE
 [Fri 27. March 2026, 17:28:45 CET] Watchdog v11.0 (mmap heartbeat monitor) ONLINE
 [Fri 27. March 2026, 17:31:24 CET] Watchdog v11.0 (mmap heartbeat monitor) ONLINE
+[Fri 27. March 2026, 17:34:24 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 17:35:54 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 17:37:11 CET] Watchdog v11.0 (mmap heartbeat monitor) ONLINE
+[Fri 27. March 2026, 17:39:41 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 17:40:11 CET] ALERT: Sniper core not running. systemd should auto-restart.
+[Fri 27. March 2026, 17:40:45 CET] Watchdog v11.0 (mmap heartbeat monitor) ONLINE
