@@ -1967,6 +1967,9 @@ name = "sniper-shared"
 version = "11.1.0"
 dependencies = [
  "memmap2",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
  "zerocopy",
 ]
 

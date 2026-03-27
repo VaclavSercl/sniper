@@ -47,7 +47,7 @@ impl AsyncNotifier {
         let token = std::env::var("TELEGRAM_BOT_TOKEN").unwrap_or_default();
         let chat_id = std::env::var("TELEGRAM_CHAT_ID").unwrap_or_default();
         let client = reqwest::Client::builder().timeout(Duration::from_secs(10)).build().unwrap();
-        let alerts_log = "/home/wwwenda/hft-sniper/logs/alerts.log".to_string();
+        let alerts_log = std::env::current_dir().unwrap_or_default().join("logs/alerts.log").to_string_lossy().to_string();
 
         tokio::spawn(async move {
             let mut report_interval = tokio::time::interval(Duration::from_secs(3600));
@@ -72,7 +72,7 @@ impl AsyncNotifier {
                         }
                         // v7.1: Hourly state.json snapshot for Oracle
                         tokio::task::spawn_blocking(|| {
-                            let _ = std::process::Command::new("/home/wwwenda/hft-sniper/target/release/beroun-config")
+                            let _ = std::process::Command::new(std::env::current_exe().unwrap_or_default().with_file_name("hydra-config"))
                                 .arg("export-json")
                                 .stdout(std::fs::File::create("/dev/shm/beroun/state.json").unwrap_or_else(|_| std::fs::File::create("/dev/null").unwrap()))
                                 .status(); // .status() waits for child — prevents zombie
@@ -294,7 +294,7 @@ fn main() -> Result<()> {
     // ═══ NON-BLOCKING DAILY LOG ROTATION (L2 Audit Trail) ═══
     // Sniper writes to a lock-free channel → background thread flushes to disk
     // Zero impact on L0 hot path latency
-    let log_dir = "/home/wwwenda/hft-sniper/logs";
+    let log_dir = "logs";
     let file_appender = tracing_appender::rolling::daily(log_dir, "trading.log");
     let (non_blocking, _log_guard) = tracing_appender::non_blocking(file_appender);
     tracing_subscriber::registry()
@@ -306,14 +306,14 @@ fn main() -> Result<()> {
     std::fs::create_dir_all("/dev/shm/beroun").context("Failed to create /dev/shm/beroun")?;
 
     // ═══ SINGLE-INSTANCE LOCK (Ghost-in-the-Machine prevention) ═══
-    let lock_file = std::fs::File::create("/tmp/beroun-sniper.lock")
+    let lock_file = std::fs::File::create("/tmp/hydra-core.lock")
         .context("Failed to create lock file")?;
     if lock_file.try_lock_exclusive().is_err() {
         tracing::error!(event = "dual_instance_blocked",
-            msg = "Another beroun-core is already running! Aborting to prevent dual-trading.");
+            msg = "Another hydra-core is already running! Aborting to prevent dual-trading.");
         std::process::exit(1);
     }
-    info!(event = "instance_lock_acquired", lock = "/tmp/beroun-sniper.lock");
+    info!(event = "instance_lock_acquired", lock = "/tmp/hydra-core.lock");
     // lock_file must stay alive (held open) for the entire process lifetime
     let _lock_guard = lock_file;
 
@@ -460,8 +460,8 @@ async fn async_main() -> Result<()> {
     let key = std::env::var("BITFINEX_API_KEY").context("Missing API KEY")?;
     let sec = std::env::var("BITFINEX_API_SECRET").context("Missing API SECRET")?;
 
-    info!(event = "system_start", version = "11.1.0-delta-lead");
-    notifier.alert("*Beroun Sniper v11.1 DELTA LEAD ONLINE*\n`Hydra Grid + L1 Shield + Delta Lead + Macro Intelligence`".to_string());
+    info!(event = "system_start", version = "11.1.0-hydra");
+    notifier.alert("*🐍 HYDRA v11.1 ONLINE*\n`Delta Lead + Ghost Grid + L1 Shield + Macro Intelligence`".to_string());
 
     // SIGTERM listener (systemd, Docker)
     let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
