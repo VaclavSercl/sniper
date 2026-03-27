@@ -19,6 +19,7 @@ Commands:
 
 import os
 import json
+import re
 import subprocess
 import time
 import hashlib
@@ -496,8 +497,7 @@ def cmd_analytics(message):
         # Get live state
         state = run_config("export-json")
         if state:
-            import json as j
-            d = j.loads(state)
+            d = json.loads(state)
             a = d.get("analytics", {})
             pnl = d.get("pnl", {})
             eq = d.get("equity", {})
@@ -523,7 +523,7 @@ def cmd_analytics(message):
                     capture_output=True, text=True, timeout=10
                 )
                 if r.returncode == 0 and r.stdout.strip() != "[]":
-                    regimes = j.loads(r.stdout)
+                    regimes = json.loads(r.stdout)
                     msg += "\n📈 *Brain Analýza (per regime):*\n"
                     for reg in regimes:
                         msg += f"`  {reg['regime']}: {reg['cycles']}x avg_pnl=${reg['avg_pnl']:.4f}`\n"
@@ -608,8 +608,7 @@ def cmd_brain(message):
             capture_output=True, text=True, timeout=10
         )
         if result.returncode == 0:
-            import json as j
-            d = j.loads(result.stdout)
+            d = json.loads(result.stdout)
             stats = (f"📊 *Statistiky:*\n"
                      f"`Cyklů:     {d.get('total_cycles', 0)}`\n"
                      f"`Alertů:    {d.get('total_alerts', 0)}`\n"
@@ -641,8 +640,8 @@ def cmd_brain(message):
             capture_output=True, text=True, timeout=10
         )
         if result.returncode == 0:
-            import json as j2
-            ll = j2.loads(result.stdout)
+            
+            ll = json.loads(result.stdout)
             if ll:
                 lessons = f"\n\n📝 *Lekce ({len(ll)}):*"
                 for lx in ll[:5]:
@@ -659,8 +658,8 @@ def cmd_brain(message):
             capture_output=True, text=True, timeout=10
         )
         if result.returncode == 0:
-            import json as j3
-            a = j3.loads(result.stdout)
+            
+            a = json.loads(result.stdout)
             ai = a.get("alpha", {})
             verdict_icon = "📈" if ai.get("verdict") == "EFFICIENT" else "📉" if ai.get("verdict") == "OVER_CAUTIOUS" else "➖"
             alpha = (f"\n\n{verdict_icon} *Alpha Audit (24h):*\n"
@@ -682,7 +681,7 @@ def cmd_backtest(message):
     bot.reply_to(message, "🌙 Spouštím Neural Cross backtest + AI Coach...")
 
     try:
-        import json as j3
+        
 
         # Step 1: Run statistical backtest
         result = subprocess.run(
@@ -693,7 +692,7 @@ def cmd_backtest(message):
             bot.send_message(message.chat.id, f"❌ Backtest error: {result.stderr[:200]}")
             return
 
-        d = j3.loads(result.stdout)
+        d = json.loads(result.stdout)
 
         msg = (f"🌙 *Neural Cross Backtest v10.4*\n\n"
                f"`Status:   {d.get('status', '?')}`\n"
@@ -719,7 +718,7 @@ def cmd_backtest(message):
             capture_output=True, text=True, timeout=10
         )
         worst_cycles = worst_result.stdout.strip() if worst_result.returncode == 0 else "[]"
-        worst_list = j3.loads(worst_cycles)
+        worst_list = json.loads(worst_cycles)
 
         if not worst_list:
             bot.send_message(message.chat.id, "✅ Žádné ztrátové cykly — není co kritizovat!")
@@ -758,10 +757,9 @@ Be BRUTALLY HONEST. RESPOND WITH JSON ONLY:
         )
         raw = coach_result.stdout.strip()
 
-        import re
         match = re.search(r'\{[\s\S]*"lessons"[\s\S]*\}', raw)
         if match:
-            coach = j3.loads(match.group())
+            coach = json.loads(match.group())
             critique = coach.get('self_critique', 'N/A')
             pattern = coach.get('pattern_identified', 'N/A')
             lessons = coach.get('lessons', [])
@@ -774,7 +772,7 @@ Be BRUTALLY HONEST. RESPOND WITH JSON ONLY:
                 try:
                     subprocess.run(
                         ["/home/wwwenda/hft-sniper/target/release/beroun-brain",
-                         "save-lesson", j3.dumps(lesson)],
+                         "save-lesson", json.dumps(lesson)],
                         capture_output=True, text=True, timeout=5
                     )
                     saved += 1
@@ -803,7 +801,7 @@ Be BRUTALLY HONEST. RESPOND WITH JSON ONLY:
             capture_output=True, text=True, timeout=5
         )
         if lessons_result.returncode == 0:
-            all_lessons = j3.loads(lessons_result.stdout)
+            all_lessons = json.loads(lessons_result.stdout)
             if all_lessons:
                 lmsg = "📚 Aktivní lekce v Brain:\n"
                 for ll in all_lessons[:5]:
@@ -828,7 +826,7 @@ def cmd_validate(message):
     bot.reply_to(message, "🔬 Spouštím Lesson Validation Engine...")
 
     try:
-        import json as j4
+        
 
         # Step 1: Validate lessons
         result = subprocess.run(
@@ -839,7 +837,7 @@ def cmd_validate(message):
             bot.send_message(message.chat.id, f"Validation error: {result.stderr[:200]}")
             return
 
-        d = j4.loads(result.stdout)
+        d = json.loads(result.stdout)
         if d.get("status") == "no_active_lessons":
             bot.send_message(message.chat.id, "Zadne aktivni lekce k validaci.")
             return
@@ -867,7 +865,7 @@ def cmd_validate(message):
                 capture_output=True, text=True, timeout=10
             )
             if alpha.returncode == 0:
-                a = j4.loads(alpha.stdout)
+                a = json.loads(alpha.stdout)
                 ai = a.get("alpha", {})
                 verdict = ai.get("verdict", "?").replace("_", " ")
                 verdict_icon = "📈" if "EFFICIENT" in verdict else "📉" if "CAUTIOUS" in verdict else "➖"

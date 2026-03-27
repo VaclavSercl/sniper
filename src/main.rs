@@ -2,12 +2,11 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH, Duration};
-use futures_util::{StreamExt, SinkExt};
 use serde_json::json;
 use hmac::{Hmac, Mac};
 use sha2::Sha384;
 use dotenvy::dotenv;
-use tracing::{info, Level, warn, error};
+use tracing::{info, Level, error};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use memmap2::MmapMut;
 use anyhow::{Context, Result};
@@ -16,9 +15,8 @@ use fs2::FileExt;
 
 use beroun_types::{EngineState, RiskState, ENGINE_STATE_PATH, RISK_STATE_PATH};
 
-use fastwebsockets::{handshake, OpCode, Payload};
-use hyper::{Request, body::Bytes, header::{CONNECTION, UPGRADE, HOST}};
-use http_body_util::Empty;
+use fastwebsockets::{OpCode, Payload};
+use hyper::{Request, header::{CONNECTION, UPGRADE, HOST}};
 
 struct SpawnExecutor;
 impl<Fut> hyper::rt::Executor<Fut> for SpawnExecutor

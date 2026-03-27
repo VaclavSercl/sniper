@@ -4,3 +4,10 @@
 *.log
 .env
 nohup.out
+*.swp
+*.swo
+*~
+.DS_Store
+/tmp/
+*.pyc
+__pycache__/

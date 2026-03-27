@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 use std::convert::Infallible;
 use axum::{
     extract::State,
-    response::{Html, IntoResponse, sse::{Event, Sse, KeepAlive}},
+    response::{Html, sse::{Event, Sse, KeepAlive}},
     routing::get,
     Router,
 };
