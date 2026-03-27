@@ -9,6 +9,11 @@ pub const PRICE_SCALE_I: i64 = 100_000_000;
 pub const BOOK_LEVELS: usize = 25;
 pub const MAX_GRID_LEVELS: usize = 5;
 
+/// v10.0: Trading pair configuration (Multi-Pair foundation)
+pub const TRADING_SYMBOL: &str = "tBTCUSD";
+pub const TRADING_BASE: &str = "BTC";     // Base currency for wallet tracking
+pub const TRADING_QUOTE: &str = "USD";    // Quote currency
+
 /// Fibonacci-like spacing multipliers for grid levels
 /// Level 1: 1.0x grid, Level 2: 2.5x, Level 3: 4.5x, Level 4: 7.0x, Level 5: 10.0x
 pub const LEVEL_SPACING: [f64; MAX_GRID_LEVELS] = [1.0, 2.5, 4.5, 7.0, 10.0];

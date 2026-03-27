@@ -456,7 +456,7 @@ async fn async_main() -> Result<()> {
 
         // Configure Market Data WS (public, no auth)
         let _ = mdata_write.send(Message::Text(json!({"event":"conf","flags":131072|536870912}).to_string().into())).await;
-        let _ = mdata_write.send(Message::Text(json!({"event":"subscribe","channel":"book","symbol":"tBTCUSD","prec":"P0","freq":"F0","len":"25"}).to_string().into())).await;
+        let _ = mdata_write.send(Message::Text(json!({"event":"subscribe","channel":"book","symbol":beroun_types::TRADING_SYMBOL,"prec":"P0","freq":"F0","len":"25"}).to_string().into())).await;
 
         // Order channel: HFT loop → exec writer
         let (order_tx, mut order_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
@@ -578,8 +578,8 @@ async fn async_main() -> Result<()> {
                                     for w in wd {
                                         if let (Some(wt), Some(cur), Some(bal)) = (w[0].as_str(), w[1].as_str(), safe_as_f64(&w[2])) {
                                             if wt == "exchange" {
-                                                if cur == "BTC" { engine.wallet_btc.store((bal * beroun_types::PRICE_SCALE) as u64, Ordering::SeqCst); }
-                                                else if cur == "USD" || cur == "UST" { engine.wallet_usd.store((bal * beroun_types::PRICE_SCALE) as u64, Ordering::SeqCst); }
+                                                if cur == beroun_types::TRADING_BASE { engine.wallet_btc.store((bal * beroun_types::PRICE_SCALE) as u64, Ordering::SeqCst); }
+                                                else if cur == beroun_types::TRADING_QUOTE || cur == "UST" { engine.wallet_usd.store((bal * beroun_types::PRICE_SCALE) as u64, Ordering::SeqCst); }
                                             }
                                         }
                                     }
@@ -601,7 +601,7 @@ async fn async_main() -> Result<()> {
                                                     o[0].as_u64().or_else(|| o[0].as_f64().map(|f| f as u64)),
                                                     o[3].as_str(), safe_as_f64(&o[6]), o[13].as_str()
                                                 ) {
-                                                    if sym == "tBTCUSD" && (status.contains("ACTIVE") || status.contains("PARTIALLY")) {
+                                                    if sym == beroun_types::TRADING_SYMBOL && (status.contains("ACTIVE") || status.contains("PARTIALLY")) {
                                                         if amt > 0.0 { store_order_slot(&engine.active_buy_ids, id); }
                                                         else { store_order_slot(&engine.active_sell_ids, id); }
                                                         info!(event = "order_recovered", id = id, side = if amt > 0.0 { "buy" } else { "sell" });
@@ -618,7 +618,7 @@ async fn async_main() -> Result<()> {
                                             o[0].as_u64().or_else(|| o[0].as_f64().map(|f| f as u64)),
                                             o[3].as_str(), safe_as_f64(&o[6]), o[13].as_str()
                                         ) {
-                                            if sym == "tBTCUSD" {
+                                            if sym == beroun_types::TRADING_SYMBOL {
                                                 if status.contains("ACTIVE") || status.contains("PARTIALLY") {
                                                     if amt > 0.0 { store_order_slot(&engine.active_buy_ids, id); }
                                                     else { store_order_slot(&engine.active_sell_ids, id); }
@@ -972,8 +972,8 @@ async fn async_main() -> Result<()> {
                                                         let cost = amt * bp;
                                                         if total_buy_usd + cost <= cap_available * 0.95 && amt >= MIN_ORDER_BTC {
                                                             order_parts.push(format!(
-                                                                r#"["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
-                                                                amt, bp
+                                                                r#"["on",{{"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
+                                                                beroun_types::TRADING_SYMBOL, amt, bp
                                                             ));
                                                             total_buy_usd += cost;
                                                         }
@@ -986,8 +986,8 @@ async fn async_main() -> Result<()> {
                                                         let sp = sp_i as f64 / beroun_types::PRICE_SCALE;
                                                         if total_sell_btc + amt <= btc_cap * 0.95 && amt >= MIN_ORDER_BTC {
                                                             order_parts.push(format!(
-                                                                r#"["on",{{"symbol":"tBTCUSD","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
-                                                                -amt, sp
+                                                                r#"["on",{{"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
+                                                                beroun_types::TRADING_SYMBOL, -amt, sp
                                                             ));
                                                             total_sell_btc += amt;
                                                         }
