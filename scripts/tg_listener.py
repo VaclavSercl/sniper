@@ -98,6 +98,7 @@ def cmd_help(message):
 💰 `/capital 400` — Autorizovaný kapitál ($)
 🛑 `/loss 20` — Denní loss limit ($)
 ⏸️ `/pause` / ▶️ `/resume`
+⚠️ `/cautious` — Macro-event defense (15 min)
 🔮 `/oracle` — Vynutit Oracle cyklus
 ❓ `/help` — Tento přehled
 
@@ -235,6 +236,74 @@ def cmd_loss(message):
         log.info(f"Daily loss limit set to ${value} via Telegram")
     except ValueError:
         bot.reply_to(message, "❌ Neplatné číslo")
+
+
+# ── CAUTIOUS MODE (Macro-Event Awareness v9.5) ────────────
+cautious_state = {"active": False, "orig_grid": None, "orig_levels": None}
+
+@bot.message_handler(commands=["cautious"])
+def cmd_cautious(message):
+    if not auth(message): return
+    parts = message.text.split()
+
+    if len(parts) >= 2 and parts[1].lower() == "off":
+        if cautious_state["active"]:
+            _restore_cautious()
+            bot.reply_to(message, "▶️ *CAUTIOUS MODE OFF* — Normal trading restored.")
+        else:
+            bot.reply_to(message, "ℹ️ Cautious mode not active.")
+        return
+
+    if cautious_state["active"]:
+        bot.reply_to(message, "⚠️ Already in CAUTIOUS MODE. `/cautious off` to disable.")
+        return
+
+    raw = run_config("export-json")
+    try:
+        state = json.loads(raw)
+        risk = state.get("risk_params", {})
+        cautious_state["orig_grid"] = risk.get("grid_step_usd", 3.0)
+        cautious_state["orig_levels"] = risk.get("grid_levels", 3)
+    except Exception:
+        cautious_state["orig_grid"] = 3.0
+        cautious_state["orig_levels"] = 3
+
+    new_grid = cautious_state["orig_grid"] * 2.0
+    run_config("set-grid", str(new_grid))
+    run_config("set-levels", "1")
+    cautious_state["active"] = True
+    log.warning(f"CAUTIOUS MODE: grid ${new_grid:.2f}, 1 level, 15min timer")
+
+    def _auto_restore():
+        time.sleep(900)
+        if cautious_state["active"]:
+            _restore_cautious()
+            try:
+                bot.send_message(AUTHORIZED_CHAT_ID,
+                    "🐺 ⏰ *CAUTIOUS MODE expired* (15 min). Normal trading restored.",
+                    parse_mode="Markdown")
+            except Exception:
+                pass
+
+    threading.Thread(target=_auto_restore, daemon=True).start()
+
+    bot.reply_to(message, f"""⚠️ *CAUTIOUS MODE ACTIVATED*
+
+📐 Grid: `${cautious_state['orig_grid']:.2f}` → `${new_grid:.2f}` (2×)
+📊 Levels: `{cautious_state['orig_levels']}` → `1`
+
+⏰ Auto-restore za *15 minut*
+_Nebo: `/cautious off`_""")
+
+
+def _restore_cautious():
+    if cautious_state["orig_grid"]:
+        run_config("set-grid", str(cautious_state["orig_grid"]))
+    if cautious_state["orig_levels"]:
+        run_config("set-levels", str(cautious_state["orig_levels"]))
+    cautious_state["active"] = False
+    log.info("CAUTIOUS MODE deactivated")
+
 
 @bot.message_handler(commands=["close"])
 def cmd_close(message):
