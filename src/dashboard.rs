@@ -378,6 +378,7 @@ fn render_dashboard(db: &DashboardState) -> String {
 </div>
 
 <div class="layout3">
+<div style="display:flex;flex-direction:column;gap:0.75rem">
 <div class="ai-panel">
 <div class="ai-title">🧠 AI INTELLIGENCE</div>
 {conf_bar}
@@ -401,15 +402,16 @@ fn render_dashboard(db: &DashboardState) -> String {
 {shadow_pnl_block}
 </div>
 
-<div class="ai-panel">
+<div class="ai-panel" style="border-image:linear-gradient(180deg,var(--cyan),var(--green)) 1;border-left:3px solid">
 <div class="ai-title">⚡ DELTA LEAD v11.1</div>
-<div class="ai-grid">
+<div class="ai-grid" style="grid-template-columns:1fr 1fr 1fr">
 <div class="ai-stat"><div class="ai-sl">Binance</div><div class="ai-sv">{bnb_mid_str}</div></div>
 <div class="ai-stat"><div class="ai-sl">Delta</div><div class="ai-sv {delta_cls}">{delta_str}</div></div>
 <div class="ai-stat"><div class="ai-sl">Signal</div><div class="ai-sv {delta_cls}">{delta_dir}</div></div>
 <div class="ai-stat"><div class="ai-sl">Δ Repos</div><div class="ai-sv cyan">{delta_repos}</div></div>
 <div class="ai-stat"><div class="ai-sl">Sentinel</div><div class="ai-sv cyan">{sentinel_repos}</div></div>
 <div class="ai-stat"><div class="ai-sl">Fee</div><div class="ai-sv {fee_cls}">{fee_str}</div></div>
+</div>
 </div>
 </div>
 
