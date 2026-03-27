@@ -1,8 +1,47 @@
-# 🐺 Beroun Sniper v8.0 — HFT Trading Bot
+# 🐺 Beroun Sniper v10.0 — Architecture
 
-Vysokofrekvenční obchodní bot pro Bitfinex BTC/USD. Rust 2024, zero-copy architektura, sub-millisecond tick-to-trade, třívrstvý AI imunitní systém.
+Vysokofrekvenční market-making bot pro Bitfinex BTC/USD.
+Rust 2024, zero-copy architektura, sub-millisecond tick-to-trade, třívrstvý AI imunitní systém.
 
-## Architektura v8.0 — Tri-Layer AI + Telegram Command & Control
+## Třívrstvá Architektura (L0 / L1 / L2)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  L0 REFLEX — Rust (< 1ms tick-to-trade)                     │
+│  CPU Core 1, pinned, current_thread Tokio runtime           │
+│  ├─ Task 1: Market Data WS (simd_json, 25-level book)      │
+│  ├─ Task 2: Execution WS (order send/recv, trade tracking)  │
+│  └─ Task 3: HFT Loop (Hydra Grid, micro-price, skew)       │
+├─────────────────────────────────────────────────────────────┤
+│  IPC (mmap, lock-free atomics, cache-line aligned)          │
+│  ├─ engine_state.bin  ← L0 writes, L1 reads                │
+│  └─ risk_state.bin    ← L1 writes, L0 reads                │
+├─────────────────────────────────────────────────────────────┤
+│  L1 TACTICAL SHIELD — Python (1s cycle)                     │
+│  l1_shield.py: OBI skewing, micro-skew, sweep detection     │
+│  Reads OBI/mid from engine_state → writes bias to risk_state│
+├─────────────────────────────────────────────────────────────┤
+│  L2 STRATEGIC ORACLE — Gemini 3.1 Pro (26h cycle)           │
+│  oracle_brain.sh: RSS + Fear&Greed + macro → beroun-config  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## L0: Rust HFT Engine (main.rs)
+
+### Dual WebSocket Architecture
+
+**Problém:** Jeden WS pro data i ordery → **TCP Head-of-Line blocking**.
+Při tržním volume přijímáš stovky book updatů, a tvůj order čeká ve frontě na TCP ACK.
+
+**Řešení:**
+| WS | Účel | Auth | Subscribe |
+|----|-------|------|-----------|
+| Market Data | Příjem order booku | ❌ Ne | ✅ book tBTCUSD |
+| Execution | Ordery + notifikace | ✅ Ano | ❌ Ne |
+
+Order string se formátuje na hot path a posílá přes `unbounded_channel` — **nanosekunda**, ne milisekunda čekání na TCP.
+
+### Task Architecture
 
 ```mermaid
 graph TB
@@ -11,7 +50,7 @@ graph TB
             WS_PUB[Market Data WS<br/>TCP_NODELAY<br/>15s watchdog] --> PARSE[simd_json<br/>zero-copy parse]
             PARSE --> BOOK[Order Book<br/>25 bids + 25 asks]
             BOOK --> BBA[Update BBA]
-            BBA --> SNIPER["Sniper Logic<br/>Micro-Price + Inv Skew + Dynamic Grid"]
+            BBA --> SNIPER["Sniper Logic<br/>Micro-Price + Inv Skew + Hydra Grid"]
         end
         subgraph "Task 1: Exec Writer (spawned)"
             WRITER[Order Writer<br/>unbounded_channel recv]
@@ -48,47 +87,39 @@ graph TB
     ERR_CH -->|watchdog trigger| WS_PUB
 ```
 
-## Proč Dual WebSocket?
+### Trading Intelligence
 
-**Problém:** Jeden WS pro data i ordery → **TCP Head-of-Line blocking**.
-Při markentím volume přijímáš stovky book updatů, a tvůj order čeká ve frontě na TCP ACK.
-
-**Řešení:**
-| WS | Účel | Auth | Subscribe |
-|----|-------|------|-----------|
-| Market Data | Příjem order booku | ❌ Ne | ✅ book tBTCUSD |
-| Execution | Ordery + notifikace | ✅ Ano | ❌ Ne |
-
-Order string se formátuje na hot path a posílá přes `unbounded_channel` — **nanosekunda**, ne milisekunda čekání na TCP.
-
-## Trading Intelligence (v6.2)
-
-### Micro-Price (Volume-Weighted Mid)
+#### Micro-Price (Volume-Weighted Mid)
 ```
 micro = (bid_price × ask_vol + ask_price × bid_vol) / total_vol
 ```
-Na rozdíl od hloupého `(bid+ask)/2`, micro-price predikuje směr z volume imbalance.
+Na rozdíl od `(bid+ask)/2`, micro-price predikuje směr z volume imbalance.
 Velký bid volume → cena se posune k asku (předpovídá růst) → bot se posune dřív než trh.
 
-### L2 Order Book Imbalance (OBI) — NOVÉ v6.2
+#### L2 Order Book Imbalance (OBI)
 ```
 OBI = (Σ bid_vol[0..10] - Σ ask_vol[0..10]) / (Σ bid_vol[0..10] + Σ ask_vol[0..10])
 ```
 Rozsah: -1.0 (čistý prodejní tlak) → +1.0 (čistý nákupní tlak).
 Bot čte hloubku 10 hladin order booku a vidí "zdi" — velké objemy, které drží cenu.
 
-### Dynamic Sizing (Konvergence signálů) — NOVÉ v6.2
-| OBI | Micro-Price bias | Signály | Sizing |
-|-----|-----------------|---------|--------|
-| > +0.2 | kladný (bid tlak) | ✅ Shodné | **1.5× base** (přitlačí) |
-| < -0.2 | záporný (ask tlak) | ✅ Shodné | **1.5× base** (přitlačí) |
-| > +0.1 | záporný | ❌ Protichůdné | **0.7× base** (opatrný) |
-| < -0.1 | kladný | ❌ Protichůdné | **0.7× base** (opatrný) |
-| jinak | jakýkoli | Neutrální | **1.0× base** |
+#### Hydra Multi-Level Grid (v9.0+)
+```
+Level 1: base_grid × 1.0    (tight, high fill rate)
+Level 2: base_grid × 1.618  (Fibonacci, medium)
+Level 3: base_grid × 2.618  (wide, capture volatility)
+Level 4: base_grid × 4.236  (ultra-wide, rare fills)
+Level 5: base_grid × 6.854  (extreme, black swan capture)
+```
 
-Clamp: `[0.5× base, 2.0× base]`
+#### Adaptive Grid (v9.5+)
+```
+fill_balance = buys_filled / (buys_filled + sells_filled)
+grid_mult = lerp(0.7, 1.5, abs(fill_balance - 0.5) × 2)
+dynamic_grid = base_grid × grid_mult × volatility_factor
+```
 
-### Inventory Skew (Řízení zásob)
+#### Inventory Skew (Řízení zásob)
 ```
 skew = -(position / max_position) × 2 × grid
 ```
@@ -99,133 +130,58 @@ skew = -(position / max_position) × 2 × grid
 | +100% max | +1.0 | -2×grid | Maximální obranný posun |
 | -50% max | -0.5 | +1×grid | Brzdí prodeje, zlevňuje nákupy |
 
-### Volatility Engine (Dynamický Grid)
+#### Volatility Engine (Dynamický Grid)
 Background task (500ms polling): sbírá mid-price do 60-slot ring bufferu (30s okno).
 ```
 dynamic_grid = base($2) + 15% × price_range(30s)
 clamped to [$2, $50]
 ```
-- Nízká volatilita → tight spread ($2-3) → více obchodů
-- Vysoká volatilita → wide spread ($5-50) → ochrana před adverse selection
-- Loguje `volatility_spike` při range > $50
 
-## Watchdog
-
-### In-Process (v5.3, nové)
-
-| Mechanismus | Timeout | Reakce |
-|---|---|---|
-| Market Data read | 15s | `should_reconnect = true` |
-| Exec Reader read | 15s | `err_tx.send("exec_socket_timeout")` |
-| Exec Writer send fail | okamžitě | `err_tx.send("writer_socket_error")` |
-| `err_rx.recv()` v HFT loop | biased select | `should_reconnect = true` |
-
-### Reconnect Cleanup
+#### Liquidity Hole Detection (v9.5+)
 ```
-1. writer_handle.abort()    — zabije zombie writer
-2. reader_handle.abort()    — zabije zombie reader
-3. Zero order book          — sniper čeká na snapshot
-4. Zero last_buy/sell_price — sniper provede fresh fire
-5. Sleep 3s                  — dá Bitfinexu čas
-6. Outer loop: reconnect    — nové oba WS
+depth_score = Σ ask_vol[0..5]  (top 5 levels)
+depth_ma = 60-sample moving average
+if depth_score < depth_ma × 0.3 → grid ×3 (protective widening)
 ```
 
-### Graceful Shutdown (SIGTERM/SIGINT)
-```
-1. Odchytí signal (ctrl_c / sigterm.recv)
-2. Pošle cancel_all přes order_tx → writer → Bitfinex
-3. Sleep 500ms (TCP flush)
-4. return Ok(()) — čistý exit
-```
+## L1: Tactical Shield (l1_shield.py)
 
-## Adresářová struktura
+Python sidecar proces čtoucí engine_state přes mmap a zapisující bias do risk_state.
 
+### Funkce
+| Funkce | Input | Output | Cyklus |
+|--------|-------|--------|--------|
+| **OBI Skewing** | OBI z engine_state (-1.0 to +1.0) | bias_offset do risk_state | 1s |
+| **Micro-Skew** | Mid price + OBI směr | Posun bidů dolů při sell pressure | 1s |
+| **Sweep Detection** | Volume spike detection | Toxic flag (grid widening) | 1s |
+
+### Metriky (live)
 ```
-/home/wwwenda/hft-sniper/
-├── src/
-│   ├── main.rs              # Core: async_main, 3 tasks, watchdog, shutdown
-│   ├── types.rs              # EngineState, RiskState, OrderBookLevel
-│   ├── dashboard.rs          # Dashboard WS server (:3000)
-│   ├── monitor.rs            # TUI dashboard (ANSI, 5 FPS, mmap reader)
-│   └── sovereign_ai.rs       # AI risk module (separate binary)
-├── runtime/
-│   ├── engine_state.bin      # mmap shared state (auto-generated)
-│   └── risk_state.bin        # mmap risk params (auto-generated)
-├── logs/
-│   └── alerts.log            # Telegram + file alerts
-├── dashboard.html            # Web dashboard (glassmorphism, uPlot)
-├── .env                      # BITFINEX_API_KEY, BITFINEX_API_SECRET
-├── Cargo.toml
-└── ARCHITECTURE.md           # This file
+OBI=-0.651  Skew=$-0.59  Mid=$68,470  Toxic=0  Cycle=1200
+```
+- OBI: -0.651 = silný sell pressure → posouvá bidy dolů
+- Micro-skew: $-0.59 = chrání před padajícím nožem
+- Toxic=0: žádné sweep detekce (clean market)
+
+### mmap IPC Layout
+```
+L1 reads:  engine_state.bin → best_bid, best_ask, bids[25], asks[25], OBI
+L1 writes: risk_state.bin   → bias_offset (AtomicI64, PRICE_SCALE=1e8)
 ```
 
-## Telegram Notifikace (v6.0)
+## L2: Strategic Oracle (oracle_brain.sh)
 
-### BotEvent Enum
-```rust
-pub enum BotEvent {
-    Alert(String),            // Okamžité odeslání (startup, shutdown, reconnect)
-    Trade { amount, price },  // Agregováno do hodinového reportu
-}
+### Pipeline
 ```
-
-| Událost | Typ | Chování |
-|---------|-----|--------|
-| Startup | Alert | Okamžitě: `*Beroun Sniper v6.0 ONLINE*` |
-| Trade | Trade | Agreguje se: buys/sells/volume/poslední cena |
-| Hodinový report | Timer | Každou hodinu: počet obchodů, objem, posl. cena |
-| Reconnect | Alert | Okamžitě s důvodem |
-| Shutdown | Alert | Okamžitě: cancel_all + flush |
-
-### Hodinový Report (ukázka)
-```
-🐺 📊 *Hodinový Report*
-📈 Obchodů: `20` (12 nákup / 8 prodej)
-💰 Objem: `0.01440` BTC
-💲 Posl. cena: `$69,752.50`
-```
-
-## TUI Monitor (`cargo run --release --bin beroun-monitor`)
-ANSI terminálový dashboard, 5 FPS, čte mmap přímo.
-```
-══════════════════════════════════════════════════════════════════════
- 🐺 BEROUN SNIPER v6.0          🟢 RUNNING
-══════════════════════════════════════════════════════════════════════
- ┌─ TRH: tBTCUSD ───────────┐  ┌─ BOT METRIKY ───────────┐
- │ Best Ask:    $ 69,640.00  │  │ T2T Latence:    42 µs │
- │ Micro-Price: $ 69,639.50  │  │ Dyn Grid:    $ 4.25  │
- │ Mid-Price:   $ 69,639.00  │  │ Inv Skew:    $+1.73  │
- │ Best Bid:    $ 69,638.00  │  │ PnL:         $+2.15  │
- │ Spread:      $ 2.00       │  │                      │
- └────────────────────────────┘  └──────────────────────┘
-```
-
-## Operační příkazy
-
-```bash
-# Status
-systemctl --user status beroun-sniper
-
-# Live logy
-journalctl --user -u beroun-sniper -f
-
-# Restart
-systemctl --user restart beroun-sniper
-
-# Stop (triggers graceful shutdown → cancel_all)
-systemctl --user stop beroun-sniper
-
-# Sledování obchodů
-journalctl --user -u beroun-sniper -f | jq 'select(.fields.event == "sniper_fire" or .fields.event == "trade_aggregated")'
-
-# TUI Monitor (druhé SSH okno)
-cargo run --release --bin beroun-monitor
-
-# Sledování watchdogu
-journalctl --user -u beroun-sniper -f | jq 'select(.fields.event | startswith("watchdog") or startswith("reconnect") or startswith("shutdown"))'
-
-# Sledování chyb
-journalctl --user -u beroun-sniper -f | jq 'select(.fields.event | test("error|timeout|closed"))'
+main.rs (hourly) → runtime/state.json
+                        ↓
+oracle_brain.sh  → beroun-config export-json + RSS + Fear/Greed
+                        ↓
+                   gemini-cli → {new_grid, max_position, risk_level, reasoning}
+                        ↓
+                   beroun-config set-grid + set-max-inv (with 3× safety)
+                        ↓
+                   risk_state.bin (mmap) → Sniper reads immediately
 ```
 
 ## Memory Layout (mmap IPC)
@@ -255,7 +211,41 @@ amount   AtomicI64   8B     0x08
 count    AtomicU64   8B     0x10
 ```
 
-## Optimalizace na Hot Path
+## Watchdog Systems
+
+### In-Process Watchdog
+
+| Mechanismus | Timeout | Reakce |
+|---|---|---|
+| Market Data read | 15s | `should_reconnect = true` |
+| Exec Reader read | 15s | `err_tx.send("exec_socket_timeout")` |
+| Exec Writer send fail | okamžitě | `err_tx.send("writer_socket_error")` |
+| `err_rx.recv()` v HFT loop | biased select | `should_reconnect = true` |
+
+### External Watchdog (watchdog.sh)
+- Checks mmap heartbeat timestamp
+- Restarts engine if heartbeat > 60s stale
+- Runs as systemd timer or cron
+
+### Reconnect Cleanup
+```
+1. writer_handle.abort()    — zabije zombie writer
+2. reader_handle.abort()    — zabije zombie reader
+3. Zero order book          — sniper čeká na snapshot
+4. Zero last_buy/sell_price — sniper provede fresh fire
+5. Sleep 3s                  — dá Bitfinexu čas
+6. Outer loop: reconnect    — nové oba WS
+```
+
+### Graceful Shutdown (SIGTERM/SIGINT)
+```
+1. Odchytí signal (ctrl_c / sigterm.recv)
+2. Pošle cancel_all přes order_tx → writer → Bitfinex
+3. Sleep 500ms (TCP flush)
+4. return Ok(()) — čistý exit
+```
+
+## Hot Path Optimizations
 
 | Optimalizace | Detaily | Dopad |
 |---|---|---|
@@ -268,12 +258,7 @@ count    AtomicU64   8B     0x10
 | **TCP_NODELAY** | Oba WS sockety bez Nagle | Instant packet send |
 | **CPU pinning** | Core 1, current_thread runtime | Zero cache migration |
 | **biased select!** | Shutdown/watchdog checked first | Guaranteed responsiveness |
-| **15s watchdog** | timeout() na obou WS | Detekce half-open |
-| **abort() handles** | Zombie task prevention | Zero memory leaks |
-| **Book zeroing** | Reconnect → clean slate | No stale data trading |
-| **Micro-Price** | Volume-weighted mid | ~1-2 tick prediction edge |
-| **Inventory Skew** | Position-based bias | Prevents inventory blowup |
-| **Volatility Engine** | Dynamic grid from 30s window | Adaptive spread width |
+| **mmap IPC** | Lock-free atomic reads/writes | Zero syscall overhead |
 
 ## Bezpečnostní opravy
 
@@ -285,6 +270,26 @@ count    AtomicU64   8B     0x10
 | Orphan orders on shutdown | `cancel_all` → 500ms flush |
 | Half-open connections | 15s timeout watchdog |
 | Zombie tasks on reconnect | `JoinHandle::abort()` |
+
+## Order Tracking
+
+### Životní cyklus objednávky
+```
+os (snapshot)  → načte existující ordery po připojení (state recovery)
+on (new)       → bot poslal nový order → uloží ID do active_buy/sell_id
+ou (update)    → order se částečně fillnul → aktualizuje ID
+oc (cancel)    → order zrušen → compare_exchange vymaže ID
+te (executed)  → obchod proveden → aktualizuje net_position
+```
+
+### Chirurgický cancel (vs. cancel all)
+```rust
+// PŘED (v6.0): ruší VŠECHNY objednávky na účtu
+["oc_multi", {"all": 1}]
+
+// PO (v6.1): ruší POUZE naše trackované objednávky
+["oc_multi", {"id": [234102741323, 234102741324]}]
+```
 
 ## Konfigurace
 
@@ -305,88 +310,89 @@ TELEGRAM_CHAT_ID=...       # optional
 | grid_size | 2 | Počet párů objednávek |
 | order_usd | $50 | Velikost objednávky v USD |
 | max_inv_delta | 0.005 BTC | Max inventory delta (pro skew) |
-| bias_offset | 0 | Directional bias (signed) |
+| bias_offset | 0 | Directional bias (L1 Shield writes) |
 
-## Order Tracking (v6.1)
+## Adresářová struktura
 
-### Životní cyklus objednávky
 ```
-os (snapshot)  → načte existující ordery po připojení (state recovery)
-on (new)       → bot poslal nový order → uloží ID do active_buy/sell_id
-ou (update)    → order se částečně fillnul → aktualizuje ID
-oc (cancel)    → order zrušen → compare_exchange vymaže ID
-te (executed)  → obchod proveden → aktualizuje net_position
-```
-
-### Chirurgický cancel (vs. cancel all)
-```rust
-// PŘED (v6.0): ruší VŠECHNY objednávky na účtu
-["oc_multi", {"all": 1}]
-
-// PO (v6.1): ruší POUZE naše trackované objednávky
-["oc_multi", {"id": [234102741323, 234102741324]}]
-```
-
-### Graceful Shutdown
-- Čte `active_buy_id` / `active_sell_id` z mmap
-- Posílá cílený cancel
-- Fallback na `cancel_all` pokud nejsou žádné trackované ID
-
-## Lokální AI Node (v8.0)
-
-### Stack
-| Komponenta | Hodnota |
-|-----------|--------|
-| Runtime | LM Studio v0.4.7 (llmster headless) |
-| Model | Phi-3.5-mini-instruct (3.8B, Q4_K_S) |
-| GPU | GTX 1060 6GB (VRAM: ~3.7 GB model + ~2.3 GB KV cache) |
-| API | `localhost:1234` (OpenAI-compatible) |
-| Sampling | Greedy: temp=0, top_p=0.1, max_tokens=5 |
-| Systemd | `beroun-ai.service` (Restart=always, CPU core 2) |
-
-### AI Safety Systems (v8.0)
-| System | Trigger | Akce |
-|--------|---------|------|
-| **Heartbeat Fuse** | `ai_heartbeat_ms` > 30s stale | Bias zeroed, pure grid |
-| **Thermal Guard** | GPU ≥ 82°C | Cycle 5s → 10s |
-| **Sanity Clamp** | beroun-config writes | Grid $1-$200, ±50%/update |
-| **Alpha Tracking** | Every trade execution | Measures AI $ contribution |
-
-### Třívrstvý AI Pipeline
-```
-L0 (µs)  main.rs         — Rust zero-copy, simd_json, mmap
-L1 (5s)  sovereign_ai.rs — LM Studio GPU, OBI→bias, heartbeat
-L2 (26h) oracle_brain.sh — Gemini 3.1 Pro, RSS→grid, beroun-config
+/home/wwwenda/hft-sniper/
+├── src/
+│   ├── main.rs              # L0 HFT engine (Dual WS, Hydra Grid, Adaptive Grid)
+│   ├── types.rs             # EngineState, RiskState, OrderBookLevel (mmap layout)
+│   ├── config_cli.rs        # beroun-config CLI (mmap parameter modifier)
+│   ├── dashboard.rs         # Dashboard HTTP server (:3000)
+│   ├── dump_offsets.rs      # Debug: mmap struct offset validator
+│   └── risk_control.rs     # Risk control binary
+├── scripts/
+│   ├── l1_shield.py         # L1 Tactical Shield (OBI→skew, sweep detection)
+│   ├── tg_listener.py       # Telegram C2 interface
+│   ├── analytics.py         # Trade Analytics Engine (Sharpe, win-rate)
+│   └── oracle_brain.sh      # L2 Gemini Oracle scheduler
+├── docs/
+│   ├── AI_INFRASTRUCTURE.md # AI stack (LM Studio, Gemini, L1 Shield)
+│   ├── HFT_AUDIT_2026.md   # Architecture audit & standards
+│   ├── MONITORING.md        # Observability & metrics stack
+│   ├── RESEARCH.md          # HFT research notes
+│   └── STRATEGY.md          # Trading strategy documentation
+├── runtime/
+│   ├── engine_state.bin     # mmap shared state (auto-generated)
+│   └── risk_state.bin       # mmap risk params (auto-generated)
+├── logs/                    # Runtime logs (gitignored)
+├── systemd/                 # systemd unit files
+├── beroun-start.sh          # Orchestrator startup script
+├── watchdog.sh              # mmap heartbeat monitor
+├── optimize.sh              # PGO optimization script
+├── dashboard.html           # Web dashboard UI (glassmorphism, uPlot)
+├── beroun-sniper.service    # systemd service definition
+├── Cargo.toml               # Rust dependencies
+└── .env                     # API keys (gitignored)
 ```
 
-### Telegram Command & Control (v8.0)
-```
-📱 /status  → beroun-config export-json → live mmap snapshot
-📱 /analyze → gemini -p → Gemini 3.1 Pro ad-hoc analysis
-📱 /grid N  → beroun-config set-grid (3× safety layers)
-📱 /pause   → beroun-config pause true → instant stop
-📱 /oracle  → oracle_brain.sh → force 26h cycle
-📱 free-text → gemini -p → CIO advisor
+## Operační příkazy
+
+```bash
+# Status
+systemctl status beroun-sniper
+
+# Live logy
+journalctl -u beroun-sniper -f
+
+# Restart
+systemctl restart beroun-sniper
+
+# Stop (triggers graceful shutdown → cancel_all)
+systemctl stop beroun-sniper
+
+# L1 Shield status
+ps aux | grep l1_shield
+
+# Sledování obchodů
+journalctl -u beroun-sniper -f | grep -E "sniper_fire|trade_aggregated"
+
+# Sledování watchdogu
+journalctl -u beroun-sniper -f | grep -E "watchdog|reconnect|shutdown"
 ```
 
-### Oracle Pipeline (L2)
-```
-main.rs (hourly) → runtime/state.json
-                        ↓
-oracle_brain.sh  → beroun-config export-json + RSS + Fear/Greed
-                        ↓
-                   gemini-cli → {new_grid, max_position, risk_level, reasoning}
-                        ↓
-                   beroun-config set-grid + set-max-inv (with 3× safety)
-                        ↓
-                   risk_state.bin (mmap) → Sniper reads immediately
-```
+## Telegram Command & Control
 
-Dokumentace: [docs/AI_INFRASTRUCTURE.md](docs/AI_INFRASTRUCTURE.md)
+```
+📱 /status    → beroun-config export-json → live mmap snapshot
+📱 /report    → Denní PnL, equity, obchody
+📱 /analytics → Sharpe, win-rate, hourly heatmap
+📱 /analyze   → gemini -p → Gemini 3.1 Pro ad-hoc analysis
+📱 /grid N    → beroun-config set-grid (3× safety layers)
+📱 /pause     → beroun-config pause true → instant stop
+📱 /oracle    → oracle_brain.sh → force 26h cycle
+📱 /close CONFIRM → Emergency REST API market close
+📱 /cautious  → 15-min defensive mode
+📱 free-text  → gemini -p → CIO advisor
+```
 
 ## Známé Limitace
 
 1. **`into_data().to_vec()`** — tungstenite 0.26 vrací `Bytes`, true zero-copy by vyžadoval `fastwebsockets`
 2. **Sell ordery** mohou selhat bez BTC balance na exchange walletce
-3. **AI inference** závisí na LM Studio dostupnosti — heartbeat fuse ochrání při výpadku
+3. **L1 Shield** závisí na správných mmap offsetech — `dump_offsets` tool ověřuje kompatibilitu
+4. **Single pair** — multi-pair runtime připraven (TRADING_SYMBOL), ale zatím běží pouze BTC/USD
 
+Dokumentace: [docs/AI_INFRASTRUCTURE.md](docs/AI_INFRASTRUCTURE.md) | [docs/STRATEGY.md](docs/STRATEGY.md) | [docs/MONITORING.md](docs/MONITORING.md)

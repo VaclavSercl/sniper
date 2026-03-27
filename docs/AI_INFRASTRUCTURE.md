@@ -1,40 +1,60 @@
-# AI Infrastructure — Beroun Sniper v7.0
+# AI Infrastructure — Beroun Sniper v10.0
 
 ## Přehled
 
-Lokální AI node poskytuje botovi „strategický mozek" — 100% offline, GPU-akcelerovaný,
-s OpenAI-kompatibilním API na `localhost:1234`.
+Třívrstvý AI systém: lokální L1 Shield (Python/mmap), lokální LM Studio (GPU), vzdálený Gemini Oracle.
 
 ```
-beroun-core (CPU 1)              LM Studio (GPU: GTX 1060)
-    │                                 │
-    ├─► engine_state.bin ─────►  beroun-sovereign-ai (CPU 2)
-    │   (mmap: OBI, micro)            │
-    │                                 ├─► POST /v1/chat/completions
-    │   risk_state.bin  ◄─────────────┤   (localhost:1234)
-    │   (bias_offset)                 │
-    └── grid posun                    └── Phi-3.5-mini (3.8B, Q4_K_S)
+                    Beroun Sniper AI Stack
+┌─────────────────────────────────────────────────────┐
+│                                                     │
+│  L1 TACTICAL SHIELD (l1_shield.py)                  │
+│  ├─ Python 3, 1s cycle, mmap IPC                   │
+│  ├─ Reads: engine_state.bin (OBI, mid, bids/asks)  │
+│  ├─ Writes: risk_state.bin (bias_offset)            │
+│  └─ Functions: OBI skewing, micro-skew, sweep det. │
+│                                                     │
+│  LOCAL AI NODE (LM Studio, optional)                │
+│  ├─ GTX 1060 6GB, Phi-3.5-mini, localhost:1234     │
+│  └─ Greedy sampling, heartbeat-fused                │
+│                                                     │
+│  L2 STRATEGIC ORACLE (oracle_brain.sh)              │
+│  ├─ Gemini 3.1 Pro, 26h macro cycle                │
+│  └─ RSS + Fear/Greed → beroun-config adjustments   │
+│                                                     │
+└─────────────────────────────────────────────────────┘
 ```
 
-## Hardware
+## L1 Tactical Shield (l1_shield.py)
 
-| Komponenta | Specifikace |
-|-----------|-------------|
-| GPU | NVIDIA GeForce GTX 1060 6GB (Pascal) |
-| VRAM | 6144 MiB (model: ~3.7 GB, KV cache: ~2.3 GB) |
-| Driver | 580.126.09 |
-| Runtime | llmster 0.0.7-4 (LM Studio v0.4.7) |
+### Funkce
+| Funkce | Popis | Input → Output |
+|--------|-------|----------------|
+| **OBI Skewing** | Čte order book imbalance, posouvá bias | engine_state OBI → bias_offset |
+| **Micro-Skew** | Tlumí bidy při sell pressure | OBI < -0.3 → záporný skew |
+| **Sweep Detection** | Detekce toxických large-order sweepů | Volume spike → Toxic flag |
 
-## Nasazený model
+### Live Metriky
+```
+OBI=-0.651  Skew=$-0.59  Mid=$68,470  Toxic=0  Cycle=1200
+```
 
-| Parametr | Hodnota |
-|----------|---------|
-| Model | Phi-3.5 Mini Instruct |
-| Parametry | 3.8B |
-| Kvantizace | Q4_K_S (2.19 GB) |
-| Architektura | Phi-3 |
-| Kontext | 4096 tokenů |
-| GPU offloading | `--gpu max` (všechny vrstvy na GPU) |
+### Bezpečnost
+- Pokud mmap read selže → bias = 0 (safe default, pure grid)
+- Pokud engine heartbeat > 30s stale → bias zeroed
+- Všechny bias hodnoty clampovány na ±$5
+
+## Lokální AI Node (LM Studio)
+
+### Stack
+| Komponenta | Hodnota |
+|-----------|--------|
+| Runtime | LM Studio v0.4.7 (llmster headless) |
+| Model | Phi-3.5-mini-instruct (3.8B, Q4_K_S) |
+| GPU | GTX 1060 6GB (VRAM: ~3.7 GB model + ~2.3 GB KV cache) |
+| API | `localhost:1234` (OpenAI-compatible) |
+| Sampling | Greedy: temp=0, top_p=0.1, max_tokens=5 |
+| Systemd | `lmstudio.service` (Restart=always) |
 
 ### Výběr modelu podle VRAM
 
@@ -45,18 +65,32 @@ beroun-core (CPU 1)              LM Studio (GPU: GTX 1060)
 | 12 GB | Mistral 7B | Q6_K | ~5.5 GB |
 | 16+ GB | Gemma 2 9B / Command-R | Q8_0 | ~9 GB |
 
-## LM Studio v0.4.7 — klíčové funkce
+### AI Safety Systems
+| System | Trigger | Akce |
+|--------|---------|------|
+| **Heartbeat Fuse** | `ai_heartbeat_ms` > 30s stale | Bias zeroed, pure grid |
+| **Thermal Guard** | GPU ≥ 82°C | Cycle 5s → 10s |
+| **Sanity Clamp** | beroun-config writes | Grid $1-$200, ±50%/update |
+| **Alpha Tracking** | Every trade execution | Measures AI $ contribution |
 
-| Funkce | Popis | Přínos pro Snipera |
-|--------|-------|-------------------|
-| **Continuous Batching** | Paralelní inference (`--parallel N`) | AI Manager + manuální analýza současně |
-| **LM Link** | Tailscale E2E šifrované připojení | Vzdálený přístup k AI bez VPN |
-| **Anthropic API** | `/v1/messages` kompatibilita | Claude-style agenti lokálně |
-| **Headless daemon** | `llmster` bez GUI | Čistý server deployment |
+## L2 Strategic Oracle (oracle_brain.sh)
+
+### Pipeline
+```
+main.rs (hourly) → runtime/state.json
+                        ↓
+oracle_brain.sh  → beroun-config export-json + RSS + Fear/Greed
+                        ↓
+                   gemini-cli → {new_grid, max_position, risk_level, reasoning}
+                        ↓
+                   beroun-config set-grid + set-max-inv (with 3× safety)
+                        ↓
+                   risk_state.bin (mmap) → Sniper reads immediately
+```
 
 ## Služby (systemd)
 
-### lmstudio.service (system-level)
+### lmstudio.service
 ```ini
 [Unit]
 Description=LM Studio Headless Daemon (llmster v0.4.7)
@@ -74,52 +108,34 @@ RestartSec=5
 
 ### Pořadí startu služeb
 ```
-nvidia-persistenced → lmstudio.service → beroun-sniper → beroun-dashboard
-                      (GPU + AI model)    (HFT engine)    (Web UI)
-```
-
-## API Endpoint
-
-```
-POST http://localhost:1234/v1/chat/completions
-Content-Type: application/json
-```
-
-### Příklad volání (Rust)
-```rust
-let res = client.post("http://localhost:1234/v1/chat/completions")
-    .json(&json!({
-        "model": "phi-3.5-mini-instruct",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.0,
-        "max_tokens": 10
-    }))
-    .send().await?;
-```
-
-### Příklad volání (curl)
-```bash
-curl -s http://localhost:1234/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"phi-3.5-mini-instruct","messages":[{"role":"user","content":"OBI +0.45. Bias?"}],"temperature":0,"max_tokens":10}'
+nvidia-persistenced → lmstudio.service → beroun-sniper
+                      (GPU + AI model)    (HFT engine + L1 Shield + dashboard)
 ```
 
 ## CLI příkazy
 
 ```bash
+# LM Studio
 lms status                    # Stav serveru a modelů
 lms ps                        # Načtené modely v paměti
-lms ls                        # Dostupné modely na disku
 lms load <model> --gpu max    # Načíst model na GPU
-lms unload <model>            # Uvolnit VRAM
-lms server start --port 1234  # Spustit API server
-lms server stop               # Zastavit API server
 nvidia-smi                    # Kontrola VRAM využití
+
+# L1 Shield
+python3 scripts/l1_shield.py  # Spustí L1 Shield
+ps aux | grep l1_shield       # Zkontroluje běh
+
+# Oracle
+./scripts/oracle_brain.sh     # Vynutí Oracle cyklus
+
+# mmap debug
+cargo run --release --bin dump-offsets  # Ověří struct offsets
 ```
 
 ## Bezpečnost
 
-- ✅ **100% offline** — žádná data neopouštějí server
-- ✅ **Žádné API klíče** — lokální inference
+- ✅ **L1 Shield 100% offline** — mmap IPC only, žádné síťové volání
+- ✅ **LM Studio 100% offline** — žádná data neopouštějí server
 - ✅ **GPU izolace** — AI na GPU, Sniper na CPU Core 1
-- ✅ **LM Link (volitelně)** — E2E šifrovaný vzdálený přístup
+- ✅ **Triple Safety** — Heartbeat fuse + bias clamping + beroun-config validation
+- ✅ **Graceful degradation** — pokud L1 selže, L0 běží s bias=0
