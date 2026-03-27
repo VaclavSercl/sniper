@@ -98,16 +98,17 @@ def bfx_rest(path, body=None):
 @bot.message_handler(commands=["start", "help"])
 def cmd_help(message):
     if not auth(message): return
-    bot.reply_to(message, """🐺 *Beroun Sniper v10.1 — Overlord Interface*
+    bot.reply_to(message, """🐺 *SNIPER v10.2 — Command Center*
 
 📊 `/status` — Live stav (Equity, PnL, pozice)
 🧠 `/ai` — AI Status (L1 Shield + L2 Oracle)
+🧠 `/brain` — Sniper Brain (trvalá paměť, statistiky)
 🌑 `/shadow` — Aktivovat Shadow Mode (simulace)
 🚀 `/golive` — Návrat do Live režimu
 📅 `/report` — Denní report (obchody, PnL, equity)
 📊 `/analytics` — Trade analytics (Sharpe, win-rate)
 🚨 `/close CONFIRM` — EMERGENCY CLOSE (market exit)
-🔍 `/analyze` — Gemini 3.1 Pro analýza trhu
+🔍 `/analyze` — Gemini analýza s trvalou pamětí
 📐 `/grid 8.5` — Nastavit grid
 💰 `/capital 400` — Autorizovaný kapitál ($)
 🛑 `/loss 20` — Denní loss limit ($)
@@ -532,6 +533,48 @@ def cmd_oracle(message):
         bot.send_message(message.chat.id, "✅ Oracle dokončen:\n```\n{}\n```".format("\n".join(output)))
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Oracle error: {e}")
+
+# ── BRAIN COMMAND ──────────────────────────────────────────
+@bot.message_handler(commands=["brain"])
+def cmd_brain(message):
+    if not auth(message): return
+    log.info("Brain status requested")
+
+    # Get stats
+    stats = ""
+    try:
+        result = subprocess.run(
+            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "stats"],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0:
+            import json as j
+            d = j.loads(result.stdout)
+            stats = (f"📊 *Statistiky:*\n"
+                     f"`Cyklů:     {d.get('total_cycles', 0)}`\n"
+                     f"`Alertů:    {d.get('total_alerts', 0)}`\n"
+                     f"`Regimes:   {d.get('regime_distribution', 'N/A')}`\n"
+                     f"`Avg PnL:   {d.get('avg_pnl_per_cycle', 'N/A')}`\n"
+                     f"`Eskalace:  {d.get('escalation_events', 0)}`\n"
+                     f"`DB:        {d.get('db_size_bytes', 0)} bytes`\n"
+                     f"`Od:        {d.get('first_cycle', 'N/A')}`")
+    except Exception as e:
+        stats = f"❌ Stats error: {e}"
+
+    # Get context
+    context = ""
+    try:
+        result = subprocess.run(
+            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "context", "--cycles", "4"],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            context = f"\n\n📜 *Paměť:*\n`{result.stdout.strip()[:1500]}`"
+    except Exception:
+        pass
+
+    bot.reply_to(message, f"🧠 *SNIPER BRAIN v10.2*\n\n{stats}{context}",
+                 parse_mode="Markdown")
 
 
 # Catch-all: forward to Gemini as free-form question
