@@ -35,7 +35,7 @@ apihelper.ENABLE_MIDDLEWARE = True
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 AUTHORIZED_CHAT_ID = int(os.environ.get("TELEGRAM_CHAT_ID", "0"))
 CONFIG_BIN = "/home/wwwenda/hft-sniper/target/release/beroun-config"
-ORACLE_SCRIPT = "/home/wwwenda/hft-sniper/scripts/beroun_ai_orchestrator.py"
+ORACLE_SCRIPT = "/home/wwwenda/hft-sniper/scripts/sniper_orchestrator.py"
 STATE_JSON = "/dev/shm/beroun/state.json"
 L1_STATE_JSON = "/dev/shm/beroun/l1_state.json"
 ENGINE_MMAP = "/dev/shm/beroun/engine_state.bin"
@@ -491,14 +491,46 @@ def cmd_analytics(message):
     log.info("Analytics requested")
     bot.reply_to(message, "📊 Analyzuji obchody...")
     try:
-        today = datetime.now(CET).strftime("%Y-%m-%d")
-        log_file = f"{LOG_DIR}/trading.log.{today}"
-        result = subprocess.run(
-            ["python3", "/home/wwwenda/hft-sniper/scripts/analytics.py", log_file, "--telegram"],
-            capture_output=True, text=True, timeout=30
-        )
-        output = result.stdout.strip()[:3800]
-        bot.send_message(message.chat.id, output if output else "⚠️ No data")
+        # Get live state
+        state = run_config("export-json")
+        if state:
+            import json as j
+            d = j.loads(state)
+            a = d.get("analytics", {})
+            pnl = d.get("pnl", {})
+            eq = d.get("equity", {})
+            fills = a.get("session_fills", 0)
+            buy_vol = a.get("session_buy_volume_btc", 0)
+            sell_vol = a.get("session_sell_volume_btc", 0)
+            capture = a.get("net_spread_capture_per_btc", 0)
+            toxic = a.get("toxic_flow_hits", 0)
+
+            msg = (f"📊 *Trade Analytics (Live)*\n\n"
+                   f"`Fills:       {fills}`\n"
+                   f"`Buy Vol:     {buy_vol:.6f} BTC`\n"
+                   f"`Sell Vol:    {sell_vol:.6f} BTC`\n"
+                   f"`Capture:     ${capture:.2f}/BTC`\n"
+                   f"`Toxic Hits:  {toxic}`\n"
+                   f"`PnL:         ${pnl.get('total_usd', 0):.4f}`\n"
+                   f"`Equity:      ${eq.get('total_usd', 0):.2f}`\n")
+
+            # Add brain regime analysis
+            try:
+                r = subprocess.run(
+                    ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "analyze"],
+                    capture_output=True, text=True, timeout=10
+                )
+                if r.returncode == 0 and r.stdout.strip() != "[]":
+                    regimes = j.loads(r.stdout)
+                    msg += "\n📈 *Brain Analýza (per regime):*\n"
+                    for reg in regimes:
+                        msg += f"`  {reg['regime']}: {reg['cycles']}x avg_pnl=${reg['avg_pnl']:.4f}`\n"
+            except Exception:
+                pass
+
+            bot.send_message(message.chat.id, msg, parse_mode="Markdown")
+        else:
+            bot.send_message(message.chat.id, "⚠️ Nelze načíst stav")
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Analytics error: `{e}`")
 

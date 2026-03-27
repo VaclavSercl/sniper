@@ -1,6 +1,6 @@
 [package]
 name = "beroun-core"
-version = "10.0.0"
+version = "10.2.0"
 edition = "2024"
 
 [lib]
@@ -12,20 +12,12 @@ name = "beroun-core"
 path = "src/main.rs"
 
 [[bin]]
-name = "risk-control"
-path = "src/risk_control.rs"
-
-[[bin]]
 name = "beroun-dashboard"
 path = "src/dashboard.rs"
 
 [[bin]]
 name = "beroun-config"
 path = "src/config_cli.rs"
-
-[[bin]]
-name = "dump-offsets"
-path = "src/dump_offsets.rs"
 
 [[bin]]
 name = "beroun-brain"
