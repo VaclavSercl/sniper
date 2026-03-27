@@ -169,6 +169,14 @@ fn main() -> Result<()> {
             let btc_value = w_btc * micro_p;
             let total_equity = w_usd + btc_value;
 
+            // Pre-compute analytics (can't use let inside json! macro)
+            let a_fills = engine.session_fill_count.load(Ordering::Acquire);
+            let a_bv = engine.session_buy_volume.load(Ordering::Acquire) as f64 / s;
+            let a_sv = engine.session_sell_volume.load(Ordering::Acquire) as f64 / s;
+            let a_bu = engine.session_buy_usd.load(Ordering::Acquire) as f64 / s;
+            let a_su = engine.session_sell_usd.load(Ordering::Acquire) as f64 / s;
+            let a_spread = if a_bv > 0.0 && a_sv > 0.0 { (a_su / a_sv) - (a_bu / a_bv) } else { 0.0 };
+
             let json = serde_json::json!({
                 "timestamp": chrono::Utc::now().to_rfc3339(),
                 "price": {
@@ -195,11 +203,9 @@ fn main() -> Result<()> {
                 },
                 "volume": {
                     "monthly_usd": engine.monthly_volume_usd.load(Ordering::Acquire) as f64 / s,
-                    "fee_tier": if engine.monthly_volume_usd.load(Ordering::Acquire) as f64 / s > 500_000.0 { "Tier 2" }
-                               else if engine.monthly_volume_usd.load(Ordering::Acquire) as f64 / s > 10_000.0 { "Tier 1" }
-                               else { "Tier 0" },
-                    "maker_fee_pct": 0.1,
-                    "taker_fee_pct": 0.2,
+                    "fee_tier": "Zero (since Dec 2025)",
+                    "maker_fee_pct": 0.0,
+                    "taker_fee_pct": 0.0,
                 },
                 "intelligence": {
                     "l2_obi": obi,
@@ -207,6 +213,20 @@ fn main() -> Result<()> {
                     "t2t_micros": t2t,
                     "ai_heartbeat_ms": ai_hb_ms,
                     "ai_alive": ai_alive
+                },
+                "analytics": {
+                    "session_fills": a_fills,
+                    "session_buy_volume_btc": a_bv,
+                    "session_sell_volume_btc": a_sv,
+                    "session_buy_usd": a_bu,
+                    "session_sell_usd": a_su,
+                    "net_spread_capture_per_btc": a_spread,
+                    "toxic_flow_hits": engine.toxic_flow_hits.load(Ordering::Acquire),
+                    "checkpoint_ms": engine.analytics_checkpoint_ms.load(Ordering::Acquire),
+                },
+                "l1_intelligence": {
+                    "sweep_freeze_until_ms": engine.sweep_freeze_until.load(Ordering::Acquire),
+                    "l1_skew_adjustment_usd": engine.l1_skew_adjustment.load(Ordering::Acquire) as f64 / s,
                 },
                 "risk_params": {
                     "grid_step_usd": grid,

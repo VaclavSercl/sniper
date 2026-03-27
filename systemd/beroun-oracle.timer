@@ -1,0 +1,12 @@
+[Unit]
+Description=Beroun Oracle v9.2 Timer - 1h Symbiotic Cycle
+Requires=beroun-oracle.service
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+RandomizedDelaySec=5min
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

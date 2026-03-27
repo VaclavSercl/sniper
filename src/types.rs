@@ -90,6 +90,18 @@ pub struct EngineState {
 
     // --- FEE OPTIMIZER (v10.0) ---
     pub monthly_volume_usd: AtomicU64,  // 30-day trading volume in USD × PRICE_SCALE
+
+    // --- TRADE ANALYTICS (v9.2 Hybrid Intelligence) ---
+    pub session_buy_volume: AtomicU64,   // Cumulative buy volume × PRICE_SCALE (BTC)
+    pub session_sell_volume: AtomicU64,  // Cumulative sell volume × PRICE_SCALE (BTC)
+    pub session_buy_usd: AtomicU64,     // Cumulative buy cost in USD × PRICE_SCALE
+    pub session_sell_usd: AtomicU64,    // Cumulative sell revenue in USD × PRICE_SCALE
+    pub session_fill_count: AtomicU64,  // Total fills this session
+    pub session_pnl_realized: AtomicI64, // Session realized PnL × PRICE_SCALE
+    pub toxic_flow_hits: AtomicU64,     // L1: toxic flow detections (sweep/large order)
+    pub sweep_freeze_until: AtomicU64,  // L1: epoch_ms until execution frozen (0 = no freeze)
+    pub l1_skew_adjustment: AtomicI64,  // L1: micro-skew bias from OBI × PRICE_SCALE
+    pub analytics_checkpoint_ms: AtomicU64, // Timestamp of last analytics reset
 }
 
 impl Default for OrderBookLevel {
@@ -139,6 +151,16 @@ impl Default for EngineState {
             buy_fill_count: AtomicU64::new(0),
             sell_fill_count: AtomicU64::new(0),
             monthly_volume_usd: AtomicU64::new(0),
+            session_buy_volume: AtomicU64::new(0),
+            session_sell_volume: AtomicU64::new(0),
+            session_buy_usd: AtomicU64::new(0),
+            session_sell_usd: AtomicU64::new(0),
+            session_fill_count: AtomicU64::new(0),
+            session_pnl_realized: AtomicI64::new(0),
+            toxic_flow_hits: AtomicU64::new(0),
+            sweep_freeze_until: AtomicU64::new(0),
+            l1_skew_adjustment: AtomicI64::new(0),
+            analytics_checkpoint_ms: AtomicU64::new(0),
         }
     }
 }

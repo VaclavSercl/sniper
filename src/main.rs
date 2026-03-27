@@ -568,6 +568,16 @@ async fn async_main() -> Result<()> {
                                             // v10.0: Monthly volume for fee tier
                                             let trade_vol_usd = (trade_amt.abs() * trade_price * scale) as u64;
                                             engine.monthly_volume_usd.fetch_add(trade_vol_usd, Ordering::Relaxed);
+
+                                            // v9.2: HYBRID INTELLIGENCE — TradeAnalytics
+                                            engine.session_fill_count.fetch_add(1, Ordering::Relaxed);
+                                            if trade_amt > 0.0 {
+                                                engine.session_buy_volume.fetch_add((trade_amt * scale) as u64, Ordering::Relaxed);
+                                                engine.session_buy_usd.fetch_add(trade_vol_usd, Ordering::Relaxed);
+                                            } else {
+                                                engine.session_sell_volume.fetch_add((trade_amt.abs() * scale) as u64, Ordering::Relaxed);
+                                                engine.session_sell_usd.fetch_add(trade_vol_usd, Ordering::Relaxed);
+                                            }
                                             exec_notifier.trade(trade_amt, trade_price);
                                         }
                                     }
@@ -769,6 +779,20 @@ async fn async_main() -> Result<()> {
                                         let now = Instant::now();
                                         if now.duration_since(last_upd).as_millis() > 3000 {
                                             if risk.paused.load(Ordering::Acquire) == 0 {
+                                                // ═══ L1 SWEEP FREEZE CHECK (v9.2 Hybrid Intelligence) ═══
+                                                let freeze_until = eng.sweep_freeze_until.load(Ordering::Acquire);
+                                                if freeze_until > 0 {
+                                                    let now_ms_check = std::time::SystemTime::now()
+                                                        .duration_since(std::time::UNIX_EPOCH).unwrap_or_default()
+                                                        .as_millis() as u64;
+                                                    if now_ms_check < freeze_until {
+                                                        info!(event = "l1_sweep_freeze", remaining_ms = freeze_until - now_ms_check);
+                                                        last_upd = now; // prevent rapid retries
+                                                        continue;
+                                                    } else {
+                                                        eng.sweep_freeze_until.store(0, Ordering::Release);
+                                                    }
+                                                }
                                                 // 1. MICRO-PRICE (volume-weighted mid from L1)
                                                 let mid_i = ((best_bid as i64) + (best_ask as i64)) / 2;
                                                 let bid_vol_0 = eng.bids[0].amount.load(Ordering::Relaxed).unsigned_abs() as f64;
@@ -856,8 +880,11 @@ async fn async_main() -> Result<()> {
                                                     raw_bias
                                                 };
                                                 let final_bias = bias + inv_skew;
-                                                let mut buy_i = (micro_i - grid + final_bias).max(0);
-                                                let mut sell_i = (micro_i + grid + final_bias).max(0);
+                                                // ═══ L1 MICRO-SKEW (v9.2 Hybrid Intelligence) ═══
+                                                let l1_skew = eng.l1_skew_adjustment.load(Ordering::Acquire);
+                                                let final_bias_with_l1 = final_bias + l1_skew;
+                                                let mut buy_i = (micro_i - grid + final_bias_with_l1).max(0);
+                                                let mut sell_i = (micro_i + grid + final_bias_with_l1).max(0);
 
                                                 // ═══ ANTI-CROSS GUARD (L0 Safety) ═══
                                                 // Prevent POSTONLY CANCELED: bid must be below best ask, ask must be above best bid
