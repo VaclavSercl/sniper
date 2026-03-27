@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🐺 BEROUN SNIPER v10.9 — Macro Intelligence Monitor
+🐺 BEROUN SNIPER v11.0 — Macro Intelligence + Sentinel Defense
 "The Eyes" — External market awareness for Omniscient Predator.
 
 Modules:
@@ -37,6 +37,10 @@ OFF_MACRO_BIAS = 1824        # i64: -10000..+10000
 OFF_MACRO_SOURCE_TS = 1832   # u64: epoch ms
 OFF_BINANCE_SWEEP_TS = 1840  # u64: epoch ms
 OFF_MACRO_FEAR_GREED = 1848  # u64: 0..100
+# v11.0 Sentinel
+OFF_BINANCE_MID_PRICE = 1856 # i64: Binance mid × PRICE_SCALE
+OFF_GLOBAL_FAIR_VALUE = 1864 # i64: weighted fair value × PRICE_SCALE
+OFF_SENTINEL_REPOSITIONS = 1880 # u64: counter
 
 # Binance thresholds
 BINANCE_LARGE_SELL_BTC = 1.0    # Alert if single trade > 1 BTC sell
@@ -108,6 +112,7 @@ def binance_monitor(mm):
     import websocket
 
     sell_window = deque()  # (timestamp, volume)
+    price_buffer = deque()  # (price, qty) for VWAP — v11.0
     url = "wss://stream.binance.com:9443/ws/btcusdt@aggTrade"
 
     def on_message(ws, message):
@@ -119,6 +124,16 @@ def binance_monitor(mm):
             price = float(d["p"])
             qty = float(d["q"])
             is_buyer = d["m"]  # True = seller is maker = sell aggression
+
+            # v11.0: Track Binance mid-price (VWAP of recent trades)
+            price_buffer.append((price, qty))
+            if len(price_buffer) > 100:
+                price_buffer.popleft()
+            if len(price_buffer) >= 5:
+                total_vol = sum(v for _, v in price_buffer)
+                if total_vol > 0:
+                    vwap = sum(p * v for p, v in price_buffer) / total_vol
+                    write_i64(mm, OFF_BINANCE_MID_PRICE, int(vwap * PRICE_SCALE))
 
             if is_buyer:  # Sell aggression
                 now = time.time()
@@ -279,7 +294,7 @@ def news_sentiment_monitor(mm):
 
 # ── MAIN ────────────────────────────────────────────────────
 def main():
-    log.info("🐺 SNIPER v10.9 — Macro Intelligence Monitor starting...")
+    log.info("🐺 SNIPER v11.0 — Macro Intelligence + Sentinel starting...")
 
     # Wait for mmap
     for i in range(30):

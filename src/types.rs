@@ -138,6 +138,12 @@ pub struct EngineState {
     pub macro_source_ts: AtomicU64,        // Epoch ms of last macro update
     pub binance_sweep_ts: AtomicU64,       // Epoch ms of last Binance large sell detection
     pub macro_fear_greed: AtomicU64,       // 0..100 (Extreme Fear..Extreme Greed)
+
+    // --- SENTINEL DEFENSE (v11.0 The Sentinel Singularity) ---
+    pub binance_mid_price: AtomicI64,      // Binance BTC/USDT mid × PRICE_SCALE (cross-exchange reference)
+    pub global_fair_value: AtomicI64,      // Weighted fair value × PRICE_SCALE (local + global + sentiment)
+    pub ai_min_order_lifetime_ms: AtomicU64, // Anti-flicker: min ms before cancel/replace (default 100)
+    pub sentinel_repositions: AtomicU64,   // Counter: how many times sentinel re-positioned ghost grid
 }
 
 impl Default for OrderBookLevel {
@@ -221,6 +227,10 @@ impl Default for EngineState {
             macro_source_ts: AtomicU64::new(0),
             binance_sweep_ts: AtomicU64::new(0),
             macro_fear_greed: AtomicU64::new(50),        // neutral
+            binance_mid_price: AtomicI64::new(0),
+            global_fair_value: AtomicI64::new(0),
+            ai_min_order_lifetime_ms: AtomicU64::new(100), // 100ms anti-flicker
+            sentinel_repositions: AtomicU64::new(0),
         }
     }
 }

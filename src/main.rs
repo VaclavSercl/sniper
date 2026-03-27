@@ -901,8 +901,10 @@ async fn async_main() -> Result<()> {
                                             const MIN_TICK: i64 = 100_000_000;
                                             if best_bid > 0 && best_ask > 0 {
                                                 let now = Instant::now();
-                                                // v10.7: Dynamic fire interval from AI registry
-                                                let fire_interval = eng.ai_fire_interval_ms.load(Ordering::Relaxed).max(500).min(10000);
+                                                // v11.0: Fire interval = max(AI fire_interval, anti-flicker lifetime)
+                                                let fire_ai = eng.ai_fire_interval_ms.load(Ordering::Relaxed).max(500).min(10000);
+                                                let anti_flicker = eng.ai_min_order_lifetime_ms.load(Ordering::Relaxed).max(50).min(5000);
+                                                let fire_interval = fire_ai.max(anti_flicker);
                                                 if now.duration_since(last_upd).as_millis() > fire_interval as u128
                                                     && risk.paused.load(Ordering::Acquire) == 0 {
                                                         // ═══ L1 SWEEP FREEZE CHECK (v9.2 Hybrid Intelligence) ═══
@@ -928,6 +930,46 @@ async fn async_main() -> Result<()> {
                                                             ((best_bid as f64 * ask_vol_0 + best_ask as f64 * bid_vol_0) / total_vol_0).round() as i64
                                                         } else { mid_i };
                                                         let micro_f = micro_i as f64 / beroun_types::PRICE_SCALE;
+
+                                                        // ═══ v11.0 SENTINEL: Global Fair Value ═══
+                                                        // Weighted: 60% local micro + 30% Binance mid + 10% sentiment shift
+                                                        let bnb_mid_raw = eng.binance_mid_price.load(Ordering::Relaxed);
+                                                        let fair_value_i = if bnb_mid_raw > 0 {
+                                                            let local_w = (micro_i as f64) * 0.6;
+                                                            let bnb_w = (bnb_mid_raw as f64) * 0.3;
+                                                            let macro_raw = eng.macro_bias.load(Ordering::Relaxed);
+                                                            let macro_ts = eng.macro_source_ts.load(Ordering::Relaxed);
+                                                            let sentinel_now = SystemTime::now()
+                                                                .duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+                                                            let macro_shift = if sentinel_now.saturating_sub(macro_ts) < 600_000 {
+                                                                micro_i as f64 * 0.001 * (macro_raw as f64 / 10000.0) * 0.1
+                                                            } else { 0.0 };
+                                                            let fv = local_w + bnb_w + macro_shift;
+                                                            eng.global_fair_value.store(fv.round() as i64, Ordering::Relaxed);
+                                                            fv.round() as i64
+                                                        } else {
+                                                            eng.global_fair_value.store(micro_i, Ordering::Relaxed);
+                                                            micro_i
+                                                        };
+
+                                                        // Sentinel re-position: if fair value diverges > 0.05% from local
+                                                        let divergence = (fair_value_i - micro_i).abs() as f64 / micro_i as f64;
+                                                        if divergence > 0.0005 && bnb_mid_raw > 0 {
+                                                            // Shift ghost grid center toward fair value
+                                                            for lvl in 0..beroun_types::MAX_GRID_LEVELS {
+                                                                let ghost_buy = eng.ghost_buy_prices[lvl].load(Ordering::Relaxed);
+                                                                let ghost_sell = eng.ghost_sell_prices[lvl].load(Ordering::Relaxed);
+                                                                if ghost_buy != 0 {
+                                                                    let shift = ((fair_value_i - micro_i) as f64 * 0.5).round() as i64;
+                                                                    eng.ghost_buy_prices[lvl].store(ghost_buy + shift, Ordering::Relaxed);
+                                                                }
+                                                                if ghost_sell != 0 {
+                                                                    let shift = ((fair_value_i - micro_i) as f64 * 0.5).round() as i64;
+                                                                    eng.ghost_sell_prices[lvl].store(ghost_sell + shift, Ordering::Relaxed);
+                                                                }
+                                                            }
+                                                            eng.sentinel_repositions.fetch_add(1, Ordering::Relaxed);
+                                                        }
 
                                                         // 2. L2 ORDER BOOK IMBALANCE (OBI — top 10 levels)
                                                         let mut sum_bid_vol: f64 = 0.0;
