@@ -565,6 +565,9 @@ async fn async_main() -> Result<()> {
                                             } else {
                                                 engine.sell_fill_count.fetch_add(1, Ordering::Relaxed);
                                             }
+                                            // v10.0: Monthly volume for fee tier
+                                            let trade_vol_usd = (trade_amt.abs() * trade_price * scale) as u64;
+                                            engine.monthly_volume_usd.fetch_add(trade_vol_usd, Ordering::Relaxed);
                                             exec_notifier.trade(trade_amt, trade_price);
                                         }
                                     }

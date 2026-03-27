@@ -82,6 +82,9 @@ pub struct EngineState {
     // --- FILL-RATE TRACKER (v9.5) ---
     pub buy_fill_count: AtomicU64,      // Incremented on each buy fill (reset by vol engine)
     pub sell_fill_count: AtomicU64,     // Incremented on each sell fill (reset by vol engine)
+
+    // --- FEE OPTIMIZER (v10.0) ---
+    pub monthly_volume_usd: AtomicU64,  // 30-day trading volume in USD × PRICE_SCALE
 }
 
 impl Default for OrderBookLevel {
@@ -130,6 +133,7 @@ impl Default for EngineState {
             ai_alpha_usd: AtomicI64::new(0),
             buy_fill_count: AtomicU64::new(0),
             sell_fill_count: AtomicU64::new(0),
+            monthly_volume_usd: AtomicU64::new(0),
         }
     }
 }

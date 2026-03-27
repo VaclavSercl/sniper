@@ -193,6 +193,14 @@ fn main() -> Result<()> {
                     "wallet_btc": w_btc,
                     "btc_value_usd": btc_value
                 },
+                "volume": {
+                    "monthly_usd": engine.monthly_volume_usd.load(Ordering::Acquire) as f64 / s,
+                    "fee_tier": if engine.monthly_volume_usd.load(Ordering::Acquire) as f64 / s > 500_000.0 { "Tier 2" }
+                               else if engine.monthly_volume_usd.load(Ordering::Acquire) as f64 / s > 10_000.0 { "Tier 1" }
+                               else { "Tier 0" },
+                    "maker_fee_pct": 0.1,
+                    "taker_fee_pct": 0.2,
+                },
                 "intelligence": {
                     "l2_obi": obi,
                     "ai_bias_usd": ai_bias,
