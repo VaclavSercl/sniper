@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🧠 BEROUN AI ORCHESTRATOR v10.1.1 — Sovereign Oracle with Memory
+🧠 SNIPER ORCHESTRATOR v10.3 — Neural Cross Oracle
 ═══════════════════════════════════════════════════════════════════
 The Sovereign Oracle: Connects L1 (tactical) with L2 (strategic).
 Runs every 5 minutes, analyzes both layers, decides and acts.
@@ -448,8 +448,148 @@ def analyze_regime(bot_state, l1_state):
         return 2, "RANGING"
 
 
-def generate_l2_prompt(bot_state, l1_state, market_intel, memory: OracleMemory, brain_context: str = ""):
-    """Generate the Sovereign Oracle prompt with historical memory context."""
+def load_lessons(regime: str = None) -> str:
+    """Load active lessons from Sniper Brain for Oracle prompt injection."""
+    try:
+        cmd = [BRAIN_BIN, "lessons"]
+        if regime:
+            cmd.extend(["--regime", regime])
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        if result.returncode != 0 or not result.stdout.strip():
+            return ""
+        lessons = json.loads(result.stdout)
+        if not lessons:
+            return "No lessons yet (collecting data for Neural Cross)."
+
+        lines = []
+        for l in lessons:
+            conf = l.get('confidence', 0)
+            icon = '🔴' if conf >= 0.7 else '🟡' if conf >= 0.3 else '⚪'
+            lines.append(
+                f"  {icon} [{l['regime']}] {l['rule_type']} (conf={conf:.0%}, n={l.get('sample_count',0)}): "
+                f"{l.get('action','')} — {l.get('reasoning','')}"
+            )
+        return "\n".join(lines)
+    except Exception:
+        return ""
+
+
+def run_nightly_coach():
+    """Gemini Self-Critique: review worst cycles and generate lessons."""
+    log.info("🌙 ═══ NIGHTLY NEURAL CROSS STARTING ═══")
+
+    # Step 1: Run statistical backtest
+    backtest_data = ""
+    try:
+        result = subprocess.run(
+            [BRAIN_BIN, "backtest", "--days", "1"],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode == 0:
+            backtest_data = result.stdout.strip()
+            log.info(f"  📊 Backtest completed ({len(backtest_data)} chars)")
+    except Exception as e:
+        log.warning(f"  Backtest failed: {e}")
+
+    # Step 2: Get worst cycles for self-critique
+    worst_cycles = ""
+    try:
+        result = subprocess.run(
+            [BRAIN_BIN, "worst-cycles", "--n", "5", "--hours", "24"],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0:
+            worst_cycles = result.stdout.strip()
+    except Exception as e:
+        log.warning(f"  Worst cycles failed: {e}")
+
+    if not worst_cycles or worst_cycles == '[]':
+        log.info("  No losing cycles to review. Skipping coach.")
+        send_telegram("🌙 *Neural Cross Report*\n\nŽádné ztrátové cykly za 24h — není co kritizovat. ✅")
+        return
+
+    # Step 3: Gemini Self-Critique
+    coach_prompt = f"""You are SNIPER performing your nightly SELF-CRITIQUE.
+You are the AI that made these decisions. Now review them with hindsight.
+
+═══ STATISTICAL BACKTEST RESULTS ═══
+{backtest_data}
+
+═══ YOUR WORST DECISIONS (last 24h) ═══
+{worst_cycles}
+
+═══ YOUR TASK ═══
+1. For each bad cycle: What was WRONG with your reasoning at the time?
+2. What PATTERN do you see across your failures?
+3. Generate 1-3 NEW LESSONS (rules for your future self)
+
+IMPORTANT: Be BRUTALLY HONEST. You made mistakes. Own them. Learn from them.
+Each lesson must have a clear condition and action.
+
+RESPOND WITH EXACTLY THIS JSON (no markdown):
+{{"self_critique": "2-3 sentence honest self-assessment",
+"pattern_identified": "The common thread in my failures",
+"lessons": [
+  {{"regime": "TRENDING", "rule_type": "grid_floor", "condition": {{"toxic_above": 400}}, "action": {{"grid_min": 12.0}}, "reasoning": "Why I need this rule", "confidence": 0.65}}
+]}}"""
+
+    try:
+        result = subprocess.run(
+            ["gemini", "-p", coach_prompt],
+            capture_output=True, text=True, timeout=180
+        )
+        raw = result.stdout.strip()
+
+        import re
+        match = re.search(r'\{[\s\S]*"lessons"[\s\S]*\}', raw)
+        if not match:
+            log.warning(f"Coach: no JSON in response")
+            return
+
+        coach_result = json.loads(match.group())
+        critique = coach_result.get('self_critique', '')
+        pattern = coach_result.get('pattern_identified', '')
+        lessons = coach_result.get('lessons', [])
+
+        log.info(f"  🧠 Coach critique: {critique}")
+        log.info(f"  🧠 Pattern: {pattern}")
+        log.info(f"  🧠 Lessons generated: {len(lessons)}")
+
+        # Save lessons to Brain
+        saved = 0
+        for lesson in lessons[:3]:  # Max 3 per night
+            if not all(k in lesson for k in ['regime', 'rule_type', 'reasoning']):
+                continue
+            try:
+                subprocess.run(
+                    [BRAIN_BIN, "save-lesson", json.dumps(lesson)],
+                    capture_output=True, text=True, timeout=5
+                )
+                saved += 1
+            except Exception:
+                pass
+
+        # Telegram report
+        report = (f"🌙 *Neural Cross Report v10.3*\n\n"
+                  f"🔍 *Sebekritika:*\n_{critique}_\n\n"
+                  f"🎯 *Identifikovaný vzorec:*\n_{pattern}_\n\n"
+                  f"📝 *Nové lekce:* {saved} uloženo do Brain")
+        for i, lesson in enumerate(lessons[:3]):
+            report += (f"\n  {i+1}. `{lesson.get('regime','?')}/{lesson.get('rule_type','?')}` "
+                       f"(conf={lesson.get('confidence',0):.0%}): {lesson.get('reasoning','?')}")
+        send_telegram(report)
+
+    except subprocess.TimeoutExpired:
+        log.error("Coach: Gemini timeout")
+    except Exception as e:
+        log.error(f"Coach error: {e}")
+
+    log.info("🌙 ═══ NIGHTLY NEURAL CROSS COMPLETE ═══")
+
+
+def generate_l2_prompt(bot_state, l1_state, market_intel, memory: OracleMemory,
+                       brain_context: str = "", lessons_text: str = ""):
+    """Generate the Sovereign Oracle prompt with memory + learned lessons."""
     analytics = bot_state.get("analytics", {})
     risk = bot_state.get("risk_params", {})
     price = bot_state.get("price", {})
@@ -459,7 +599,17 @@ def generate_l2_prompt(bot_state, l1_state, market_intel, memory: OracleMemory, 
     # Memory context: prefer Sniper Brain (permanent), fallback to rolling memory
     history_summary = brain_context if brain_context else memory.get_history_summary(6)
 
-    prompt = f"""You are SNIPER, the L2 Sovereign Oracle for Beroun Sniper v10.2 HFT bot.
+    # Lessons section
+    lessons_section = ""
+    if lessons_text:
+        lessons_section = f"""\n═══ LEARNED LESSONS (from Neural Cross nightly backtest) ═══
+{lessons_text}
+
+IMPORTANT: 🔴 = MANDATORY (confidence ≥70%). Do NOT violate these.
+🟡 = SUGGESTED (30-70%). Use your judgment but lean towards following them.
+"""
+
+    prompt = f"""You are SNIPER, the L2 Sovereign Oracle for Beroun Sniper v10.3 HFT bot.
 Your role: Strategic commander of a high-frequency BTC/USD market maker.
 You have PERMANENT MEMORY — you remember every decision you've ever made and their outcomes.
 
@@ -504,7 +654,7 @@ Total Sweeps Detected: {l1_state.get('total_sweeps', 0)}
 ═══ MARKET INTELLIGENCE ═══
 Fear & Greed: {market_intel.get('fear_greed', 'N/A')}
 Headlines: {'; '.join(market_intel.get('headlines', ['none'])[:3])}
-
+{lessons_section}
 ═══ YOUR MISSION (Chain-of-Analysis) ═══
 STEP 1: Review the ORACLE MEMORY trends. Is the situation improving or degrading?
 STEP 2: Classify market regime (TRENDING / RANGING / CHAOS)
@@ -677,7 +827,7 @@ def check_shadow_recovery(mm, bot_state):
 
 # ── MAIN LOOP ───────────────────────────────────────────────
 def main():
-    log.info("═══ BEROUN SNIPER v10.2 (Sovereign Oracle + Permanent Brain) STARTING ═══")
+    log.info("═══ SNIPER v10.3 Neural Cross Oracle STARTING ═══")
     log.info(f"  Cycle: {ORACLE_CYCLE_SEC}s | L1 bridge: {L1_STATE_JSON}")
     log.info(f"  Engine: {ENGINE_MMAP}")
     log.info(f"  Brain: {BRAIN_BIN}")
@@ -694,11 +844,12 @@ def main():
     memory = OracleMemory()
     alert_engine = TacticalAlertEngine(memory)
     escalation = AutoEscalation(memory)
+    nightly_done_today = None  # Track which day we ran coach
 
     # Initialize Sniper Brain (Rust SQLite)
     try:
         subprocess.run([BRAIN_BIN, "init"], capture_output=True, timeout=5)
-        log.info("  🧠 Sniper Brain (SQLite) initialized")
+        log.info("  🧠 Sniper Brain v10.3 (Neural Cross) initialized")
     except Exception as e:
         log.warning(f"  Sniper Brain init failed: {e}")
 
@@ -738,8 +889,26 @@ def main():
             except Exception as e:
                 log.warning(f"  Brain context failed: {e}")
 
-            # 3. Consult L2 Oracle (Gemini) with memory context
-            prompt = generate_l2_prompt(bot_state, l1_state, market_intel, memory, brain_context)
+            # 2.7. Load active lessons from Neural Cross
+            lessons_text = ""
+            try:
+                lessons_text = load_lessons(regime_name)
+                if lessons_text:
+                    log.info(f"  📝 Lessons loaded for {regime_name}")
+            except Exception as e:
+                log.warning(f"  Lessons load failed: {e}")
+
+            # 2.8. Check nightly coach schedule (03:00 CET)
+            now_cet = datetime.now(CET)
+            today = now_cet.date()
+            if now_cet.hour == 3 and nightly_done_today != today:
+                run_nightly_coach()
+                nightly_done_today = today
+                # Reload lessons after coach
+                lessons_text = load_lessons(regime_name)
+
+            # 3. Consult L2 Oracle (Gemini) with memory + lessons context
+            prompt = generate_l2_prompt(bot_state, l1_state, market_intel, memory, brain_context, lessons_text)
             decision = consult_gemini(prompt)
 
             if not decision:

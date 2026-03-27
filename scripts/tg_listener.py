@@ -102,15 +102,16 @@ def cmd_help(message):
     if not auth(message): return
     log.info("Help/Start requested")
     try:
-        bot.reply_to(message, """🐺 *SNIPER v10.2 — Command Center*
+        bot.reply_to(message, """🐺 *SNIPER v10.3 — Neural Cross Command Center*
 
 📊 /status — Live stav
 🧠 /ai — AI Status (L1 + L2)
-🧠 /brain — Sniper Brain (trvalá paměť)
+🧠 /brain — Sniper Brain (paměť + lekce)
+🌙 /backtest — Neural Cross backtest
 🌑 /shadow — Shadow Mode
 🚀 /golive — Návrat do Live
 📅 /report — Denní report
-📊 /analytics — Trade analytics
+📊 /analytics — Trade analytics + Brain
 🚨 /close CONFIRM — EMERGENCY CLOSE
 🔍 /analyze — Gemini analýza
 📐 /grid 8.5 — Nastavit grid
@@ -631,8 +632,67 @@ def cmd_brain(message):
     except Exception:
         pass
 
-    bot.reply_to(message, f"🧠 *SNIPER BRAIN v10.2*\n\n{stats}{context}",
+    # Get lessons
+    lessons = ""
+    try:
+        result = subprocess.run(
+            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "lessons"],
+            capture_output=True, text=True, timeout=10
+        )
+        if result.returncode == 0:
+            import json as j2
+            ll = j2.loads(result.stdout)
+            if ll:
+                lessons = f"\n\n📝 *Lekce ({len(ll)}):*"
+                for lx in ll[:5]:
+                    lessons += (f"\n`  {lx['regime']}/{lx['rule_type']} "
+                               f"(conf={lx.get('confidence',0):.0%})`")
+    except Exception:
+        pass
+
+    bot.reply_to(message, f"🧠 *SNIPER BRAIN v10.3*\n\n{stats}{context}{lessons}",
                  parse_mode="Markdown")
+
+
+@bot.message_handler(commands=["backtest"])
+def cmd_backtest(message):
+    if not auth(message): return
+    log.info("Backtest requested")
+    bot.reply_to(message, "🌙 Spouštím Neural Cross backtest...")
+
+    try:
+        # Run backtest
+        result = subprocess.run(
+            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "backtest", "--days", "1"],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode != 0:
+            bot.send_message(message.chat.id, f"❌ Backtest error: {result.stderr[:200]}")
+            return
+
+        import json as j3
+        d = j3.loads(result.stdout)
+
+        msg = (f"🌙 *Neural Cross Backtest*\n\n"
+               f"`Status:   {d.get('status', '?')}`\n"
+               f"`Cyklů:    {d.get('cycles_analyzed', 0)}`\n"
+               f"`Regimes:  {', '.join(d.get('regimes', []))}`\n"
+               f"`Lekce:    +{d.get('lessons_generated',0)} nové, "
+               f"{d.get('lessons_updated',0)} aktualizované`\n")
+
+        # Add findings
+        for f in d.get('findings', []):
+            w = f.get('winners', {})
+            l = f.get('losers', {})
+            msg += (f"\n📊 *{f.get('regime', '?')}:*\n"
+                    f"`  Winners: {w.get('count',0)} (grid ${w.get('avg_grid','?')})`\n"
+                    f"`  Losers:  {l.get('count',0)} (grid ${l.get('avg_grid','?')})`\n"
+                    f"`  Neutral: {f.get('neutral_count',0)}`")
+
+        bot.send_message(message.chat.id, msg, parse_mode="Markdown")
+
+    except Exception as e:
+        bot.send_message(message.chat.id, f"❌ Backtest error: `{e}`")
 
 
 # Catch-all: forward to Gemini as free-form question
