@@ -514,10 +514,14 @@ async fn main() -> Result<()> {
         let listener = {
             let mut bound = None;
             for attempt in 1..=15 {
-                // SO_REUSEADDR handles TIME_WAIT on restart
-                // Do NOT use SO_REUSEPORT — it allows duplicate binds, masking double-start bugs
+                // SO_REUSEADDR+SO_REUSEPORT for graceful restart (old socket may linger)
+                // Double-start is prevented by flock guard above, not by socket binding
                 let socket = tokio::net::TcpSocket::new_v4().unwrap();
                 let _ = socket.set_reuseaddr(true);
+                #[cfg(unix)]
+                {
+                    let _ = socket.set_reuseport(true);
+                }
                 match socket.bind("0.0.0.0:3000".parse().unwrap())
                     .and_then(|()| socket.listen(1024))
                 {
