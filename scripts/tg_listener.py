@@ -251,13 +251,38 @@ Answer concisely in Czech as a Senior HFT Trading Advisor. Max 5 sentences."""
 
 # ── MAIN ────────────────────────────────────────────────────
 if __name__ == "__main__":
-    log.info(f"🐺 Beroun Telegram Interface v9.0 starting...")
+    log.info("🐺 Beroun Telegram Interface v9.0 starting...")
     log.info(f"   Authorized chat_id: {AUTHORIZED_CHAT_ID}")
     log.info(f"   Config binary: {CONFIG_BIN}")
 
+    backoff = 5
+    MAX_BACKOFF = 60
+    offset = None
+
     while True:
         try:
-            bot.polling(non_stop=True, timeout=30)
+            updates = bot.get_updates(offset=offset, timeout=30, long_polling_timeout=25)
+            backoff = 5  # Reset on success
+
+            for update in updates:
+                offset = update.update_id + 1
+                bot.process_new_updates([update])
+
+        except telebot.apihelper.ApiTelegramException as e:
+            if "409" in str(e):
+                log.warning(f"409 Conflict — waiting {backoff}s...")
+                time.sleep(backoff)
+                backoff = min(backoff * 2, MAX_BACKOFF)
+            else:
+                log.error(f"Telegram API error: {e}")
+                time.sleep(10)
+
+        except KeyboardInterrupt:
+            log.info("Shutting down...")
+            break
+
         except Exception as e:
             log.error(f"Polling error: {e}")
-            time.sleep(5)
+            time.sleep(10)
+            backoff = 5
+
