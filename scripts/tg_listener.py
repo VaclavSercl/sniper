@@ -48,7 +48,7 @@ DAILY_STATS_PATH = f"{LOG_DIR}/daily_stats.json"
 CET = timezone(timedelta(hours=1))
 PRICE_SCALE = 1e8
 
-# Mmap offsets for AI fields (v10.4-v10.7)
+# Mmap offsets for AI fields (v10.4-v10.9)
 OFF_SHADOW_MODE = 1616
 OFF_L1_UPTIME = 1664
 OFF_GHOST_TRANSPARENCY = 1672
@@ -59,6 +59,11 @@ OFF_AI_FIRE_INTERVAL = 1792
 OFF_AI_GHOST_TRIGGER = 1800
 OFF_AI_INTENT = 1808
 OFF_AI_REGISTRY_VER = 1816
+# v10.9 Macro Intelligence
+OFF_MACRO_BIAS = 1824
+OFF_MACRO_SOURCE_TS = 1832
+OFF_BINANCE_SWEEP_TS = 1840
+OFF_MACRO_FEAR_GREED = 1848
 
 # Intent presets: {intent_id: (name, grid_mult, freeze_ms, fire_interval, ghost_trigger_pct, ghost_trans)}
 INTENT_PRESETS = {
@@ -1024,7 +1029,41 @@ _L2 Oracle běží každých 5 minut._"""
     bot.reply_to(message, msg)
 
 
-# ═══ v10.7 SOVEREIGN INTENT COMMANDS ═══
+# ═══ v10.9 MACRO INTELLIGENCE ═══
+@bot.message_handler(commands=["macro"])
+def cmd_macro(message):
+    if not auth(message): return
+    log.info("Macro status requested")
+    try:
+        import struct as st
+        with open(ENGINE_MMAP, 'rb') as f:
+            data = f.read()
+        bias = st.unpack_from('<q', data, OFF_MACRO_BIAS)[0] / 10000.0
+        fng = st.unpack_from('<Q', data, OFF_MACRO_FEAR_GREED)[0]
+        bnb_ts = st.unpack_from('<Q', data, OFF_BINANCE_SWEEP_TS)[0]
+        macro_ts = st.unpack_from('<Q', data, OFF_MACRO_SOURCE_TS)[0]
+        now = int(time.time() * 1000)
+        bnb_ago = (now - bnb_ts) / 1000 if bnb_ts > 0 else -1
+        macro_ago = (now - macro_ts) / 1000 if macro_ts > 0 else -1
+
+        bias_icon = '🟢' if bias > 0.3 else '🔴' if bias < -0.3 else '⚪'
+        fng_icon = '🟢' if fng > 60 else '🔴' if fng < 30 else '🟡'
+
+        bot.reply_to(message, f"""🌍 *MACRO INTELLIGENCE v10.9*
+════════════════════════
+{bias_icon} *Macro Bias:* `{bias:+.4f}`
+{fng_icon} *Fear & Greed:* `{fng}`
+🟠 *Last Update:* `{macro_ago:.0f}s ago`
+
+🟡 *Binance Sweep:* `{'NONE' if bnb_ago < 0 else f'{bnb_ago:.0f}s ago'}`
+
+_Bias > 0.05 = Bullish (grid shifted up)_
+_Bias < -0.05 = Bearish (grid shifted down)_
+_BNB Sweep < 3s = Auto Ghost Mode_""")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Macro error: {e}")
+
+
 def _write_mmap_u64(offset, value):
     """Write u64 to engine mmap."""
     import mmap as mmap_mod

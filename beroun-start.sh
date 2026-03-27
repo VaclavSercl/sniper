@@ -60,11 +60,15 @@ fi
 python3 $PROJECT_ROOT/scripts/tg_listener.py &
 echo "-> Telegram Command Center started (v10.7 Sovereign)"
 
-# 7. Start Watchdog (The Guardian)
+# 7. Start Macro Intelligence (v10.9 — The Eyes)
+python3 $PROJECT_ROOT/scripts/macro_monitor.py &
+echo "-> Macro Intelligence started (Binance + F&G + News RSS)"
+
+# 8. Start Watchdog (The Guardian)
 if [ -f "$PROJECT_ROOT/watchdog.sh" ]; then
     $PROJECT_ROOT/watchdog.sh &
     echo "-> Watchdog started"
 fi
 
-echo "✅ All systems operational — SNIPER v10.7 (Sovereign AI Engine)"
+echo "✅ All systems operational — SNIPER v10.9 (Omniscient Predator)"
 wait

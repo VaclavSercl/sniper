@@ -74,6 +74,10 @@ struct DashboardState {
     ghost_injections: u64,
     ghost_velocity_rejects: u64,
     ghost_active_mask: u64,
+    // v10.9 Macro Intelligence
+    macro_bias: f64,
+    macro_fear_greed: u64,
+    macro_bnb_sweep_ago: i64,  // -1 = never, else seconds ago
     // Order Book
     bid_prices: Vec<f64>,
     bid_amounts: Vec<f64>,
@@ -103,6 +107,7 @@ impl Default for DashboardState {
             session_fills: 0, paused: false, l1_uptime_pct: 1.0,
             ghost_transparency: 1.0, ghost_injections: 0,
             ghost_velocity_rejects: 0, ghost_active_mask: 0,
+            macro_bias: 0.0, macro_fear_greed: 50, macro_bnb_sweep_ago: -1,
             bid_prices: vec![], bid_amounts: vec![],
             ask_prices: vec![], ask_amounts: vec![],
             price_history: VecDeque::with_capacity(MAX_HISTORY),
@@ -371,6 +376,9 @@ fn render_dashboard(db: &DashboardState) -> String {
 <div class="ai-stat"><div class="ai-sl">👻 Ghost</div><div class="ai-sv {ghost_cls}">{ghost_pct}</div></div>
 <div class="ai-stat"><div class="ai-sl">Injections</div><div class="ai-sv purple">{ghost_inj}</div></div>
 <div class="ai-stat"><div class="ai-sl">Vel.Reject</div><div class="ai-sv yellow">{ghost_rej}</div></div>
+<div class="ai-stat"><div class="ai-sl">🌍 Macro</div><div class="ai-sv {macro_cls}">{macro_val}</div></div>
+<div class="ai-stat"><div class="ai-sl">F&G</div><div class="ai-sv">{fng}</div></div>
+<div class="ai-stat"><div class="ai-sl">BNB Sweep</div><div class="ai-sv {bnb_cls}">{bnb_sweep}</div></div>
 </div>
 {shadow_pnl_block}
 </div>
@@ -430,6 +438,11 @@ fn render_dashboard(db: &DashboardState) -> String {
         ghost_inj = db.ghost_injections,
         ghost_rej = db.ghost_velocity_rejects,
         ghost_html = ghost_html,
+        macro_val = format!("{:+.2}", db.macro_bias),
+        macro_cls = if db.macro_bias < -0.3 { "neg" } else if db.macro_bias > 0.3 { "pos" } else { "" },
+        fng = db.macro_fear_greed,
+        bnb_sweep = if db.macro_bnb_sweep_ago < 0 { "—".to_string() } else { format!("{}s", db.macro_bnb_sweep_ago) },
+        bnb_cls = if db.macro_bnb_sweep_ago >= 0 && db.macro_bnb_sweep_ago < 10 { "neg" } else { "" },
         shadow_pnl_block = if db.is_shadow_mode {
             format!(r#"<div class="ai-sep"></div><div class="bar-row"><span class="bar-label">SHADOW PnL</span><span class="bar-val purple">${:.6}</span></div>"#, db.shadow_pnl)
         } else { String::new() },
@@ -584,6 +597,11 @@ async fn main() -> Result<()> {
         let ghost_inj = engine.ghost_injections.load(Ordering::Acquire);
         let ghost_rej = engine.ghost_velocity_rejects.load(Ordering::Acquire);
         let ghost_mask = engine.ghost_active_mask.load(Ordering::Acquire);
+        let macro_bias_raw = engine.macro_bias.load(Ordering::Acquire) as f64 / 10000.0;
+        let macro_fng = engine.macro_fear_greed.load(Ordering::Acquire);
+        let bnb_ts = engine.binance_sweep_ts.load(Ordering::Acquire);
+        let now_ms_d = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+        let bnb_ago = if bnb_ts > 0 { ((now_ms_d - bnb_ts) / 1000) as i64 } else { -1 };
 
         {
             let mut db = state.lock().expect("Lock failed");
@@ -619,6 +637,9 @@ async fn main() -> Result<()> {
             db.ghost_injections = ghost_inj;
             db.ghost_velocity_rejects = ghost_rej;
             db.ghost_active_mask = ghost_mask;
+            db.macro_bias = macro_bias_raw;
+            db.macro_fear_greed = macro_fng;
+            db.macro_bnb_sweep_ago = bnb_ago;
             db.bid_prices = bp;
             db.bid_amounts = bv;
             db.ask_prices = ap;

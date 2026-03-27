@@ -1008,7 +1008,32 @@ async fn async_main() -> Result<()> {
                                                         let final_bias = bias + inv_skew;
                                                         // ═══ L1 MICRO-SKEW (v9.2 Hybrid Intelligence) ═══
                                                         let l1_skew = eng.l1_skew_adjustment.load(Ordering::Acquire);
-                                                        let final_bias_with_l1 = final_bias + l1_skew;
+
+                                                        // ═══ v10.9 MACRO BIAS (Omniscient Predator) ═══
+                                                        // macro_bias: -10000..+10000 → scaled to grid-fraction
+                                                        let macro_raw = eng.macro_bias.load(Ordering::Relaxed);
+                                                        let macro_ts = eng.macro_source_ts.load(Ordering::Relaxed);
+                                                        let macro_stale = now_ms.saturating_sub(macro_ts) > 600_000; // >10min = stale
+                                                        let macro_bias_scaled = if !macro_stale && macro_raw.abs() > 500 {
+                                                            // 10% of grid × normalized bias
+                                                            (grid as f64 * 0.1 * (macro_raw as f64 / 10000.0)).round() as i64
+                                                        } else { 0 };
+
+                                                        // v10.9: Binance sweep → force ghost for 5s
+                                                        let bnb_sweep_ts = eng.binance_sweep_ts.load(Ordering::Relaxed);
+                                                        let bnb_sweep_age_ms = now_ms.saturating_sub(bnb_sweep_ts);
+                                                        if bnb_sweep_ts > 0 && bnb_sweep_age_ms < 3000 {
+                                                            // Binance sweep < 3s ago → force ghost mode
+                                                            let current_trans = eng.ghost_transparency.load(Ordering::Relaxed);
+                                                            if current_trans > 2000 {
+                                                                eng.ghost_transparency.store(1000, Ordering::Relaxed);
+                                                                tracing::info!(event = "binance_ghost_trigger",
+                                                                    age_ms = bnb_sweep_age_ms,
+                                                                    old_transparency = current_trans);
+                                                            }
+                                                        }
+
+                                                        let final_bias_with_l1 = final_bias + l1_skew + macro_bias_scaled;
                                                         let mut buy_i = (micro_i - grid + final_bias_with_l1).max(0);
                                                         let mut sell_i = (micro_i + grid + final_bias_with_l1).max(0);
 

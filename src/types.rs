@@ -132,6 +132,12 @@ pub struct EngineState {
     pub ai_ghost_trigger_pct: AtomicU64,   // Ghost trigger zone × 100000 (default 50 = 0.05%)
     pub ai_intent: AtomicU64,              // 0=sovereign, 1=aggressive, 2=defensive, 3=scout
     pub ai_registry_version: AtomicU64,    // Incremented each time Oracle writes new params
+
+    // --- MACRO INTELLIGENCE (v10.9 Omniscient Predator) ---
+    pub macro_bias: AtomicI64,             // -10000..+10000 = -1.0..+1.0 (Bearish..Bullish)
+    pub macro_source_ts: AtomicU64,        // Epoch ms of last macro update
+    pub binance_sweep_ts: AtomicU64,       // Epoch ms of last Binance large sell detection
+    pub macro_fear_greed: AtomicU64,       // 0..100 (Extreme Fear..Extreme Greed)
 }
 
 impl Default for OrderBookLevel {
@@ -211,6 +217,10 @@ impl Default for EngineState {
             ai_ghost_trigger_pct: AtomicU64::new(50),  // 0.05%
             ai_intent: AtomicU64::new(0),               // 0 = sovereign
             ai_registry_version: AtomicU64::new(0),
+            macro_bias: AtomicI64::new(0),               // neutral
+            macro_source_ts: AtomicU64::new(0),
+            binance_sweep_ts: AtomicU64::new(0),
+            macro_fear_greed: AtomicU64::new(50),        // neutral
         }
     }
 }
