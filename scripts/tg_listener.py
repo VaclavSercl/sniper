@@ -1318,6 +1318,7 @@ if __name__ == "__main__":
             BotCommand("resume", "▶️ Pokračovat"),
             BotCommand("cautious", "⚠️ Macro defense"),
             BotCommand("close", "🚨 EMERGENCY CLOSE"),
+            BotCommand("delta", "⚡ Delta Lead v11.1"),
             BotCommand("help", "❓ Přehled příkazů"),
         ])
         log.info("   ✅ Telegram menu commands registered")
