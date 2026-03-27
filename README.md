@@ -1,7 +1,35 @@
-# 🐺 Beroun Sniper v8.0
+# 🐺 Beroun Sniper v10.0 "Apex Predator"
 
 Vysokofrekvenční (HFT) market-making bot pro Bitfinex BTC/USD.
-Rust 2024 • Zero-copy • Sub-ms latence • CPU-pinned • mmap IPC • AI Sovereign Intelligence
+Rust 2024 • Zero-copy • Sub-ms latence • mmap IPC • Hydra Multi-Level Grid
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────┐
+│               BEROUN SNIPER v10.0                │
+├──────────────────────────────────────────────────┤
+│  L0 REFLEX (Rust, <1ms)                          │
+│  ├─ Dual WebSocket (Market Data + Exec)          │
+│  ├─ Hydra Multi-Level Grid (1-5 levels)          │
+│  ├─ Adaptive Grid (fill-rate + volatility)       │
+│  ├─ Liquidity Hole Detection (L2 depth)          │
+│  ├─ Inventory Throttling + Anti-Cross Guard      │
+│  └─ Capital Guard + DLL Circuit Breaker          │
+├──────────────────────────────────────────────────┤
+│  IPC (mmap /dev/shm/beroun/)                     │
+│  ├─ engine_state.bin (EngineState, lock-free)    │
+│  └─ risk_state.bin  (RiskState, atomic params)   │
+├──────────────────────────────────────────────────┤
+│  C2 LAYER (Python + Telegram)                    │
+│  ├─ tg_listener.py (Command & Control)           │
+│  ├─ analytics.py   (Trade Analytics Engine)      │
+│  └─ oracle_brain.sh (Gemini 3.1 Pro Oracle)      │
+├──────────────────────────────────────────────────┤
+│  DASHBOARD (http://localhost:3000)                │
+│  └─ dashboard.html (Real-time metrics)           │
+└──────────────────────────────────────────────────┘
+```
 
 ## Quick Start
 
@@ -13,123 +41,84 @@ cp .env.example .env
 # 2. Build
 cargo build --release
 
-# 3. Spuštění (kompletní AI stack)
-systemctl --user enable --now beroun-sniper       # L0: HFT Engine
-systemctl --user enable --now beroun-dashboard     # Web Dashboard
-sudo systemctl enable --now beroun-ai             # L1: GPU AI Manager
-sudo systemctl enable --now beroun-telegram       # Telegram Interface
-sudo systemctl enable --now beroun-oracle.timer   # L2: Gemini Oracle (26h)
+# 3. Spuštění
+sudo systemctl start beroun-sniper   # Spustí beroun-start.sh (engine + dashboard + tg_listener)
 
 # 4. Dashboard
-# Web:  http://localhost:3000
-# TUI:  cargo run --release --bin beroun-monitor
+open http://localhost:3000
 
-# 5. Telegram
-# Pošli /help tvému Beroun_Oracle_Bot na Telegramu
+# 5. Telegram — pošli /help tvému botovi
 ```
 
-## Architektura v8.0 — Třívrstvý AI Imunitní Systém
+## Telegram Commands
+
+| Command | Description |
+|---------|-------------|
+| `/status` | Live equity, PnL, pozice |
+| `/report` | Denní report (obchody, equity) |
+| `/analytics` | Trade analytics (Sharpe, win-rate, heatmap) |
+| `/close CONFIRM` | 🚨 Emergency market close + auto-pause |
+| `/cautious` | Macro-event defense mode (15 min) |
+| `/grid <N>` | Nastavit grid step (USD) |
+| `/capital <N>` | Autorizovaný kapitál (USD) |
+| `/loss <N>` | Denní loss limit (USD) |
+| `/pause` / `/resume` | Nouzové zastavení / obnovení |
+| `/analyze` | Gemini 3.1 Pro analýza trhu |
+| `/oracle` | Vynutit Oracle cyklus |
+
+## Project Structure
 
 ```
-┌──────────────────────────────────────────────────────────────────┐
-│                    L2: STRATEGIE (26h + jitter)                  │
-│  oracle_brain.sh → gemini-cli → beroun-config → mmap            │
-│  RSS + Fear/Greed + PnL → Gemini 3.1 Pro → grid/inv update      │
-├──────────────────────────────────────────────────────────────────┤
-│                    L1: TAKTIKA (5s / 10s thermal)                │
-│  beroun-sovereign-ai → LM Studio (localhost:1234) → mmap        │
-│  OBI + Spread + Position → Phi-3.5 (GPU) → bias offset         │
-│  Greedy sampling: temp=0, top_p=0.1, max_tokens=5              │
-├──────────────────────────────────────────────────────────────────┤
-│                    L0: REFLEX (< 50 µs)                          │
-│  beroun-core → simd_json → Order Book → Sniper Logic → Bitfinex│
-│  Micro-Price + OBI + Inv Skew + Dynamic Grid + AI Safety Fuse   │
-└──────────────────────────────────────────────────────────────────┘
-
-┌─ IPC (mmap, lock-free) ─────────────────────────────────────────┐
-│  engine_state.bin ◄─► beroun-core, monitor, dashboard, ai       │
-│  risk_state.bin   ◄─► beroun-config, sovereign-ai, oracle       │
-└─────────────────────────────────────────────────────────────────┘
+hft-sniper/
+├── src/
+│   ├── main.rs          # L0 HFT engine (Dual WS, Hydra Grid, Adaptive Grid)
+│   ├── types.rs          # Shared types (EngineState, RiskState, mmap structs)
+│   ├── config_cli.rs     # beroun-config CLI (mmap parameter modifier)
+│   ├── dashboard.rs      # HTTP dashboard server
+│   └── risk_control.rs   # Risk control binary
+├── scripts/
+│   ├── tg_listener.py    # Telegram C2 interface
+│   ├── analytics.py      # Trade Analytics Engine
+│   └── oracle_brain.sh   # Gemini Oracle scheduler
+├── beroun-start.sh       # Orchestrator (startup script)
+├── dashboard.html        # Web dashboard UI
+├── ROADMAP.md            # Future development plan
+└── ARCHITECTURE.md       # Detailed architecture docs
 ```
 
-## Klíčové vlastnosti
+## Key Features (v10.0)
 
-| Vrstva | Technologie | Detail |
-|--------|-------------|--------|
-| Parser | `simd_json` | SIMD-akcelerovaný, ~10× vs serde_json |
-| IPC | `memmap2` | Atomické ops, cache-line aligned |
-| Network | TCP_NODELAY | Dual WebSocket (data + exec) |
-| Runtime | Tokio current_thread | CPU pinned na core 1 |
-| Intelligence | Micro-Price, OBI, Inv Skew | Volume-weighted pricing + L2 imbalance |
-| AI L1 | LM Studio v0.4.7 + GTX 1060 | Phi-3.5-mini, greedy sampling, 5s cycle |
-| AI L2 | Gemini 3.1 Pro (gemini-cli) | 26h Oracle cycle, RSS + sentiment |
-| Safety | AI Heartbeat + Sanity Checks | 30s fuse, ±50% rate limiter, $1-$200 clamp |
-| PnL | WAP + Alpha Tracking | Realized/Unrealized + AI execution alpha |
-| Control | Telegram Bot | /status /analyze /grid /pause /oracle |
-| Thermal | nvidia-smi + adaptive cycle | 82°C throttle, 75°C resume |
+- **Hydra Multi-Level Grid**: 1-5 concurrent price levels with Fibonacci spacing
+- **Adaptive Grid**: Fill-rate balance drives grid tightening/widening (0.7×-1.5×)
+- **Liquidity Hole Detection**: L2 depth monitor with 60-sample MA, auto grid ×3 on holes
+- **Emergency Close**: `/close CONFIRM` — REST API market close (works even if WS is down)
+- **Cautious Mode**: `/cautious` — 15-min defensive mode before macro events
+- **Total Equity**: `wallet_usd + (wallet_btc × mid_price)` — true NAV tracking
+- **Trade Analytics**: Sharpe Ratio, win-rate, hourly PnL heatmap, max drawdown
+- **Volume Tracking**: 30-day volume accumulation for fee tier optimization
+- **Multi-Pair Foundation**: `TRADING_SYMBOL` abstraction (0 hardcoded pair references)
+- **Auto Daily Report**: 08:00 CET automatic Telegram summary
 
-## Binárky
+## Safety Systems
 
-| Binárka | Účel |
-|---------|------|
-| `beroun-core` | HFT engine (main loop, orders, WS, PnL tracker) |
-| `beroun-dashboard` | Web dashboard server (:3000) |
-| `beroun-monitor` | TUI dashboard (ANSI, mmap reader, Alpha display) |
-| `beroun-sovereign-ai` | AI L1 sidecar (LM Studio, GPU, thermal guard) |
-| `beroun-config` | Live mmap parameter CLI (show/set-grid/set-bias/export-json) |
-| `risk-control` | Legacy risk parameter management |
+1. **Capital Guard**: Hard USD cap per order cycle
+2. **Daily Loss Limit**: Circuit breaker (-$20 default)
+3. **Anti-Cross Guard**: Prevents bid > best_ask or ask < best_bid
+4. **Inventory Throttling**: Skews grid based on net position
+5. **Delta-Reducing Exemption**: Always allows position-reducing trades
+6. **Checksum Validation**: 5-consecutive failures before reconnect
+7. **AI Safety Fuse**: Zeros AI bias if heartbeat > 30s stale
 
-## Příkazy
+## Version History
 
-```bash
-# Služby
-systemctl --user status beroun-sniper           # HFT engine
-systemctl --user status beroun-dashboard        # Dashboard
-sudo systemctl status beroun-ai                 # AI Manager (GPU)
-sudo systemctl status beroun-telegram           # Telegram Interface
-sudo systemctl list-timers beroun-oracle.timer  # Oracle timer
+| Version | Codename | Key Features |
+|---------|----------|-------------|
+| v10.0 | Apex Predator | Analytics, Fee Optimizer, Multi-Pair |
+| v9.5 | Sentinel | Adaptive Grid, Liquidity Hole, Cautious Mode |
+| v9.2 | Accountant | Emergency Close, Total Equity, Daily Report |
+| v9.0 | Silent Hydra | Multi-Level Grid, Capital Guard, DLL |
+| v8.0 | Sovereign | Dual WS, AI Sidecar, Gemini Oracle |
 
-# Monitoring
-cargo run --release --bin beroun-monitor    # TUI monitor
-./target/release/beroun-config show        # Live risk params
-./target/release/beroun-config export-json # Full JSON snapshot
+## License
 
-# Telegram
-/status    — Live stav bota
-/analyze   — Gemini 3.1 Pro analýza
-/grid 8.5  — Nastavit grid (se sanity checks)
-/pause     — Nouzové zastavení
-/oracle    — Force Oracle cyklus
-```
-
-## Dokumentace
-
-| Soubor | Obsah |
-|--------|-------|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Kompletní architektura, memory layout, intelligence |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Coding standards (Rust HFT) |
-| [docs/AI_INFRASTRUCTURE.md](docs/AI_INFRASTRUCTURE.md) | LM Studio v0.4.7, GPU, model, API |
-| [docs/STRATEGY.md](docs/STRATEGY.md) | Obchodní strategie (OFI, Grid) |
-| [docs/HFT_AUDIT_2026.md](docs/HFT_AUDIT_2026.md) | Technické standardy a audit |
-| [docs/MONITORING.md](docs/MONITORING.md) | Monitoring stack a metriky |
-| [docs/RESEARCH.md](docs/RESEARCH.md) | Akademický výzkum HFT v Rustu |
-
-## Roadmap (v8.0+)
-
-Viz [GitHub Issues](https://github.com/VaclavSercl/HFT-Sniper/issues).
-
-### ✅ Completed
-- **#1** PnL Tracker (Realized vs. Unrealized) — WAP, mmap
-- **#2** Machine Learning Risk (AI Manager) — LM Studio, GPU sidecar
-- **#7** Telegram Bi-directional Interface — 7 commands, Gemini Q&A
-- **#8** AI Heartbeat + Alpha Tracking — 30s fuse, execution alpha
-
-### 🔓 Open
-- **#3** True Zero-Copy (FastWebSockets Migration)
-- **#4** Global Oracle Fine-tuning (Gemini 3.1 Pro)
-- **#5** L2 GPU Inference Optimization (<100ms)
-- **#9** Thermal Guard + Network Jitter + Anti-Toxic Flow
-
-## Licence
-
-Proprietární — VaclavSercl
+Private / All Rights Reserved

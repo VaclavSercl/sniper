@@ -1,6 +1,6 @@
 [package]
 name = "beroun-core"
-version = "8.0.0"
+version = "10.0.0"
 edition = "2024"
 
 [lib]
@@ -18,22 +18,6 @@ path = "src/risk_control.rs"
 [[bin]]
 name = "beroun-dashboard"
 path = "src/dashboard.rs"
-
-[[bin]]
-name = "beroun-health"
-path = "src/health.rs"
-
-[[bin]]
-name = "beroun-monitor"
-path = "src/monitor.rs"
-
-[[bin]]
-name = "beroun-sovereign-ai"
-path = "src/sovereign_ai.rs"
-
-[[bin]]
-name = "beroun-tele-brain"
-path = "src/tele_brain.rs"
 
 [[bin]]
 name = "beroun-config"
