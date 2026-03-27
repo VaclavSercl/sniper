@@ -18,8 +18,8 @@ pkill -9 -f sniper_orchestrator 2>/dev/null || true
 pkill -9 -f macro_monitor 2>/dev/null || true
 pkill -9 -f watchdog.sh 2>/dev/null || true
 sleep 2
-# Lock MUST be removed AFTER processes are dead (flock released on fd close)
-rm -f /tmp/beroun-sniper.lock 2>/dev/null || true
+# Locks MUST be removed AFTER processes are dead (flock released on fd close)
+rm -f /tmp/beroun-sniper.lock /tmp/beroun-dashboard.lock 2>/dev/null || true
 echo "-> Dezinsekce complete"
 
 # ═══ IPC: Fresh mmap (prevents struct size mismatch after upgrades) ═══

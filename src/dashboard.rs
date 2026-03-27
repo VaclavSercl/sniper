@@ -486,7 +486,18 @@ async fn sse_handler(
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenv().ok();
-    println!("--- BEROUN DASHBOARD v10.1.0 (HTMX+SSE) ---");
+
+    // ═══ SINGLE-INSTANCE LOCK ═══
+    let lock_file = std::fs::File::create("/tmp/beroun-dashboard.lock")
+        .expect("Failed to create dashboard lock file");
+    use fs2::FileExt as Fs2FileExt;
+    if lock_file.try_lock_exclusive().is_err() {
+        eprintln!("[DASHBOARD] Another instance already running — aborting.");
+        std::process::exit(1);
+    }
+    let _lock_guard = lock_file;
+
+    println!("--- BEROUN DASHBOARD v11.0 (HTMX+SSE) ---");
 
     let state: SharedState = Arc::new(Mutex::new(DashboardState::default()));
     let state_for_server = state.clone();
@@ -503,13 +514,10 @@ async fn main() -> Result<()> {
         let listener = {
             let mut bound = None;
             for attempt in 1..=15 {
-                // Use SO_REUSEADDR + SO_REUSEPORT to avoid TIME_WAIT issues on restart
+                // SO_REUSEADDR handles TIME_WAIT on restart
+                // Do NOT use SO_REUSEPORT — it allows duplicate binds, masking double-start bugs
                 let socket = tokio::net::TcpSocket::new_v4().unwrap();
                 let _ = socket.set_reuseaddr(true);
-                #[cfg(unix)]
-                {
-                    let _ = socket.set_reuseport(true);
-                }
                 match socket.bind("0.0.0.0:3000".parse().unwrap())
                     .and_then(|()| socket.listen(1024))
                 {

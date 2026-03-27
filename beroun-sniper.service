@@ -17,7 +17,7 @@ ExecStartPre=-/usr/bin/pkill -9 -f tg_listener
 ExecStartPre=-/usr/bin/pkill -9 -f l1_shield
 ExecStartPre=-/usr/bin/pkill -9 -f macro_monitor
 ExecStartPre=/usr/bin/sleep 2
-ExecStartPre=-/usr/bin/rm -f /tmp/beroun-sniper.lock
+ExecStartPre=-/usr/bin/rm -f /tmp/beroun-sniper.lock /tmp/beroun-dashboard.lock
 
 ExecStart=/home/wwwenda/hft-sniper/beroun-start.sh
 Restart=always
