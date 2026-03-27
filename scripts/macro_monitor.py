@@ -47,6 +47,11 @@ OFF_DELTA_LEAD_RAW_BPS = 1896  # i64: raw delta bps × 100
 OFF_DELTA_REPOSITIONS = 1904   # u64: counter
 OFF_AI_DELTA_THRESHOLD = 1912  # u64: threshold bps×100 (default 100)
 OFF_DELTA_PNL_ATTR = 1920      # i64: PnL attribution × 1e8
+# v11.3 Fee Sentinel
+OFF_MAKER_FEE_BPS = 1928       # u64
+OFF_TAKER_FEE_BPS = 1936       # u64
+OFF_FEE_LAST_CHECKED = 1944    # u64
+OFF_FEE_KILLS = 1952           # u64
 
 # Binance thresholds
 BINANCE_LARGE_SELL_BTC = 1.0    # Alert if single trade > 1 BTC sell

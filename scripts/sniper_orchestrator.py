@@ -63,6 +63,12 @@ OFF_LEARNING_TRIG = 1656
 # Legacy v8.0 fields (must keep alive for beroun-config ai_alive check)
 OFF_AI_HEARTBEAT = 1480  # ai_heartbeat_ms in EngineState (verified from repr(C) layout)
 
+# v11.3 Fee Sentinel
+OFF_MAKER_FEE_BPS = 1928    # u64: maker fee × 10000
+OFF_TAKER_FEE_BPS = 1936    # u64: taker fee × 10000
+OFF_FEE_LAST_CHECKED = 1944 # u64: epoch ms
+OFF_FEE_KILLS = 1952        # u64: counter
+
 # Auto-escalation limits
 MAX_POSITION_FLOOR = 0.001
 MAX_POSITION_CEIL = 0.010
@@ -107,6 +113,64 @@ def send_telegram(text, buttons=None):
             log.error(f"Telegram send failed: {r.status_code} {r.text[:200]}")
     except Exception as e:
         log.error(f"Telegram error: {e}")
+
+
+def check_bitfinex_fees(mm):
+    """v11.3 Fee Sentinel: Check Bitfinex API for current fee schedule."""
+    try:
+        import hmac, hashlib
+        api_key = os.environ.get('BITFINEX_API_KEY', '')
+        api_secret = os.environ.get('BITFINEX_API_SECRET', '')
+        if not api_key or not api_secret:
+            return
+
+        nonce = str(int(time.time() * 1000))
+        path = '/v2/auth/r/summary'
+        body = '{}'
+        sig_payload = f'/api{path}{nonce}{body}'
+        sig = hmac.new(api_secret.encode(), sig_payload.encode(), hashlib.sha384).hexdigest()
+
+        headers = {
+            'bfx-nonce': nonce,
+            'bfx-apikey': api_key,
+            'bfx-signature': sig,
+            'content-type': 'application/json'
+        }
+        r = requests.post(f'https://api.bitfinex.com{path}', headers=headers, data=body, timeout=10)
+        if r.status_code == 200:
+            data = r.json()
+            # Bitfinex summary returns fees as decimals (0.001 = 0.1%)
+            maker_rate = 0.0
+            taker_rate = 0.0
+            if isinstance(data, list) and len(data) > 0:
+                for item in data:
+                    if isinstance(item, list) and len(item) > 1:
+                        if item[0] == 'maker_fee':
+                            maker_rate = float(item[1])
+                        elif item[0] == 'taker_fee':
+                            taker_rate = float(item[1])
+
+            maker_bps = int(maker_rate * 10000)
+            taker_bps = int(taker_rate * 10000)
+
+            # Read previous values
+            old_maker = struct.unpack_from('<Q', mm, OFF_MAKER_FEE_BPS)[0]
+            old_taker = struct.unpack_from('<Q', mm, OFF_TAKER_FEE_BPS)[0]
+
+            # Write to mmap
+            struct.pack_into('<Q', mm, OFF_MAKER_FEE_BPS, maker_bps)
+            struct.pack_into('<Q', mm, OFF_TAKER_FEE_BPS, taker_bps)
+            struct.pack_into('<Q', mm, OFF_FEE_LAST_CHECKED, int(time.time() * 1000))
+
+            log.info(f"  💰 Fee check: maker={maker_rate*100:.3f}% taker={taker_rate*100:.3f}%")
+
+            # Alert if fees changed
+            if (maker_bps != old_maker or taker_bps != old_taker) and (old_maker > 0 or old_taker > 0 or maker_bps > 0 or taker_bps > 0):
+                send_telegram(f"⚠️ *FEE ALERT*\nMaker: {old_maker/100:.2f}→{maker_bps/100:.2f} bps\nTaker: {old_taker/100:.2f}→{taker_bps/100:.2f} bps")
+        else:
+            log.warning(f"  Fee API: HTTP {r.status_code}")
+    except Exception as e:
+        log.warning(f"  Fee check failed: {e}")
 
 
 def read_u64_mmap(mm, offset):
@@ -876,6 +940,10 @@ def main():
         try:
             cycle += 1
             log.info(f"═══ ORACLE CYCLE #{cycle} ═══")
+
+            # v11.3 Fee Sentinel: check fees hourly (every 12 cycles at 5min interval)
+            if cycle % 12 == 1:
+                check_bitfinex_fees(mm)
 
             # 1. Collect all data
             bot_state = collect_bot_state()

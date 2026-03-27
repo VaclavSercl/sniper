@@ -1136,6 +1136,20 @@ async fn async_main() -> Result<()> {
                                                             continue;
                                                         }
 
+                                                        // ═══ v11.3 FEE SENTINEL: Profitability Guard ═══
+                                                        // Skip cycle if fees eat the entire spread profit
+                                                        let maker_fee = eng.maker_fee_bps.load(Ordering::Relaxed);
+                                                        let taker_fee = eng.taker_fee_bps.load(Ordering::Relaxed);
+                                                        let round_trip_fee_bps = maker_fee + taker_fee; // worst case
+                                                        if round_trip_fee_bps > 0 {
+                                                            let spread_bps = ((sell_i - buy_i) as f64 / micro_i as f64 * 10000.0) as u64;
+                                                            if spread_bps < round_trip_fee_bps * 2 {
+                                                                // Spread too thin — fees > profit
+                                                                eng.fee_kills.fetch_add(1, Ordering::Relaxed);
+                                                                continue;
+                                                            }
+                                                        }
+
                                                         let lb = eng.last_buy_price.load(Ordering::SeqCst);
                                                         let ls = eng.last_sell_price.load(Ordering::SeqCst);
                                                         let db = (buy_i - lb).abs();

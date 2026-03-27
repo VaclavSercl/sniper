@@ -73,6 +73,11 @@ OFF_DELTA_LEAD_RAW_BPS = 1896
 OFF_DELTA_REPOSITIONS = 1904
 OFF_AI_DELTA_THRESHOLD = 1912
 OFF_DELTA_PNL_ATTR = 1920
+# v11.3 Fee Sentinel
+OFF_MAKER_FEE_BPS = 1928
+OFF_TAKER_FEE_BPS = 1936
+OFF_FEE_LAST_CHECKED = 1944
+OFF_FEE_KILLS = 1952
 
 # Intent presets: {intent_id: (name, grid_mult, freeze_ms, fire_interval, ghost_trigger_pct, ghost_trans)}
 INTENT_PRESETS = {
@@ -149,6 +154,7 @@ def cmd_help(message):
 ⚡ /delta — Delta Lead v11.1 (cross-venue)
 /analytics — Trade analytics
 /report — Denní report
+💰 /fees — Fee Sentinel v11.3
 
 🧠 *AI & Brain:*
 /brain — Sniper Brain (SQLite)
@@ -1108,6 +1114,40 @@ _Binance leads → Bitfinex follows (10-50ms)_""")
     except Exception as e:
         bot.reply_to(message, f"❌ Delta error: {e}")
 
+@bot.message_handler(commands=['fees'])
+def cmd_fees(message):
+    if not auth(message): return
+    log.info("Fee Sentinel status requested")
+    try:
+        import struct as st
+        with open(ENGINE_MMAP, 'rb') as f:
+            data = f.read()
+        maker = st.unpack_from('<Q', data, OFF_MAKER_FEE_BPS)[0]
+        taker = st.unpack_from('<Q', data, OFF_TAKER_FEE_BPS)[0]
+        last_ts = st.unpack_from('<Q', data, OFF_FEE_LAST_CHECKED)[0]
+        kills = st.unpack_from('<Q', data, OFF_FEE_KILLS)[0]
+
+        now = int(time.time() * 1000)
+        last_ago = (now - last_ts) / 1000 if last_ts > 0 else -1
+
+        maker_pct = maker / 10000 * 100
+        taker_pct = taker / 10000 * 100
+        free = maker == 0 and taker == 0
+
+        bot.reply_to(message, f"""💰 *FEE SENTINEL v11.3*
+════════════════════════════
+{'🟢 ZERO FEES' if free else '🔴 FEES ACTIVE'}
+   Maker: `{maker_pct:.3f}%` ({maker} bps×10⁻⁴)
+   Taker: `{taker_pct:.3f}%` ({taker} bps×10⁻⁴)
+   
+🕐 Last API Check: `{f'{last_ago:.0f}s ago' if last_ago >= 0 else 'never'}`
+🚫 Fee Kills: `{kills:,}` (trades skipped, fee > profit)
+
+_Auto-monitoring via L2 Oracle (hourly)_
+_Alert on any fee change_""")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Fee error: {e}")
+
 
 def _write_mmap_u64(offset, value):
     """Write u64 to engine mmap."""
@@ -1321,6 +1361,7 @@ if __name__ == "__main__":
             BotCommand("cautious", "⚠️ Macro defense"),
             BotCommand("close", "🚨 EMERGENCY CLOSE"),
             BotCommand("delta", "⚡ Delta Lead v11.1"),
+            BotCommand("fees", "💰 Fee Sentinel v11.3"),
             BotCommand("help", "❓ Přehled příkazů"),
         ])
         log.info("   ✅ Telegram menu commands registered")

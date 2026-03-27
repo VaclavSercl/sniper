@@ -151,6 +151,12 @@ pub struct EngineState {
     pub delta_repositions: AtomicU64,      // Counter: grid shifts triggered by delta lead
     pub ai_delta_threshold_bps: AtomicU64, // AI-tunable threshold in bps×100 (default 100 = 1.0 bps = 0.01%)
     pub delta_pnl_attribution: AtomicI64,  // PnL attributed to delta-lead trades × 1e8
+
+    // --- FEE SENTINEL (v11.3 Fee Guard) ---
+    pub maker_fee_bps: AtomicU64,          // Maker fee × 10000 (0 = free, 10 = 0.1%)
+    pub taker_fee_bps: AtomicU64,          // Taker fee × 10000
+    pub fee_last_checked_ms: AtomicU64,    // Epoch ms of last API check
+    pub fee_kills: AtomicU64,              // Counter: trades skipped due to fee > profit
 }
 
 impl Default for OrderBookLevel {
@@ -244,6 +250,11 @@ impl Default for EngineState {
             delta_repositions: AtomicU64::new(0),
             ai_delta_threshold_bps: AtomicU64::new(100), // 1.0 bps = 0.01%
             delta_pnl_attribution: AtomicI64::new(0),
+            // v11.3 Fee Sentinel
+            maker_fee_bps: AtomicU64::new(0),      // 0 = free (Bitfinex 2026)
+            taker_fee_bps: AtomicU64::new(0),      // 0 = free
+            fee_last_checked_ms: AtomicU64::new(0),
+            fee_kills: AtomicU64::new(0),
         }
     }
 }
