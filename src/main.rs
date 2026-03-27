@@ -971,6 +971,27 @@ async fn async_main() -> Result<()> {
                                                             eng.sentinel_repositions.fetch_add(1, Ordering::Relaxed);
                                                         }
 
+                                                        // ═══ v11.1 DELTA LEAD: Cross-Venue Arbitrage Prediction ═══
+                                                        // Calculate Binance-Bitfinex delta in basis points
+                                                        // When Binance "leads" (moves first), Bitfinex will follow within 10-50ms
+                                                        let delta_lead_bps = if bnb_mid_raw > 0 && micro_i > 0 {
+                                                            // Raw delta: (Binance - Bitfinex) / Bitfinex × 10000 bps × 100 for precision
+                                                            let raw = ((bnb_mid_raw as f64 - micro_i as f64) / micro_i as f64) * 1_000_000.0;
+                                                            eng.delta_lead_raw_bps.store(raw.round() as i64, Ordering::Relaxed);
+                                                            raw
+                                                        } else {
+                                                            eng.delta_lead_raw_bps.store(0, Ordering::Relaxed);
+                                                            0.0
+                                                        };
+
+                                                        // Delta signal: clamped to -10000..+10000
+                                                        let delta_signal = (delta_lead_bps * 100.0).round() as i64;
+                                                        eng.delta_lead_signal.store(delta_signal.max(-10000).min(10000), Ordering::Relaxed);
+
+                                                        // Delta threshold from AI registry (default 100 = 1.0 bps = 0.01%)
+                                                        let delta_threshold = eng.ai_delta_threshold_bps.load(Ordering::Relaxed) as f64;
+                                                        let delta_active = delta_lead_bps.abs() > delta_threshold && bnb_mid_raw > 0;
+
                                                         // 2. L2 ORDER BOOK IMBALANCE (OBI — top 10 levels)
                                                         let mut sum_bid_vol: f64 = 0.0;
                                                         let mut sum_ask_vol: f64 = 0.0;
@@ -1076,8 +1097,25 @@ async fn async_main() -> Result<()> {
                                                         }
 
                                                         let final_bias_with_l1 = final_bias + l1_skew + macro_bias_scaled;
-                                                        let mut buy_i = (micro_i - grid + final_bias_with_l1).max(0);
-                                                        let mut sell_i = (micro_i + grid + final_bias_with_l1).max(0);
+
+                                                        // ═══ v11.1 DELTA LEAD: Reactive Grid Repositioning ═══
+                                                        // When Binance leads, shift grid center toward expected convergence
+                                                        let delta_shift = if delta_active {
+                                                            // Shift = delta_bps × price × aggressiveness (capped at 25% of grid step)
+                                                            let raw_shift = (delta_lead_bps / 100.0) * (micro_i as f64 / beroun_types::PRICE_SCALE);
+                                                            let max_shift = grid as f64 * 0.25;
+                                                            let clamped = raw_shift.max(-max_shift).min(max_shift);
+                                                            let shift_i = (clamped * beroun_types::PRICE_SCALE).round() as i64;
+                                                            eng.delta_repositions.fetch_add(1, Ordering::Relaxed);
+                                                            tracing::info!(event = "delta_reposition",
+                                                                delta_bps = format!("{:.1}", delta_lead_bps),
+                                                                shift_usd = format!("{:.2}", shift_i as f64 / beroun_types::PRICE_SCALE),
+                                                                direction = if delta_lead_bps > 0.0 { "BULL" } else { "BEAR" });
+                                                            shift_i
+                                                        } else { 0 };
+
+                                                        let mut buy_i = (micro_i - grid + final_bias_with_l1 + delta_shift).max(0);
+                                                        let mut sell_i = (micro_i + grid + final_bias_with_l1 + delta_shift).max(0);
 
                                                         // ═══ ANTI-CROSS GUARD (L0 Safety) ═══
                                                         // Prevent POSTONLY CANCELED: bid must be below best ask, ask must be above best bid

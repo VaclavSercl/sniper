@@ -64,6 +64,15 @@ OFF_MACRO_BIAS = 1824
 OFF_MACRO_SOURCE_TS = 1832
 OFF_BINANCE_SWEEP_TS = 1840
 OFF_MACRO_FEAR_GREED = 1848
+# v11.0 Sentinel
+OFF_BINANCE_MID_PRICE = 1856
+OFF_SENTINEL_REPOSITIONS = 1880
+# v11.1 Delta Lead
+OFF_DELTA_LEAD_SIGNAL = 1888
+OFF_DELTA_LEAD_RAW_BPS = 1896
+OFF_DELTA_REPOSITIONS = 1904
+OFF_AI_DELTA_THRESHOLD = 1912
+OFF_DELTA_PNL_ATTR = 1920
 
 # Intent presets: {intent_id: (name, grid_mult, freeze_ms, fire_interval, ghost_trigger_pct, ghost_trans)}
 INTENT_PRESETS = {
@@ -1062,6 +1071,40 @@ _Bias < -0.05 = Bearish (grid shifted down)_
 _BNB Sweep < 3s = Auto Ghost Mode_""")
     except Exception as e:
         bot.reply_to(message, f"❌ Macro error: {e}")
+
+@bot.message_handler(commands=['delta'])
+def cmd_delta(message):
+    if not auth(message): return
+    log.info("Delta Lead status requested")
+    try:
+        import struct as st
+        with open(ENGINE_MMAP, 'rb') as f:
+            data = f.read()
+        signal = st.unpack_from('<q', data, OFF_DELTA_LEAD_SIGNAL)[0]
+        raw_bps = st.unpack_from('<q', data, OFF_DELTA_LEAD_RAW_BPS)[0] / 100.0
+        repositions = st.unpack_from('<Q', data, OFF_DELTA_REPOSITIONS)[0]
+        threshold = st.unpack_from('<Q', data, OFF_AI_DELTA_THRESHOLD)[0] / 100.0
+        pnl_attr = st.unpack_from('<q', data, OFF_DELTA_PNL_ATTR)[0] / 1e8
+        bnb_mid = st.unpack_from('<q', data, OFF_BINANCE_MID_PRICE)[0] / 1e8
+        sentinel = st.unpack_from('<Q', data, OFF_SENTINEL_REPOSITIONS)[0]
+
+        direction = '🟢 BULL' if signal > 0 else '🔴 BEAR' if signal < 0 else '⚪ FLAT'
+        active = '✅ ACTIVE' if abs(raw_bps) > threshold else '💤 IDLE'
+
+        bot.reply_to(message, f"""⚡ *DELTA LEAD v11.1*
+════════════════════════
+{direction} Signal: `{signal:+d}` | `{raw_bps:+.1f} bps`
+Threshold: `{threshold:.1f} bps` → {active}
+
+📊 *Binance Mid:* `${bnb_mid:,.2f}`
+🔄 *Delta Repositions:* `{repositions:,}`
+🛡 *Sentinel Repositions:* `{sentinel:,}`
+💰 *Delta PnL Attribution:* `${pnl_attr:+.4f}`
+
+_Cross-venue latency arbitrage_
+_Binance leads → Bitfinex follows (10-50ms)_""")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Delta error: {e}")
 
 
 def _write_mmap_u64(offset, value):

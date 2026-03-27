@@ -41,6 +41,12 @@ OFF_MACRO_FEAR_GREED = 1848  # u64: 0..100
 OFF_BINANCE_MID_PRICE = 1856 # i64: Binance mid × PRICE_SCALE
 OFF_GLOBAL_FAIR_VALUE = 1864 # i64: weighted fair value × PRICE_SCALE
 OFF_SENTINEL_REPOSITIONS = 1880 # u64: counter
+# v11.1 Delta Lead
+OFF_DELTA_LEAD_SIGNAL = 1888   # i64: -10000..+10000
+OFF_DELTA_LEAD_RAW_BPS = 1896  # i64: raw delta bps × 100
+OFF_DELTA_REPOSITIONS = 1904   # u64: counter
+OFF_AI_DELTA_THRESHOLD = 1912  # u64: threshold bps×100 (default 100)
+OFF_DELTA_PNL_ATTR = 1920      # i64: PnL attribution × 1e8
 
 # Binance thresholds
 BINANCE_LARGE_SELL_BTC = 1.0    # Alert if single trade > 1 BTC sell

@@ -144,6 +144,13 @@ pub struct EngineState {
     pub global_fair_value: AtomicI64,      // Weighted fair value × PRICE_SCALE (local + global + sentiment)
     pub ai_min_order_lifetime_ms: AtomicU64, // Anti-flicker: min ms before cancel/replace (default 100)
     pub sentinel_repositions: AtomicU64,   // Counter: how many times sentinel re-positioned ghost grid
+
+    // --- DELTA LEAD (v11.1 Cross-Venue Arbitrage Prediction) ---
+    pub delta_lead_signal: AtomicI64,      // -10000..+10000: direction×magnitude of cross-venue delta
+    pub delta_lead_raw_bps: AtomicI64,     // Raw delta in basis points × 100 (e.g. 15 = 0.15 bps)
+    pub delta_repositions: AtomicU64,      // Counter: grid shifts triggered by delta lead
+    pub ai_delta_threshold_bps: AtomicU64, // AI-tunable threshold in bps×100 (default 100 = 1.0 bps = 0.01%)
+    pub delta_pnl_attribution: AtomicI64,  // PnL attributed to delta-lead trades × 1e8
 }
 
 impl Default for OrderBookLevel {
@@ -231,6 +238,12 @@ impl Default for EngineState {
             global_fair_value: AtomicI64::new(0),
             ai_min_order_lifetime_ms: AtomicU64::new(100), // 100ms anti-flicker
             sentinel_repositions: AtomicU64::new(0),
+            // v11.1 Delta Lead
+            delta_lead_signal: AtomicI64::new(0),
+            delta_lead_raw_bps: AtomicI64::new(0),
+            delta_repositions: AtomicU64::new(0),
+            ai_delta_threshold_bps: AtomicU64::new(100), // 1.0 bps = 0.01%
+            delta_pnl_attribution: AtomicI64::new(0),
         }
     }
 }
