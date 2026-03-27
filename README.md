@@ -1,190 +1,128 @@
-# 🐺 BEROUN SNIPER v10.4 "Lesson Validator"
-**Status:** Live Fire | **Intelligence:** Self-Learning + Self-Validating AI
+# 🐺 BEROUN SNIPER v10.7 — Sovereign AI HFT Engine
 
-[![Rust](https://img.shields.io/badge/Rust-2024_Edition-orange)]()
-[![SQLite](https://img.shields.io/badge/Brain-SQLite_WAL-blue)]()
-[![Gemini](https://img.shields.io/badge/Oracle-Gemini_3.1_Pro-green)]()
-
-## What is this?
-
-A sovereign HFT market-making bot for BTC/USD on Bitfinex. It places bid/ask orders on a dynamic grid, captures the spread, and uses a 3-layer AI architecture to autonomously optimize its own strategy.
-
-**v10.4 "Lesson Validator"** adds the **closed feedback loop**: the AI not only learns from mistakes, but **validates its own lessons** against real performance data, automatically degrading rules that make things worse.
+> **Autonomous High-Frequency Trading system for BTC/USD on Bitfinex.**
+> Three-layer architecture: L0 Rust Engine → L1 Python Shield → L2 Gemini Oracle.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│              SNIPER v10.4 LESSON VALIDATOR           │
-│                                                      │
-│  L0: beroun-core         (Rust, µs HFT engine)      │
-│  L1: l1_shield.py        (Python, 50ms OBI tactical) │
-│  L2: sniper_orchestrator (Python, 5min Gemini Oracle)│
-│  🧠: beroun-brain         (Rust, SQLite memory)      │
-│  🌙: Neural Cross         (Nightly AI self-critique)  │
-│  🔬: Lesson Validator     (Pre/Post PnL analysis)    │
-│  UI: beroun-dashboard    (Rust, HTMX+SSE)            │
-│  C2: tg_listener.py      (Telegram interface)        │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────── L2: Gemini Oracle (Strategic) ───────────────────────┐
+│  sniper_orchestrator.py · 5-min cycle · Regime detection · Grid & position  │
+│  decisions · SQLite permanent memory · Neural Cross self-learning           │
+└─────────────┬──────────────── beroun-config → mmap ──────────┬──────────────┘
+              │                                                │
+┌─────────────▼────── L1: Python Shield (Tactical, 50ms) ──────▼──────────────┐
+│  l1_shield.py · Sweep detection · OBI monitoring · Adaptive threshold       │
+│  Ghost Mode activation · Anti-paralysis · Inventory skew → mmap            │
+└─────────────┬──────────────── mmap IPC ──────────────────────┬──────────────┘
+              │                                                │
+┌─────────────▼────── L0: Rust Engine (Execution, <1ms) ───────▼──────────────┐
+│  main.rs · WebSocket orderbook · Micro-price · Hydra multi-level grid       │
+│  Ghost proximity monitor · Flash IOC injection · Atomic mmap state          │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### The Closed Feedback Loop
+## Features
 
-```
-DAY:   Oracle reads validated lessons → better decisions → logs to SQLite
-                                                            ↓
-NIGHT (03:00 CET):
-  Step 0: VALIDATE existing lessons (pre vs post avg PnL)
-    → CONFIRMED → confidence +0.1
-    → DEGRADED  → confidence -0.15
-    → < 15%     → auto-deactivated (lesson killed)
-                        ↓
-  Step 1: Statistical backtest (winners vs losers)
-  Step 2: Worst-cycles export
-  Step 3: Gemini Self-Critique → generate NEW lessons
-                        ↓
-NEXT DAY: Oracle reads VALIDATED lessons → even better decisions
-  ↻ autonomous forever
-```
+### v10.7 Sovereign AI (Current)
+- **AI Control Registry**: `freeze_ms`, `fire_interval`, `ghost_trigger_zone`, `intent` — all AI-tunable via mmap
+- **Intent System**: `/aggressive`, `/defensive`, `/scout`, `/sovereign` — strategic directives via Telegram
+- **Dynamic Parameters**: No hardcoded constants in hot path — everything reads from AI registry
+
+### v10.6 Ghost Shadow
+- **Shadow Grid**: Hidden liquidity levels stored in RAM, invisible to orderbook
+- **Flash IOC Injection**: Sub-millisecond order injection when micro-price approaches ghost level
+- **Anti-Toxic Shield**: Velocity-based rejection prevents injection during sweeps
+- **Transparency Control**: L1 Shield auto-activates ghost mode when `toxic > 300` or `OBI < -0.85`
+
+### v10.5 Resurrection
+- **Anti-Paralysis**: Breaks "death by safety" spiral — uptime tracking + threshold desensitization
+- **L2 Grid Override**: Oracle decisions override vol-engine
+
+### Core (v1.0–v10.4)
+- **Zero-copy IPC**: Lock-free atomic mmap on `/dev/shm/beroun/`
+- **Micro-price**: Volume-weighted BBA midpoint for sub-tick precision
+- **Hydra Grid**: Fibonacci-spaced multi-level market making with dynamic bias
+- **SIMD JSON**: `simd-json` + `fastwebsockets` for minimal parsing latency
+- **SQLite Brain**: Permanent memory — cycles, lessons, experiments, alpha audit
+- **Neural Cross**: Nightly AI self-critique with lesson generation and validation
 
 ## Project Structure
 
 ```
 hft-sniper/
 ├── src/
-│   ├── main.rs              # L0 HFT Engine (Hydra Grid, Zero-Copy WS)
-│   ├── types.rs              # EngineState mmap struct (Atomic IPC)
-│   ├── brain.rs              # Sniper Brain v10.4 (SQLite + Validator)
-│   ├── dashboard.rs          # Dashboard (SSE + HTMX, zero JS)
-│   └── config_cli.rs         # Parameter overrider (beroun-config)
+│   ├── main.rs           # L0: HFT execution engine (1330 lines)
+│   ├── types.rs           # Shared mmap schema (AtomicU64/I64, cache-aligned)
+│   ├── dashboard.rs       # HTMX+SSE real-time dashboard on :3000
+│   ├── brain.rs           # SQLite permanent memory + Neural Cross
+│   └── config_cli.rs      # beroun-config CLI for mmap writes
 ├── scripts/
-│   ├── l1_shield.py          # L1 Kinetic Shield (OBI, sweep detection)
-│   ├── sniper_orchestrator.py # L2 Neural Cross Oracle + Validator
-│   └── tg_listener.py        # Telegram Command Center (20 commands)
-├── logs/
-│   └── sniper.db             # Permanent SQLite Memory
-├── beroun-start.sh           # Master Orchestrator
-├── watchdog.sh               # Process guardian
-├── Cargo.toml                # v10.4.0
-└── .env                      # API keys (not in git)
+│   ├── l1_shield.py       # L1: Tactical shield (sweep detection, ghost control)
+│   ├── sniper_orchestrator.py  # L2: Gemini Oracle + regime detection
+│   └── tg_listener.py     # Telegram command center (v10.7 Sovereign)
+├── beroun-start.sh        # Master startup script
+├── beroun-sniper.service  # systemd unit file
+├── watchdog.sh            # mmap heartbeat monitor
+├── dashboard.html         # HTMX template for dashboard
+├── Cargo.toml             # Rust dependencies (edition 2024)
+└── .env                   # API keys (not tracked)
 ```
 
-## Rust Binaries
-
-| Binary | Purpose |
-|--------|---------|
-| `beroun-core` | HFT engine (µs trades, Hydra Grid) |
-| `beroun-dashboard` | HTMX+SSE dashboard (zero JavaScript) |
-| `beroun-config` | CLI parameter overrider |
-| `beroun-brain` | SQLite memory + Neural Cross + Lesson Validator |
-
-## Sniper Brain CLI
+## Quick Start
 
 ```bash
-# Memory
-beroun-brain init                      # Create/migrate DB (6 tables)
-beroun-brain log-cycle <json>          # Store Oracle cycle
-beroun-brain log-alert <json>          # Store tactical alert
-beroun-brain query [--last 6h]         # Query history
-beroun-brain analyze                   # Self-analysis per regime
-beroun-brain pattern TRENDING          # Learned optimal params
-beroun-brain stats                     # Overall statistics
-beroun-brain context [--cycles 6]      # Generate Gemini prompt
+# 1. Build
+cargo build --release
 
-# Neural Cross (v10.3+)
-beroun-brain backtest [--days 1]       # Statistical winners-vs-losers
-beroun-brain worst-cycles [--n 5]      # Export worst cycles for AI critique
-beroun-brain lessons [--regime R]      # Query active learned lessons
-beroun-brain save-lesson <json>        # Store lesson from AI Coach
+# 2. Configure
+cp .env.example .env  # Add Bitfinex + Telegram keys
 
-# Lesson Validator (v10.4)
-beroun-brain validate-lessons [--hours 24]  # Validate lessons: pre vs post PnL
-beroun-brain alpha-report [--hours 24]      # AI efficiency audit (saved/missed)
+# 3. Install systemd service
+sudo cp beroun-sniper.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable beroun-sniper
+sudo systemctl start beroun-sniper
+
+# 4. Monitor
+journalctl -u beroun-sniper -f
+open http://localhost:3000  # Dashboard
 ```
-
-## SQLite Schema (6 tables)
-
-| Table | Purpose |
-|-------|---------|
-| `cycles` | Every 5min Oracle cycle snapshot |
-| `alerts` | Tactical alerts (inventory drift, latency spike) |
-| `patterns` | Learned optimal params per regime |
-| `experiments` | What-if counterfactual analysis |
-| `lessons` | AI-generated corrective rules with confidence |
-| `lesson_validations` | Validation results (pre/post PnL comparison) |
-
-### Confidence System
-
-| Confidence | Icon | Behavior |
-|------------|------|----------|
-| ≥ 70% | 🔴 | **Mandatory** — Oracle must follow |
-| 30-70% | 🟡 | **Suggested** — Oracle considers |
-| < 30% | ⚪ | Ignored (will decay) |
-| < 15% | ❌ | **Auto-deactivated** by Validator |
-
-Confidence is **dynamic**:
-- CONFIRMED validation: +0.10
-- DEGRADED validation: -0.15 (bad lessons punished harder)
-- Auto-decay: -5% per 3 days without validation
 
 ## Telegram Commands
 
-| Command | Description |
-|---------|-------------|
-| `/status` | Live state (equity, PnL, position) |
-| `/ai` | AI status (L1 Shield + L2 Oracle) |
-| `/brain` | Sniper Brain (memory + lessons + Alpha Audit) |
-| `/backtest` | Neural Cross (stats → worst → Coach → lessons) |
-| `/validate` | **Lesson Validation + Alpha Report** |
-| `/oracle` | Force Sniper AI cycle |
-| `/analyze` | Gemini analysis with permanent memory |
-| `/analytics` | Trade analytics + Brain regime analysis |
-| `/shadow` | Activate Shadow Mode (simulation) |
-| `/golive` | Return to Live Fire |
-| `/grid N` | Set grid step ($) |
-| `/capital N` | Set authorized capital ($) |
-| `/loss N` | Set daily loss limit ($) |
-| `/pause` / `/resume` | Pause/resume trading |
-| `/cautious` | Macro-event defense (15 min) |
-| `/close CONFIRM` | EMERGENCY market exit |
-| `/report` | Daily report |
-| `/help` | Command overview |
+| Command | Effect |
+|---|---|
+| `/aggressive` | Tight grid, fast fire, no ghost |
+| `/defensive` | Wide grid, slow fire, ghost ON |
+| `/scout` | Shadow mode + data collection |
+| `/sovereign` | AI full autonomy (default) |
+| `/status` | Live PnL, position, equity |
+| `/ai` | L1/L2 + Ghost + Sovereign status |
+| `/brain` | SQLite memory + lessons |
+| `/oracle` | Force Gemini cycle |
+| `/close CONFIRM` | Emergency market close |
 
-## Alpha Report
+## Safety
 
-The Lesson Validator compares **pre-lesson avg PnL** vs **post-lesson avg PnL** per regime:
+- **DLL Circuit Breaker**: Daily loss limit auto-pauses trading (non-overridable)
+- **Capital Guard**: Maximum authorized capital enforced at L0
+- **Anti-Cross Guard**: Prevents self-crossing orders
+- **Fire Interval Clamp**: 500ms–10000ms (L0 enforced)
+- **Freeze Clamp**: 500ms–30000ms (L1 enforced)
 
-```
-📉 AI ALPHA REPORT (24h)
+## Tech Stack
 
-PnL total: $-60.14
-Cyklu: 27 (W:0 L:12)
-Aktivni lekce: 4
-
-AI Saved: +$0.00
-AI Missed: -$14.17
-Net Alpha: $-14.17
-Verdict: OVER_CAUTIOUS
-```
-
-When Net Alpha is negative, the system knows its lessons are **too paranoid** and automatically degrades them.
-
-## Version History
-
-| Version | Codename | Key Feature |
-|---------|----------|-------------|
-| v10.4 | **Lesson Validator** | Closed-loop: validate → adjust → repeat |
-| v10.3 | Neural Cross | Self-learning backtest + AI Coach |
-| v10.2 | Sniper Brain | SQLite permanent memory |
-| v10.1 | Apex Predator | Cross-layer AI orchestration |
-| v10.0 | Sovereign | Gemini Oracle + L1 Shield |
-| v9.x | Hydra | Grid trading + mmap IPC |
-
-## Standards
-- **Rust 2024 Edition**, Zero-copy, Atomic Fixed-Point (PRICE_SCALE=1e8)
-- **PGO profiling**, `opt-level=3`, `lto=fat`, `panic=abort`
-- **SQLite WAL mode** for concurrent reads during trading
-- **Gemini 3.1 Pro** for strategic analysis and self-critique
+| Component | Technology |
+|---|---|
+| Engine | Rust 2024, tokio, fastwebsockets |
+| IPC | mmap `/dev/shm/`, lock-free atomics |
+| JSON | simd-json (SIMD-accelerated) |
+| AI | Google Gemini 2.5 Pro via CLI |
+| Database | SQLite (rusqlite, bundled) |
+| Dashboard | HTMX + SSE (zero JavaScript) |
+| Release | Fat LTO, PGO-ready, panic=abort |
 
 ## License
-Proprietary — Sovereign HFT Systems © 2026
+
+Proprietary. © 2024–2026 Beroun Systems.

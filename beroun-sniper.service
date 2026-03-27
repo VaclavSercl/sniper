@@ -1,5 +1,5 @@
 [Unit]
-Description=Beroun Sniper v10.4 Neural Cross — Self-Learning HFT Suite
+Description=Beroun Sniper v10.7 Sovereign AI Engine — Self-Learning HFT Suite
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=0

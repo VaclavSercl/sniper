@@ -59,7 +59,7 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::SetGrid { value } => {
             // 1. Absolute clamp
-            if value < GRID_MIN || value > GRID_MAX {
+            if !(GRID_MIN..=GRID_MAX).contains(&value) {
                 bail!("❌ Grid ${value} mimo povolený rozsah (${GRID_MIN}-${GRID_MAX})");
             }
             // 2. Rate-of-change check (max ±50%)
@@ -90,7 +90,7 @@ fn main() -> Result<()> {
             println!("✅ Bias Offset: ${clamped}");
         }
         Commands::SetMaxInv { value } => {
-            if value < INV_MIN || value > INV_MAX {
+            if !(INV_MIN..=INV_MAX).contains(&value) {
                 bail!("❌ MaxInv {value} BTC mimo rozsah ({INV_MIN}-{INV_MAX})");
             }
             risk.max_inv_delta.store((value * s) as u64, Ordering::SeqCst);
@@ -101,21 +101,21 @@ fn main() -> Result<()> {
             println!("✅ Bot {}", if state { "⏸️  PAUSED" } else { "▶️  RESUMED" });
         }
         Commands::SetCapital { value } => {
-            if value < 10.0 || value > 50_000.0 {
+            if !(10.0..=50_000.0).contains(&value) {
                 bail!("❌ Capital ${value} mimo rozsah ($10-$50,000)");
             }
             risk.authorized_capital.store((value * s) as u64, Ordering::SeqCst);
             println!("✅ Authorized Capital: ${value:.2}");
         }
         Commands::SetLoss { value } => {
-            if value < 1.0 || value > 10_000.0 {
+            if !(1.0..=10_000.0).contains(&value) {
                 bail!("❌ Loss limit ${value} mimo rozsah ($1-$10,000)");
             }
             risk.daily_loss_limit.store((value * s) as u64, Ordering::SeqCst);
             println!("✅ Daily Loss Limit: -${value:.2}");
         }
         Commands::SetLevels { value } => {
-            if value < 1 || value > 5 {
+            if !(1..=5).contains(&value) {
                 bail!("❌ Grid levels {value} mimo rozsah (1-5)");
             }
             risk.grid_size.store(value, Ordering::SeqCst);

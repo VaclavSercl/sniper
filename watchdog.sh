@@ -1,5 +1,5 @@
 #!/bin/bash
-# BEROUN WATCHDOG v10.4 — mmap Heartbeat Monitor
+# BEROUN WATCHDOG v10.7 — mmap Heartbeat Monitor
 # Checks engine_state.bin heartbeat via mmap. Restarts if stale > 60s.
 # Runs alongside in-process 15s watchdog as a secondary safety net.
 
@@ -7,7 +7,7 @@ STATE_FILE="/dev/shm/beroun/engine_state.bin"
 LOG_FILE="/home/wwwenda/hft-sniper/logs/watchdog.log"
 STALE_THRESHOLD_S=120  # 2 minutes = definitely dead (in-process watchdog handles faster cases)
 
-echo "[$(date)] Watchdog v10.4 (mmap heartbeat monitor) ONLINE" >> $LOG_FILE
+echo "[$(date)] Watchdog v10.7 (mmap heartbeat monitor) ONLINE" >> $LOG_FILE
 
 while true; do
     if ! pgrep -f "beroun-core" > /dev/null; then

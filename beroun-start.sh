@@ -1,11 +1,12 @@
 #!/bin/bash
-# 🐺 BEROUN SNIPER v10.4 "Neural Cross" — MASTER STARTUP
-# Sovereign HFT Systems | SQLite Permanent Memory | Zero-JS Dashboard
+# 🐺 BEROUN SNIPER v10.7 "Sovereign AI Engine" — MASTER STARTUP
+# Three-Layer Architecture: L0 Rust | L1 Python Shield | L2 Gemini Oracle
+# Ghost Orders | Sovereign Control Registry | SQLite Brain
 
 PROJECT_ROOT="/home/wwwenda/hft-sniper"
 BIN_DIR="$PROJECT_ROOT/target/release"
 
-echo "🐺 Starting SNIPER v10.4 (Neural Cross)..."
+echo "🐺 Starting SNIPER v10.7 (Sovereign)..."
 cd $PROJECT_ROOT
 
 # ═══ DEZINSEKCE: Kill ALL old processes ═══
@@ -26,7 +27,7 @@ mkdir -p /dev/shm/beroun
 $BIN_DIR/beroun-brain init 2>/dev/null || true
 echo "-> 🧠 Sniper Brain initialized"
 
-# 1. Start core Sniper (L0 — HFT Engine)
+# 1. Start core Sniper (L0 — Rust HFT Engine)
 $BIN_DIR/beroun-core &
 SNIPER_PID=$!
 echo "-> Sniper started (PID: $SNIPER_PID)"
@@ -38,26 +39,26 @@ sleep 3
 $BIN_DIR/beroun-config set-capital 400 2>/dev/null || true
 $BIN_DIR/beroun-config set-loss 20 2>/dev/null || true
 $BIN_DIR/beroun-config set-levels 3 2>/dev/null || true
-echo "-> Config applied (Capital: $400, DLL: $20, Levels: 3)"
+echo "-> Config applied (Capital: \$400, DLL: \$20, Levels: 3)"
 
 # 3. Start Dashboard (HTMX+SSE, Zero JS)
 $BIN_DIR/beroun-dashboard &
 echo "-> Dashboard started"
 
-# 4. Start L1 Shield (Tactical AI — Kinetic Shield)
+# 4. Start L1 Shield (Tactical AI — Adaptive + Anti-Paralysis + Ghost Control)
 python3 $PROJECT_ROOT/scripts/l1_shield.py &
-echo "-> L1 Shield started (Kinetic Shield)"
+echo "-> L1 Shield started (v10.5 Resurrection + Ghost)"
 
 # 5. Start Sniper Orchestrator (L2 — Sovereign Oracle + Brain)
 python3 $PROJECT_ROOT/scripts/sniper_orchestrator.py &
 echo "-> Sniper Orchestrator started (L2 Oracle + SQLite Brain, 5min cycle)"
 
-# 6. Start Telegram Command Center
+# 6. Start Telegram Sovereign Command Center
 if [ -f "$PROJECT_ROOT/.env" ]; then
     set -a; source "$PROJECT_ROOT/.env"; set +a
 fi
 python3 $PROJECT_ROOT/scripts/tg_listener.py &
-echo "-> Telegram Command Center started (SNIPER v10.4)"
+echo "-> Telegram Command Center started (v10.7 Sovereign)"
 
 # 7. Start Watchdog (The Guardian)
 if [ -f "$PROJECT_ROOT/watchdog.sh" ]; then
@@ -65,5 +66,5 @@ if [ -f "$PROJECT_ROOT/watchdog.sh" ]; then
     echo "-> Watchdog started"
 fi
 
-echo "✅ All systems operational — SNIPER v10.4 (Neural Cross)"
+echo "✅ All systems operational — SNIPER v10.7 (Sovereign AI Engine)"
 wait

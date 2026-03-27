@@ -625,7 +625,7 @@ async fn main() -> Result<()> {
             db.ask_amounts = av;
 
             // Update sparkline history (every 300ms = ~3 points/sec)
-            if tick % 6 == 0 && mid > 0.0 {
+            if tick.is_multiple_of(6) && mid > 0.0 {
                 db.price_history.push_back(mid);
                 if db.price_history.len() > MAX_HISTORY { db.price_history.pop_front(); }
                 db.pnl_history.push_back(pnl);

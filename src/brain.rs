@@ -687,7 +687,7 @@ fn cmd_backtest(conn: &Connection, days: u32, dry_run: bool) -> Result<()> {
             let condition = serde_json::json!({"always": true}).to_string();
             let action = serde_json::json!({"grid_min": (grid_floor * 10.0).round() / 10.0}).to_string();
             let samples = winner_stats.4 + loser_stats.4;
-            let confidence = (samples as f64 / 50.0).min(0.9).max(0.3);
+            let confidence = (samples as f64 / 50.0).clamp(0.3, 0.9);
 
             if !dry_run {
                 let existing: Option<i64> = conn.query_row(
@@ -722,7 +722,7 @@ fn cmd_backtest(conn: &Connection, days: u32, dry_run: bool) -> Result<()> {
             let condition = serde_json::json!({"always": true}).to_string();
             let action = serde_json::json!({"max_position": (pos_cap * 10000.0).round() / 10000.0}).to_string();
             let samples = winner_stats.4 + loser_stats.4;
-            let confidence = (samples as f64 / 50.0).min(0.85).max(0.3);
+            let confidence = (samples as f64 / 50.0).clamp(0.3, 0.85);
 
             if !dry_run {
                 let existing: Option<i64> = conn.query_row(
@@ -757,7 +757,7 @@ fn cmd_backtest(conn: &Connection, days: u32, dry_run: bool) -> Result<()> {
             let condition = serde_json::json!({"toxic_above": toxic_threshold}).to_string();
             let action = serde_json::json!({"grid_multiply": 1.4, "reduce_position": true}).to_string();
             let samples = winner_stats.4 + loser_stats.4;
-            let confidence = (samples as f64 / 40.0).min(0.85).max(0.3);
+            let confidence = (samples as f64 / 40.0).clamp(0.3, 0.85);
 
             if !dry_run {
                 let existing: Option<i64> = conn.query_row(

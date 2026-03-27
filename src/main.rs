@@ -317,12 +317,11 @@ fn main() -> Result<()> {
     // lock_file must stay alive (held open) for the entire process lifetime
     let _lock_guard = lock_file;
 
-    if let Some(core_ids) = core_affinity::get_core_ids() {
-        if core_ids.len() > 1 {
+    if let Some(core_ids) = core_affinity::get_core_ids()
+        && core_ids.len() > 1 {
             core_affinity::set_for_current(core_ids[1]);
             info!(event = "cpu_pinned", core = 1, total_cores = core_ids.len());
         }
-    }
 
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -536,9 +535,9 @@ async fn async_main() -> Result<()> {
                                     let engine = unsafe { &*(exec_engine as *const EngineState) };
                                     if arr[0].as_i64() == Some(0) {
                                         let mt = arr[1].as_str().unwrap_or("");
-                                        if mt == "te" {
-                                            if let Some(trade) = arr[2].as_array() {
-                                                if let (Some(trade_amt), Some(trade_price)) = (safe_as_f64(&trade[4]), safe_as_f64(&trade[5])) {
+                                        if mt == "te"
+                                            && let Some(trade) = arr[2].as_array()
+                                                && let (Some(trade_amt), Some(trade_price)) = (safe_as_f64(&trade[4]), safe_as_f64(&trade[5])) {
                                                     let scale = beroun_types::PRICE_SCALE;
                                                     let old_pos_i = engine.net_position.load(Ordering::SeqCst);
                                                     let old_pos = old_pos_i as f64 / scale;
@@ -609,55 +608,48 @@ async fn async_main() -> Result<()> {
                                                     }
                                                     exec_notifier.trade(trade_amt, trade_price);
                                                 }
-                                            }
-                                        }
                                         if mt == "wu" || mt == "ws" {
                                             let wd: Vec<&BorrowedValue> = if mt == "wu" { vec![&arr[2]] }
                                             else { arr[2].as_array().map(|a: &Vec<BorrowedValue>| a.iter().collect()).unwrap_or_default() };
                                             for w in wd {
-                                                if let (Some(wt), Some(cur), Some(bal)) = (w[0].as_str(), w[1].as_str(), safe_as_f64(&w[2])) {
-                                                    if wt == "exchange" {
+                                                if let (Some(wt), Some(cur), Some(bal)) = (w[0].as_str(), w[1].as_str(), safe_as_f64(&w[2]))
+                                                    && wt == "exchange" {
                                                         if cur == beroun_types::TRADING_BASE { engine.wallet_btc.store((bal * beroun_types::PRICE_SCALE) as u64, Ordering::SeqCst); }
                                                         else if cur == beroun_types::TRADING_QUOTE || cur == "UST" { engine.wallet_usd.store((bal * beroun_types::PRICE_SCALE) as u64, Ordering::SeqCst); }
                                                     }
-                                                }
                                             }
                                         }
-                                        if mt == "n" {
-                                            if let Some(n) = arr[2].as_array() {
+                                        if mt == "n"
+                                            && let Some(n) = arr[2].as_array() {
                                                 info!(event = "bitfinex_notification",
                                                       ntype = n[1].as_str().unwrap_or("?"),
                                                       status = n[6].as_str().unwrap_or("?"),
                                                       text = n[7].as_str().unwrap_or(""));
                                             }
-                                        }
                                         // --- ORDER SNAPSHOT (state recovery after connect) ---
-                                        if mt == "os" {
-                                            if let Some(orders) = arr[2].as_array() {
+                                        if mt == "os"
+                                            && let Some(orders) = arr[2].as_array() {
                                                 for order in orders {
-                                                    if let Some(o) = order.as_array() {
-                                                        if let (Some(id), Some(sym), Some(amt), Some(status)) = (
+                                                    if let Some(o) = order.as_array()
+                                                        && let (Some(id), Some(sym), Some(amt), Some(status)) = (
                                                             o[0].as_u64().or_else(|| o[0].as_f64().map(|f| f as u64)),
                                                             o[3].as_str(), safe_as_f64(&o[6]), o[13].as_str()
-                                                        ) {
-                                                            if sym == beroun_types::TRADING_SYMBOL && (status.contains("ACTIVE") || status.contains("PARTIALLY")) {
+                                                        )
+                                                            && sym == beroun_types::TRADING_SYMBOL && (status.contains("ACTIVE") || status.contains("PARTIALLY")) {
                                                                 if amt > 0.0 { store_order_slot(&engine.active_buy_ids, id); }
                                                                 else { store_order_slot(&engine.active_sell_ids, id); }
                                                                 info!(event = "order_recovered", id = id, side = if amt > 0.0 { "buy" } else { "sell" });
                                                             }
-                                                        }
-                                                    }
                                                 }
                                             }
-                                        }
                                         // --- ORDER LIFECYCLE (on=new, ou=update, oc=cancel) ---
-                                        if mt == "on" || mt == "ou" || mt == "oc" {
-                                            if let Some(o) = arr[2].as_array() {
-                                                if let (Some(id), Some(sym), Some(amt), Some(status)) = (
+                                        if (mt == "on" || mt == "ou" || mt == "oc")
+                                            && let Some(o) = arr[2].as_array()
+                                                && let (Some(id), Some(sym), Some(amt), Some(status)) = (
                                                     o[0].as_u64().or_else(|| o[0].as_f64().map(|f| f as u64)),
                                                     o[3].as_str(), safe_as_f64(&o[6]), o[13].as_str()
-                                                ) {
-                                                    if sym == beroun_types::TRADING_SYMBOL {
+                                                )
+                                                    && sym == beroun_types::TRADING_SYMBOL {
                                                         if status.contains("ACTIVE") || status.contains("PARTIALLY") {
                                                             if amt > 0.0 { store_order_slot(&engine.active_buy_ids, id); }
                                                             else { store_order_slot(&engine.active_sell_ids, id); }
@@ -671,15 +663,11 @@ async fn async_main() -> Result<()> {
                                                             info!(event = "order_cleared", mt = mt, id = id, status = status);
                                                         }
                                                     }
-                                                }
-                                            }
-                                        }
                                     }
-                                } else if let BorrowedValue::Object(obj) = v {
-                                    if obj.get("event") == Some(&BorrowedValue::from("auth")) && obj.get("status") == Some(&BorrowedValue::from("OK")) {
+                                } else if let BorrowedValue::Object(obj) = v
+                                    && obj.get("event") == Some(&BorrowedValue::from("auth")) && obj.get("status") == Some(&BorrowedValue::from("OK")) {
                                         info!(event = "exec_auth_ok");
                                     }
-                                }
                             },
                             OpCode::Ping => { let _ = exec_ws.write_frame(fastwebsockets::Frame::pong(frame.payload)).await; }
                             OpCode::Close => { let _ = err_tx_exec.send("exec_socket_closed"); break; },
@@ -712,8 +700,6 @@ async fn async_main() -> Result<()> {
         // ═══ v10.6 GHOST ORDERS STATE ═══
         let mut ghost_last_micro: i64 = 0;         // Previous micro_price for velocity
         let mut ghost_velocity: f64 = 0.0;         // Price velocity (ticks/update)
-        let mut ghost_active_ids: [u64; beroun_types::MAX_GRID_LEVELS * 2] = [0; beroun_types::MAX_GRID_LEVELS * 2]; // Active ghost order IDs
-        let ghost_trigger_pct: f64 = 0.0005;       // 0.05% trigger zone
         let ghost_velocity_max: f64 = 500_000_000.0; // $5 per tick = too fast, reject
         let mut ghost_last_inject: Instant = Instant::now();
 
@@ -773,20 +759,19 @@ async fn async_main() -> Result<()> {
 
                                             // Book Update
                                             if let Some(top_arr) = arr[1].as_array() {
-                                                let is_nested = top_arr.first().map_or(false, |e| e.as_array().is_some());
+                                                let is_nested = top_arr.first().is_some_and(|e| e.as_array().is_some());
                                                 if is_nested {
                                                     let mut bc = 0u32;
                                                     let mut ac = 0u32;
                                                     for entry in top_arr {
-                                                        if let Some(u) = entry.as_array() {
-                                                            if let (Some(price), Some(count), Some(amount)) = (safe_as_f64(&u[0]), safe_as_i64(&u[1]), safe_as_f64(&u[2])) {
+                                                        if let Some(u) = entry.as_array()
+                                                            && let (Some(price), Some(count), Some(amount)) = (safe_as_f64(&u[0]), safe_as_i64(&u[1]), safe_as_f64(&u[2])) {
                                                                 let p = (price * beroun_types::PRICE_SCALE).round() as u64;
                                                                 let a = (amount * beroun_types::PRICE_SCALE).round() as i64;
                                                                 let c = count as u64;
                                                                 if amount > 0.0 { update_book(unsafe { &raw mut (*engine_ptr).bids }, p, a, c); bc += 1; }
                                                                 else { update_book(unsafe { &raw mut (*engine_ptr).asks }, p, a, c); ac += 1; }
                                                             }
-                                                        }
                                                     }
                                                     fence(Ordering::SeqCst);
                                                     sort_book(unsafe { &raw mut (*engine_ptr).bids }, true);
@@ -918,8 +903,8 @@ async fn async_main() -> Result<()> {
                                                 let now = Instant::now();
                                                 // v10.7: Dynamic fire interval from AI registry
                                                 let fire_interval = eng.ai_fire_interval_ms.load(Ordering::Relaxed).max(500).min(10000);
-                                                if now.duration_since(last_upd).as_millis() > fire_interval as u128 {
-                                                    if risk.paused.load(Ordering::Acquire) == 0 {
+                                                if now.duration_since(last_upd).as_millis() > fire_interval as u128
+                                                    && risk.paused.load(Ordering::Acquire) == 0 {
                                                         // ═══ L1 SWEEP FREEZE CHECK (v9.2 Hybrid Intelligence) ═══
                                                         let freeze_until = eng.sweep_freeze_until.load(Ordering::Acquire);
                                                         if freeze_until > 0 {
@@ -1225,7 +1210,6 @@ async fn async_main() -> Result<()> {
                                                                   ghost_sell = if ghost_mode { n_sell - n_public_sell } else { 0 });
                                                         }
                                                     }
-                                                }
                                             }
                                         }
                                     } else if let BorrowedValue::Object(obj) = v {
@@ -1308,10 +1292,10 @@ async fn connect_ws() -> Result<fastwebsockets::FragmentCollector<hyper_util::rt
     let tcp = tokio::net::TcpStream::connect("api.bitfinex.com:443").await?;
     tcp.set_nodelay(true)?;
     let connector = tokio_native_tls::TlsConnector::from(
-        native_tls::TlsConnector::new().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?
+        native_tls::TlsConnector::new().map_err(std::io::Error::other)?
     );
     let tls = connector.connect("api.bitfinex.com", tcp).await
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        .map_err(std::io::Error::other)?;
         
     let req = Request::builder()
         .method("GET")
@@ -1322,10 +1306,10 @@ async fn connect_ws() -> Result<fastwebsockets::FragmentCollector<hyper_util::rt
         .header("Sec-WebSocket-Key", fastwebsockets::handshake::generate_key())
         .header("Sec-WebSocket-Version", "13")
         .body(http_body_util::Empty::<hyper::body::Bytes>::new())
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        .map_err(std::io::Error::other)?;
 
     let (ws, _) = fastwebsockets::handshake::client(&SpawnExecutor, req, tls).await
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        .map_err(std::io::Error::other)?;
         
     Ok(fastwebsockets::FragmentCollector::new(ws))
 }
