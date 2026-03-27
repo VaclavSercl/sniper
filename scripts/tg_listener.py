@@ -114,7 +114,7 @@ def cmd_help(message):
 🛑 `/loss 20` — Denní loss limit ($)
 ⏸️ `/pause` / ▶️ `/resume`
 ⚠️ `/cautious` — Macro-event defense (15 min)
-🔮 `/oracle` — Vynutit Oracle cyklus
+🔮 `/oracle` — Vynutit Sniper AI cyklus (okamžitá analýza)
 ❓ `/help` — Tento přehled
 
 _Zabezpečeno: jen chat\\_id {}_""".format(AUTHORIZED_CHAT_ID))
