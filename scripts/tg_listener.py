@@ -658,10 +658,12 @@ def cmd_brain(message):
 def cmd_backtest(message):
     if not auth(message): return
     log.info("Backtest requested")
-    bot.reply_to(message, "🌙 Spouštím Neural Cross backtest...")
+    bot.reply_to(message, "🌙 Spouštím Neural Cross backtest + AI Coach...")
 
     try:
-        # Run backtest
+        import json as j3
+
+        # Step 1: Run statistical backtest
         result = subprocess.run(
             ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "backtest", "--days", "1"],
             capture_output=True, text=True, timeout=30
@@ -670,10 +672,9 @@ def cmd_backtest(message):
             bot.send_message(message.chat.id, f"❌ Backtest error: {result.stderr[:200]}")
             return
 
-        import json as j3
         d = j3.loads(result.stdout)
 
-        msg = (f"🌙 *Neural Cross Backtest*\n\n"
+        msg = (f"🌙 *Neural Cross Backtest v10.3*\n\n"
                f"`Status:   {d.get('status', '?')}`\n"
                f"`Cyklů:    {d.get('cycles_analyzed', 0)}`\n"
                f"`Regimes:  {', '.join(d.get('regimes', []))}`\n"
@@ -685,11 +686,112 @@ def cmd_backtest(message):
             w = f.get('winners', {})
             l = f.get('losers', {})
             msg += (f"\n📊 *{f.get('regime', '?')}:*\n"
-                    f"`  Winners: {w.get('count',0)} (grid ${w.get('avg_grid','?')})`\n"
-                    f"`  Losers:  {l.get('count',0)} (grid ${l.get('avg_grid','?')})`\n"
+                    f"`  Winners: {w.get('count',0)} (grid ${w.get('avg_grid','?')}, toxic {w.get('avg_toxic','?')})`\n"
+                    f"`  Losers:  {l.get('count',0)} (grid ${l.get('avg_grid','?')}, toxic {l.get('avg_toxic','?')})`\n"
                     f"`  Neutral: {f.get('neutral_count',0)}`")
 
         bot.send_message(message.chat.id, msg, parse_mode="Markdown")
+
+        # Step 2: Get worst cycles
+        worst_result = subprocess.run(
+            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "worst-cycles", "--n", "3", "--hours", "24"],
+            capture_output=True, text=True, timeout=10
+        )
+        worst_cycles = worst_result.stdout.strip() if worst_result.returncode == 0 else "[]"
+        worst_list = j3.loads(worst_cycles)
+
+        if not worst_list:
+            bot.send_message(message.chat.id, "✅ Žádné ztrátové cykly — není co kritizovat!")
+            return
+
+        # Show worst cycles
+        worst_msg = "📉 *Nejhorší rozhodnutí (24h):*\n"
+        for wc in worst_list[:3]:
+            worst_msg += (f"\n`{wc.get('timestamp','')}` PnL=`${wc.get('pnl',0):.2f}`\n"
+                         f"  Grid=${wc.get('grid_step',0):.1f} | Toxic={wc.get('toxic_hits',0)}\n"
+                         f"  _{wc.get('reasoning_at_the_time','?')[:120]}_\n")
+        bot.send_message(message.chat.id, worst_msg, parse_mode="Markdown")
+
+        # Step 3: AI Coach (Gemini Self-Critique)
+        bot.send_message(message.chat.id, "🧠 Spouštím Gemini Self-Critique (AI Coach)... ~30s")
+
+        coach_prompt = f"""You are SNIPER performing SELF-CRITIQUE of your past decisions.
+
+═══ STATISTICAL BACKTEST ═══
+{result.stdout.strip()[:2000]}
+
+═══ YOUR WORST DECISIONS ═══
+{worst_cycles[:2000]}
+
+═══ YOUR TASK ═══
+1. What was WRONG with your reasoning in the worst cycles?
+2. What PATTERN connects your failures?
+3. Generate 1-3 LESSONS (rules for yourself)
+
+Be BRUTALLY HONEST. RESPOND WITH JSON ONLY:
+{{"self_critique": "2-3 sentences", "pattern_identified": "common thread", "lessons": [{{"regime": "X", "rule_type": "grid_floor", "condition": {{"toxic_above": 400}}, "action": {{"grid_min": 12.0}}, "reasoning": "why", "confidence": 0.65}}]}}"""
+
+        coach_result = subprocess.run(
+            ["gemini", "-p", coach_prompt],
+            capture_output=True, text=True, timeout=120
+        )
+        raw = coach_result.stdout.strip()
+
+        import re
+        match = re.search(r'\{[\s\S]*"lessons"[\s\S]*\}', raw)
+        if match:
+            coach = j3.loads(match.group())
+            critique = coach.get('self_critique', 'N/A')
+            pattern = coach.get('pattern_identified', 'N/A')
+            lessons = coach.get('lessons', [])
+
+            # Save lessons
+            saved = 0
+            for lesson in lessons[:3]:
+                if not all(k in lesson for k in ['regime', 'rule_type', 'reasoning']):
+                    continue
+                try:
+                    subprocess.run(
+                        ["/home/wwwenda/hft-sniper/target/release/beroun-brain",
+                         "save-lesson", j3.dumps(lesson)],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    saved += 1
+                except Exception:
+                    pass
+
+            # Coach report
+            coach_msg = (f"🧠 *AI Self-Critique (Gemini Coach)*\n\n"
+                        f"🔍 *Sebekritika:*\n_{critique}_\n\n"
+                        f"🎯 *Vzorec selhání:*\n_{pattern}_\n\n"
+                        f"📝 *Nové lekce:* {saved} uloženo do Brain\n")
+            for i, lesson in enumerate(lessons[:3]):
+                conf = lesson.get('confidence', 0)
+                icon = '🔴' if conf >= 0.7 else '🟡'
+                coach_msg += (f"\n{icon} {i+1}. `{lesson.get('regime','?')}/{lesson.get('rule_type','?')}` "
+                             f"(conf={conf:.0%})\n"
+                             f"   _{lesson.get('reasoning','?')}_")
+
+            bot.send_message(message.chat.id, coach_msg, parse_mode="Markdown")
+        else:
+            bot.send_message(message.chat.id, "⚠️ Gemini Coach nedodal validní JSON")
+
+        # Step 4: Show all active lessons
+        lessons_result = subprocess.run(
+            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "lessons"],
+            capture_output=True, text=True, timeout=5
+        )
+        if lessons_result.returncode == 0:
+            all_lessons = j3.loads(lessons_result.stdout)
+            if all_lessons:
+                lmsg = "📚 *Aktivní lekce v Brain:*\n"
+                for ll in all_lessons[:5]:
+                    conf = ll.get('confidence', 0)
+                    icon = '🔴' if conf >= 0.7 else '🟡' if conf >= 0.3 else '⚪'
+                    lmsg += (f"\n{icon} `{ll['regime']}/{ll['rule_type']}` "
+                            f"(conf={conf:.0%}, n={ll.get('sample_count',0)})\n"
+                            f"   {ll.get('action','')}")
+                bot.send_message(message.chat.id, lmsg, parse_mode="Markdown")
 
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Backtest error: `{e}`")
