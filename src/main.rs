@@ -470,45 +470,40 @@ async fn async_main() -> Result<()> {
         // Error channel: any task → main loop (watchdog kill switch)
         let (err_tx, mut err_rx) = tokio::sync::mpsc::unbounded_channel::<&'static str>();
 
-        // ── TASK 1: EXEC WRITER ──
-        let mut exec_ws_writer = ws_exec; // Move exec_ws into the writer task
-        let err_tx_w = err_tx.clone();
+        // ── TASK 1: EXEC LOOP (Read + Write) ──
+        let mut exec_ws = ws_exec;
+        let err_tx_exec = err_tx.clone();
         let key_c = key.clone();
         let sec_c = sec.clone();
-        let writer_handle = tokio::spawn(async move {
+        
+        let exec_engine = engine_ptr as usize;
+        let exec_notifier = notifier.clone();
+
+        let exec_handle = tokio::spawn(async move {
             let nonce = match SystemTime::now().duration_since(UNIX_EPOCH) {
                 Ok(d) => d.as_millis().to_string(),
-                Err(_) => { let _ = err_tx_w.send("writer_time_error"); return; }
+                Err(_) => { let _ = err_tx_exec.send("writer_time_error"); return; }
             };
             let auth_payload = format!("AUTH{}", nonce);
             let sig = get_sig(&sec_c, &auth_payload).await;
-            let _ = exec_ws_writer.write_frame(fastwebsockets::Frame::text(Payload::Owned(json!({"event":"conf","flags":131072}).to_string().into_bytes()))).await;
+            let _ = exec_ws.write_frame(fastwebsockets::Frame::text(Payload::Owned(json!({"event":"conf","flags":131072}).to_string().into_bytes()))).await;
             let auth_msg = json!({"event":"auth","apiKey":key_c,"authSig":sig,"authPayload":auth_payload,"authNonce":nonce,"dms":4});
-            if exec_ws_writer.write_frame(fastwebsockets::Frame::text(Payload::Owned(auth_msg.to_string().into_bytes()))).await.is_err() {
-                let _ = err_tx_w.send("writer_auth_failed");
+            if exec_ws.write_frame(fastwebsockets::Frame::text(Payload::Owned(auth_msg.to_string().into_bytes()))).await.is_err() {
+                let _ = err_tx_exec.send("writer_auth_failed");
                 return;
             }
-            while let Some(order_msg) = order_rx.recv().await {
-                if exec_ws_writer.write_frame(fastwebsockets::Frame::text(Payload::Owned(order_msg.into_bytes()))).await.is_err() {
-                    let _ = err_tx_w.send("writer_socket_error");
-                    break;
-                }
-            }
-        });
 
-        // ── TASK 2: EXEC READER (te, wu, n + 15s watchdog) ──
-        // We need a separate connection for the reader if the writer takes ownership.
-        // Re-establish exec_ws for the reader.
-        let mut exec_read = match connect_ws().await {
-            Ok(v) => v,
-            Err(e) => { info!(event = "exec_reader_connect_failed", error = %e); tokio::time::sleep(Duration::from_secs(5)).await; continue; }
-        };
-        let err_tx_r = err_tx.clone();
-        let exec_engine = engine_ptr as usize;
-        let exec_notifier = notifier.clone();
-        let reader_handle = tokio::spawn(async move {
             loop {
-                let frame = tokio::time::timeout(Duration::from_secs(15), exec_read.read_frame()).await;
+                tokio::select! {
+                    msg = order_rx.recv() => {
+                        if let Some(order_msg) = msg {
+                            if exec_ws.write_frame(fastwebsockets::Frame::text(Payload::Owned(order_msg.into_bytes()))).await.is_err() {
+                                let _ = err_tx_exec.send("writer_socket_error");
+                                break;
+                            }
+                        } else { break; }
+                    }
+                    frame = tokio::time::timeout(Duration::from_secs(30), exec_ws.read_frame()) => {
                 match frame {
                     Ok(Ok(frame)) => {
                         match frame.opcode {
@@ -667,14 +662,17 @@ async fn async_main() -> Result<()> {
                                     }
                                 }
                             },
-                            OpCode::Close => { let _ = err_tx_r.send("exec_socket_closed"); break; },
+                            OpCode::Ping => { let _ = exec_ws.write_frame(fastwebsockets::Frame::pong(frame.payload)).await; }
+                            OpCode::Close => { let _ = err_tx_exec.send("exec_socket_closed"); break; },
                             _ => {} // Ping/Pong/Binary
                         }
                     }
-                    Ok(Err(e)) => { let _ = err_tx_r.send("exec_socket_error"); error!(event = "exec_read_error", error = %e); break; }
-                    Err(_) => { let _ = err_tx_r.send("exec_socket_timeout"); info!(event = "exec_socket_timeout"); break; }
+                    Ok(Err(e)) => { let _ = err_tx_exec.send("exec_socket_error"); error!(event = "exec_read_error", error = %e); break; }
+                    Err(_) => { let _ = err_tx_exec.send("exec_socket_timeout"); info!(event = "exec_socket_timeout"); break; }
                 }
-            }
+            } // closes frame_res branch
+            } // closes tokio::select!
+            } // closes loop 
         });
 
         // ── TASK 3: MARKET DATA HFT LOOP (inline, highest priority) ──
@@ -700,15 +698,13 @@ async fn async_main() -> Result<()> {
                 _ = tokio::signal::ctrl_c() => {
                     info!(event = "shutdown_initiated", signal = "SIGINT");
                     graceful_shutdown(&order_tx, &notifier, engine_ptr).await;
-                    writer_handle.abort();
-                    reader_handle.abort();
+                    exec_handle.abort();
                     return Ok(());
                 }
                 _ = sigterm.recv() => {
                     info!(event = "shutdown_initiated", signal = "SIGTERM");
                     graceful_shutdown(&order_tx, &notifier, engine_ptr).await;
-                    writer_handle.abort();
-                    reader_handle.abort();
+                    exec_handle.abort();
                     return Ok(());
                 }
                 // ── WATCHDOG: task failure ──
@@ -1086,6 +1082,7 @@ async fn async_main() -> Result<()> {
                                         }
                                     }
                                 },
+                                OpCode::Ping => { let _ = mdata_read.write_frame(fastwebsockets::Frame::pong(frame.payload)).await; }
                                 OpCode::Close => { info!(event = "mdata_socket_closed"); shutdown_reason = "mdata_closed"; should_reconnect = true; },
                                 _ => {} // Ping/Pong/Binary
                             }
@@ -1099,8 +1096,7 @@ async fn async_main() -> Result<()> {
 
         // ═══ RECONNECT CLEANUP ═══
         info!(event = "reconnecting", reason = shutdown_reason);
-        writer_handle.abort();
-        reader_handle.abort();
+        exec_handle.abort();
 
         // Zero order book — sniper waits for fresh snapshot
         let eng = unsafe { &*engine_ptr };
