@@ -139,17 +139,21 @@ fn fast_parse_ticker(data: &[u8]) -> Option<(i64, i64, i64)> {
     // Parse BID (field 0)
     let start = i;
     while i < data.len() && data[i] != b',' { i += 1; }
+    if i >= data.len() || start >= i { return None; }
     let bid_str = std::str::from_utf8(&data[start..i]).ok()?;
     let bid = (bid_str.parse::<f64>().ok()? * PRICE_SCALE_I as f64) as i64;
     i += 1; // skip ','
+    if i >= data.len() { return None; }
 
     // Skip BID_SIZE (field 1)
     while i < data.len() && data[i] != b',' { i += 1; }
     i += 1;
+    if i >= data.len() { return None; }
 
     // Parse ASK (field 2)
     let start = i;
-    while i < data.len() && data[i] != b',' { i += 1; }
+    while i < data.len() && data[i] != b',' && data[i] != b']' { i += 1; }
+    if start >= i { return None; }
     let ask_str = std::str::from_utf8(&data[start..i]).ok()?;
     let ask = (ask_str.parse::<f64>().ok()? * PRICE_SCALE_I as f64) as i64;
 

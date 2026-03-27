@@ -157,12 +157,16 @@ fn fast_parse_ticker(data: &[u8]) -> Option<(i64, i64, i64)> {
     i += 1;
     let start = i;
     while i < data.len() && data[i] != b',' { i += 1; }
+    if i >= data.len() || start >= i { return None; }
     let bid = (std::str::from_utf8(&data[start..i]).ok()?.parse::<f64>().ok()? * PRICE_SCALE_I as f64) as i64;
     i += 1;
+    if i >= data.len() { return None; }
     while i < data.len() && data[i] != b',' { i += 1; }
     i += 1;
+    if i >= data.len() { return None; }
     let start = i;
-    while i < data.len() && data[i] != b',' { i += 1; }
+    while i < data.len() && data[i] != b',' && data[i] != b']' { i += 1; }
+    if start >= i { return None; }
     let ask = (std::str::from_utf8(&data[start..i]).ok()?.parse::<f64>().ok()? * PRICE_SCALE_I as f64) as i64;
     Some((chan_id, bid, ask))
 }
