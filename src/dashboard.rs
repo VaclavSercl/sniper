@@ -78,6 +78,16 @@ struct DashboardState {
     macro_bias: f64,
     macro_fear_greed: u64,
     macro_bnb_sweep_ago: i64,  // -1 = never, else seconds ago
+    // v11.1 Delta Lead
+    binance_mid: f64,
+    delta_lead_bps: f64,
+    delta_signal: i64,
+    delta_repositions: u64,
+    sentinel_repositions: u64,
+    // v11.3 Fee Sentinel
+    maker_fee_pct: f64,
+    taker_fee_pct: f64,
+    fee_kills: u64,
     // Order Book
     bid_prices: Vec<f64>,
     bid_amounts: Vec<f64>,
@@ -108,6 +118,9 @@ impl Default for DashboardState {
             ghost_transparency: 1.0, ghost_injections: 0,
             ghost_velocity_rejects: 0, ghost_active_mask: 0,
             macro_bias: 0.0, macro_fear_greed: 50, macro_bnb_sweep_ago: -1,
+            binance_mid: 0.0, delta_lead_bps: 0.0, delta_signal: 0,
+            delta_repositions: 0, sentinel_repositions: 0,
+            maker_fee_pct: 0.0, taker_fee_pct: 0.0, fee_kills: 0,
             bid_prices: vec![], bid_amounts: vec![],
             ask_prices: vec![], ask_amounts: vec![],
             price_history: VecDeque::with_capacity(MAX_HISTORY),
@@ -340,7 +353,7 @@ fn render_dashboard(db: &DashboardState) -> String {
 <header class="hdr">
 <div class="hdr-l">
 <div class="logo"><span class="wolf">🐺</span><span class="b">BEROUN</span><span class="s"> SNIPER</span></div>
-<span class="ver">v11.0</span>
+<span class="ver">v11.1</span>
 {regime}
 {paused_html}
 </div>
@@ -386,6 +399,18 @@ fn render_dashboard(db: &DashboardState) -> String {
 <div class="ai-stat"><div class="ai-sl">BNB Sweep</div><div class="ai-sv {bnb_cls}">{bnb_sweep}</div></div>
 </div>
 {shadow_pnl_block}
+</div>
+
+<div class="ai-panel">
+<div class="ai-title">⚡ DELTA LEAD v11.1</div>
+<div class="ai-grid">
+<div class="ai-stat"><div class="ai-sl">Binance</div><div class="ai-sv">{bnb_mid_str}</div></div>
+<div class="ai-stat"><div class="ai-sl">Delta</div><div class="ai-sv {delta_cls}">{delta_str}</div></div>
+<div class="ai-stat"><div class="ai-sl">Signal</div><div class="ai-sv {delta_cls}">{delta_dir}</div></div>
+<div class="ai-stat"><div class="ai-sl">Δ Repos</div><div class="ai-sv cyan">{delta_repos}</div></div>
+<div class="ai-stat"><div class="ai-sl">Sentinel</div><div class="ai-sv cyan">{sentinel_repos}</div></div>
+<div class="ai-stat"><div class="ai-sl">Fee</div><div class="ai-sv {fee_cls}">{fee_str}</div></div>
+</div>
 </div>
 
 <div class="chart-box">
@@ -449,6 +474,20 @@ fn render_dashboard(db: &DashboardState) -> String {
         bnb_sweep = bnb_sweep_str,
         bnb_cls = if db.macro_bnb_sweep_ago >= 0 && db.macro_bnb_sweep_ago < 10 { "neg" } else { "" },
         shadow_pnl_block = shadow_pnl_str,
+        // v11.1 Delta Lead
+        bnb_mid_str = if db.binance_mid > 0.0 { format!("${:.0}", db.binance_mid) } else { "---".to_string() },
+        delta_str = format!("{:+.1} bps", db.delta_lead_bps),
+        delta_cls = if db.delta_lead_bps > 0.5 { "pos" } else if db.delta_lead_bps < -0.5 { "neg" } else { "" },
+        delta_dir = if db.delta_signal > 100 { "🟢 BULL" } else if db.delta_signal < -100 { "🔴 BEAR" } else { "⚪ FLAT" },
+        delta_repos = db.delta_repositions,
+        sentinel_repos = db.sentinel_repositions,
+        // v11.3 Fee Sentinel
+        fee_str = if db.maker_fee_pct == 0.0 && db.taker_fee_pct == 0.0 {
+            "FREE".to_string()
+        } else {
+            format!("M{:.2}% T{:.2}%", db.maker_fee_pct, db.taker_fee_pct)
+        },
+        fee_cls = if db.maker_fee_pct == 0.0 && db.taker_fee_pct == 0.0 { "pos" } else { "neg" },
         price_svg = price_svg,
         evcount = db.events.len(),
         events = render_events(&db.events),
@@ -617,6 +656,16 @@ async fn main() -> Result<()> {
         let bnb_ts = engine.binance_sweep_ts.load(Ordering::Acquire);
         let now_ms_d = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
         let bnb_ago = if bnb_ts > 0 { ((now_ms_d - bnb_ts) / 1000) as i64 } else { -1 };
+        // v11.1 Delta Lead
+        let bnb_mid = engine.binance_mid_price.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
+        let delta_bps = engine.delta_lead_raw_bps.load(Ordering::Acquire) as f64 / 100.0;
+        let delta_sig = engine.delta_lead_signal.load(Ordering::Acquire);
+        let delta_repos = engine.delta_repositions.load(Ordering::Acquire);
+        let sentinel_repos = engine.sentinel_repositions.load(Ordering::Acquire);
+        // v11.3 Fee Sentinel
+        let maker_f = engine.maker_fee_bps.load(Ordering::Acquire) as f64 / 10000.0 * 100.0;
+        let taker_f = engine.taker_fee_bps.load(Ordering::Acquire) as f64 / 10000.0 * 100.0;
+        let f_kills = engine.fee_kills.load(Ordering::Acquire);
 
         {
             let mut db = state.lock().expect("Lock failed");
@@ -655,6 +704,14 @@ async fn main() -> Result<()> {
             db.macro_bias = macro_bias_raw;
             db.macro_fear_greed = macro_fng;
             db.macro_bnb_sweep_ago = bnb_ago;
+            db.binance_mid = bnb_mid;
+            db.delta_lead_bps = delta_bps;
+            db.delta_signal = delta_sig;
+            db.delta_repositions = delta_repos;
+            db.sentinel_repositions = sentinel_repos;
+            db.maker_fee_pct = maker_f;
+            db.taker_fee_pct = taker_f;
+            db.fee_kills = f_kills;
             db.bid_prices = bp;
             db.bid_amounts = bv;
             db.ask_prices = ap;
