@@ -784,14 +784,17 @@ Be BRUTALLY HONEST. RESPOND WITH JSON ONLY:
         if lessons_result.returncode == 0:
             all_lessons = j3.loads(lessons_result.stdout)
             if all_lessons:
-                lmsg = "📚 *Aktivní lekce v Brain:*\n"
+                lmsg = "📚 Aktivní lekce v Brain:\n"
                 for ll in all_lessons[:5]:
                     conf = ll.get('confidence', 0)
                     icon = '🔴' if conf >= 0.7 else '🟡' if conf >= 0.3 else '⚪'
-                    lmsg += (f"\n{icon} `{ll['regime']}/{ll['rule_type']}` "
+                    action_str = str(ll.get('action', '')).replace('{','').replace('}','').replace('"','')[:80]
+                    reasoning = str(ll.get('reasoning', ''))[:100]
+                    lmsg += (f"\n{icon} {ll['regime']}/{ll['rule_type']} "
                             f"(conf={conf:.0%}, n={ll.get('sample_count',0)})\n"
-                            f"   {ll.get('action','')}")
-                bot.send_message(message.chat.id, lmsg, parse_mode="Markdown")
+                            f"   Action: {action_str}\n"
+                            f"   Reason: {reasoning}")
+                bot.send_message(message.chat.id, lmsg)
 
     except Exception as e:
         bot.send_message(message.chat.id, f"❌ Backtest error: `{e}`")
