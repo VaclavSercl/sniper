@@ -81,10 +81,10 @@ def write_i64(mm, offset, val):
 
 
 def read_orderbook_levels(mm, base_offset, n=5):
-    """Read n OrderBookLevel from mmap. Each level is OBL_SIZE (60) bytes."""
+    """Read n OrderBookLevel from mmap. Each level is OBL_SIZE (24) bytes."""
     levels = []
     for i in range(n):
-        off = base_offset + i * OBL_SIZE  # 60 bytes per level
+        off = base_offset + i * OBL_SIZE  # 24 bytes per level
         price = read_u64(mm, off) / PRICE_SCALE
         amount = read_i64(mm, off + 8) / PRICE_SCALE
         if price > 0:
