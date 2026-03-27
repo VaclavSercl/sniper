@@ -24,12 +24,18 @@ import signal
 import logging
 from collections import deque
 
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+BOT_DIR = os.path.dirname(SCRIPT_DIR)
+PROJECT_ROOT = os.path.dirname(BOT_DIR)
+LOG_DIR = os.path.join(PROJECT_ROOT, "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [L1] %(message)s',
     handlers=[
         logging.StreamHandler(),
-        logging.FileHandler('/home/wwwenda/hft-sniper/logs/l1_shield.log')
+        logging.FileHandler(os.path.join(LOG_DIR, 'l1_shield.log'))
     ]
 )
 log = logging.getLogger('L1')

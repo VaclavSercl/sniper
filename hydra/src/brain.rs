@@ -22,18 +22,21 @@ use serde::{Deserialize, Serialize};
 use anyhow::Result;
 use std::path::PathBuf;
 
-const DEFAULT_DB: &str = "/home/wwwenda/hft-sniper/logs/sniper.db";
+fn default_db_path() -> String {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    format!("{home}/.local/share/sniper/hydra.db")
+}
 
 #[derive(Parser)]
-#[command(name = "beroun-brain", version = "10.4.0")]
-#[command(about = "🐺 Sniper Brain — Permanent memory for the Sovereign Oracle")]
+#[command(name = "hydra-brain", version = "11.2.0")]
+#[command(about = "🐺 Hydra Brain — Permanent memory for the Sovereign Oracle")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
 
     /// Path to SQLite database
-    #[arg(long, default_value = DEFAULT_DB)]
-    db: PathBuf,
+    #[arg(long)]
+    db: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -461,7 +464,7 @@ fn cmd_stats(conn: &Connection) -> Result<()> {
         "total_pnl_change": format!("${:.6}", total_pnl_change),
         "escalation_events": escalations,
         "regime_distribution": regime_str,
-        "db_size_bytes": std::fs::metadata(DEFAULT_DB).map(|m| m.len()).unwrap_or(0),
+        "db_size_bytes": std::fs::metadata(default_db_path()).map(|m| m.len()).unwrap_or(0),
     });
 
     println!("{}", serde_json::to_string_pretty(&result)?);
@@ -570,12 +573,19 @@ fn analyze_trend(values: &[f64]) -> &'static str {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let conn = open_db(&cli.db)?;
+    let db_path = cli.db.unwrap_or_else(|| PathBuf::from(default_db_path()));
+
+    // Ensure parent directory exists
+    if let Some(parent) = db_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let conn = open_db(&db_path)?;
     init_db(&conn)?;
 
     match cli.command {
         Commands::Init => {
-            println!("🧠 Sniper Brain v11.1 initialized: {}", cli.db.display());
+            println!("🧠 Hydra Brain v11.2 initialized: {}", db_path.display());
             println!("   Tables: cycles, alerts, patterns, experiments, lessons, lesson_validations");
         }
         Commands::LogCycle { json } => cmd_log_cycle(&conn, &json)?,

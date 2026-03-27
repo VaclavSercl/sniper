@@ -33,17 +33,23 @@ from telebot import apihelper
 apihelper.ENABLE_MIDDLEWARE = True
 
 # ── CONFIG ──────────────────────────────────────────────────
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+BOT_DIR = os.path.dirname(SCRIPT_DIR)  # hydra/
+PROJECT_ROOT = os.path.dirname(BOT_DIR)  # hft-sniper/
+BIN_DIR = os.path.join(PROJECT_ROOT, "target", "release")
+
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 AUTHORIZED_CHAT_ID = int(os.environ.get("TELEGRAM_CHAT_ID", "0"))
-CONFIG_BIN = "/home/wwwenda/hft-sniper/target/release/beroun-config"
-ORACLE_SCRIPT = "/home/wwwenda/hft-sniper/scripts/sniper_orchestrator.py"
+CONFIG_BIN = os.path.join(BIN_DIR, "hydra-config")
+ORACLE_SCRIPT = os.path.join(SCRIPT_DIR, "sniper_orchestrator.py")
 STATE_JSON = "/dev/shm/beroun/state.json"
 L1_STATE_JSON = "/dev/shm/beroun/l1_state.json"
 ENGINE_MMAP = "/dev/shm/beroun/engine_state.bin"
 BFX_API_KEY = os.environ.get("BITFINEX_API_KEY", "")
 BFX_API_SECRET = os.environ.get("BITFINEX_API_SECRET", "")
 BFX_REST_URL = "https://api.bitfinex.com"
-LOG_DIR = "/home/wwwenda/hft-sniper/logs"
+LOG_DIR = os.path.join(PROJECT_ROOT, "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
 DAILY_STATS_PATH = f"{LOG_DIR}/daily_stats.json"
 CET = timezone(timedelta(hours=1))
 PRICE_SCALE = 1e8
@@ -230,7 +236,7 @@ def cmd_analyze(message):
     brain_ctx = ""
     try:
         result = subprocess.run(
-            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "context", "--cycles", "6"],
+            ["hydra-brain", "context", "--cycles", "6"],
             capture_output=True, text=True, timeout=10
         )
         if result.returncode == 0:
@@ -567,7 +573,7 @@ def cmd_analytics(message):
             # Add brain regime analysis
             try:
                 r = subprocess.run(
-                    ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "analyze"],
+                    ["hydra-brain", "analyze"],
                     capture_output=True, text=True, timeout=10
                 )
                 if r.returncode == 0 and r.stdout.strip() != "[]":
@@ -616,7 +622,7 @@ def cmd_oracle(message):
         brain_ctx = ""
         try:
             r = subprocess.run(
-                ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "context", "--cycles", "6"],
+                ["hydra-brain", "context", "--cycles", "6"],
                 capture_output=True, text=True, timeout=10
             )
             if r.returncode == 0:
@@ -652,7 +658,7 @@ def cmd_brain(message):
     stats = ""
     try:
         result = subprocess.run(
-            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "stats"],
+            ["hydra-brain", "stats"],
             capture_output=True, text=True, timeout=10
         )
         if result.returncode == 0:
@@ -672,7 +678,7 @@ def cmd_brain(message):
     context = ""
     try:
         result = subprocess.run(
-            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "context", "--cycles", "4"],
+            ["hydra-brain", "context", "--cycles", "4"],
             capture_output=True, text=True, timeout=10
         )
         if result.returncode == 0 and result.stdout.strip():
@@ -684,7 +690,7 @@ def cmd_brain(message):
     lessons = ""
     try:
         result = subprocess.run(
-            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "lessons"],
+            ["hydra-brain", "lessons"],
             capture_output=True, text=True, timeout=10
         )
         if result.returncode == 0:
@@ -702,7 +708,7 @@ def cmd_brain(message):
     alpha = ""
     try:
         result = subprocess.run(
-            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "alpha-report"],
+            ["hydra-brain", "alpha-report"],
             capture_output=True, text=True, timeout=10
         )
         if result.returncode == 0:
@@ -733,7 +739,7 @@ def cmd_backtest(message):
 
         # Step 1: Run statistical backtest
         result = subprocess.run(
-            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "backtest", "--days", "1"],
+            ["hydra-brain", "backtest", "--days", "1"],
             capture_output=True, text=True, timeout=30
         )
         if result.returncode != 0:
@@ -762,7 +768,7 @@ def cmd_backtest(message):
 
         # Step 2: Get worst cycles
         worst_result = subprocess.run(
-            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "worst-cycles", "--n", "3", "--hours", "24"],
+            ["hydra-brain", "worst-cycles", "--n", "3", "--hours", "24"],
             capture_output=True, text=True, timeout=10
         )
         worst_cycles = worst_result.stdout.strip() if worst_result.returncode == 0 else "[]"
@@ -819,7 +825,7 @@ Be BRUTALLY HONEST. RESPOND WITH JSON ONLY:
                     continue
                 try:
                     subprocess.run(
-                        ["/home/wwwenda/hft-sniper/target/release/beroun-brain",
+                        ["hydra-brain",
                          "save-lesson", json.dumps(lesson)],
                         capture_output=True, text=True, timeout=5
                     )
@@ -845,7 +851,7 @@ Be BRUTALLY HONEST. RESPOND WITH JSON ONLY:
 
         # Step 4: Show all active lessons
         lessons_result = subprocess.run(
-            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "lessons"],
+            ["hydra-brain", "lessons"],
             capture_output=True, text=True, timeout=5
         )
         if lessons_result.returncode == 0:
@@ -878,7 +884,7 @@ def cmd_validate(message):
 
         # Step 1: Validate lessons
         result = subprocess.run(
-            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "validate-lessons"],
+            ["hydra-brain", "validate-lessons"],
             capture_output=True, text=True, timeout=15
         )
         if result.returncode != 0:
@@ -909,7 +915,7 @@ def cmd_validate(message):
         # Step 2: Alpha report (separate try/except)
         try:
             alpha = subprocess.run(
-                ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "alpha-report"],
+                ["hydra-brain", "alpha-report"],
                 capture_output=True, text=True, timeout=10
             )
             if alpha.returncode == 0:
@@ -946,7 +952,7 @@ def cmd_freeform(message):
     brain_ctx = ""
     try:
         result = subprocess.run(
-            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "context", "--cycles", "4"],
+            ["hydra-brain", "context", "--cycles", "4"],
             capture_output=True, text=True, timeout=10
         )
         if result.returncode == 0:
@@ -1194,7 +1200,7 @@ def _apply_intent(intent_id):
     # Log to SQLite
     try:
         import sqlite3
-        db = sqlite3.connect('/home/wwwenda/hft-sniper/logs/sniper.db')
+        db = sqlite3.connect(os.path.join(LOG_DIR, 'sniper.db'))
         db.execute("INSERT INTO ai_registry (intent, freeze_ms, fire_interval_ms, ghost_mode, reasoning) VALUES (?,?,?,?,?)",
                    (name, freeze_ms, fire_interval, ghost_trans is not None and ghost_trans < 10000,
                     f"Commander set intent to {name} via Telegram"))

@@ -40,7 +40,7 @@ fn main() -> Result<()> {
     let engine = unsafe { &*(e_mmap.as_ptr() as *const GridEngineState) };
     let risk = unsafe { &*(r_mmap.as_ptr() as *const GridRiskState) };
 
-    let home = std::env::var("HOME").unwrap_or("/home/wwwenda".into());
+    let home = std::env::var("HOME").unwrap_or("/tmp".into());
     let db_dir = format!("{}/.local/share/sniper", home);
     std::fs::create_dir_all(&db_dir)?;
     let conn = Connection::open(format!("{}/grid.db", db_dir))?;

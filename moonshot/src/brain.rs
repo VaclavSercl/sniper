@@ -138,6 +138,6 @@ fn main() -> Result<()> {
 }
 
 fn dirs_path() -> String {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/home/wwwenda".to_string());
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
     format!("{}/.local/share/sniper", home)
 }

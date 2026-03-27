@@ -33,10 +33,16 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # ── CONFIG ──────────────────────────────────────────────────
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+BOT_DIR = os.path.dirname(SCRIPT_DIR)
+PROJECT_ROOT = os.path.dirname(BOT_DIR)
+BIN_DIR = os.path.join(PROJECT_ROOT, "target", "release")
+
 CET = timezone(timedelta(hours=1))
-LOG_DIR = "/home/wwwenda/hft-sniper/logs"
-CONFIG_BIN = "/home/wwwenda/hft-sniper/target/release/beroun-config"
-BRAIN_BIN = "/home/wwwenda/hft-sniper/target/release/beroun-brain"
+LOG_DIR = os.path.join(PROJECT_ROOT, "logs")
+os.makedirs(LOG_DIR, exist_ok=True)
+CONFIG_BIN = os.path.join(BIN_DIR, "hydra-config")
+BRAIN_BIN = os.path.join(BIN_DIR, "hydra-brain")
 L1_STATE_JSON = "/dev/shm/beroun/l1_state.json"
 ENGINE_MMAP = "/dev/shm/beroun/engine_state.bin"
 ALERTS_LOG = f"{LOG_DIR}/alerts.log"
