@@ -112,6 +112,18 @@ pub struct EngineState {
     pub l1_sweep_success_rate: AtomicU64,  // 0..10000 = successful sweep detections
     pub l2_last_action_ms: AtomicU64,      // epoch_ms of last L2 Oracle intervention
     pub ai_learning_trigger: AtomicU64,    // Flag: 1 = L2 should analyze logs
+
+    // --- ANTI-PARALYSIS (v10.5 Resurrection) ---
+    pub l1_uptime_pct: AtomicU64,          // 0..10000 = L1 trading uptime % (0% = fully frozen)
+
+    // --- GHOST ORDERS (v10.6 Hidden Liquidity) ---
+    pub ghost_transparency: AtomicU64,     // 0..10000 = 0%-100% (100% = all public, 0% = full ghost)
+    pub ghost_active_mask: AtomicU64,      // Bitmask: which ghost levels are currently materialized
+    pub ghost_injections: AtomicU64,       // Total flash injection count
+    pub ghost_velocity_rejects: AtomicU64, // Times ghost refused to activate (too fast price move)
+    // Shadow grid prices (up to MAX_GRID_LEVELS buy + sell)
+    pub ghost_buy_prices: [AtomicI64; MAX_GRID_LEVELS],  // Shadow bid prices × PRICE_SCALE
+    pub ghost_sell_prices: [AtomicI64; MAX_GRID_LEVELS], // Shadow ask prices × PRICE_SCALE
 }
 
 impl Default for OrderBookLevel {
@@ -179,6 +191,13 @@ impl Default for EngineState {
             l1_sweep_success_rate: AtomicU64::new(5000),
             l2_last_action_ms: AtomicU64::new(0),
             ai_learning_trigger: AtomicU64::new(0),
+            l1_uptime_pct: AtomicU64::new(10000),  // 100% default (healthy)
+            ghost_transparency: AtomicU64::new(10000), // 100% = all public (classic mode)
+            ghost_active_mask: AtomicU64::new(0),
+            ghost_injections: AtomicU64::new(0),
+            ghost_velocity_rejects: AtomicU64::new(0),
+            ghost_buy_prices: [const { AtomicI64::new(0) }; MAX_GRID_LEVELS],
+            ghost_sell_prices: [const { AtomicI64::new(0) }; MAX_GRID_LEVELS],
         }
     }
 }

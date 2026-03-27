@@ -68,6 +68,12 @@ struct DashboardState {
     l1_sweep_success_rate: f64,
     session_fills: u64,
     paused: bool,
+    l1_uptime_pct: f64,  // v10.5: Trading uptime %
+    // v10.6 Ghost Orders
+    ghost_transparency: f64,
+    ghost_injections: u64,
+    ghost_velocity_rejects: u64,
+    ghost_active_mask: u64,
     // Order Book
     bid_prices: Vec<f64>,
     bid_amounts: Vec<f64>,
@@ -94,7 +100,9 @@ impl Default for DashboardState {
             shadow_pnl: 0.0, toxic_flow_hits: 0, sweep_freeze_active: false,
             l1_skew_usd: 0.0, l2_imbalance: 0.0,
             l1_false_positive_rate: 0.0, l1_sweep_success_rate: 0.0,
-            session_fills: 0, paused: false,
+            session_fills: 0, paused: false, l1_uptime_pct: 1.0,
+            ghost_transparency: 1.0, ghost_injections: 0,
+            ghost_velocity_rejects: 0, ghost_active_mask: 0,
             bid_prices: vec![], bid_amounts: vec![],
             ask_prices: vec![], ask_amounts: vec![],
             price_history: VecDeque::with_capacity(MAX_HISTORY),
@@ -278,6 +286,10 @@ fn render_dashboard(db: &DashboardState) -> String {
         r#"<div class="freeze-ind">🚨 SWEEP FREEZE</div>"#
     } else { "" };
 
+    let ghost_html = if db.ghost_transparency < 0.99 {
+        r#"<div class="freeze-ind" style="background:rgba(139,92,246,0.15);border-color:#a78bfa;">👻 GHOST MODE</div>"#
+    } else { "" };
+
     let shadow_banner = if db.is_shadow_mode {
         r#"<div class="shadow-banner">🌑 SHADOW MODE — SIMULACE BEZ RIZIKA 🌑</div>"#
     } else { "" };
@@ -312,6 +324,7 @@ fn render_dashboard(db: &DashboardState) -> String {
 
     format!(r##"<div class="root{shadow_class}">
 {freeze_html}
+{ghost_html}
 {shadow_banner}
 
 <header class="hdr">
@@ -354,6 +367,10 @@ fn render_dashboard(db: &DashboardState) -> String {
 <div class="ai-stat"><div class="ai-sl">FP Rate</div><div class="ai-sv yellow">{fp}</div></div>
 <div class="ai-stat"><div class="ai-sl">Success</div><div class="ai-sv pos">{success}</div></div>
 <div class="ai-stat"><div class="ai-sl">L1 Skew</div><div class="ai-sv">{l1_skew}</div></div>
+<div class="ai-stat"><div class="ai-sl">Uptime</div><div class="ai-sv {uptime_cls}">{uptime}</div></div>
+<div class="ai-stat"><div class="ai-sl">👻 Ghost</div><div class="ai-sv {ghost_cls}">{ghost_pct}</div></div>
+<div class="ai-stat"><div class="ai-sl">Injections</div><div class="ai-sv purple">{ghost_inj}</div></div>
+<div class="ai-stat"><div class="ai-sl">Vel.Reject</div><div class="ai-sv yellow">{ghost_rej}</div></div>
 </div>
 {shadow_pnl_block}
 </div>
@@ -406,6 +423,13 @@ fn render_dashboard(db: &DashboardState) -> String {
         fp = fmt_pct(db.l1_false_positive_rate),
         success = fmt_pct(db.l1_sweep_success_rate),
         l1_skew = fmt_usd(db.l1_skew_usd),
+        uptime = fmt_pct(db.l1_uptime_pct),
+        uptime_cls = if db.l1_uptime_pct < 0.3 { "neg" } else if db.l1_uptime_pct < 0.7 { "yellow" } else { "pos" },
+        ghost_pct = fmt_pct(db.ghost_transparency),
+        ghost_cls = if db.ghost_transparency < 0.5 { "purple" } else { "pos" },
+        ghost_inj = db.ghost_injections,
+        ghost_rej = db.ghost_velocity_rejects,
+        ghost_html = ghost_html,
         shadow_pnl_block = if db.is_shadow_mode {
             format!(r#"<div class="ai-sep"></div><div class="bar-row"><span class="bar-label">SHADOW PnL</span><span class="bar-val purple">${:.6}</span></div>"#, db.shadow_pnl)
         } else { String::new() },
@@ -555,6 +579,11 @@ async fn main() -> Result<()> {
         let fp_rate = engine.l1_false_positive_rate.load(Ordering::Acquire) as f64 / 10000.0;
         let success_rate = engine.l1_sweep_success_rate.load(Ordering::Acquire) as f64 / 10000.0;
         let paused = risk.paused.load(Ordering::Acquire) != 0;
+        let l1_uptime = engine.l1_uptime_pct.load(Ordering::Acquire) as f64 / 10000.0;
+        let ghost_trans = engine.ghost_transparency.load(Ordering::Acquire) as f64 / 10000.0;
+        let ghost_inj = engine.ghost_injections.load(Ordering::Acquire);
+        let ghost_rej = engine.ghost_velocity_rejects.load(Ordering::Acquire);
+        let ghost_mask = engine.ghost_active_mask.load(Ordering::Acquire);
 
         {
             let mut db = state.lock().expect("Lock failed");
@@ -585,6 +614,11 @@ async fn main() -> Result<()> {
             db.l1_sweep_success_rate = success_rate;
             db.session_fills = fills;
             db.paused = paused;
+            db.l1_uptime_pct = l1_uptime;
+            db.ghost_transparency = ghost_trans;
+            db.ghost_injections = ghost_inj;
+            db.ghost_velocity_rejects = ghost_rej;
+            db.ghost_active_mask = ghost_mask;
             db.bid_prices = bp;
             db.bid_amounts = bv;
             db.ask_prices = ap;

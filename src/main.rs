@@ -424,11 +424,32 @@ async fn async_main() -> Result<()> {
                     let dynamic = (range as f64 * vol_mult) as i64;
                     let adapted = ((base_grid + dynamic) as f64 * grid_mult) as i64;
                     let new_grid = adapted.clamp(min_grid, max_grid) as u64;
-                    risk.grid_step.store(new_grid, Ordering::Release);
-                    if range > 5_000_000_000 {
-                        tracing::info!(event = "volatility_spike",
-                            range_usd = range / beroun_types::PRICE_SCALE_I,
-                            new_grid_usd = new_grid as i64 / beroun_types::PRICE_SCALE_I);
+
+                    // ═══ v10.5: L2 Oracle Grid Override ═══
+                    // If L2 Oracle has written within last 10 minutes,
+                    // respect its grid decision and skip vol-engine override.
+                    let l2_action_ms = engine.l2_last_action_ms.load(Ordering::Acquire);
+                    let now_ms_vol = std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH).unwrap_or_default()
+                        .as_millis() as u64;
+                    let l2_active = l2_action_ms > 0 && now_ms_vol.saturating_sub(l2_action_ms) < 600_000;
+
+                    if l2_active {
+                        // L2 Oracle is active — do NOT overwrite grid_step
+                        // (Oracle writes via beroun-config set-grid)
+                        if range > 5_000_000_000 {
+                            tracing::info!(event = "vol_engine_deferred",
+                                range_usd = range / beroun_types::PRICE_SCALE_I,
+                                vol_grid_usd = new_grid as i64 / beroun_types::PRICE_SCALE_I,
+                                reason = "l2_oracle_active");
+                        }
+                    } else {
+                        risk.grid_step.store(new_grid, Ordering::Release);
+                        if range > 5_000_000_000 {
+                            tracing::info!(event = "volatility_spike",
+                                range_usd = range / beroun_types::PRICE_SCALE_I,
+                                new_grid_usd = new_grid as i64 / beroun_types::PRICE_SCALE_I);
+                        }
                     }
                 } else {
                     risk.grid_step.store(default_grid, Ordering::Release);
@@ -688,6 +709,14 @@ async fn async_main() -> Result<()> {
         let mut depth_history: VecDeque<f64> = VecDeque::with_capacity(61);
         let mut was_in_hole: bool = false;
 
+        // ═══ v10.6 GHOST ORDERS STATE ═══
+        let mut ghost_last_micro: i64 = 0;         // Previous micro_price for velocity
+        let mut ghost_velocity: f64 = 0.0;         // Price velocity (ticks/update)
+        let mut ghost_active_ids: [u64; beroun_types::MAX_GRID_LEVELS * 2] = [0; beroun_types::MAX_GRID_LEVELS * 2]; // Active ghost order IDs
+        let ghost_trigger_pct: f64 = 0.0005;       // 0.05% trigger zone
+        let ghost_velocity_max: f64 = 500_000_000.0; // $5 per tick = too fast, reject
+        let mut ghost_last_inject: Instant = Instant::now();
+
         loop {
             if should_reconnect { break; }
             tokio::select! {
@@ -790,6 +819,96 @@ async fn async_main() -> Result<()> {
                                             let best_ask = eng.asks[0].price.load(Ordering::SeqCst);
                                             eng.best_bid.store(best_bid, Ordering::SeqCst);
                                             eng.best_ask.store(best_ask, Ordering::SeqCst);
+
+                                            // ═══ v10.6 GHOST PROXIMITY CHECK (runs on EVERY book tick) ═══
+                                            if best_bid > 0 && best_ask > 0 {
+                                                let ghost_trans = eng.ghost_transparency.load(Ordering::Relaxed);
+                                                if ghost_trans < 10000 { // Ghost mode active
+                                                    let bid_vol_g = eng.bids[0].amount.load(Ordering::Relaxed).unsigned_abs() as f64;
+                                                    let ask_vol_g = eng.asks[0].amount.load(Ordering::Relaxed).unsigned_abs() as f64;
+                                                    let total_vol_g = bid_vol_g + ask_vol_g;
+                                                    let micro_g = if total_vol_g > 0.0 {
+                                                        ((best_bid as f64 * ask_vol_g + best_ask as f64 * bid_vol_g) / total_vol_g).round() as i64
+                                                    } else {
+                                                        ((best_bid as i64) + (best_ask as i64)) / 2
+                                                    };
+
+                                                    // Velocity tracking (EMA: 80% old + 20% new)
+                                                    if ghost_last_micro > 0 {
+                                                        let delta = (micro_g - ghost_last_micro).abs() as f64;
+                                                        ghost_velocity = ghost_velocity * 0.8 + delta * 0.2;
+                                                    }
+                                                    ghost_last_micro = micro_g;
+
+                                                    // Check ghost levels for proximity injection
+                                                    let trigger_dist = (micro_g as f64 * ghost_trigger_pct) as i64;
+                                                    let velocity_safe = ghost_velocity < ghost_velocity_max;
+                                                    let min_inject_interval = ghost_last_inject.elapsed().as_millis() > 200; // Rate limit: max 5/sec
+
+                                                    if velocity_safe && min_inject_interval {
+                                                        let mut mask = eng.ghost_active_mask.load(Ordering::Relaxed);
+                                                        for i in 0..beroun_types::MAX_GRID_LEVELS {
+                                                            // Ghost BUY levels
+                                                            let gbp = eng.ghost_buy_prices[i].load(Ordering::Relaxed);
+                                                            if gbp > 0 {
+                                                                let dist = (micro_g - gbp).abs();
+                                                                let bit = 1u64 << i;
+                                                                if dist < trigger_dist && (mask & bit) == 0 {
+                                                                    // FLASH INJECT: fire IOC buy
+                                                                    let price_f = gbp as f64 / beroun_types::PRICE_SCALE;
+                                                                    let amt_f = eng.current_order_usd.load(Ordering::Relaxed) as f64
+                                                                        / beroun_types::PRICE_SCALE / price_f;
+                                                                    let amt_f = amt_f.max(0.00015);
+                                                                    let msg = format!(r#"[0,"on",null,{{"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE IOC"}}]"#,
+                                                                        beroun_types::TRADING_SYMBOL, amt_f, price_f);
+                                                                    let _ = order_tx.send(msg);
+                                                                    mask |= bit;
+                                                                    eng.ghost_active_mask.store(mask, Ordering::Relaxed);
+                                                                    eng.ghost_injections.fetch_add(1, Ordering::Relaxed);
+                                                                    ghost_last_inject = Instant::now();
+                                                                    tracing::info!(event = "ghost_inject", side = "buy", level = i,
+                                                                        price = price_f, micro = micro_g as f64 / beroun_types::PRICE_SCALE,
+                                                                        dist_usd = dist as f64 / beroun_types::PRICE_SCALE,
+                                                                        velocity = format!("{:.2}", ghost_velocity / beroun_types::PRICE_SCALE));
+                                                                } else if dist >= trigger_dist * 3 && (mask & bit) != 0 {
+                                                                    // Price moved away: clear active flag
+                                                                    mask &= !bit;
+                                                                    eng.ghost_active_mask.store(mask, Ordering::Relaxed);
+                                                                }
+                                                            }
+                                                            // Ghost SELL levels
+                                                            let gsp = eng.ghost_sell_prices[i].load(Ordering::Relaxed);
+                                                            if gsp > 0 {
+                                                                let dist = (micro_g - gsp).abs();
+                                                                let bit = 1u64 << (i + beroun_types::MAX_GRID_LEVELS);
+                                                                if dist < trigger_dist && (mask & bit) == 0 {
+                                                                    let price_f = gsp as f64 / beroun_types::PRICE_SCALE;
+                                                                    let amt_f = eng.current_order_usd.load(Ordering::Relaxed) as f64
+                                                                        / beroun_types::PRICE_SCALE / price_f;
+                                                                    let amt_f = amt_f.max(0.00015);
+                                                                    let msg = format!(r#"[0,"on",null,{{"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE IOC"}}]"#,
+                                                                        beroun_types::TRADING_SYMBOL, -amt_f, price_f);
+                                                                    let _ = order_tx.send(msg);
+                                                                    mask |= bit;
+                                                                    eng.ghost_active_mask.store(mask, Ordering::Relaxed);
+                                                                    eng.ghost_injections.fetch_add(1, Ordering::Relaxed);
+                                                                    ghost_last_inject = Instant::now();
+                                                                    tracing::info!(event = "ghost_inject", side = "sell", level = i,
+                                                                        price = price_f, micro = micro_g as f64 / beroun_types::PRICE_SCALE,
+                                                                        dist_usd = dist as f64 / beroun_types::PRICE_SCALE,
+                                                                        velocity = format!("{:.2}", ghost_velocity / beroun_types::PRICE_SCALE));
+                                                                } else if dist >= trigger_dist * 3 && (mask & bit) != 0 {
+                                                                    mask &= !bit;
+                                                                    eng.ghost_active_mask.store(mask, Ordering::Relaxed);
+                                                                }
+                                                            }
+                                                        }
+                                                    } else if !velocity_safe && min_inject_interval {
+                                                        // Anti-toxic: velocity too high, reject injection
+                                                        eng.ghost_velocity_rejects.fetch_add(1, Ordering::Relaxed);
+                                                    }
+                                                }
+                                            }
 
                                             // ── SNIPER INTEL v6.2 (OBI + Dynamic Sizing) ──
                                             const MIN_TICK: i64 = 100_000_000;
@@ -1010,17 +1129,41 @@ async fn async_main() -> Result<()> {
                                                             let mut total_sell_btc = 0.0;
 
                                                             // BUY LEVELS (fibonacci spacing from micro-price)
+                                                            // ═══ v10.6 GHOST SPLIT ═══
+                                                            let ghost_trans = eng.ghost_transparency.load(Ordering::Relaxed) as f64 / 10000.0;
+                                                            // n_public = how many levels are visible in orderbook
+                                                            // At transparency=1.0 (100%): all public. At 0.1: only ~1 level public per side.
+                                                            let n_public_buy = ((n_buy as f64 * ghost_trans).ceil() as usize).max(1).min(n_buy);
+                                                            let n_public_sell = ((n_sell as f64 * ghost_trans).ceil() as usize).max(1).min(n_sell);
+                                                            let ghost_mode = ghost_trans < 0.99;
+
+                                                            // Clear old ghost prices
+                                                            if ghost_mode {
+                                                                for gi in 0..beroun_types::MAX_GRID_LEVELS {
+                                                                    eng.ghost_buy_prices[gi].store(0, Ordering::Relaxed);
+                                                                    eng.ghost_sell_prices[gi].store(0, Ordering::Relaxed);
+                                                                }
+                                                                eng.ghost_active_mask.store(0, Ordering::Relaxed);
+                                                            }
+
                                                             for i in 0..n_buy {
                                                                 let spacing = (grid as f64 * beroun_types::LEVEL_SPACING[i]) as i64;
                                                                 let bp_i = (micro_i - spacing + final_bias).max(0).min(ba_i - MIN_TICK);
                                                                 let bp = bp_i as f64 / beroun_types::PRICE_SCALE;
                                                                 let cost = amt * bp;
-                                                                if total_buy_usd + cost <= cap_available * 0.95 && amt >= MIN_ORDER_BTC {
-                                                                    order_parts.push(format!(
-                                                                        r#"["on",{{"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
-                                                                        beroun_types::TRADING_SYMBOL, amt, bp
-                                                                    ));
-                                                                    total_buy_usd += cost;
+
+                                                                if i < n_public_buy {
+                                                                    // PUBLIC: visible in orderbook (POSTONLY)
+                                                                    if total_buy_usd + cost <= cap_available * 0.95 && amt >= MIN_ORDER_BTC {
+                                                                        order_parts.push(format!(
+                                                                            r#"["on",{{"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
+                                                                            beroun_types::TRADING_SYMBOL, amt, bp
+                                                                        ));
+                                                                        total_buy_usd += cost;
+                                                                    }
+                                                                } else if ghost_mode {
+                                                                    // GHOST: stored in shadow grid, fires on proximity
+                                                                    eng.ghost_buy_prices[i].store(bp_i, Ordering::Relaxed);
                                                                 }
                                                             }
 
@@ -1029,12 +1172,19 @@ async fn async_main() -> Result<()> {
                                                                 let spacing = (grid as f64 * beroun_types::LEVEL_SPACING[i]) as i64;
                                                                 let sp_i = (micro_i + spacing + final_bias).max(0).max(bb_i + MIN_TICK);
                                                                 let sp = sp_i as f64 / beroun_types::PRICE_SCALE;
-                                                                if total_sell_btc + amt <= btc_cap * 0.95 && amt >= MIN_ORDER_BTC {
-                                                                    order_parts.push(format!(
-                                                                        r#"["on",{{"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
-                                                                        beroun_types::TRADING_SYMBOL, -amt, sp
-                                                                    ));
-                                                                    total_sell_btc += amt;
+
+                                                                if i < n_public_sell {
+                                                                    // PUBLIC: visible in orderbook (POSTONLY)
+                                                                    if total_sell_btc + amt <= btc_cap * 0.95 && amt >= MIN_ORDER_BTC {
+                                                                        order_parts.push(format!(
+                                                                            r#"["on",{{"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
+                                                                            beroun_types::TRADING_SYMBOL, -amt, sp
+                                                                        ));
+                                                                        total_sell_btc += amt;
+                                                                    }
+                                                                } else if ghost_mode {
+                                                                    // GHOST: stored in shadow grid, fires on proximity
+                                                                    eng.ghost_sell_prices[i].store(sp_i, Ordering::Relaxed);
                                                                 }
                                                             }
 
@@ -1064,7 +1214,11 @@ async fn async_main() -> Result<()> {
                                                                   order_usd = final_order_usd as f64 / beroun_types::PRICE_SCALE,
                                                                   inv_skew = inv_skew, position = current_pos,
                                                                   pos_ratio = format!("{:.2}", pos_ratio),
-                                                                  dynamic_grid = grid, total_orders = order_parts.len());
+                                                                  dynamic_grid = grid, total_orders = order_parts.len(),
+                                                                  ghost_mode = ghost_mode,
+                                                                  public_buy = n_public_buy, public_sell = n_public_sell,
+                                                                  ghost_buy = if ghost_mode { n_buy - n_public_buy } else { 0 },
+                                                                  ghost_sell = if ghost_mode { n_sell - n_public_sell } else { 0 });
                                                         }
                                                     }
                                                 }

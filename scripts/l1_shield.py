@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🛡️ BEROUN L1 SHIELD v10.4 — The Kinetic Shield (Tactical AI)
+🛡️ BEROUN L1 SHIELD v10.5 — Resurrection (Anti-Paralysis)
 ═══════════════════════════════════════════════════════════════
 Cross-Layer Intelligence: L1 reads orderbook, writes skew + freeze + confidence
   - OBI Micro-Skewing: shifts grid bias based on order book imbalance
@@ -62,22 +62,45 @@ OFF_L1_SUCCESS = 1640      # l1_sweep_success_rate
 OFF_L2_ACTION_MS = 1648    # l2_last_action_ms
 OFF_LEARNING_TRIG = 1656   # ai_learning_trigger
 
+# v10.5 Resurrection: Anti-Paralysis
+OFF_L1_UPTIME_PCT = 1664   # l1_uptime_pct (u64, 0-10000 = 0%-100%)
+
+# v10.6 Ghost Orders: Hidden Liquidity
+OFF_GHOST_TRANSPARENCY = 1672  # ghost_transparency (u64, 0-10000)
+OFF_GHOST_ACTIVE_MASK = 1680   # ghost_active_mask (u64 bitmask)
+OFF_GHOST_INJECTIONS = 1688    # ghost_injections (u64)
+OFF_GHOST_VELOCITY_REJECTS = 1696  # ghost_velocity_rejects (u64)
+
 OBL_SIZE = 24         # sizeof(OrderBookLevel) = 3 × 8 bytes
 
 # ═══ CONFIGURATION ═══
 CYCLE_MS = 50           # 50ms cycle = 20 updates/sec
 OBI_SKEW_FACTOR = 0.3   # How aggressively to skew based on OBI
 MAX_SKEW_USD = 3.0      # Maximum skew in USD
-SWEEP_VOL_DROP_PCT = 0.70  # 70% depth volume drop = genuine sweep
-SWEEP_FREEZE_MS = 15000    # 15 second freeze after sweep
+SWEEP_VOL_DROP_PCT = 0.85  # 85% depth volume drop = genuine sweep (v10.5: raised from 70%)
+SWEEP_FREEZE_MS = 4000     # 4 second freeze after sweep (v10.5: reduced from 15s)
 SWEEP_DEBOUNCE_MS = 500    # Ignore sweeps within 500ms of last one
 BOOK_DEPTH = 10            # Read top 10 of 25 levels
 
 # ═══ ADAPTIVE LEARNING ═══
 CONFIDENCE_WINDOW = 100       # Last N sweep events for confidence calc
 ADAPTATION_INTERVAL = 600     # Every 10 minutes, adapt thresholds
-MIN_SWEEP_THRESHOLD = 0.40    # Minimum sweep detection threshold
+MIN_SWEEP_THRESHOLD = 0.60    # Minimum sweep detection threshold (v10.5: raised from 0.40)
 MAX_SWEEP_THRESHOLD = 0.90    # Maximum sweep detection threshold
+
+# v10.5 Anti-Paralysis
+PARALYSIS_FREEZE_RATIO = 0.60      # If frozen >60% of time → force desensitize
+PARALYSIS_CHECK_WINDOW = 300       # 5 minute window for uptime check
+PARALYSIS_DESENSITIZE_STEP = 0.05  # Raise threshold by 0.05 per check
+MAX_CONSECUTIVE_FREEZES = 8        # After 8 consecutive freezes, force raise threshold
+
+# v10.6 Ghost Orders thresholds
+GHOST_TOXIC_ACTIVATE = 300         # Activate ghost when toxic > 300
+GHOST_OBI_ACTIVATE = -0.85         # Activate ghost when OBI < -0.85
+GHOST_CALM_DEACTIVATE = 50         # Deactivate ghost when toxic < 50
+GHOST_TRANSPARENCY_STEALTH = 1000  # 10% = only tip visible
+GHOST_TRANSPARENCY_PUBLIC = 10000  # 100% = full public mode
+GHOST_COOLDOWN_SEC = 120           # Min seconds between ghost state changes
 
 running = True
 
@@ -163,7 +186,7 @@ def compute_iceberg_score(levels):
 
 
 class AdaptiveL1Brain:
-    """Self-learning L1 Shield with confidence tracking."""
+    """Self-learning L1 Shield with confidence tracking + anti-paralysis."""
 
     def __init__(self):
         self.sweep_threshold = SWEEP_VOL_DROP_PCT
@@ -177,6 +200,16 @@ class AdaptiveL1Brain:
         self.ask_price_history = deque(maxlen=50)
         self.depth_history = deque(maxlen=120)
         self.pre_sweep_signatures = []  # Store market "fingerprints" before sweeps
+        # v10.5 Anti-Paralysis: Uptime Tracker
+        self.freeze_time_ms = 0        # Total ms spent in freeze
+        self.active_time_ms = 0        # Total ms spent active
+        self.uptime_window_start = time.time()
+        self.consecutive_freezes = 0   # Count consecutive freeze detections
+        self.last_paralysis_fix = 0    # Last time we force-desensitized
+        # v10.6 Ghost Mode
+        self.ghost_active = False
+        self.ghost_last_change = 0     # Timestamp of last ghost state change
+        self.ghost_session_injections = 0
 
     def record_sweep(self, side, pnl_before, pnl_after, obi, depth):
         """Record a sweep event for learning."""
@@ -213,11 +246,32 @@ class AdaptiveL1Brain:
                 self.pre_sweep_signatures = self.pre_sweep_signatures[-50:]
 
     def adapt_threshold(self):
-        """Adapt sweep detection threshold based on success rate."""
+        """Adapt sweep detection threshold based on success rate + anti-paralysis."""
         if time.time() - self.last_adaptation < ADAPTATION_INTERVAL:
             return
 
         self.last_adaptation = time.time()
+
+        # ═══ v10.5 ANTI-PARALYSIS CHECK (runs BEFORE normal adaptation) ═══
+        uptime_pct = self.get_uptime_pct()
+        if uptime_pct < (1.0 - PARALYSIS_FREEZE_RATIO):  # Frozen >60% of time
+            old_threshold = self.sweep_threshold
+            self.sweep_threshold = min(MAX_SWEEP_THRESHOLD,
+                                       self.sweep_threshold + PARALYSIS_DESENSITIZE_STEP)
+            log.warning(f"🆘 L1 ANTI-PARALYSIS: Uptime {uptime_pct:.0%} too low! "
+                        f"Threshold {old_threshold:.2f}→{self.sweep_threshold:.2f} "
+                        f"(force desensitize, consecutive={self.consecutive_freezes})")
+            self.last_paralysis_fix = time.time()
+            # Reset uptime window
+            self.freeze_time_ms = 0
+            self.active_time_ms = 0
+            self.uptime_window_start = time.time()
+            self.consecutive_freezes = 0
+            # Reset counters to prevent normal adaptation from fighting us
+            self.true_positives = 1
+            self.false_positives = 1
+            return
+
         total = self.true_positives + self.false_positives
         if total < 5:
             return
@@ -235,16 +289,79 @@ class AdaptiveL1Brain:
                      f"Threshold {old_threshold:.2f}→{self.sweep_threshold:.2f} "
                      f"(less sensitive)")
         elif fp_rate < 0.1 and success_rate > 0.8:
-            # Very accurate → can be slightly more sensitive
-            self.sweep_threshold = max(MIN_SWEEP_THRESHOLD,
-                                       self.sweep_threshold - 0.03)
-            log.info(f"🧠 L1 ADAPT: Success rate {success_rate:.0%} excellent. "
-                     f"Threshold {old_threshold:.2f}→{self.sweep_threshold:.2f} "
-                     f"(more sensitive)")
+            # v10.5: Only allow sensitization if uptime is healthy (>80%)
+            if uptime_pct > 0.8:
+                self.sweep_threshold = max(MIN_SWEEP_THRESHOLD,
+                                           self.sweep_threshold - 0.03)
+                log.info(f"🧠 L1 ADAPT: Success rate {success_rate:.0%} excellent. "
+                         f"Threshold {old_threshold:.2f}→{self.sweep_threshold:.2f} "
+                         f"(more sensitive)")
+            else:
+                log.info(f"🧠 L1 ADAPT: Success rate {success_rate:.0%} but "
+                         f"uptime {uptime_pct:.0%} — NOT sensitizing (anti-paralysis)")
 
         # Reset counters for next window
         self.true_positives = max(1, self.true_positives // 2)
         self.false_positives = max(0, self.false_positives // 2)
+
+    def record_freeze_time(self, freeze_ms):
+        """v10.5: Track time spent in freeze for uptime calculation."""
+        self.freeze_time_ms += freeze_ms
+        # Reset window every PARALYSIS_CHECK_WINDOW
+        elapsed = time.time() - self.uptime_window_start
+        if elapsed > PARALYSIS_CHECK_WINDOW:
+            self.freeze_time_ms = 0
+            self.active_time_ms = 0
+            self.uptime_window_start = time.time()
+
+    def record_active_time(self, active_ms):
+        """v10.5: Track active (non-frozen) time."""
+        self.active_time_ms += active_ms
+        self.consecutive_freezes = 0  # Reset on active cycle
+
+    def record_consecutive_freeze(self):
+        """v10.5: Track consecutive freeze events for force-desensitization."""
+        self.consecutive_freezes += 1
+        if self.consecutive_freezes >= MAX_CONSECUTIVE_FREEZES:
+            old = self.sweep_threshold
+            self.sweep_threshold = min(MAX_SWEEP_THRESHOLD,
+                                       self.sweep_threshold + PARALYSIS_DESENSITIZE_STEP)
+            log.warning(f"🆘 L1 CONSECUTIVE FREEZE #{self.consecutive_freezes}: "
+                        f"Threshold {old:.2f}→{self.sweep_threshold:.2f} (force raise)")
+            self.consecutive_freezes = 0
+
+    def get_uptime_pct(self):
+        """v10.5: Calculate trading uptime percentage."""
+        total = self.freeze_time_ms + self.active_time_ms
+        if total < 1000:  # Not enough data yet
+            return 1.0
+        return self.active_time_ms / total
+
+    def evaluate_ghost_mode(self, toxic_hits, obi, l2_regime):
+        """v10.6: Decide whether to activate/deactivate Ghost Mode.
+        Returns (transparency_value, changed, reason)."""
+        now = time.time()
+        if now - self.ghost_last_change < GHOST_COOLDOWN_SEC:
+            return None, False, ""
+
+        if not self.ghost_active:
+            # ACTIVATE ghost if market is toxic
+            if toxic_hits > GHOST_TOXIC_ACTIVATE:
+                self.ghost_active = True
+                self.ghost_last_change = now
+                return GHOST_TRANSPARENCY_STEALTH, True, f"Toxic={toxic_hits} > {GHOST_TOXIC_ACTIVATE}"
+            if obi < GHOST_OBI_ACTIVATE:
+                self.ghost_active = True
+                self.ghost_last_change = now
+                return GHOST_TRANSPARENCY_STEALTH, True, f"OBI={obi:.3f} < {GHOST_OBI_ACTIVATE}"
+        else:
+            # DEACTIVATE ghost if market calms down (and regime is RANGING)
+            if toxic_hits < GHOST_CALM_DEACTIVATE and l2_regime == 2:  # 2 = RANGING
+                self.ghost_active = False
+                self.ghost_last_change = now
+                return GHOST_TRANSPARENCY_PUBLIC, True, f"Market calm (toxic={toxic_hits}, RANGING)"
+
+        return None, False, ""
 
     def compute_confidence(self, obi, flicker_rate, iceberg_score, depth_ratio):
         """
@@ -305,7 +422,7 @@ class AdaptiveL1Brain:
 def main():
     global running
 
-    log.info("═══ L1 SHIELD v10.4 — THE KINETIC SHIELD STARTING ═══")
+    log.info("═══ L1 SHIELD v10.5 — RESURRECTION (Anti-Paralysis) STARTING ═══")
     log.info(f"  mmap: {ENGINE_MMAP}")
     log.info(f"  Cycle: {CYCLE_MS}ms | Skew factor: {OBI_SKEW_FACTOR}")
     log.info(f"  Max skew: ${MAX_SKEW_USD} | Sweep freeze: {SWEEP_FREEZE_MS}ms")
@@ -325,7 +442,7 @@ def main():
     cycle = 0
     pnl_at_sweep = 0  # Track PnL at time of sweep for learning
 
-    log.info("═══ L1 SHIELD v10.4 ACTIVE ═══")
+    log.info("═══ L1 SHIELD v10.5 ACTIVE ═══")
 
     while running:
         try:
@@ -371,7 +488,7 @@ def main():
             confidence = brain.compute_confidence(obi, flicker_rate, iceberg_score, depth_ratio)
             write_u64(mm, OFF_L1_CONFIDENCE, int(confidence * 10000))
 
-            # ── SWEEP PROTECTION (ADAPTIVE) ──
+            # ── SWEEP PROTECTION (ADAPTIVE + ANTI-PARALYSIS v10.5) ──
             if cycle > 5:
                 now_ms = int(time.time() * 1000)
                 if now_ms - last_sweep_ms > SWEEP_DEBOUNCE_MS:
@@ -383,6 +500,10 @@ def main():
                         freeze_until = now_ms + SWEEP_FREEZE_MS
                         write_u64(mm, OFF_SWEEP_FREEZE, freeze_until)
                         last_sweep_ms = now_ms
+
+                        # v10.5: Track consecutive freezes
+                        brain.record_consecutive_freeze()
+                        brain.record_freeze_time(SWEEP_FREEZE_MS)
 
                         # Record PnL at sweep time for learning
                         pnl_at_sweep = read_i64(mm, OFF_REALIZED_PNL) / PRICE_SCALE
@@ -402,6 +523,9 @@ def main():
                                    f"Toxic: {current_toxic + 1} | "
                                    f"Confidence: {confidence:.2f} | "
                                    f"Threshold: {brain.sweep_threshold:.2f}")
+                    else:
+                        # v10.5: No sweep → record active time
+                        brain.record_active_time(CYCLE_MS)
 
             prev_bids = bids
             prev_asks = asks
@@ -423,9 +547,25 @@ def main():
                 write_u64(mm, OFF_L1_FP_RATE, int(fp_rate * 10000))
                 write_u64(mm, OFF_L1_SUCCESS, int(success_rate * 10000))
 
+                # v10.5: Write uptime to mmap
+                uptime_pct = brain.get_uptime_pct()
+                write_u64(mm, OFF_L1_UPTIME_PCT, int(uptime_pct * 10000))
+
                 log.info(f"L1 status: OBI={obi:+.3f} Skew=${skew_usd:+.2f} "
                         f"Mid=${mid:.0f} Toxic={toxic} Conf={confidence:.2f} "
-                        f"Thresh={brain.sweep_threshold:.2f} Cycle={cycle}")
+                        f"Thresh={brain.sweep_threshold:.2f} Up={uptime_pct:.0%} "
+                        f"Ghost={'ON' if brain.ghost_active else 'OFF'} Cycle={cycle}")
+
+                # v10.6: Ghost Mode evaluation
+                l2_regime = read_u64(mm, OFF_L2_REGIME)
+                ghost_val, ghost_changed, ghost_reason = brain.evaluate_ghost_mode(
+                    toxic, obi, l2_regime)
+                if ghost_changed:
+                    write_u64(mm, OFF_GHOST_TRANSPARENCY, ghost_val)
+                    if brain.ghost_active:
+                        log.warning(f"👻 GHOST MODE ACTIVATED: {ghost_reason}")
+                    else:
+                        log.info(f"👁️ GHOST MODE DEACTIVATED: {ghost_reason}")
 
                 # Check if L2 triggered learning
                 learning_flag = read_u64(mm, OFF_LEARNING_TRIG)
@@ -449,7 +589,7 @@ def main():
     write_i64(mm, OFF_L1_SKEW, 0)
     mm.close()
     os.close(fd)
-    log.info("═══ L1 SHIELD v10.4 STOPPED ═══")
+    log.info("═══ L1 SHIELD v10.5 STOPPED ═══")
 
 
 if __name__ == "__main__":
