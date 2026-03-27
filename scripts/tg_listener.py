@@ -704,13 +704,13 @@ def cmd_backtest(message):
             bot.send_message(message.chat.id, "✅ Žádné ztrátové cykly — není co kritizovat!")
             return
 
-        # Show worst cycles
-        worst_msg = "📉 *Nejhorší rozhodnutí (24h):*\n"
+        # Show worst cycles (plain text — reasoning has special chars)
+        worst_msg = "📉 Nejhorší rozhodnutí (24h):\n"
         for wc in worst_list[:3]:
-            worst_msg += (f"\n`{wc.get('timestamp','')}` PnL=`${wc.get('pnl',0):.2f}`\n"
+            worst_msg += (f"\n{wc.get('timestamp','')} PnL=${wc.get('pnl',0):.2f}\n"
                          f"  Grid=${wc.get('grid_step',0):.1f} | Toxic={wc.get('toxic_hits',0)}\n"
-                         f"  _{wc.get('reasoning_at_the_time','?')[:120]}_\n")
-        bot.send_message(message.chat.id, worst_msg, parse_mode="Markdown")
+                         f"  {wc.get('reasoning_at_the_time','?')[:120]}\n")
+        bot.send_message(message.chat.id, worst_msg)
 
         # Step 3: AI Coach (Gemini Self-Critique)
         bot.send_message(message.chat.id, "🧠 Spouštím Gemini Self-Critique (AI Coach)... ~30s")
@@ -760,19 +760,19 @@ Be BRUTALLY HONEST. RESPOND WITH JSON ONLY:
                 except Exception:
                     pass
 
-            # Coach report
-            coach_msg = (f"🧠 *AI Self-Critique (Gemini Coach)*\n\n"
-                        f"🔍 *Sebekritika:*\n_{critique}_\n\n"
-                        f"🎯 *Vzorec selhání:*\n_{pattern}_\n\n"
-                        f"📝 *Nové lekce:* {saved} uloženo do Brain\n")
+            # Coach report (plain text — AI content has special chars)
+            coach_msg = (f"🧠 AI Self-Critique (Gemini Coach)\n\n"
+                        f"🔍 Sebekritika:\n{critique}\n\n"
+                        f"🎯 Vzorec selhání:\n{pattern}\n\n"
+                        f"📝 Nové lekce: {saved} uloženo do Brain\n")
             for i, lesson in enumerate(lessons[:3]):
                 conf = lesson.get('confidence', 0)
                 icon = '🔴' if conf >= 0.7 else '🟡'
-                coach_msg += (f"\n{icon} {i+1}. `{lesson.get('regime','?')}/{lesson.get('rule_type','?')}` "
+                coach_msg += (f"\n{icon} {i+1}. {lesson.get('regime','?')}/{lesson.get('rule_type','?')} "
                              f"(conf={conf:.0%})\n"
-                             f"   _{lesson.get('reasoning','?')}_")
+                             f"   {lesson.get('reasoning','?')}")
 
-            bot.send_message(message.chat.id, coach_msg, parse_mode="Markdown")
+            bot.send_message(message.chat.id, coach_msg)
         else:
             bot.send_message(message.chat.id, "⚠️ Gemini Coach nedodal validní JSON")
 
