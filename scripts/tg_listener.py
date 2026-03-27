@@ -102,12 +102,13 @@ def cmd_help(message):
     if not auth(message): return
     log.info("Help/Start requested")
     try:
-        bot.reply_to(message, """🐺 *SNIPER v10.3 — Neural Cross Command Center*
+        bot.reply_to(message, """🐺 *SNIPER v10.4 — Neural Cross Command Center*
 
 📊 /status — Live stav
 🧠 /ai — AI Status (L1 + L2)
 🧠 /brain — Sniper Brain (paměť + lekce)
 🌙 /backtest — Neural Cross backtest
+🔬 /validate — Lesson Validation + Alpha Report
 🌑 /shadow — Shadow Mode
 🚀 /golive — Návrat do Live
 📅 /report — Denní report
@@ -797,8 +798,69 @@ Be BRUTALLY HONEST. RESPOND WITH JSON ONLY:
                 bot.send_message(message.chat.id, lmsg)
 
     except Exception as e:
-        bot.send_message(message.chat.id, f"❌ Backtest error: `{e}`")
+        bot.send_message(message.chat.id, f"Backtest error: {e}")
 
+
+@bot.message_handler(commands=["validate"])
+def cmd_validate(message):
+    if not auth(message): return
+    log.info("Validation requested")
+    bot.reply_to(message, "🔬 Spouštím Lesson Validation Engine...")
+
+    try:
+        import json as j4
+
+        # Step 1: Validate lessons
+        result = subprocess.run(
+            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "validate-lessons"],
+            capture_output=True, text=True, timeout=15
+        )
+        if result.returncode != 0:
+            bot.send_message(message.chat.id, f"Validation error: {result.stderr[:200]}")
+            return
+
+        d = j4.loads(result.stdout)
+        if d.get("status") == "no_active_lessons":
+            bot.send_message(message.chat.id, "Zadne aktivni lekce k validaci.")
+            return
+
+        msg = f"🔬 Lesson Validation v10.4\n\nValidovano: {d.get('validated', 0)} lekci\n"
+        confirmed = 0
+        degraded = 0
+        for v in d.get("validations", []):
+            status = v.get("status", "?")
+            icon = "✅" if status == "CONFIRMED" else "⚠️" if status == "DEGRADED" else "⏳" if status == "INSUFFICIENT_DATA" else "➖"
+            if status == "CONFIRMED": confirmed += 1
+            if status == "DEGRADED": degraded += 1
+            msg += (f"\n{icon} {v.get('regime','?')}/{v.get('rule_type','?')}\n"
+                   f"   Pre: avg PnL ${v.get('pre_lesson',{}).get('avg_pnl','?')} ({v.get('pre_lesson',{}).get('cycles',0)} cycles)\n"
+                   f"   Post: avg PnL ${v.get('post_lesson',{}).get('avg_pnl','?')} ({v.get('post_lesson',{}).get('cycles',0)} cycles)\n"
+                   f"   Impact: ${v.get('net_impact','?')} | Conf: {v.get('confidence','?')} ({v.get('confidence_delta','?')})\n"
+                   f"   Status: {status}")
+        msg += f"\n\nSouhrn: {confirmed} confirmed, {degraded} degraded"
+        bot.send_message(message.chat.id, msg)
+
+        # Step 2: Alpha report
+        alpha = subprocess.run(
+            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "alpha-report"],
+            capture_output=True, text=True, timeout=10
+        )
+        if alpha.returncode == 0:
+            a = j4.loads(alpha.stdout)
+            ai = a.get("alpha", {})
+            verdict_icon = "📈" if ai.get("verdict") == "EFFICIENT" else "📉" if ai.get("verdict") == "OVER_CAUTIOUS" else "➖"
+            amsg = (f"{verdict_icon} AI ALPHA REPORT (24h)\n\n"
+                   f"PnL total: ${a.get('total_pnl','?')}\n"
+                   f"Cyklu: {a.get('total_cycles',0)} (W:{a.get('winners',0)} L:{a.get('losers',0)})\n"
+                   f"Aktivni lekce: {a.get('active_lessons',0)}\n\n"
+                   f"AI Saved: +${ai.get('saved_usd','0')}\n"
+                   f"AI Missed: -${ai.get('missed_usd','0')}\n"
+                   f"Net Alpha: ${ai.get('net_alpha','0')}\n"
+                   f"Verdict: {ai.get('verdict','?')}")
+            bot.send_message(message.chat.id, amsg)
+
+    except Exception as e:
+        bot.send_message(message.chat.id, f"Validation error: {e}")
 
 # Catch-all: forward to Gemini as free-form question
 @bot.message_handler(func=lambda m: True)
@@ -979,6 +1041,7 @@ if __name__ == "__main__":
             BotCommand("ai", "🧠 AI Status (L1 + L2)"),
             BotCommand("brain", "🧠 Sniper Brain (paměť + lekce)"),
             BotCommand("backtest", "🌙 Neural Cross backtest"),
+            BotCommand("validate", "🔬 Lesson Validation + Alpha"),
             BotCommand("oracle", "🔮 Vynutit AI cyklus"),
             BotCommand("analyze", "🔍 Gemini analýza"),
             BotCommand("analytics", "📊 Trade analytics + Brain"),

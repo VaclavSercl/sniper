@@ -475,8 +475,25 @@ def load_lessons(regime: str = None) -> str:
 
 
 def run_nightly_coach():
-    """Gemini Self-Critique: review worst cycles and generate lessons."""
-    log.info("🌙 ═══ NIGHTLY NEURAL CROSS STARTING ═══")
+    """Gemini Self-Critique + Lesson Validation: closed feedback loop."""
+    log.info("🌙 ═══ NIGHTLY NEURAL CROSS v10.4 STARTING ═══")
+
+    # Step 0: VALIDATE existing lessons first (before generating new ones)
+    try:
+        result = subprocess.run(
+            [BRAIN_BIN, "validate-lessons", "--hours", "24"],
+            capture_output=True, text=True, timeout=15
+        )
+        if result.returncode == 0:
+            vdata = json.loads(result.stdout)
+            validated = vdata.get("validated", 0)
+            degraded = sum(1 for v in vdata.get("validations",[]) if v.get("status") == "DEGRADED")
+            confirmed = sum(1 for v in vdata.get("validations",[]) if v.get("status") == "CONFIRMED")
+            log.info(f"  🔬 Validated {validated} lessons: {confirmed} confirmed, {degraded} degraded")
+            if degraded > 0:
+                send_telegram(f"🔬 Nightly Validation: {degraded} lekci DEGRADED (confidence snížena). {confirmed} CONFIRMED.")
+    except Exception as e:
+        log.warning(f"  Validation failed: {e}")
 
     # Step 1: Run statistical backtest
     backtest_data = ""

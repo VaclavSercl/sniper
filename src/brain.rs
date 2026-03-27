@@ -1,6 +1,7 @@
-//! 🐺 BEROUN SNIPER BRAIN v10.3 "Neural Cross"
+//! 🐺 BEROUN SNIPER BRAIN v10.4 "Lesson Validator"
 //! ═══════════════════════════════════════════════
-//! Permanent SQLite memory + self-learning backtest engine.
+//! Permanent memory + self-learning + lesson validation.
+//! Closed-loop: learn → apply → validate → adjust.
 //!
 //! Usage:
 //!   beroun-brain init              — Create/migrate DB
@@ -24,7 +25,7 @@ use std::path::PathBuf;
 const DEFAULT_DB: &str = "/home/wwwenda/hft-sniper/logs/sniper.db";
 
 #[derive(Parser)]
-#[command(name = "beroun-brain", version = "10.3.0")]
+#[command(name = "beroun-brain", version = "10.4.0")]
 #[command(about = "🐺 Sniper Brain — Permanent memory for the Sovereign Oracle")]
 struct Cli {
     #[command(subcommand)]
@@ -106,6 +107,18 @@ enum Commands {
     SaveLesson {
         /// JSON lesson data
         json: String,
+    },
+    /// Validate active lessons against recent performance
+    ValidateLessons {
+        /// Hours of post-lesson data to evaluate
+        #[arg(long, default_value = "24")]
+        hours: u32,
+    },
+    /// Alpha report: overall AI efficiency audit
+    AlphaReport {
+        /// Hours to look back
+        #[arg(long, default_value = "24")]
+        hours: u32,
     },
 }
 
@@ -223,6 +236,21 @@ fn init_db(conn: &Connection) -> Result<()> {
 
         CREATE INDEX IF NOT EXISTS idx_experiments_regime ON experiments(regime);
         CREATE INDEX IF NOT EXISTS idx_lessons_regime ON lessons(regime);
+
+        CREATE TABLE IF NOT EXISTS lesson_validations (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            validated_at        TEXT DEFAULT (datetime('now', 'localtime')),
+            lesson_id           INTEGER REFERENCES lessons(id),
+            regime              TEXT NOT NULL,
+            rule_type           TEXT NOT NULL,
+            pre_lesson_avg_pnl  REAL,
+            post_lesson_avg_pnl REAL,
+            pre_lesson_cycles   INTEGER,
+            post_lesson_cycles  INTEGER,
+            net_impact          REAL,
+            confidence_delta    REAL,
+            validation_status   TEXT
+        );
     ")?;
     Ok(())
 }
@@ -540,8 +568,6 @@ fn analyze_trend(values: &[f64]) -> &'static str {
     if rising { "rising ↑" } else if falling { "falling ↓" } else { "stable ↔" }
 }
 
-// ═══ MAIN ═══
-
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let conn = open_db(&cli.db)?;
@@ -549,8 +575,8 @@ fn main() -> Result<()> {
 
     match cli.command {
         Commands::Init => {
-            println!("🧠 Sniper Brain v10.3 initialized: {}", cli.db.display());
-            println!("   Tables: cycles, alerts, patterns, experiments, lessons");
+            println!("🧠 Sniper Brain v10.4 initialized: {}", cli.db.display());
+            println!("   Tables: cycles, alerts, patterns, experiments, lessons, lesson_validations");
         }
         Commands::LogCycle { json } => cmd_log_cycle(&conn, &json)?,
         Commands::LogAlert { json } => cmd_log_alert(&conn, &json)?,
@@ -563,6 +589,8 @@ fn main() -> Result<()> {
         Commands::Lessons { regime, active } => cmd_lessons(&conn, regime, active)?,
         Commands::WorstCycles { n, hours } => cmd_worst_cycles(&conn, n, hours)?,
         Commands::SaveLesson { json } => cmd_save_lesson(&conn, &json)?,
+        Commands::ValidateLessons { hours } => cmd_validate_lessons(&conn, hours)?,
+        Commands::AlphaReport { hours } => cmd_alpha_report(&conn, hours)?,
     }
 
     Ok(())
@@ -895,5 +923,167 @@ fn cmd_save_lesson(conn: &Connection, json: &str) -> Result<()> {
         let id = conn.last_insert_rowid();
         println!("{{\"status\": \"created\", \"id\": {}}}", id);
     }
+    Ok(())
+}
+
+// ═══ v10.4 LESSON VALIDATION ENGINE ═══
+
+fn cmd_validate_lessons(conn: &Connection, hours: u32) -> Result<()> {
+    // Get all active lessons
+    let mut stmt = conn.prepare(
+        "SELECT id, created_at, regime, rule_type, confidence, sample_count FROM lessons WHERE active=1"
+    )?;
+
+    let lessons: Vec<(i64, String, String, String, f64, i64)> = stmt.query_map([], |r| {
+        Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?, r.get(5)?))
+    })?.filter_map(|r| r.ok()).collect();
+
+    if lessons.is_empty() {
+        println!("{{\"status\": \"no_active_lessons\"}}");
+        return Ok(());
+    }
+
+    let time_window = format!("-{} hours", hours);
+    let mut validations = Vec::new();
+
+    for (lid, created_at, regime, rule_type, confidence, _sample_count) in &lessons {
+        // Pre-lesson: cycles in this regime BEFORE the lesson was created
+        let pre_stats: (f64, i64) = conn.query_row(
+            "SELECT COALESCE(AVG(pnl), 0), COUNT(*) FROM cycles \
+             WHERE regime=?1 AND timestamp < ?2 AND timestamp > datetime(?2, ?3)",
+            params![regime, created_at, time_window],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
+
+        // Post-lesson: cycles in this regime AFTER the lesson was created
+        let post_stats: (f64, i64) = conn.query_row(
+            "SELECT COALESCE(AVG(pnl), 0), COUNT(*) FROM cycles \
+             WHERE regime=?1 AND timestamp >= ?2 AND timestamp > datetime('now', 'localtime', ?3)",
+            params![regime, created_at, time_window],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )?;
+
+        let net_impact = post_stats.0 - pre_stats.0;
+
+        // Determine validation status and confidence adjustment
+        let (status, conf_delta) = if post_stats.1 < 3 || pre_stats.1 < 3 {
+            ("INSUFFICIENT_DATA", 0.0)
+        } else if net_impact > 0.0 {
+            ("CONFIRMED", 0.1_f64.min(1.0 - confidence))
+        } else if net_impact > -0.5 {
+            ("NEUTRAL", 0.0)
+        } else {
+            ("DEGRADED", -0.15_f64.max(-confidence + 0.05))
+        };
+
+        // Apply confidence adjustment
+        let new_confidence = (confidence + conf_delta).clamp(0.05, 1.0);
+        conn.execute(
+            "UPDATE lessons SET confidence=?1, last_validated=datetime('now','localtime') WHERE id=?2",
+            params![new_confidence, lid],
+        )?;
+
+        // Deactivate if confidence dropped too low
+        if new_confidence < 0.15 {
+            conn.execute("UPDATE lessons SET active=0 WHERE id=?1", params![lid])?;
+        }
+
+        // Log validation
+        conn.execute(
+            "INSERT INTO lesson_validations \
+             (lesson_id, regime, rule_type, pre_lesson_avg_pnl, post_lesson_avg_pnl, \
+              pre_lesson_cycles, post_lesson_cycles, net_impact, confidence_delta, validation_status) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![lid, regime, rule_type, pre_stats.0, post_stats.0,
+                    pre_stats.1, post_stats.1, net_impact, conf_delta, status],
+        )?;
+
+        validations.push(serde_json::json!({
+            "lesson_id": lid,
+            "regime": regime,
+            "rule_type": rule_type,
+            "pre_lesson": {"avg_pnl": format!("{:.4}", pre_stats.0), "cycles": pre_stats.1},
+            "post_lesson": {"avg_pnl": format!("{:.4}", post_stats.0), "cycles": post_stats.1},
+            "net_impact": format!("{:.4}", net_impact),
+            "confidence": format!("{:.2}", new_confidence),
+            "confidence_delta": format!("{:+.2}", conf_delta),
+            "status": status,
+        }));
+    }
+
+    let result = serde_json::json!({
+        "validated": validations.len(),
+        "validations": validations,
+    });
+    println!("{}", serde_json::to_string_pretty(&result)?);
+    Ok(())
+}
+
+fn cmd_alpha_report(conn: &Connection, hours: u32) -> Result<()> {
+    let time_filter = format!("-{} hours", hours);
+
+    // Overall PnL stats
+    let (total_pnl, total_cycles, losers, winners): (f64, i64, i64, i64) = conn.query_row(
+        "SELECT COALESCE(SUM(pnl), 0), COUNT(*), \
+         SUM(CASE WHEN pnl < 0 THEN 1 ELSE 0 END), \
+         SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) \
+         FROM cycles WHERE timestamp > datetime('now', 'localtime', ?1)",
+        params![time_filter], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+    )?;
+
+    // Active lessons count
+    let active_lessons: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM lessons WHERE active=1", [], |r| r.get(0),
+    )?;
+
+    // Get latest validations
+    let mut stmt = conn.prepare(
+        "SELECT regime, rule_type, net_impact, validation_status, confidence_delta \
+         FROM lesson_validations \
+         WHERE validated_at > datetime('now', 'localtime', ?1) \
+         ORDER BY validated_at DESC LIMIT 10"
+    )?;
+    let mut validation_results = Vec::new();
+    let mut row_iter = stmt.query(params![time_filter])?;
+    while let Some(row) = row_iter.next()? {
+        validation_results.push(serde_json::json!({
+            "regime": row.get::<_, String>(0)?,
+            "rule_type": row.get::<_, String>(1)?,
+            "net_impact": row.get::<_, f64>(2)?,
+            "status": row.get::<_, String>(3)?,
+            "confidence_delta": row.get::<_, f64>(4)?,
+        }));
+    }
+
+    // Calculate AI alpha: sum of positive net_impacts (saved) vs negative (missed)
+    let (saved, missed): (f64, f64) = conn.query_row(
+        "SELECT \
+         COALESCE(SUM(CASE WHEN net_impact > 0 THEN net_impact ELSE 0 END), 0), \
+         COALESCE(SUM(CASE WHEN net_impact < 0 THEN ABS(net_impact) ELSE 0 END), 0) \
+         FROM lesson_validations \
+         WHERE validated_at > datetime('now', 'localtime', ?1)",
+        params![time_filter], |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+
+    let net_alpha = saved - missed;
+
+    let result = serde_json::json!({
+        "period_hours": hours,
+        "total_pnl": format!("{:.2}", total_pnl),
+        "total_cycles": total_cycles,
+        "winners": winners,
+        "losers": losers,
+        "active_lessons": active_lessons,
+        "alpha": {
+            "saved_usd": format!("{:.4}", saved),
+            "missed_usd": format!("{:.4}", missed),
+            "net_alpha": format!("{:.4}", net_alpha),
+            "verdict": if net_alpha > 0.0 { "EFFICIENT" }
+                       else if net_alpha > -1.0 { "NEUTRAL" }
+                       else { "OVER_CAUTIOUS" }
+        },
+        "recent_validations": validation_results,
+    });
+    println!("{}", serde_json::to_string_pretty(&result)?);
     Ok(())
 }
