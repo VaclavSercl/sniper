@@ -70,6 +70,15 @@ OFF_GHOST_TRANSPARENCY = 1672  # ghost_transparency (u64, 0-10000)
 OFF_GHOST_ACTIVE_MASK = 1680   # ghost_active_mask (u64 bitmask)
 OFF_GHOST_INJECTIONS = 1688    # ghost_injections (u64)
 OFF_GHOST_VELOCITY_REJECTS = 1696  # ghost_velocity_rejects (u64)
+# ghost_buy_prices[5] = 1704..1743 (5 × i64)
+# ghost_sell_prices[5] = 1744..1783 (5 × i64)
+
+# v10.7 Sovereign AI Control
+OFF_AI_FREEZE_MS = 1784        # ai_freeze_ms (u64, default 4000)
+OFF_AI_FIRE_INTERVAL = 1792    # ai_fire_interval_ms (u64, default 3000)
+OFF_AI_GHOST_TRIGGER = 1800    # ai_ghost_trigger_pct (u64, ×100000, default 50)
+OFF_AI_INTENT = 1808           # ai_intent (0=sovereign, 1=aggressive, 2=defensive, 3=scout)
+OFF_AI_REGISTRY_VER = 1816     # ai_registry_version (u64)
 
 OBL_SIZE = 24         # sizeof(OrderBookLevel) = 3 × 8 bytes
 
@@ -497,13 +506,17 @@ def main():
 
                     if bid_sweep or ask_sweep:
                         side = "BID" if bid_sweep else "ASK"
-                        freeze_until = now_ms + SWEEP_FREEZE_MS
+                        # v10.7: Dynamic freeze from AI registry
+                        dynamic_freeze = read_u64(mm, OFF_AI_FREEZE_MS)
+                        if dynamic_freeze < 500:  dynamic_freeze = SWEEP_FREEZE_MS  # Fallback
+                        if dynamic_freeze > 30000: dynamic_freeze = SWEEP_FREEZE_MS  # Sanity
+                        freeze_until = now_ms + dynamic_freeze
                         write_u64(mm, OFF_SWEEP_FREEZE, freeze_until)
                         last_sweep_ms = now_ms
 
                         # v10.5: Track consecutive freezes
                         brain.record_consecutive_freeze()
-                        brain.record_freeze_time(SWEEP_FREEZE_MS)
+                        brain.record_freeze_time(dynamic_freeze)
 
                         # Record PnL at sweep time for learning
                         pnl_at_sweep = read_i64(mm, OFF_REALIZED_PNL) / PRICE_SCALE
@@ -519,7 +532,7 @@ def main():
                         brain.record_sweep(side, pnl_at_sweep, pnl_at_sweep,
                                           obi, total_depth)
 
-                        log.warning(f"🚨 SWEEP ({side})! Freeze {SWEEP_FREEZE_MS}ms. "
+                        log.warning(f"🚨 SWEEP ({side})! Freeze {dynamic_freeze}ms. "
                                    f"Toxic: {current_toxic + 1} | "
                                    f"Confidence: {confidence:.2f} | "
                                    f"Threshold: {brain.sweep_threshold:.2f}")
@@ -551,10 +564,15 @@ def main():
                 uptime_pct = brain.get_uptime_pct()
                 write_u64(mm, OFF_L1_UPTIME_PCT, int(uptime_pct * 10000))
 
+                intent_names = {0: 'SOVEREIGN', 1: 'AGGRESSIVE', 2: 'DEFENSIVE', 3: 'SCOUT'}
+                intent_id = read_u64(mm, OFF_AI_INTENT)
+                intent = intent_names.get(intent_id, 'SOVEREIGN')
+
                 log.info(f"L1 status: OBI={obi:+.3f} Skew=${skew_usd:+.2f} "
                         f"Mid=${mid:.0f} Toxic={toxic} Conf={confidence:.2f} "
                         f"Thresh={brain.sweep_threshold:.2f} Up={uptime_pct:.0%} "
-                        f"Ghost={'ON' if brain.ghost_active else 'OFF'} Cycle={cycle}")
+                        f"Ghost={'ON' if brain.ghost_active else 'OFF'} "
+                        f"Intent={intent} Cycle={cycle}")
 
                 # v10.6: Ghost Mode evaluation
                 l2_regime = read_u64(mm, OFF_L2_REGIME)

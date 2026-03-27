@@ -124,6 +124,14 @@ pub struct EngineState {
     // Shadow grid prices (up to MAX_GRID_LEVELS buy + sell)
     pub ghost_buy_prices: [AtomicI64; MAX_GRID_LEVELS],  // Shadow bid prices × PRICE_SCALE
     pub ghost_sell_prices: [AtomicI64; MAX_GRID_LEVELS], // Shadow ask prices × PRICE_SCALE
+
+    // --- SOVEREIGN AI CONTROL (v10.7) ---
+    // AI-writable registry: Oracle tunes these every cycle
+    pub ai_freeze_ms: AtomicU64,           // Dynamic sweep freeze duration (default 4000)
+    pub ai_fire_interval_ms: AtomicU64,    // Min ms between hydra fire cycles (default 3000)
+    pub ai_ghost_trigger_pct: AtomicU64,   // Ghost trigger zone × 100000 (default 50 = 0.05%)
+    pub ai_intent: AtomicU64,              // 0=sovereign, 1=aggressive, 2=defensive, 3=scout
+    pub ai_registry_version: AtomicU64,    // Incremented each time Oracle writes new params
 }
 
 impl Default for OrderBookLevel {
@@ -198,6 +206,11 @@ impl Default for EngineState {
             ghost_velocity_rejects: AtomicU64::new(0),
             ghost_buy_prices: [const { AtomicI64::new(0) }; MAX_GRID_LEVELS],
             ghost_sell_prices: [const { AtomicI64::new(0) }; MAX_GRID_LEVELS],
+            ai_freeze_ms: AtomicU64::new(4000),
+            ai_fire_interval_ms: AtomicU64::new(3000),
+            ai_ghost_trigger_pct: AtomicU64::new(50),  // 0.05%
+            ai_intent: AtomicU64::new(0),               // 0 = sovereign
+            ai_registry_version: AtomicU64::new(0),
         }
     }
 }

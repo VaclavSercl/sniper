@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-🐺 BEROUN SNIPER v10.4 — Telegram Neural Cross Command Center
+🐺 BEROUN SNIPER v10.7 — Telegram Sovereign Command Center
 Bi-directional command & control via encrypted Telegram channel.
-Includes AI L1/L2 telemetry, Shadow Mode, and inline button callbacks.
+Includes AI L1/L2 telemetry, Shadow Mode, Ghost Mode, and Sovereign Intent.
 
 Commands:
   /status    — Live bot state (PnL, position, AI bias)
@@ -48,8 +48,25 @@ DAILY_STATS_PATH = f"{LOG_DIR}/daily_stats.json"
 CET = timezone(timedelta(hours=1))
 PRICE_SCALE = 1e8
 
-# Mmap offsets for AI fields (v10.4)
+# Mmap offsets for AI fields (v10.4-v10.7)
 OFF_SHADOW_MODE = 1616
+OFF_L1_UPTIME = 1664
+OFF_GHOST_TRANSPARENCY = 1672
+OFF_GHOST_INJECTIONS = 1688
+OFF_GHOST_VEL_REJECTS = 1696
+OFF_AI_FREEZE_MS = 1784
+OFF_AI_FIRE_INTERVAL = 1792
+OFF_AI_GHOST_TRIGGER = 1800
+OFF_AI_INTENT = 1808
+OFF_AI_REGISTRY_VER = 1816
+
+# Intent presets: {intent_id: (name, grid_mult, freeze_ms, fire_interval, ghost_trigger_pct, ghost_trans)}
+INTENT_PRESETS = {
+    0: ("SOVEREIGN",   1.0, 4000, 3000, 50, None),     # AI decides everything
+    1: ("AGGRESSIVE",  0.6, 2000, 1500, 30, 10000),    # Tight grid, fast fire, no ghost
+    2: ("DEFENSIVE",   2.0, 6000, 5000, 80, 1000),     # Wide grid, slow fire, ghost ON
+    3: ("SCOUT",       0.8, 3000, 2000, 40, None),      # Shadow mode + narrow grid for data
+}
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [TG] %(message)s")
 log = logging.getLogger("beroun-tg")
@@ -103,26 +120,35 @@ def cmd_help(message):
     if not auth(message): return
     log.info("Help/Start requested")
     try:
-        bot.reply_to(message, """🐺 *SNIPER v10.4 — Neural Cross Command Center*
+        bot.reply_to(message, """🐺 *SNIPER v10.7 — Sovereign Command Center*
 
-📊 /status — Live stav
-🧠 /ai — AI Status (L1 + L2)
-🧠 /brain — Sniper Brain (paměť + lekce)
-🌙 /backtest — Neural Cross backtest
-🔬 /validate — Lesson Validation + Alpha Report
-🌑 /shadow — Shadow Mode
-🚀 /golive — Návrat do Live
-📅 /report — Denní report
-📊 /analytics — Trade analytics + Brain
-🚨 /close CONFIRM — EMERGENCY CLOSE
-🔍 /analyze — Gemini analýza
-📐 /grid 8.5 — Nastavit grid
-💰 /capital 400 — Kapitál
-🛑 /loss 20 — Loss limit
-⏸️ /pause / ▶️ /resume
-⚠️ /cautious — Macro defense
-🔮 /oracle — Vynutit AI cyklus
-❓ /help — Tento přehled""")
+🎯 *Intent (Strategické směry):*
+⚡ /aggressive — Úzký grid, rychlá exekuce
+🛡 /defensive — Široký grid, Ghost ON
+🔬 /scout — Shadow Mode + sběr dat
+🧠 /sovereign — AI řídí vše (default)
+
+📊 *Monitoring:*
+/status — Live stav
+/ai — AI Status (L1+L2+Ghost)
+/brain — Sniper Brain
+/analytics — Trade analytics
+/report — Denní report
+
+🧠 *AI:*
+/oracle — Vynutit AI cyklus
+/analyze — Gemini analýza
+/backtest — Neural Cross backtest
+/validate — Lesson Validation
+
+⚙️ *Manuální:*
+/grid 8.5 — Grid (override AI)
+/capital 400 — Kapitál
+/loss 20 — Loss limit
+/pause / /resume
+/cautious — Macro defense
+/shadow / /golive
+🚨 /close CONFIRM — EMERGENCY CLOSE""")
         log.info("Help sent OK")
     except Exception as e:
         log.error(f"Help send error: {e}")
@@ -998,6 +1024,134 @@ _L2 Oracle běží každých 5 minut._"""
     bot.reply_to(message, msg)
 
 
+# ═══ v10.7 SOVEREIGN INTENT COMMANDS ═══
+def _write_mmap_u64(offset, value):
+    """Write u64 to engine mmap."""
+    import mmap as mmap_mod
+    import struct
+    fd_m = os.open(ENGINE_MMAP, os.O_RDWR)
+    mm = mmap_mod.mmap(fd_m, 0, access=mmap_mod.ACCESS_WRITE)
+    struct.pack_into('<Q', mm, offset, value)
+    mm.close()
+    os.close(fd_m)
+
+def _read_mmap_u64(offset):
+    """Read u64 from engine mmap."""
+    import mmap as mmap_mod
+    import struct
+    fd_m = os.open(ENGINE_MMAP, os.O_RDONLY)
+    mm = mmap_mod.mmap(fd_m, 0, access=mmap_mod.ACCESS_READ)
+    val = struct.unpack_from('<Q', mm, offset)[0]
+    mm.close()
+    os.close(fd_m)
+    return val
+
+def _apply_intent(intent_id):
+    """Apply an intent preset to the AI registry via mmap."""
+    name, grid_mult, freeze_ms, fire_interval, ghost_trigger, ghost_trans = INTENT_PRESETS[intent_id]
+    _write_mmap_u64(OFF_AI_INTENT, intent_id)
+    _write_mmap_u64(OFF_AI_FREEZE_MS, freeze_ms)
+    _write_mmap_u64(OFF_AI_FIRE_INTERVAL, fire_interval)
+    _write_mmap_u64(OFF_AI_GHOST_TRIGGER, ghost_trigger)
+    if ghost_trans is not None:
+        _write_mmap_u64(OFF_GHOST_TRANSPARENCY, ghost_trans)
+    # Increment registry version
+    ver = _read_mmap_u64(OFF_AI_REGISTRY_VER)
+    _write_mmap_u64(OFF_AI_REGISTRY_VER, ver + 1)
+    # Apply grid via beroun-config
+    raw = run_config("export-json")
+    try:
+        state = json.loads(raw)
+        current_grid = state.get("risk_params", {}).get("grid_step_usd", 8.0)
+        new_grid = max(3.0, min(100.0, current_grid * grid_mult))
+        run_config("set-grid", str(round(new_grid, 2)))
+    except Exception:
+        pass
+    # Log to SQLite
+    try:
+        import sqlite3
+        db = sqlite3.connect('/home/wwwenda/hft-sniper/logs/sniper.db')
+        db.execute("INSERT INTO ai_registry (intent, freeze_ms, fire_interval_ms, ghost_mode, reasoning) VALUES (?,?,?,?,?)",
+                   (name, freeze_ms, fire_interval, ghost_trans is not None and ghost_trans < 10000,
+                    f"Commander set intent to {name} via Telegram"))
+        db.commit()
+        db.close()
+    except Exception:
+        pass
+    return name
+
+@bot.message_handler(commands=["aggressive"])
+def cmd_aggressive(message):
+    if not auth(message): return
+    log.warning("⚡ AGGRESSIVE intent activated via Telegram")
+    try:
+        name = _apply_intent(1)
+        bot.reply_to(message, """⚡ *AGGRESSIVE MODE ACTIVATED*
+════════════════════════
+🎯 Grid: ×0.6 (užší)
+⏱ Fire Interval: 1500ms (rychlejší)
+🛡 Freeze: 2000ms (kratší)
+👻 Ghost: OFF (veřejná likvidita pro maker rebates)
+
+⚠️ _Vyšší rychlost = vyšší riziko. DLL zůstává jako pojistka._
+_Pro návrat: `/sovereign`_""")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error: {e}")
+
+@bot.message_handler(commands=["defensive"])
+def cmd_defensive(message):
+    if not auth(message): return
+    log.warning("🛡 DEFENSIVE intent activated via Telegram")
+    try:
+        name = _apply_intent(2)
+        bot.reply_to(message, """🛡 *DEFENSIVE MODE ACTIVATED*
+════════════════════════
+🎯 Grid: ×2.0 (širší)
+⏱ Fire Interval: 5000ms (pomalejší)
+🛡 Freeze: 6000ms (delší)
+👻 Ghost: ON (10% transparency, stealth mode)
+
+_Sniper se stáhne do stínu a loví jen jisté příležitosti._
+_Pro návrat: `/sovereign`_""")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error: {e}")
+
+@bot.message_handler(commands=["scout"])
+def cmd_scout(message):
+    if not auth(message): return
+    log.warning("🔬 SCOUT intent activated via Telegram")
+    try:
+        name = _apply_intent(3)
+        # Also activate shadow mode
+        _write_mmap_u64(OFF_SHADOW_MODE, 1)
+        bot.reply_to(message, """🔬 *SCOUT MODE ACTIVATED*
+════════════════════════
+🎯 Grid: ×0.8 (mírně užší)
+⏱ Fire Interval: 2000ms
+🌑 Shadow Mode: ON (simulace bez rizika)
+
+_Sniper sbírá data. Žádné reálné objednávky._
+_Pro návrat: `/sovereign` + `/golive`_""")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error: {e}")
+
+@bot.message_handler(commands=["sovereign"])
+def cmd_sovereign(message):
+    if not auth(message): return
+    log.info("🧠 SOVEREIGN intent restored via Telegram")
+    try:
+        name = _apply_intent(0)
+        bot.reply_to(message, """🧠 *SOVEREIGN MODE RESTORED*
+════════════════════════
+🎯 AI řídí všechny parametry
+⏱ Fire: 3000ms | Freeze: 4000ms
+👻 Ghost: AI rozhoduje automaticky
+
+_Oracle převzal plné řízení systému._""")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Error: {e}")
+
+
 # ── SHADOW MODE COMMANDS ──────────────────────────────────
 @bot.message_handler(commands=["shadow"])
 def cmd_shadow(message):
@@ -1048,7 +1202,7 @@ Shadow PnL resetováno.
 
 # ── MAIN ────────────────────────────────────────────────────
 if __name__ == "__main__":
-    log.info("🐺 SNIPER v10.4 Neural Cross Telegram Command Center starting...")
+    log.info("🐺 SNIPER v10.7 Sovereign Telegram Command Center starting...")
     log.info(f"   Authorized chat_id: {AUTHORIZED_CHAT_ID}")
     log.info(f"   Config binary: {CONFIG_BIN}")
 
@@ -1061,13 +1215,17 @@ if __name__ == "__main__":
         from telebot.types import BotCommand
         bot.set_my_commands([
             BotCommand("status", "📊 Live stav"),
-            BotCommand("ai", "🧠 AI Status (L1 + L2)"),
-            BotCommand("brain", "🧠 Sniper Brain (paměť + lekce)"),
+            BotCommand("ai", "🧠 AI + Ghost + Sovereign"),
+            BotCommand("brain", "🧠 Sniper Brain"),
+            BotCommand("aggressive", "⚡ Aggressive mode"),
+            BotCommand("defensive", "🛡 Defensive mode"),
+            BotCommand("scout", "🔬 Scout (Shadow)"),
+            BotCommand("sovereign", "🧠 AI kontrola (default)"),
             BotCommand("backtest", "🌙 Neural Cross backtest"),
-            BotCommand("validate", "🔬 Lesson Validation + Alpha"),
+            BotCommand("validate", "🔬 Lesson Validation"),
             BotCommand("oracle", "🔮 Vynutit AI cyklus"),
             BotCommand("analyze", "🔍 Gemini analýza"),
-            BotCommand("analytics", "📊 Trade analytics + Brain"),
+            BotCommand("analytics", "📊 Trade analytics"),
             BotCommand("report", "📅 Denní report"),
             BotCommand("shadow", "🌑 Shadow Mode"),
             BotCommand("golive", "🚀 Návrat do Live"),

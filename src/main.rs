@@ -841,7 +841,9 @@ async fn async_main() -> Result<()> {
                                                     ghost_last_micro = micro_g;
 
                                                     // Check ghost levels for proximity injection
-                                                    let trigger_dist = (micro_g as f64 * ghost_trigger_pct) as i64;
+                                                    // v10.7: Dynamic trigger zone from AI registry
+                                                    let ai_trigger = eng.ai_ghost_trigger_pct.load(Ordering::Relaxed).max(10).min(500) as f64 / 100000.0;
+                                                    let trigger_dist = (micro_g as f64 * ai_trigger) as i64;
                                                     let velocity_safe = ghost_velocity < ghost_velocity_max;
                                                     let min_inject_interval = ghost_last_inject.elapsed().as_millis() > 200; // Rate limit: max 5/sec
 
@@ -914,7 +916,9 @@ async fn async_main() -> Result<()> {
                                             const MIN_TICK: i64 = 100_000_000;
                                             if best_bid > 0 && best_ask > 0 {
                                                 let now = Instant::now();
-                                                if now.duration_since(last_upd).as_millis() > 3000 {
+                                                // v10.7: Dynamic fire interval from AI registry
+                                                let fire_interval = eng.ai_fire_interval_ms.load(Ordering::Relaxed).max(500).min(10000);
+                                                if now.duration_since(last_upd).as_millis() > fire_interval as u128 {
                                                     if risk.paused.load(Ordering::Acquire) == 0 {
                                                         // ═══ L1 SWEEP FREEZE CHECK (v9.2 Hybrid Intelligence) ═══
                                                         let freeze_until = eng.sweep_freeze_until.load(Ordering::Acquire);
