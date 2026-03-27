@@ -45,12 +45,12 @@ ORACLE_CYCLE_SEC = 300  # 5 minutes
 PRICE_SCALE = 1e8
 MAX_MEMORY_CYCLES = 12  # 1 hour of history
 
-# Mmap offsets for v10.1 AI fields
-OFF_BEST_BID = 0
-OFF_BEST_ASK = 8
-OFF_NET_POS = 32
-OFF_REALIZED_PNL = 40
-OFF_T2T_MICROS = 72
+# Mmap offsets — verified from repr(C) struct layout
+OFF_BEST_BID = 64          # After heartbeat zone (8+56=64)
+OFF_BEST_ASK = 72          # 64 + 8
+OFF_NET_POS = 1408         # Verified mismatch fixed (was 32)
+OFF_REALIZED_PNL = 1416    # Verified (was 40)
+OFF_T2T_MICROS = 1280      # Verified (was 72)
 OFF_L1_CONFIDENCE = 1600
 OFF_L2_REGIME = 1608
 OFF_SHADOW_MODE = 1616
