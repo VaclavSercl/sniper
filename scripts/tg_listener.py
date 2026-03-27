@@ -17,6 +17,9 @@ import os
 import json
 import subprocess
 import time
+import hashlib
+import hmac
+import requests
 import logging
 import telebot
 
@@ -26,6 +29,9 @@ AUTHORIZED_CHAT_ID = int(os.environ.get("TELEGRAM_CHAT_ID", "0"))
 CONFIG_BIN = "/home/wwwenda/hft-sniper/target/release/beroun-config"
 ORACLE_SCRIPT = "/home/wwwenda/hft-sniper/scripts/oracle_brain.sh"
 STATE_JSON = "/dev/shm/beroun/state.json"
+BFX_API_KEY = os.environ.get("BITFINEX_API_KEY", "")
+BFX_API_SECRET = os.environ.get("BITFINEX_API_SECRET", "")
+BFX_REST_URL = "https://api.bitfinex.com"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [TG] %(message)s")
 log = logging.getLogger("beroun-tg")
@@ -55,19 +61,37 @@ def run_config(*args):
     except Exception as e:
         return f"❌ Error: {e}"
 
+def bfx_rest(path, body=None):
+    """Authenticated Bitfinex REST v2 request."""
+    nonce = str(int(time.time() * 1000000))
+    body_json = json.dumps(body) if body else "{}"
+    sig_payload = f"/api/{path}{nonce}{body_json}"
+    sig = hmac.new(
+        BFX_API_SECRET.encode(), sig_payload.encode(), hashlib.sha384
+    ).hexdigest()
+    headers = {
+        "bfx-nonce": nonce,
+        "bfx-apikey": BFX_API_KEY,
+        "bfx-signature": sig,
+        "Content-Type": "application/json",
+    }
+    r = requests.post(f"{BFX_REST_URL}/{path}", headers=headers,
+                      data=body_json, timeout=10)
+    return r.json()
+
 # ── COMMANDS ────────────────────────────────────────────────
 @bot.message_handler(commands=["start", "help"])
 def cmd_help(message):
     if not auth(message): return
-    bot.reply_to(message, """🐺 *Beroun Sniper v9.0 — Oracle Interface*
+    bot.reply_to(message, """🐺 *Beroun Sniper v9.2 — Oracle Interface*
 
-📊 `/status` — Live stav (PnL, pozice, Capital Guard)
+📊 `/status` — Live stav (Equity, PnL, pozice)
+🚨 `/close CONFIRM` — EMERGENCY CLOSE (market exit)
 🔍 `/analyze` — Gemini 3.1 Pro analýza trhu
-📐 `/grid 8.5` — Nastavit grid (s sanity check)
-💰 `/capital 400` — Nastavit autorizovaný kapitál ($)
-🛑 `/loss 20` — Nastavit denní loss limit ($)
-⏸️ `/pause` — Nouzové zastavení
-▶️ `/resume` — Obnovit trading
+📐 `/grid 8.5` — Nastavit grid
+💰 `/capital 400` — Autorizovaný kapitál ($)
+🛑 `/loss 20` — Denní loss limit ($)
+⏸️ `/pause` / ▶️ `/resume`
 🔮 `/oracle` — Vynutit Oracle cyklus
 ❓ `/help` — Tento přehled
 
@@ -89,7 +113,14 @@ def cmd_status(message):
         intel = state.get("intelligence", {})
         risk = state.get("risk_params", {})
 
-        msg = f"""📊 *BEROUN SNIPER — Live Status*
+        eq = state.get("equity", {})
+        total_eq = eq.get('total_usd', 0)
+
+        msg = f"""📊 *BEROUN SNIPER v9.2 — Live Status*
+
+💎 *Total Equity:* `${total_eq:.2f}`
+  ├─ Cash:  `${eq.get('wallet_usd', 0):.2f}`
+  └─ BTC:   `${eq.get('btc_value_usd', 0):.2f}` (`{eq.get('wallet_btc', 0):.6f}` BTC)
 
 💲 *Cena:*  `${p.get('micro_price', 0):.2f}`  (spread: `${p.get('spread', 0):.2f}`)
 📦 *Pozice:* `{pos.get('net_btc', 0):.5f}` BTC @ `${pos.get('avg_entry_price', 0):.2f}`
@@ -99,19 +130,10 @@ def cmd_status(message):
   Unrealized: `${pnl.get('unrealized_usd', 0):.4f}`
   *Total:*    `${pnl.get('total_usd', 0):.4f}`
 
-🤖 *AI:*
-  L1 Bias: `${intel.get('ai_bias_usd', 0):.2f}`
-  L2 OBI:  `{intel.get('l2_obi', 0):+.3f}`
-  T2T:     `{intel.get('t2t_micros', 0)}` µs
-
 ⚙️ *Risk:*
   Grid: `${risk.get('grid_step_usd', 0):.2f}` ({risk.get('grid_levels', '?')} levels)
-  MaxInv: `{risk.get('max_inv_delta_btc', 0):.4f}` BTC
-  Paused: `{'YES ⏸️' if risk.get('paused') else 'NO ▶️'}`
-
-🛡️ *Capital Guard:*
-  Auth Capital: `${risk.get('authorized_capital_usd', 0):.2f}`
-  Loss Limit:   `-${risk.get('daily_loss_limit_usd', 0):.2f}`"""
+  Capital: `${risk.get('authorized_capital_usd', 0):.2f}` / DLL: `-${risk.get('daily_loss_limit_usd', 0):.2f}`
+  Paused: `{'YES ⏸️' if risk.get('paused') else 'NO ▶️'}`"""
         bot.reply_to(message, msg)
     except json.JSONDecodeError:
         bot.reply_to(message, f"```\n{raw[:500]}\n```")
@@ -207,6 +229,61 @@ def cmd_loss(message):
         log.info(f"Daily loss limit set to ${value} via Telegram")
     except ValueError:
         bot.reply_to(message, "❌ Neplatné číslo")
+
+@bot.message_handler(commands=["close"])
+def cmd_close(message):
+    if not auth(message): return
+    parts = message.text.split()
+
+    if len(parts) < 2 or parts[1].upper() != "CONFIRM":
+        bot.reply_to(message, """🚨 *EMERGENCY CLOSE*
+
+Toto uzavře celou pozici MARKET příkazem a ZASTAVÍ bota.
+
+⚠️ Pro potvrzení pošli: `/close CONFIRM`""")
+        return
+
+    log.warning("🚨 EMERGENCY CLOSE initiated via Telegram!")
+    bot.reply_to(message, "⏳ Provádím Emergency Close...")
+
+    try:
+        # 1. Read current position
+        raw = run_config("export-json")
+        state = json.loads(raw)
+        net_btc = state.get("position", {}).get("net_btc", 0)
+        price = state.get("price", {}).get("micro_price", 0)
+
+        # 2. Cancel ALL orders via REST API
+        cancel_result = bfx_rest("v2/order/cancel/all", {"all": 1})
+        log.info(f"Cancel all result: {cancel_result}")
+
+        # 3. Market close if position exists
+        close_msg = ""
+        if abs(net_btc) > 0.00001:
+            close_amt = -net_btc  # Opposite direction
+            order_result = bfx_rest("v2/order/submit", {
+                "type": "EXCHANGE MARKET",
+                "symbol": "tBTCUSD",
+                "amount": f"{close_amt:.5f}",
+            })
+            log.info(f"Market close result: {order_result}")
+            close_msg = f"\n📦 Market {'BUY' if close_amt > 0 else 'SELL'} `{abs(close_amt):.5f}` BTC @ ~`${price:.2f}`"
+        else:
+            close_msg = "\n📦 Žádná pozice k uzavření"
+
+        # 4. PAUSE bot via mmap
+        run_config("pause", "true")
+
+        bot.send_message(message.chat.id, f"""🚨 *EMERGENCY CLOSE EXECUTED*
+{close_msg}
+🛑 Bot is *PAUSED*
+
+_Pro obnovení: `/resume`_""")
+        log.warning(f"Emergency close complete. Position was {net_btc:.5f} BTC")
+
+    except Exception as e:
+        bot.send_message(message.chat.id, f"❌ Emergency close error: `{e}`")
+        log.error(f"Emergency close failed: {e}")
 
 
 @bot.message_handler(commands=["oracle"])

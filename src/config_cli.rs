@@ -164,6 +164,11 @@ fn main() -> Result<()> {
                 .as_millis() as u64;
             let ai_alive = ai_hb_ms > 0 && now_epoch.saturating_sub(ai_hb_ms) < 30_000;
 
+            let w_btc = engine.wallet_btc.load(Ordering::Acquire) as f64 / s;
+            let w_usd = engine.wallet_usd.load(Ordering::Acquire) as f64 / s;
+            let btc_value = w_btc * micro_p;
+            let total_equity = w_usd + btc_value;
+
             let json = serde_json::json!({
                 "timestamp": chrono::Utc::now().to_rfc3339(),
                 "price": {
@@ -181,6 +186,12 @@ fn main() -> Result<()> {
                     "realized_usd": r_pnl,
                     "unrealized_usd": u_pnl,
                     "total_usd": r_pnl + u_pnl
+                },
+                "equity": {
+                    "total_usd": total_equity,
+                    "wallet_usd": w_usd,
+                    "wallet_btc": w_btc,
+                    "btc_value_usd": btc_value
                 },
                 "intelligence": {
                     "l2_obi": obi,
