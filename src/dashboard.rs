@@ -17,7 +17,7 @@ use anyhow::Result;
 use beroun_types::{EngineState, RiskState, ENGINE_STATE_PATH, RISK_STATE_PATH, PRICE_SCALE_I};
 
 const MAX_HISTORY: usize = 200;
-const MAX_EVENTS: usize = 60;
+const MAX_EVENTS: usize = 150;
 
 fn init_mmap_ptr<T: Default>(path: &str) -> Result<MmapMut> {
     let file = OpenOptions::new().read(true).write(true).create(true).truncate(false).open(path)?;
@@ -88,6 +88,9 @@ struct DashboardState {
     maker_fee_pct: f64,
     taker_fee_pct: f64,
     fee_kills: u64,
+    // Grid overlay
+    last_buy_price: f64,
+    last_sell_price: f64,
     // Order Book
     bid_prices: Vec<f64>,
     bid_amounts: Vec<f64>,
@@ -121,6 +124,7 @@ impl Default for DashboardState {
             binance_mid: 0.0, delta_lead_bps: 0.0, delta_signal: 0,
             delta_repositions: 0, sentinel_repositions: 0,
             maker_fee_pct: 0.0, taker_fee_pct: 0.0, fee_kills: 0,
+            last_buy_price: 0.0, last_sell_price: 0.0,
             bid_prices: vec![], bid_amounts: vec![],
             ask_prices: vec![], ask_amounts: vec![],
             price_history: VecDeque::with_capacity(MAX_HISTORY),
@@ -152,9 +156,9 @@ fn render_sparkline(data: &VecDeque<f64>, w: f64, h: f64, stroke: &str, gid: &st
     let hex_gray = "#4a5568";
     if data.len() < 3 {
         return format!(
-            "<svg viewBox=\"0 0 {} {}\" width=\"100%\" height=\"{}\">\
+            "<svg viewBox=\"0 0 {} {}\" width=\"100%\" style=\"aspect-ratio:{}/{}\">\
             <text x=\"50%\" y=\"50%\" text-anchor=\"middle\" fill=\"{}\" font-size=\"11\" font-family=\"Inter\">Collecting data...</text></svg>",
-            w, h, h, hex_gray
+            w, h, w as i32, h as i32, hex_gray
         );
     }
     let min = data.iter().cloned().fold(f64::INFINITY, f64::min);
@@ -194,7 +198,7 @@ fn render_sparkline(data: &VecDeque<f64>, w: f64, h: f64, stroke: &str, gid: &st
     };
 
     format!(
-        r#"<svg viewBox="0 0 {} {}" width="100%" height="{}" xmlns="http://www.w3.org/2000/svg">
+        r#"<svg viewBox="0 0 {} {}" width="100%" style="aspect-ratio:{}/{}" xmlns="http://www.w3.org/2000/svg">
 <defs><linearGradient id="{}" x1="0" y1="0" x2="0" y2="1">
 <stop offset="0%" stop-color="{}" stop-opacity="0.2"/><stop offset="100%" stop-color="{}" stop-opacity="0"/>
 </linearGradient></defs>
@@ -203,13 +207,75 @@ fn render_sparkline(data: &VecDeque<f64>, w: f64, h: f64, stroke: &str, gid: &st
 <polyline points="{}" fill="none" stroke="{}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
 <text x="{}" y="{}" text-anchor="end" fill="{}" font-size="9" font-family="JetBrains Mono">{}</text>
 </svg>"#,
-        w, h, h,
+        w, h, w as i32, h as i32,
         gid, stroke, stroke,
         grid,
         first_x, h, points, last_x, h, gid,
         points, stroke,
         w - 2.0, m + 10.0, stroke, val_label
     )
+}
+
+/// Price sparkline with grid overlay: buy level (green), sell level (red), Binance mid (cyan)
+fn render_price_with_grid(data: &VecDeque<f64>, w: f64, h: f64, buy: f64, sell: f64, bnb: f64) -> String {
+    if data.len() < 3 {
+        return render_sparkline(data, w, h, "#e2e8f0", "gp");
+    }
+    let min = data.iter().cloned().fold(f64::INFINITY, f64::min);
+    let max = data.iter().cloned().fold(f64::NEG_INFINITY, f64::max);
+    let range = (max - min).max(0.01);
+    let m = 4.0;
+    let pw = w - 2.0 * m;
+    let ph = h - 2.0 * m;
+
+    // Helper: price → Y coordinate
+    let price_to_y = |p: f64| -> f64 {
+        if p <= 0.0 || p < min - range || p > max + range { return -100.0; }
+        m + ph - ((p - min) / range) * ph
+    };
+
+    let mut overlay = String::new();
+
+    // Buy grid line (green dashed)
+    if buy > 0.0 {
+        let y = price_to_y(buy);
+        if y > 0.0 && y < h {
+            overlay.push_str(&format!(
+                "<line x1=\"{x1}\" y1=\"{y:.1}\" x2=\"{x2}\" y2=\"{y:.1}\" stroke=\"#10b981\" stroke-width=\"1\" stroke-dasharray=\"4,3\" opacity=\"0.7\"/>\
+                 <text x=\"{tx}\" y=\"{ty:.1}\" fill=\"#10b981\" font-size=\"7\" font-family=\"JetBrains Mono\" opacity=\"0.8\">BUY ${p:.0}</text>",
+                x1 = m, y = y, x2 = m + pw, tx = m + 2.0, ty = y - 2.0, p = buy
+            ));
+        }
+    }
+
+    // Sell grid line (red dashed)
+    if sell > 0.0 {
+        let y = price_to_y(sell);
+        if y > 0.0 && y < h {
+            overlay.push_str(&format!(
+                "<line x1=\"{x1}\" y1=\"{y:.1}\" x2=\"{x2}\" y2=\"{y:.1}\" stroke=\"#ef4444\" stroke-width=\"1\" stroke-dasharray=\"4,3\" opacity=\"0.7\"/>\
+                 <text x=\"{tx}\" y=\"{ty:.1}\" fill=\"#ef4444\" font-size=\"7\" font-family=\"JetBrains Mono\" text-anchor=\"end\" opacity=\"0.8\">SELL ${p:.0}</text>",
+                x1 = m, y = y, x2 = m + pw, tx = m + pw - 2.0, ty = y - 2.0, p = sell
+            ));
+        }
+    }
+
+    // Binance mid line (cyan dotted)
+    if bnb > 0.0 {
+        let y = price_to_y(bnb);
+        if y > 0.0 && y < h {
+            overlay.push_str(&format!(
+                "<line x1=\"{x1}\" y1=\"{y:.1}\" x2=\"{x2}\" y2=\"{y:.1}\" stroke=\"#06b6d4\" stroke-width=\"0.8\" stroke-dasharray=\"2,2\" opacity=\"0.5\"/>\
+                 <text x=\"{tx}\" y=\"{ty:.1}\" fill=\"#06b6d4\" font-size=\"6\" font-family=\"JetBrains Mono\" text-anchor=\"middle\" opacity=\"0.6\">BNB</text>",
+                x1 = m, y = y, x2 = m + pw, tx = w / 2.0, ty = y + 8.0
+            ));
+        }
+    }
+
+    // Base sparkline + overlay
+    let base = render_sparkline(data, w, h, "#e2e8f0", "gp");
+    // Insert overlay before closing </svg>
+    base.replace("</svg>", &format!("{}</svg>", overlay))
 }
 
 // ═══ HTML FRAGMENT RENDERERS ═══
@@ -305,7 +371,7 @@ fn render_dashboard(db: &DashboardState) -> String {
     } else { "" };
 
     let ghost_html = if db.ghost_transparency < 0.99 {
-        r#"<div class="freeze-ind" style="background:rgba(139,92,246,0.15);border-color:#a78bfa;">👻 GHOST MODE</div>"#
+        r#"<span class="ghost-badge">👻 GHOST</span>"#
     } else { "" };
 
     let shadow_banner = if db.is_shadow_mode {
@@ -331,7 +397,7 @@ fn render_dashboard(db: &DashboardState) -> String {
     let s = db.uptime_secs % 60;
     let uptime_str = format!("{:02}:{:02}:{:02}", h, m, s);
 
-    let price_svg = render_sparkline(&db.price_history, 600.0, 200.0, "#e2e8f0", "gp");
+    let price_svg = render_price_with_grid(&db.price_history, 600.0, 200.0, db.last_buy_price, db.last_sell_price, db.binance_mid);
     let pnl_svg = render_sparkline(&db.pnl_history, 500.0, 140.0,
         if db.is_shadow_mode { "#a855f7" } else { "#10b981" },
         "gpnl"
@@ -347,7 +413,6 @@ fn render_dashboard(db: &DashboardState) -> String {
 
     format!(r##"<div class="root{shadow_class}">
 {freeze_html}
-{ghost_html}
 {shadow_banner}
 
 <header class="hdr">
@@ -355,6 +420,7 @@ fn render_dashboard(db: &DashboardState) -> String {
 <div class="logo"><span class="wolf">🐺</span><span class="b">BEROUN</span><span class="s"> SNIPER</span></div>
 <span class="ver">v11.1</span>
 {regime}
+{ghost_html}
 {paused_html}
 </div>
 <div class="hdr-r">
@@ -714,6 +780,8 @@ async fn main() -> Result<()> {
             db.maker_fee_pct = maker_f;
             db.taker_fee_pct = taker_f;
             db.fee_kills = f_kills;
+            db.last_buy_price = engine.last_buy_price.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
+            db.last_sell_price = engine.last_sell_price.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
             db.bid_prices = bp;
             db.bid_amounts = bv;
             db.ask_prices = ap;

@@ -68,6 +68,7 @@
         .mono-s { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: #8892a8; }
         .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 8px var(--green); animation: glow 2s ease-in-out infinite; }
         .paused-badge { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; font-weight: 700; color: var(--red); padding: 2px 8px; border-radius: 4px; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); }
+        .ghost-badge { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; font-weight: 600; color: var(--purple); padding: 2px 8px; border-radius: 6px; background: rgba(168,85,247,0.12); border: 1px solid rgba(168,85,247,0.25); animation: pulse-d 2s ease-in-out infinite; }
 
         /* Regime badges */
         .regime { font-size: 0.6rem; font-family: 'JetBrains Mono', monospace; font-weight: 600; padding: 3px 10px; border-radius: 6px; letter-spacing: 0.05em; }
@@ -181,7 +182,7 @@
         .spread-row td { text-align: center; color: var(--yellow); font-size: 0.5rem; padding: 2px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 
         /* ═══ LOG ═══ */
-        .log-scroll { max-height: 220px; overflow-y: auto; }
+        .log-scroll { max-height: 500px; overflow-y: auto; }
         .log-entry { font-family: 'JetBrains Mono', monospace; font-size: 0.57rem; padding: 2px 0; color: #8892a8; border-bottom: 1px solid rgba(255,255,255,0.02); }
         .log-entry .log-time { color: var(--text-muted); margin-right: 5px; }
         .log-entry.trade { color: #34d399; }
