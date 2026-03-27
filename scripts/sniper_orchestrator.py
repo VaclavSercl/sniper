@@ -5,7 +5,7 @@
 The Sovereign Oracle: Connects L1 (tactical) with L2 (strategic).
 Runs every 5 minutes, analyzes both layers, decides and acts.
 
-v10.1.1 UPGRADES:
+v10.3 NEURAL CROSS:
   - OracleMemory: Cross-cycle persistent memory (12 cycles = 1 hour)
   - Tactical Alert Engine: 5 automated rules (inventory, spread, latency, FP, streak)
   - Auto-Escalation: Performance-based aggressivity tuning
@@ -761,7 +761,7 @@ def generate_apex_report(bot_state, l1_state, decision, market_intel,
 
     timestamp = datetime.now(CET).strftime("%H:%M")
 
-    report = f"""{health} *APEX PREDATOR v10.1.1 | STATUS* `{timestamp}`
+    report = f"""{health} *SNIPER v10.3 Neural Cross | STATUS* `{timestamp}`
 ━━━━━━━━━━━━━━━━━━━━━
 
 {regime_icon} *Režim:* `{regime}`
