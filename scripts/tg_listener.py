@@ -860,27 +860,32 @@ def cmd_validate(message):
         msg += f"\n\nSouhrn: {confirmed} confirmed, {degraded} degraded"
         bot.send_message(message.chat.id, msg)
 
-        # Step 2: Alpha report
-        alpha = subprocess.run(
-            ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "alpha-report"],
-            capture_output=True, text=True, timeout=10
-        )
-        if alpha.returncode == 0:
-            a = j4.loads(alpha.stdout)
-            ai = a.get("alpha", {})
-            verdict_icon = "📈" if ai.get("verdict") == "EFFICIENT" else "📉" if ai.get("verdict") == "OVER_CAUTIOUS" else "➖"
-            amsg = (f"{verdict_icon} AI ALPHA REPORT (24h)\n\n"
-                   f"PnL total: ${a.get('total_pnl','?')}\n"
-                   f"Cyklu: {a.get('total_cycles',0)} (W:{a.get('winners',0)} L:{a.get('losers',0)})\n"
-                   f"Aktivni lekce: {a.get('active_lessons',0)}\n\n"
-                   f"AI Saved: +${ai.get('saved_usd','0')}\n"
-                   f"AI Missed: -${ai.get('missed_usd','0')}\n"
-                   f"Net Alpha: ${ai.get('net_alpha','0')}\n"
-                   f"Verdict: {ai.get('verdict','?')}")
-            bot.send_message(message.chat.id, amsg)
+        # Step 2: Alpha report (separate try/except)
+        try:
+            alpha = subprocess.run(
+                ["/home/wwwenda/hft-sniper/target/release/beroun-brain", "alpha-report"],
+                capture_output=True, text=True, timeout=10
+            )
+            if alpha.returncode == 0:
+                a = j4.loads(alpha.stdout)
+                ai = a.get("alpha", {})
+                verdict = ai.get("verdict", "?")
+                verdict_icon = "📈" if verdict == "EFFICIENT" else "📉" if verdict == "OVER_CAUTIOUS" else "➖"
+                amsg = (f"{verdict_icon} AI ALPHA REPORT (24h)\n\n"
+                       f"PnL total: {a.get('total_pnl','?')} USD\n"
+                       f"Cyklu: {a.get('total_cycles',0)} (W:{a.get('winners',0)} L:{a.get('losers',0)})\n"
+                       f"Aktivni lekce: {a.get('active_lessons',0)}\n\n"
+                       f"AI Saved: +{ai.get('saved_usd','0')} USD\n"
+                       f"AI Missed: -{ai.get('missed_usd','0')} USD\n"
+                       f"Net Alpha: {ai.get('net_alpha','0')} USD\n"
+                       f"Verdict: {verdict}")
+                bot.send_message(message.chat.id, amsg)
+        except Exception as ae:
+            log.warning(f"Alpha report display error: {ae}")
 
     except Exception as e:
-        bot.send_message(message.chat.id, f"Validation error: {e}")
+        err = str(e).replace('`','').replace('*','').replace('_','')[:200]
+        bot.send_message(message.chat.id, f"Validation error: {err}")
 
 # Catch-all: forward to Gemini as free-form question
 @bot.message_handler(func=lambda m: True)
