@@ -11,3 +11,4 @@ nohup.out
 /tmp/
 *.pyc
 __pycache__/
+*.db
