@@ -39,22 +39,26 @@ echo "-> Config applied (Capital: $400, DLL: $20, Levels: 3)"
 $BIN_DIR/beroun-dashboard &
 echo "-> Dashboard started"
 
-# 4. Start L1 Shield (Tactical AI)
+# 4. Start L1 Shield (Tactical AI v10.1)
 python3 $PROJECT_ROOT/scripts/l1_shield.py &
-echo "-> L1 Shield started"
+echo "-> L1 Shield started (v10.1 Kinetic Shield)"
 
-# 5. Start Telegram Listener (Python C2)
+# 5. Start AI Orchestrator (L2 Sovereign Oracle v10.1)
+python3 $PROJECT_ROOT/scripts/beroun_ai_orchestrator.py &
+echo "-> AI Orchestrator started (L2 Oracle, 5min cycle)"
+
+# 6. Start Telegram Listener (Python C2)
 if [ -f "$PROJECT_ROOT/.env" ]; then
     set -a; source "$PROJECT_ROOT/.env"; set +a
 fi
 python3 $PROJECT_ROOT/scripts/tg_listener.py &
-echo "-> Telegram C2 started"
+echo "-> Telegram C2 started (v10.1 Overlord)"
 
-# 6. Start Watchdog (The Guardian — backup monitor)
+# 7. Start Watchdog (The Guardian — backup monitor)
 if [ -f "$PROJECT_ROOT/watchdog.sh" ]; then
     $PROJECT_ROOT/watchdog.sh &
     echo "-> Watchdog started"
 fi
 
-echo "✅ All systems operational — v10.0 Apex Predator"
+echo "✅ All systems operational — v10.1 Apex Predator (Overlord)"
 wait

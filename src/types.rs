@@ -102,6 +102,16 @@ pub struct EngineState {
     pub sweep_freeze_until: AtomicU64,  // L1: epoch_ms until execution frozen (0 = no freeze)
     pub l1_skew_adjustment: AtomicI64,  // L1: micro-skew bias from OBI × PRICE_SCALE
     pub analytics_checkpoint_ms: AtomicU64, // Timestamp of last analytics reset
+
+    // --- CROSS-LAYER AI INTELLIGENCE (v10.1 Overlord) ---
+    pub l1_confidence_score: AtomicU64,   // 0..10000 = 0.0000..1.0000 (how certain L1 is about toxicity)
+    pub l2_regime_id: AtomicU64,          // 1=Trending, 2=Ranging, 3=Chaos, 0=Unknown
+    pub is_shadow_mode: AtomicU64,        // 0=Live, 1=Shadow (simulate only)
+    pub shadow_pnl: AtomicI64,            // Shadow PnL accumulator × PRICE_SCALE
+    pub l1_false_positive_rate: AtomicU64, // 0..10000 = FP rate (false sweep detections)
+    pub l1_sweep_success_rate: AtomicU64,  // 0..10000 = successful sweep detections
+    pub l2_last_action_ms: AtomicU64,      // epoch_ms of last L2 Oracle intervention
+    pub ai_learning_trigger: AtomicU64,    // Flag: 1 = L2 should analyze logs
 }
 
 impl Default for OrderBookLevel {
@@ -161,6 +171,14 @@ impl Default for EngineState {
             sweep_freeze_until: AtomicU64::new(0),
             l1_skew_adjustment: AtomicI64::new(0),
             analytics_checkpoint_ms: AtomicU64::new(0),
+            l1_confidence_score: AtomicU64::new(5000),   // 50% default
+            l2_regime_id: AtomicU64::new(0),
+            is_shadow_mode: AtomicU64::new(0),
+            shadow_pnl: AtomicI64::new(0),
+            l1_false_positive_rate: AtomicU64::new(0),
+            l1_sweep_success_rate: AtomicU64::new(5000),
+            l2_last_action_ms: AtomicU64::new(0),
+            ai_learning_trigger: AtomicU64::new(0),
         }
     }
 }

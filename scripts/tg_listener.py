@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """
-🐺 BEROUN SNIPER v9.0 — Telegram Oracle Interface
+🐺 BEROUN SNIPER v10.1 — Telegram Oracle Interface (Overlord)
 Bi-directional command & control via encrypted Telegram channel.
+Includes AI L1/L2 telemetry, Shadow Mode, and inline button callbacks.
 
 Commands:
   /status    — Live bot state (PnL, position, AI bias)
   /analyze   — Gemini 3.1 Pro market analysis
+  /ai        — AI Layer Status (L1 + L2 telemetry)
+  /shadow    — Toggle Shadow Mode (simulate without trading)
+  /golive    — Return from Shadow Mode to live trading
   /grid <N>  — Set grid_step to N USD
   /pause     — Emergency stop
   /resume    — Resume trading
@@ -31,12 +35,18 @@ AUTHORIZED_CHAT_ID = int(os.environ.get("TELEGRAM_CHAT_ID", "0"))
 CONFIG_BIN = "/home/wwwenda/hft-sniper/target/release/beroun-config"
 ORACLE_SCRIPT = "/home/wwwenda/hft-sniper/scripts/oracle_brain.sh"
 STATE_JSON = "/dev/shm/beroun/state.json"
+L1_STATE_JSON = "/dev/shm/beroun/l1_state.json"
+ENGINE_MMAP = "/dev/shm/beroun/engine_state.bin"
 BFX_API_KEY = os.environ.get("BITFINEX_API_KEY", "")
 BFX_API_SECRET = os.environ.get("BITFINEX_API_SECRET", "")
 BFX_REST_URL = "https://api.bitfinex.com"
 LOG_DIR = "/home/wwwenda/hft-sniper/logs"
 DAILY_STATS_PATH = f"{LOG_DIR}/daily_stats.json"
 CET = timezone(timedelta(hours=1))
+PRICE_SCALE = 1e8
+
+# Mmap offsets for AI fields (v10.1)
+OFF_SHADOW_MODE = 1616
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [TG] %(message)s")
 log = logging.getLogger("beroun-tg")
@@ -88,11 +98,14 @@ def bfx_rest(path, body=None):
 @bot.message_handler(commands=["start", "help"])
 def cmd_help(message):
     if not auth(message): return
-    bot.reply_to(message, """🐺 *Beroun Sniper v9.2 — Oracle Interface*
+    bot.reply_to(message, """🐺 *Beroun Sniper v10.1 — Overlord Interface*
 
 📊 `/status` — Live stav (Equity, PnL, pozice)
+🧠 `/ai` — AI Status (L1 Shield + L2 Oracle)
+🌑 `/shadow` — Aktivovat Shadow Mode (simulace)
+🚀 `/golive` — Návrat do Live režimu
 📅 `/report` — Denní report (obchody, PnL, equity)
-📊 `/analytics` — Trade analytics (Sharpe, win-rate, heatmap)
+📊 `/analytics` — Trade analytics (Sharpe, win-rate)
 🚨 `/close CONFIRM` — EMERGENCY CLOSE (market exit)
 🔍 `/analyze` — Gemini 3.1 Pro analýza trhu
 📐 `/grid 8.5` — Nastavit grid
@@ -531,9 +544,129 @@ Answer concisely in Czech as a Senior HFT Trading Advisor. Max 5 sentences."""
         bot.reply_to(message, f"❌ {e}")
 
 
+# ── AI STATUS COMMAND ──────────────────────────────────────
+@bot.message_handler(commands=["ai"])
+def cmd_ai(message):
+    if not auth(message): return
+    log.info("AI status requested")
+
+    # Read L1 state
+    try:
+        with open(L1_STATE_JSON, 'r') as f:
+            l1 = json.load(f)
+    except Exception:
+        l1 = {}
+
+    raw = run_config("export-json")
+    try:
+        state = json.loads(raw)
+    except Exception:
+        state = {}
+
+    analytics = state.get('analytics', {})
+    toxic = analytics.get('toxic_flow_hits', 0)
+    fills = analytics.get('session_fills', 0)
+    confidence = l1.get('confidence', 0)
+    fp_rate = l1.get('false_positive_rate', 0)
+    success_rate = l1.get('success_rate', 0)
+    threshold = l1.get('sweep_threshold', 0.70)
+    total_sweeps = l1.get('total_sweeps', 0)
+    obi = l1.get('obi', 0)
+
+    health = "🟢 Sharp" if confidence > 0.7 else "🟢 Balanced"
+    if fp_rate > 0.5:
+        health = "🟡 Too sensitive"
+
+    # Read shadow mode
+    shadow = "🚀 LIVE"
+    try:
+        import mmap as mmap_mod
+        import struct
+        fd_m = os.open(ENGINE_MMAP, os.O_RDONLY)
+        mm = mmap_mod.mmap(fd_m, 0, access=mmap_mod.ACCESS_READ)
+        shadow_val = struct.unpack_from('<Q', mm, OFF_SHADOW_MODE)[0]
+        shadow = "🌑 SHADOW" if shadow_val == 1 else "🚀 LIVE"
+        mm.close()
+        os.close(fd_m)
+    except Exception:
+        pass
+
+    msg = f"""🧠 *AI INTELLIGENCE STATUS v10.1*
+━━━━━━━━━━━━━━━━━━━━━━━━
+
+🎤 *Mode:* `{shadow}`
+
+🛡️ *L1 Shield (Taktika)*
+`OBI:          {obi:+.4f}`
+`Confidence:   {confidence:.0%}`
+`Threshold:    {threshold:.3f}`
+`FP Rate:      {fp_rate:.0%}`
+`Success Rate: {success_rate:.0%}`
+`Total Sweeps: {total_sweeps}`
+`Health:       {health}`
+
+📊 *Session*
+`Fills:        {fills}`
+`Toxic Hits:   {toxic}`
+`Toxicity:     {toxic / max(fills, 1) * 100:.1f}%`
+
+_L1 se adaptivně učí z každého sweepu._
+_L2 Oracle běží každých 5 minut._"""
+
+    bot.reply_to(message, msg)
+
+
+# ── SHADOW MODE COMMANDS ──────────────────────────────────
+@bot.message_handler(commands=["shadow"])
+def cmd_shadow(message):
+    if not auth(message): return
+    log.warning("Shadow mode activated via Telegram")
+    try:
+        import mmap as mmap_mod
+        import struct
+        fd_m = os.open(ENGINE_MMAP, os.O_RDWR)
+        mm = mmap_mod.mmap(fd_m, 0, access=mmap_mod.ACCESS_WRITE)
+        struct.pack_into('<Q', mm, OFF_SHADOW_MODE, 1)
+        mm.close()
+        os.close(fd_m)
+        run_config("pause", "true")
+        bot.reply_to(message, """🌑 *SHADOW MODE ACTIVATED*
+
+Bot pokračuje v simulaci, ale neposílá reálné objednávky.
+L1 + L2 AI dál běží a učí se.
+
+_Pro návrat: `/golive`_""")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Shadow mode error: {e}")
+
+
+@bot.message_handler(commands=["golive"])
+def cmd_golive(message):
+    if not auth(message): return
+    log.warning("Go Live activated via Telegram")
+    try:
+        import mmap as mmap_mod
+        import struct
+        fd_m = os.open(ENGINE_MMAP, os.O_RDWR)
+        mm = mmap_mod.mmap(fd_m, 0, access=mmap_mod.ACCESS_WRITE)
+        struct.pack_into('<Q', mm, OFF_SHADOW_MODE, 0)
+        struct.pack_into('<q', mm, 1624, 0)  # Reset shadow PnL
+        mm.close()
+        os.close(fd_m)
+        run_config("pause", "false")
+        bot.reply_to(message, """🚀 *LIVE MODE RESTORED*
+
+Bot obnoven do ostrého režimu.
+Shadow PnL resetováno.
+
+⚠️ _Všechny objednávky jsou ostré!_""")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Go live error: {e}")
+
+
 # ── MAIN ────────────────────────────────────────────────────
 if __name__ == "__main__":
-    log.info("🐺 Beroun Telegram Interface v9.0 starting...")
+    log.info("🐺 Beroun Telegram Interface v10.1 (Overlord) starting...")
     log.info(f"   Authorized chat_id: {AUTHORIZED_CHAT_ID}")
     log.info(f"   Config binary: {CONFIG_BIN}")
 
