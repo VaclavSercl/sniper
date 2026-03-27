@@ -10,3 +10,6 @@ path = "src/lib.rs"
 [dependencies]
 memmap2 = "0.9.5"
 zerocopy = { version = "0.8.14", features = ["derive"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.19", features = ["json", "env-filter"] }
+tracing-appender = "0.2"

@@ -1,0 +1,22 @@
+[Unit]
+Description=Sniper Armada v11.1 — Multi-Bot HFT Platform
+After=network.target
+
+[Service]
+Type=simple
+User=wwwenda
+WorkingDirectory=/home/wwwenda/hft-sniper
+ExecStart=/home/wwwenda/hft-sniper/deploy_armada.sh
+Restart=always
+RestartSec=5
+
+# Performance
+Nice=-10
+LimitNOFILE=65535
+LimitMEMLOCK=infinity
+
+# Environment
+EnvironmentFile=/home/wwwenda/hft-sniper/.env
+
+[Install]
+WantedBy=multi-user.target
