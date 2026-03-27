@@ -858,13 +858,40 @@ Shadow PnL resetováno.
 
 # ── MAIN ────────────────────────────────────────────────────
 if __name__ == "__main__":
-    log.info("🐺 SNIPER v10.2 Telegram Command Center starting...")
+    log.info("🐺 SNIPER v10.3 Neural Cross Telegram Command Center starting...")
     log.info(f"   Authorized chat_id: {AUTHORIZED_CHAT_ID}")
     log.info(f"   Config binary: {CONFIG_BIN}")
 
     # Start auto daily report scheduler (08:00 CET)
     report_thread = threading.Thread(target=auto_daily_report, daemon=True)
     report_thread.start()
+
+    # Register commands in Telegram menu
+    try:
+        from telebot.types import BotCommand
+        bot.set_my_commands([
+            BotCommand("status", "📊 Live stav"),
+            BotCommand("ai", "🧠 AI Status (L1 + L2)"),
+            BotCommand("brain", "🧠 Sniper Brain (paměť + lekce)"),
+            BotCommand("backtest", "🌙 Neural Cross backtest"),
+            BotCommand("oracle", "🔮 Vynutit AI cyklus"),
+            BotCommand("analyze", "🔍 Gemini analýza"),
+            BotCommand("analytics", "📊 Trade analytics + Brain"),
+            BotCommand("report", "📅 Denní report"),
+            BotCommand("shadow", "🌑 Shadow Mode"),
+            BotCommand("golive", "🚀 Návrat do Live"),
+            BotCommand("grid", "📐 Nastavit grid"),
+            BotCommand("capital", "💰 Kapitál"),
+            BotCommand("loss", "🛑 Loss limit"),
+            BotCommand("pause", "⏸️ Pauza"),
+            BotCommand("resume", "▶️ Pokračovat"),
+            BotCommand("cautious", "⚠️ Macro defense"),
+            BotCommand("close", "🚨 EMERGENCY CLOSE"),
+            BotCommand("help", "❓ Přehled příkazů"),
+        ])
+        log.info("   ✅ Telegram menu commands registered")
+    except Exception as e:
+        log.warning(f"   Menu registration failed: {e}")
 
     # Debug: log ALL incoming messages
     @bot.middleware_handler(update_types=['message'])
