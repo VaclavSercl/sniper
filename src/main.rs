@@ -1,14 +1,13 @@
-use std::time::{SystemTime, UNIX_EPOCH, Instant, Duration};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use tokio::sync::mpsc;
+use std::time::{Instant, SystemTime, UNIX_EPOCH, Duration};
 use futures_util::{StreamExt, SinkExt};
 use serde_json::json;
-use tokio_tungstenite::tungstenite::protocol::Message;
 use hmac::{Hmac, Mac};
 use sha2::Sha384;
 use dotenvy::dotenv;
-use tracing::{info, Level};
+use tracing::{info, Level, warn, error};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use memmap2::MmapMut;
 use anyhow::{Context, Result};
@@ -16,6 +15,21 @@ use std::collections::VecDeque;
 use fs2::FileExt;
 
 use beroun_types::{EngineState, RiskState, ENGINE_STATE_PATH, RISK_STATE_PATH};
+
+use fastwebsockets::{handshake, OpCode, Payload};
+use hyper::{Request, body::Bytes, header::{CONNECTION, UPGRADE, HOST}};
+use http_body_util::Empty;
+
+struct SpawnExecutor;
+impl<Fut> hyper::rt::Executor<Fut> for SpawnExecutor
+where
+    Fut: std::future::Future + Send + 'static,
+    Fut::Output: Send + 'static,
+{
+    fn execute(&self, fut: Fut) {
+        tokio::spawn(fut);
+    }
+}
 
 type HmacSha384 = Hmac<Sha384>;
 
@@ -451,20 +465,13 @@ async fn async_main() -> Result<()> {
         };
         info!(event = "exec_ws_connected");
 
-        let (mut mdata_write, mut mdata_read) = ws_mdata.split();
-        let (exec_write, exec_read) = ws_exec.split();
-
-        // Configure Market Data WS (public, no auth)
-        let _ = mdata_write.send(Message::Text(json!({"event":"conf","flags":131072|536870912}).to_string().into())).await;
-        let _ = mdata_write.send(Message::Text(json!({"event":"subscribe","channel":"book","symbol":beroun_types::TRADING_SYMBOL,"prec":"P0","freq":"F0","len":"25"}).to_string().into())).await;
-
         // Order channel: HFT loop → exec writer
         let (order_tx, mut order_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
         // Error channel: any task → main loop (watchdog kill switch)
         let (err_tx, mut err_rx) = tokio::sync::mpsc::unbounded_channel::<&'static str>();
 
         // ── TASK 1: EXEC WRITER ──
-        let mut exec_write = exec_write;
+        let mut exec_ws_writer = ws_exec; // Move exec_ws into the writer task
         let err_tx_w = err_tx.clone();
         let key_c = key.clone();
         let sec_c = sec.clone();
@@ -475,14 +482,14 @@ async fn async_main() -> Result<()> {
             };
             let auth_payload = format!("AUTH{}", nonce);
             let sig = get_sig(&sec_c, &auth_payload).await;
-            let _ = exec_write.send(Message::Text(json!({"event":"conf","flags":131072}).to_string().into())).await;
+            let _ = exec_ws_writer.write_frame(fastwebsockets::Frame::text(Payload::Owned(json!({"event":"conf","flags":131072}).to_string().into_bytes()))).await;
             let auth_msg = json!({"event":"auth","apiKey":key_c,"authSig":sig,"authPayload":auth_payload,"authNonce":nonce,"dms":4});
-            if exec_write.send(Message::Text(auth_msg.to_string().into())).await.is_err() {
+            if exec_ws_writer.write_frame(fastwebsockets::Frame::text(Payload::Owned(auth_msg.to_string().into_bytes()))).await.is_err() {
                 let _ = err_tx_w.send("writer_auth_failed");
                 return;
             }
             while let Some(order_msg) = order_rx.recv().await {
-                if exec_write.send(Message::Text(order_msg.into())).await.is_err() {
+                if exec_ws_writer.write_frame(fastwebsockets::Frame::text(Payload::Owned(order_msg.into_bytes()))).await.is_err() {
                     let _ = err_tx_w.send("writer_socket_error");
                     break;
                 }
@@ -490,176 +497,191 @@ async fn async_main() -> Result<()> {
         });
 
         // ── TASK 2: EXEC READER (te, wu, n + 15s watchdog) ──
-        let mut exec_read = exec_read;
+        // We need a separate connection for the reader if the writer takes ownership.
+        // Re-establish exec_ws for the reader.
+        let mut exec_read = match connect_ws().await {
+            Ok(v) => v,
+            Err(e) => { info!(event = "exec_reader_connect_failed", error = %e); tokio::time::sleep(Duration::from_secs(5)).await; continue; }
+        };
         let err_tx_r = err_tx.clone();
         let exec_engine = engine_ptr as usize;
         let exec_notifier = notifier.clone();
         let reader_handle = tokio::spawn(async move {
             loop {
-                match tokio::time::timeout(Duration::from_secs(30), exec_read.next()).await {
-                    Ok(Some(Ok(msg))) if msg.is_text() => {
-                        let mut bytes = msg.into_data().to_vec();
-                        let v = match simd_json::to_borrowed_value(&mut bytes) {
-                            Ok(v) => v,
-                            Err(_) => continue,
-                        };
-                        if let BorrowedValue::Array(arr) = v {
-                            let engine = unsafe { &*(exec_engine as *const EngineState) };
-                            if arr[0].as_i64() == Some(0) {
-                                let mt = arr[1].as_str().unwrap_or("");
-                                if mt == "te" {
-                                    if let Some(trade) = arr[2].as_array() {
-                                        if let (Some(trade_amt), Some(trade_price)) = (safe_as_f64(&trade[4]), safe_as_f64(&trade[5])) {
-                                            let scale = beroun_types::PRICE_SCALE;
-                                            let old_pos_i = engine.net_position.load(Ordering::SeqCst);
-                                            let old_pos = old_pos_i as f64 / scale;
-                                            let old_aep_i = engine.average_entry_price.load(Ordering::SeqCst);
-                                            let old_aep = old_aep_i as f64 / scale;
+                let frame = tokio::time::timeout(Duration::from_secs(15), exec_read.read_frame()).await;
+                match frame {
+                    Ok(Ok(frame)) => {
+                        match frame.opcode {
+                            OpCode::Text => {
+                                let mut bytes = frame.payload.to_vec();
+                                let v = match simd_json::to_borrowed_value(&mut bytes) {
+                                    Ok(v) => v,
+                                    Err(_) => continue,
+                                };
+                                if let BorrowedValue::Array(arr) = v {
+                                    let engine = unsafe { &*(exec_engine as *const EngineState) };
+                                    if arr[0].as_i64() == Some(0) {
+                                        let mt = arr[1].as_str().unwrap_or("");
+                                        if mt == "te" {
+                                            if let Some(trade) = arr[2].as_array() {
+                                                if let (Some(trade_amt), Some(trade_price)) = (safe_as_f64(&trade[4]), safe_as_f64(&trade[5])) {
+                                                    let scale = beroun_types::PRICE_SCALE;
+                                                    let old_pos_i = engine.net_position.load(Ordering::SeqCst);
+                                                    let old_pos = old_pos_i as f64 / scale;
+                                                    let old_aep_i = engine.average_entry_price.load(Ordering::SeqCst);
+                                                    let old_aep = old_aep_i as f64 / scale;
 
-                                            // 1. REALIZED PnL (trade reduces/closes position)
-                                            if (old_pos > 0.0 && trade_amt < 0.0) || (old_pos < 0.0 && trade_amt > 0.0) {
-                                                let closed_amt = trade_amt.abs().min(old_pos.abs());
-                                                let pnl_gain = if old_pos > 0.0 {
-                                                    (trade_price - old_aep) * closed_amt
-                                                } else {
-                                                    (old_aep - trade_price) * closed_amt
-                                                };
-                                                engine.realized_pnl.fetch_add((pnl_gain * scale).round() as i64, Ordering::SeqCst);
-                                                info!(event = "pnl_realized", gain = pnl_gain, closed = closed_amt, aep = old_aep);
-                                            }
+                                                    // 1. REALIZED PnL (trade reduces/closes position)
+                                                    if (old_pos > 0.0 && trade_amt < 0.0) || (old_pos < 0.0 && trade_amt > 0.0) {
+                                                        let closed_amt = trade_amt.abs().min(old_pos.abs());
+                                                        let pnl_gain = if old_pos > 0.0 {
+                                                            (trade_price - old_aep) * closed_amt
+                                                        } else {
+                                                            (old_aep - trade_price) * closed_amt
+                                                        };
+                                                        engine.realized_pnl.fetch_add((pnl_gain * scale).round() as i64, Ordering::SeqCst);
+                                                        info!(event = "pnl_realized", gain = pnl_gain, closed = closed_amt, aep = old_aep);
+                                                    }
 
-                                            // 2. AVERAGE ENTRY PRICE (WAP)
-                                            let new_pos = old_pos + trade_amt;
-                                            if new_pos.abs() > 1e-8 {
-                                                if (old_pos >= 0.0 && trade_amt > 0.0) || (old_pos <= 0.0 && trade_amt < 0.0) {
-                                                    // Enlarging position → weighted average
-                                                    let new_aep = (old_pos.abs() * old_aep + trade_amt.abs() * trade_price) / new_pos.abs();
-                                                    engine.average_entry_price.store((new_aep * scale).round() as i64, Ordering::SeqCst);
-                                                } else if (old_pos > 0.0 && new_pos < 0.0) || (old_pos < 0.0 && new_pos > 0.0) {
-                                                    // Position flipped → AEP = trade price
-                                                    engine.average_entry_price.store((trade_price * scale).round() as i64, Ordering::SeqCst);
+                                                    // 2. AVERAGE ENTRY PRICE (WAP)
+                                                    let new_pos = old_pos + trade_amt;
+                                                    if new_pos.abs() > 1e-8 {
+                                                        if (old_pos >= 0.0 && trade_amt > 0.0) || (old_pos <= 0.0 && trade_amt < 0.0) {
+                                                            // Enlarging position → weighted average
+                                                            let new_aep = (old_pos.abs() * old_aep + trade_amt.abs() * trade_price) / new_pos.abs();
+                                                            engine.average_entry_price.store((new_aep * scale).round() as i64, Ordering::SeqCst);
+                                                        } else if (old_pos > 0.0 && new_pos < 0.0) || (old_pos < 0.0 && new_pos > 0.0) {
+                                                            // Position flipped → AEP = trade price
+                                                            engine.average_entry_price.store((trade_price * scale).round() as i64, Ordering::SeqCst);
+                                                        }
+                                                        // Partial close: AEP stays the same (no update needed)
+                                                    } else {
+                                                        // Position == 0 → reset AEP
+                                                        engine.average_entry_price.store(0, Ordering::SeqCst);
+                                                    }
+
+                                                    // 3. Update net_position
+                                                    engine.net_position.store((new_pos * scale).round() as i64, Ordering::SeqCst);
+
+                                                    // 4. ALPHA TRACKING: measure AI contribution
+                                                    let ai_bias_now = engine.current_ai_bias.load(Ordering::Acquire) as f64 / scale;
+                                                    if ai_bias_now.abs() > 0.01 {
+                                                        // For buys: positive bias = bought higher = negative alpha
+                                                        // For sells: positive bias = sold higher = positive alpha
+                                                        let alpha = ai_bias_now * trade_amt.abs() * trade_amt.signum();
+                                                        engine.ai_alpha_usd.fetch_add((alpha * scale).round() as i64, Ordering::SeqCst);
+                                                    }
+
+                                                    info!(event = "trade_executed", amount = trade_amt, price = trade_price,
+                                                          new_pos = new_pos, aep = engine.average_entry_price.load(Ordering::SeqCst) as f64 / scale);
+                                                    // v9.5: Fill-rate tracking
+                                                    if trade_amt > 0.0 {
+                                                        engine.buy_fill_count.fetch_add(1, Ordering::Relaxed);
+                                                    } else {
+                                                        engine.sell_fill_count.fetch_add(1, Ordering::Relaxed);
+                                                    }
+                                                    // v10.0: Monthly volume for fee tier
+                                                    let trade_vol_usd = (trade_amt.abs() * trade_price * scale) as u64;
+                                                    engine.monthly_volume_usd.fetch_add(trade_vol_usd, Ordering::Relaxed);
+
+                                                    // v9.2: HYBRID INTELLIGENCE — TradeAnalytics
+                                                    engine.session_fill_count.fetch_add(1, Ordering::Relaxed);
+                                                    if trade_amt > 0.0 {
+                                                        engine.session_buy_volume.fetch_add((trade_amt * scale) as u64, Ordering::Relaxed);
+                                                        engine.session_buy_usd.fetch_add(trade_vol_usd, Ordering::Relaxed);
+                                                    } else {
+                                                        engine.session_sell_volume.fetch_add((trade_amt.abs() * scale) as u64, Ordering::Relaxed);
+                                                        engine.session_sell_usd.fetch_add(trade_vol_usd, Ordering::Relaxed);
+                                                    }
+                                                    exec_notifier.trade(trade_amt, trade_price);
                                                 }
-                                                // Partial close: AEP stays the same (no update needed)
-                                            } else {
-                                                // Position == 0 → reset AEP
-                                                engine.average_entry_price.store(0, Ordering::SeqCst);
-                                            }
-
-                                            // 3. Update net_position
-                                            engine.net_position.store((new_pos * scale).round() as i64, Ordering::SeqCst);
-
-                                            // 4. ALPHA TRACKING: measure AI contribution
-                                            let ai_bias_now = engine.current_ai_bias.load(Ordering::Acquire) as f64 / scale;
-                                            if ai_bias_now.abs() > 0.01 {
-                                                // For buys: positive bias = bought higher = negative alpha
-                                                // For sells: positive bias = sold higher = positive alpha
-                                                let alpha = ai_bias_now * trade_amt.abs() * trade_amt.signum();
-                                                engine.ai_alpha_usd.fetch_add((alpha * scale).round() as i64, Ordering::SeqCst);
-                                            }
-
-                                            info!(event = "trade_executed", amount = trade_amt, price = trade_price,
-                                                  new_pos = new_pos, aep = engine.average_entry_price.load(Ordering::SeqCst) as f64 / scale);
-                                            // v9.5: Fill-rate tracking
-                                            if trade_amt > 0.0 {
-                                                engine.buy_fill_count.fetch_add(1, Ordering::Relaxed);
-                                            } else {
-                                                engine.sell_fill_count.fetch_add(1, Ordering::Relaxed);
-                                            }
-                                            // v10.0: Monthly volume for fee tier
-                                            let trade_vol_usd = (trade_amt.abs() * trade_price * scale) as u64;
-                                            engine.monthly_volume_usd.fetch_add(trade_vol_usd, Ordering::Relaxed);
-
-                                            // v9.2: HYBRID INTELLIGENCE — TradeAnalytics
-                                            engine.session_fill_count.fetch_add(1, Ordering::Relaxed);
-                                            if trade_amt > 0.0 {
-                                                engine.session_buy_volume.fetch_add((trade_amt * scale) as u64, Ordering::Relaxed);
-                                                engine.session_buy_usd.fetch_add(trade_vol_usd, Ordering::Relaxed);
-                                            } else {
-                                                engine.session_sell_volume.fetch_add((trade_amt.abs() * scale) as u64, Ordering::Relaxed);
-                                                engine.session_sell_usd.fetch_add(trade_vol_usd, Ordering::Relaxed);
-                                            }
-                                            exec_notifier.trade(trade_amt, trade_price);
-                                        }
-                                    }
-                                }
-                                if mt == "wu" || mt == "ws" {
-                                    let wd: Vec<&BorrowedValue> = if mt == "wu" { vec![&arr[2]] }
-                                    else { arr[2].as_array().map(|a: &Vec<BorrowedValue>| a.iter().collect()).unwrap_or_default() };
-                                    for w in wd {
-                                        if let (Some(wt), Some(cur), Some(bal)) = (w[0].as_str(), w[1].as_str(), safe_as_f64(&w[2])) {
-                                            if wt == "exchange" {
-                                                if cur == beroun_types::TRADING_BASE { engine.wallet_btc.store((bal * beroun_types::PRICE_SCALE) as u64, Ordering::SeqCst); }
-                                                else if cur == beroun_types::TRADING_QUOTE || cur == "UST" { engine.wallet_usd.store((bal * beroun_types::PRICE_SCALE) as u64, Ordering::SeqCst); }
                                             }
                                         }
-                                    }
-                                }
-                                if mt == "n" {
-                                    if let Some(n) = arr[2].as_array() {
-                                        info!(event = "bitfinex_notification",
-                                              ntype = n[1].as_str().unwrap_or("?"),
-                                              status = n[6].as_str().unwrap_or("?"),
-                                              text = n[7].as_str().unwrap_or(""));
-                                    }
-                                }
-                                // --- ORDER SNAPSHOT (state recovery after connect) ---
-                                if mt == "os" {
-                                    if let Some(orders) = arr[2].as_array() {
-                                        for order in orders {
-                                            if let Some(o) = order.as_array() {
+                                        if mt == "wu" || mt == "ws" {
+                                            let wd: Vec<&BorrowedValue> = if mt == "wu" { vec![&arr[2]] }
+                                            else { arr[2].as_array().map(|a: &Vec<BorrowedValue>| a.iter().collect()).unwrap_or_default() };
+                                            for w in wd {
+                                                if let (Some(wt), Some(cur), Some(bal)) = (w[0].as_str(), w[1].as_str(), safe_as_f64(&w[2])) {
+                                                    if wt == "exchange" {
+                                                        if cur == beroun_types::TRADING_BASE { engine.wallet_btc.store((bal * beroun_types::PRICE_SCALE) as u64, Ordering::SeqCst); }
+                                                        else if cur == beroun_types::TRADING_QUOTE || cur == "UST" { engine.wallet_usd.store((bal * beroun_types::PRICE_SCALE) as u64, Ordering::SeqCst); }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        if mt == "n" {
+                                            if let Some(n) = arr[2].as_array() {
+                                                info!(event = "bitfinex_notification",
+                                                      ntype = n[1].as_str().unwrap_or("?"),
+                                                      status = n[6].as_str().unwrap_or("?"),
+                                                      text = n[7].as_str().unwrap_or(""));
+                                            }
+                                        }
+                                        // --- ORDER SNAPSHOT (state recovery after connect) ---
+                                        if mt == "os" {
+                                            if let Some(orders) = arr[2].as_array() {
+                                                for order in orders {
+                                                    if let Some(o) = order.as_array() {
+                                                        if let (Some(id), Some(sym), Some(amt), Some(status)) = (
+                                                            o[0].as_u64().or_else(|| o[0].as_f64().map(|f| f as u64)),
+                                                            o[3].as_str(), safe_as_f64(&o[6]), o[13].as_str()
+                                                        ) {
+                                                            if sym == beroun_types::TRADING_SYMBOL && (status.contains("ACTIVE") || status.contains("PARTIALLY")) {
+                                                                if amt > 0.0 { store_order_slot(&engine.active_buy_ids, id); }
+                                                                else { store_order_slot(&engine.active_sell_ids, id); }
+                                                                info!(event = "order_recovered", id = id, side = if amt > 0.0 { "buy" } else { "sell" });
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        // --- ORDER LIFECYCLE (on=new, ou=update, oc=cancel) ---
+                                        if mt == "on" || mt == "ou" || mt == "oc" {
+                                            if let Some(o) = arr[2].as_array() {
                                                 if let (Some(id), Some(sym), Some(amt), Some(status)) = (
                                                     o[0].as_u64().or_else(|| o[0].as_f64().map(|f| f as u64)),
                                                     o[3].as_str(), safe_as_f64(&o[6]), o[13].as_str()
                                                 ) {
-                                                    if sym == beroun_types::TRADING_SYMBOL && (status.contains("ACTIVE") || status.contains("PARTIALLY")) {
-                                                        if amt > 0.0 { store_order_slot(&engine.active_buy_ids, id); }
-                                                        else { store_order_slot(&engine.active_sell_ids, id); }
-                                                        info!(event = "order_recovered", id = id, side = if amt > 0.0 { "buy" } else { "sell" });
+                                                    if sym == beroun_types::TRADING_SYMBOL {
+                                                        if status.contains("ACTIVE") || status.contains("PARTIALLY") {
+                                                            if amt > 0.0 { store_order_slot(&engine.active_buy_ids, id); }
+                                                            else { store_order_slot(&engine.active_sell_ids, id); }
+                                                            info!(event = "order_tracked", mt = mt, id = id, side = if amt > 0.0 { "buy" } else { "sell" });
+                                                        } else if status.contains("CANCELED") || status.contains("EXECUTED") {
+                                                            if amt > 0.0 {
+                                                                clear_order_slot(&engine.active_buy_ids, id);
+                                                            } else {
+                                                                clear_order_slot(&engine.active_sell_ids, id);
+                                                            }
+                                                            info!(event = "order_cleared", mt = mt, id = id, status = status);
+                                                        }
                                                     }
                                                 }
                                             }
                                         }
                                     }
-                                }
-                                // --- ORDER LIFECYCLE (on=new, ou=update, oc=cancel) ---
-                                if mt == "on" || mt == "ou" || mt == "oc" {
-                                    if let Some(o) = arr[2].as_array() {
-                                        if let (Some(id), Some(sym), Some(amt), Some(status)) = (
-                                            o[0].as_u64().or_else(|| o[0].as_f64().map(|f| f as u64)),
-                                            o[3].as_str(), safe_as_f64(&o[6]), o[13].as_str()
-                                        ) {
-                                            if sym == beroun_types::TRADING_SYMBOL {
-                                                if status.contains("ACTIVE") || status.contains("PARTIALLY") {
-                                                    if amt > 0.0 { store_order_slot(&engine.active_buy_ids, id); }
-                                                    else { store_order_slot(&engine.active_sell_ids, id); }
-                                                    info!(event = "order_tracked", mt = mt, id = id, side = if amt > 0.0 { "buy" } else { "sell" });
-                                                } else if status.contains("CANCELED") || status.contains("EXECUTED") {
-                                                    if amt > 0.0 {
-                                                        clear_order_slot(&engine.active_buy_ids, id);
-                                                    } else {
-                                                        clear_order_slot(&engine.active_sell_ids, id);
-                                                    }
-                                                    info!(event = "order_cleared", mt = mt, id = id, status = status);
-                                                }
-                                            }
-                                        }
+                                } else if let BorrowedValue::Object(obj) = v {
+                                    if obj.get("event") == Some(&BorrowedValue::from("auth")) && obj.get("status") == Some(&BorrowedValue::from("OK")) {
+                                        info!(event = "exec_auth_ok");
                                     }
                                 }
-                            }
-                        } else if let BorrowedValue::Object(obj) = v {
-                            if obj.get("event") == Some(&BorrowedValue::from("auth")) && obj.get("status") == Some(&BorrowedValue::from("OK")) {
-                                info!(event = "exec_auth_ok");
-                            }
+                            },
+                            OpCode::Close => { let _ = err_tx_r.send("exec_socket_closed"); break; },
+                            _ => {} // Ping/Pong/Binary
                         }
                     }
-                    Ok(Some(Ok(_))) => {} // Ping/Pong
-                    Ok(Some(Err(_))) | Ok(None) => { let _ = err_tx_r.send("exec_socket_closed"); break; }
-                    Err(_) => { let _ = err_tx_r.send("exec_socket_timeout"); break; }
+                    Ok(Err(e)) => { let _ = err_tx_r.send("exec_socket_error"); error!(event = "exec_read_error", error = %e); break; }
+                    Err(_) => { let _ = err_tx_r.send("exec_socket_timeout"); info!(event = "exec_socket_timeout"); break; }
                 }
             }
         });
 
         // ── TASK 3: MARKET DATA HFT LOOP (inline, highest priority) ──
+        let mut mdata_read = ws_mdata;
+        let _ = mdata_read.write_frame(fastwebsockets::Frame::text(Payload::Owned(json!({"event":"conf","flags":131072|536870912}).to_string().into_bytes()))).await;
+        let _ = mdata_read.write_frame(fastwebsockets::Frame::text(Payload::Owned(json!({"event":"subscribe","channel":"book","symbol":beroun_types::TRADING_SYMBOL,"prec":"P0","freq":"F0","len":"25"}).to_string().into_bytes()))).await;
+
         let mut chan_id: Option<i64> = None;
         let mut last_upd = Instant::now();
         let mut snapshot_loaded = false;
@@ -696,375 +718,379 @@ async fn async_main() -> Result<()> {
                     should_reconnect = true;
                 }
                 // ── MARKET DATA with 15s watchdog ──
-                res = tokio::time::timeout(Duration::from_secs(15), mdata_read.next()) => {
+                res = tokio::time::timeout(Duration::from_secs(15), mdata_read.read_frame()) => {
                     match res {
-                        Ok(Some(Ok(msg))) if msg.is_text() => {
-                            let mut bytes = msg.into_data().to_vec();
-                            let v = match simd_json::to_borrowed_value(&mut bytes) {
-                                Ok(v) => v,
-                                Err(_) => continue,
-                            };
-                            if let BorrowedValue::Array(arr) = v {
-                                if arr[0].as_i64() == chan_id && chan_id.is_some() {
-                                    if arr[1].as_str() == Some("hb") { continue; }
+                        Ok(Ok(frame)) => {
+                            match frame.opcode {
+                                OpCode::Text => {
+                                    let mut bytes = frame.payload.to_vec();
+                                    let v = match simd_json::to_borrowed_value(&mut bytes) {
+                                        Ok(v) => v,
+                                        Err(_) => continue,
+                                    };
+                                    if let BorrowedValue::Array(arr) = v {
+                                        if arr[0].as_i64() == chan_id && chan_id.is_some() {
+                                            if arr[1].as_str() == Some("hb") { continue; }
 
-                                    if arr[1].as_str() == Some("cs") {
-                                        let remote_cs = arr[2].as_i64().unwrap_or(0) as i32;
-                                        let do_debug = cs_debug_count < 5;
-                                        let local_cs = calculate_checksum(unsafe { &*engine_ptr }, do_debug);
-                                        cs_debug_count += 1;
-                                        if remote_cs != local_cs {
-                                            cs_fail_count += 1;
-                                            info!(event = "checksum_mismatch", remote = remote_cs, local = local_cs, consecutive = cs_fail_count);
-                                            if cs_fail_count >= 5 { shutdown_reason = "checksum_persist"; should_reconnect = true; }
-                                        } else {
-                                            cs_fail_count = 0; // Reset on success
-                                            info!(event = "checksum_ok", cs = remote_cs);
-                                        }
-                                        continue;
-                                    }
+                                            if arr[1].as_str() == Some("cs") {
+                                                let remote_cs = arr[2].as_i64().unwrap_or(0) as i32;
+                                                let do_debug = cs_debug_count < 5;
+                                                let local_cs = calculate_checksum(unsafe { &*engine_ptr }, do_debug);
+                                                cs_debug_count += 1;
+                                                if remote_cs != local_cs {
+                                                    cs_fail_count += 1;
+                                                    info!(event = "checksum_mismatch", remote = remote_cs, local = local_cs, consecutive = cs_fail_count);
+                                                    if cs_fail_count >= 5 { shutdown_reason = "checksum_persist"; should_reconnect = true; }
+                                                } else {
+                                                    cs_fail_count = 0; // Reset on success
+                                                    info!(event = "checksum_ok", cs = remote_cs);
+                                                }
+                                                continue;
+                                            }
 
-                                    // Book Update
-                                    if let Some(top_arr) = arr[1].as_array() {
-                                        let is_nested = top_arr.first().map_or(false, |e| e.as_array().is_some());
-                                        if is_nested {
-                                            let mut bc = 0u32;
-                                            let mut ac = 0u32;
-                                            for entry in top_arr {
-                                                if let Some(u) = entry.as_array() {
-                                                    if let (Some(price), Some(count), Some(amount)) = (safe_as_f64(&u[0]), safe_as_i64(&u[1]), safe_as_f64(&u[2])) {
+                                            // Book Update
+                                            if let Some(top_arr) = arr[1].as_array() {
+                                                let is_nested = top_arr.first().map_or(false, |e| e.as_array().is_some());
+                                                if is_nested {
+                                                    let mut bc = 0u32;
+                                                    let mut ac = 0u32;
+                                                    for entry in top_arr {
+                                                        if let Some(u) = entry.as_array() {
+                                                            if let (Some(price), Some(count), Some(amount)) = (safe_as_f64(&u[0]), safe_as_i64(&u[1]), safe_as_f64(&u[2])) {
+                                                                let p = (price * beroun_types::PRICE_SCALE).round() as u64;
+                                                                let a = (amount * beroun_types::PRICE_SCALE).round() as i64;
+                                                                let c = count as u64;
+                                                                if amount > 0.0 { update_book(unsafe { &raw mut (*engine_ptr).bids }, p, a, c); bc += 1; }
+                                                                else { update_book(unsafe { &raw mut (*engine_ptr).asks }, p, a, c); ac += 1; }
+                                                            }
+                                                        }
+                                                    }
+                                                    fence(Ordering::SeqCst);
+                                                    sort_book(unsafe { &raw mut (*engine_ptr).bids }, true);
+                                                    sort_book(unsafe { &raw mut (*engine_ptr).asks }, false);
+                                                    if !snapshot_loaded && (bc + ac) > 10 {
+                                                        snapshot_loaded = true;
+                                                        let eng = unsafe { &*engine_ptr };
+                                                        info!(event = "snapshot_loaded", bids = bc, asks = ac,
+                                                              best_bid_p = eng.bids[0].price.load(Ordering::SeqCst),
+                                                              best_ask_p = eng.asks[0].price.load(Ordering::SeqCst),
+                                                              best_bid_a = eng.bids[0].amount.load(Ordering::SeqCst),
+                                                              best_ask_a = eng.asks[0].amount.load(Ordering::SeqCst),
+                                                              best_bid_c = eng.bids[0].count.load(Ordering::SeqCst),
+                                                              best_ask_c = eng.asks[0].count.load(Ordering::SeqCst));
+                                                    }
+                                                } else {
+                                                    if let (Some(price), Some(count), Some(amount)) = (safe_as_f64(&top_arr[0]), safe_as_i64(&top_arr[1]), safe_as_f64(&top_arr[2])) {
                                                         let p = (price * beroun_types::PRICE_SCALE).round() as u64;
                                                         let a = (amount * beroun_types::PRICE_SCALE).round() as i64;
                                                         let c = count as u64;
-                                                        if amount > 0.0 { update_book(unsafe { &raw mut (*engine_ptr).bids }, p, a, c); bc += 1; }
-                                                        else { update_book(unsafe { &raw mut (*engine_ptr).asks }, p, a, c); ac += 1; }
+                                                        if amount > 0.0 { update_book(unsafe { &raw mut (*engine_ptr).bids }, p, a, c); sort_book(unsafe { &raw mut (*engine_ptr).bids }, true); }
+                                                        else { update_book(unsafe { &raw mut (*engine_ptr).asks }, p, a, c); sort_book(unsafe { &raw mut (*engine_ptr).asks }, false); }
                                                     }
                                                 }
                                             }
-                                            fence(Ordering::SeqCst);
-                                            sort_book(unsafe { &raw mut (*engine_ptr).bids }, true);
-                                            sort_book(unsafe { &raw mut (*engine_ptr).asks }, false);
-                                            if !snapshot_loaded && (bc + ac) > 10 {
-                                                snapshot_loaded = true;
-                                                let eng = unsafe { &*engine_ptr };
-                                                info!(event = "snapshot_loaded", bids = bc, asks = ac,
-                                                      best_bid_p = eng.bids[0].price.load(Ordering::SeqCst),
-                                                      best_ask_p = eng.asks[0].price.load(Ordering::SeqCst),
-                                                      best_bid_a = eng.bids[0].amount.load(Ordering::SeqCst),
-                                                      best_ask_a = eng.asks[0].amount.load(Ordering::SeqCst),
-                                                      best_bid_c = eng.bids[0].count.load(Ordering::SeqCst),
-                                                      best_ask_c = eng.asks[0].count.load(Ordering::SeqCst));
-                                            }
-                                        } else {
-                                            if let (Some(price), Some(count), Some(amount)) = (safe_as_f64(&top_arr[0]), safe_as_i64(&top_arr[1]), safe_as_f64(&top_arr[2])) {
-                                                let p = (price * beroun_types::PRICE_SCALE).round() as u64;
-                                                let a = (amount * beroun_types::PRICE_SCALE).round() as i64;
-                                                let c = count as u64;
-                                                if amount > 0.0 { update_book(unsafe { &raw mut (*engine_ptr).bids }, p, a, c); sort_book(unsafe { &raw mut (*engine_ptr).bids }, true); }
-                                                else { update_book(unsafe { &raw mut (*engine_ptr).asks }, p, a, c); sort_book(unsafe { &raw mut (*engine_ptr).asks }, false); }
-                                            }
-                                        }
-                                    }
 
-                                    // Update BBA
-                                    let eng = unsafe { &*engine_ptr };
-                                    let best_bid = eng.bids[0].price.load(Ordering::SeqCst);
-                                    let best_ask = eng.asks[0].price.load(Ordering::SeqCst);
-                                    eng.best_bid.store(best_bid, Ordering::SeqCst);
-                                    eng.best_ask.store(best_ask, Ordering::SeqCst);
+                                            // Update BBA
+                                            let eng = unsafe { &*engine_ptr };
+                                            let best_bid = eng.bids[0].price.load(Ordering::SeqCst);
+                                            let best_ask = eng.asks[0].price.load(Ordering::SeqCst);
+                                            eng.best_bid.store(best_bid, Ordering::SeqCst);
+                                            eng.best_ask.store(best_ask, Ordering::SeqCst);
 
-                                    // ── SNIPER INTEL v6.2 (OBI + Dynamic Sizing) ──
-                                    const MIN_TICK: i64 = 100_000_000;
-                                    if best_bid > 0 && best_ask > 0 {
-                                        let now = Instant::now();
-                                        if now.duration_since(last_upd).as_millis() > 3000 {
-                                            if risk.paused.load(Ordering::Acquire) == 0 {
-                                                // ═══ L1 SWEEP FREEZE CHECK (v9.2 Hybrid Intelligence) ═══
-                                                let freeze_until = eng.sweep_freeze_until.load(Ordering::Acquire);
-                                                if freeze_until > 0 {
-                                                    let now_ms_check = std::time::SystemTime::now()
-                                                        .duration_since(std::time::UNIX_EPOCH).unwrap_or_default()
-                                                        .as_millis() as u64;
-                                                    if now_ms_check < freeze_until {
-                                                        info!(event = "l1_sweep_freeze", remaining_ms = freeze_until - now_ms_check);
-                                                        last_upd = now; // prevent rapid retries
-                                                        continue;
-                                                    } else {
-                                                        eng.sweep_freeze_until.store(0, Ordering::Release);
-                                                    }
-                                                }
-                                                // 1. MICRO-PRICE (volume-weighted mid from L1)
-                                                let mid_i = ((best_bid as i64) + (best_ask as i64)) / 2;
-                                                let bid_vol_0 = eng.bids[0].amount.load(Ordering::Relaxed).unsigned_abs() as f64;
-                                                let ask_vol_0 = eng.asks[0].amount.load(Ordering::Relaxed).unsigned_abs() as f64;
-                                                let total_vol_0 = bid_vol_0 + ask_vol_0;
-                                                let micro_i = if total_vol_0 > 0.0 {
-                                                    ((best_bid as f64 * ask_vol_0 + best_ask as f64 * bid_vol_0) / total_vol_0).round() as i64
-                                                } else { mid_i };
-                                                let micro_f = micro_i as f64 / beroun_types::PRICE_SCALE;
-
-                                                // 2. L2 ORDER BOOK IMBALANCE (OBI — top 10 levels)
-                                                let mut sum_bid_vol: f64 = 0.0;
-                                                let mut sum_ask_vol: f64 = 0.0;
-                                                for i in 0..10 {
-                                                    sum_bid_vol += eng.bids[i].amount.load(Ordering::Relaxed).unsigned_abs() as f64;
-                                                    sum_ask_vol += eng.asks[i].amount.load(Ordering::Relaxed).unsigned_abs() as f64;
-                                                }
-                                                let obi = if (sum_bid_vol + sum_ask_vol) > 0.0 {
-                                                    (sum_bid_vol - sum_ask_vol) / (sum_bid_vol + sum_ask_vol)
-                                                } else { 0.0 };
-
-                                                // ═══ LIQUIDITY HOLE DETECTION (v9.5) ═══
-                                                let total_depth = sum_bid_vol + sum_ask_vol;
-                                                let depth_btc = total_depth / beroun_types::PRICE_SCALE;
-                                                depth_history.push_back(total_depth);
-                                                if depth_history.len() > 60 { depth_history.pop_front(); }
-                                                let avg_depth = if !depth_history.is_empty() {
-                                                    depth_history.iter().sum::<f64>() / depth_history.len() as f64
-                                                } else { total_depth };
-
-                                                let liquidity_ratio = if avg_depth > 0.0 { total_depth / avg_depth } else { 1.0 };
-                                                let in_liquidity_hole = liquidity_ratio < 0.5;
-                                                let hole_recovering = liquidity_ratio >= 0.7;
-
-                                                if in_liquidity_hole && !was_in_hole {
-                                                    tracing::warn!(event = "liquidity_hole",
-                                                        depth_btc = format!("{:.4}", depth_btc),
-                                                        avg_depth_btc = format!("{:.4}", avg_depth / beroun_types::PRICE_SCALE),
-                                                        ratio = format!("{:.2}", liquidity_ratio));
-                                                    was_in_hole = true;
-                                                } else if hole_recovering && was_in_hole {
-                                                    tracing::info!(event = "liquidity_recovered",
-                                                        depth_btc = format!("{:.4}", depth_btc),
-                                                        ratio = format!("{:.2}", liquidity_ratio));
-                                                    was_in_hole = false;
-                                                }
-
-                                                // 3. DYNAMIC SIZING (signal convergence)
-                                                let base_usd = risk.order_usd.load(Ordering::Acquire) as f64;
-                                                let micro_bias = micro_i - mid_i;
-                                                let final_order_usd = if in_liquidity_hole {
-                                                    // Liquidity hole: reduce order size to 50%
-                                                    base_usd * 0.5
-                                                } else if (obi > 0.2 && micro_bias > 0) || (obi < -0.2 && micro_bias < 0) {
-                                                    (base_usd * 1.5).clamp(base_usd * 0.5, base_usd * 2.0)
-                                                } else if (obi > 0.1 && micro_bias < 0) || (obi < -0.1 && micro_bias > 0) {
-                                                    (base_usd * 0.7).clamp(base_usd * 0.5, base_usd * 2.0)
-                                                } else {
-                                                    base_usd
-                                                };
-
-                                                // 4. INVENTORY SKEW
-                                                let mut grid = risk.grid_step.load(Ordering::Acquire) as i64;
-                                                // v9.5: Liquidity hole → emergency grid widening (3×)
-                                                if in_liquidity_hole {
-                                                    grid = (grid * 3).min(2_000_000_000); // Max $20
-                                                }
-                                                let current_pos = eng.net_position.load(Ordering::Acquire);
-                                                let max_pos = risk.max_inv_delta.load(Ordering::Acquire) as i64;
-                                                let inv_skew = if max_pos > 0 {
-                                                    let ratio = (current_pos as f64 / max_pos as f64).clamp(-1.0, 1.0);
-                                                    (-ratio * grid as f64 * 2.0).round() as i64
-                                                } else { 0 };
-
-                                                // 5. FINAL PRICES (with AI Safety Fuse)
-                                                let raw_bias = risk.bias_offset.load(Ordering::Acquire);
-                                                let ai_hb = eng.ai_heartbeat_ms.load(Ordering::Acquire);
-                                                let now_ms = std::time::SystemTime::now()
-                                                    .duration_since(std::time::UNIX_EPOCH).unwrap_or_default()
-                                                    .as_millis() as u64;
-                                                // If AI heartbeat is >30s stale, zero bias (safety fuse)
-                                                let bias = if ai_hb > 0 && now_ms.saturating_sub(ai_hb) > 30_000 {
-                                                    0 // AI is dead, play safe
-                                                } else {
-                                                    raw_bias
-                                                };
-                                                let final_bias = bias + inv_skew;
-                                                // ═══ L1 MICRO-SKEW (v9.2 Hybrid Intelligence) ═══
-                                                let l1_skew = eng.l1_skew_adjustment.load(Ordering::Acquire);
-                                                let final_bias_with_l1 = final_bias + l1_skew;
-                                                let mut buy_i = (micro_i - grid + final_bias_with_l1).max(0);
-                                                let mut sell_i = (micro_i + grid + final_bias_with_l1).max(0);
-
-                                                // ═══ ANTI-CROSS GUARD (L0 Safety) ═══
-                                                // Prevent POSTONLY CANCELED: bid must be below best ask, ask must be above best bid
-                                                let ba_i = best_ask as i64;
-                                                let bb_i = best_bid as i64;
-                                                if buy_i >= ba_i {
-                                                    buy_i = ba_i - MIN_TICK;
-                                                    info!(event = "anti_cross_guard", side = "buy", clamped_to = buy_i as f64 / beroun_types::PRICE_SCALE, best_ask = ba_i as f64 / beroun_types::PRICE_SCALE);
-                                                }
-                                                if sell_i <= bb_i {
-                                                    sell_i = bb_i + MIN_TICK;
-                                                    info!(event = "anti_cross_guard", side = "sell", clamped_to = sell_i as f64 / beroun_types::PRICE_SCALE, best_bid = bb_i as f64 / beroun_types::PRICE_SCALE);
-                                                }
-                                                // Spread integrity: if inverted after clamping, skip cycle
-                                                if buy_i >= sell_i {
-                                                    info!(event = "spread_inverted", buy = buy_i as f64 / beroun_types::PRICE_SCALE,
-                                                          sell = sell_i as f64 / beroun_types::PRICE_SCALE, grid = grid, bias = final_bias);
-                                                    continue;
-                                                }
-
-                                                let lb = eng.last_buy_price.load(Ordering::SeqCst);
-                                                let ls = eng.last_sell_price.load(Ordering::SeqCst);
-                                                let db = (buy_i - lb).abs();
-                                                let ds = (sell_i - ls).abs();
-
-                                                if db >= MIN_TICK || ds >= MIN_TICK || lb == 0 {
-                                                    // ═══ DAILY LOSS LIMIT — Circuit Breaker ═══
-                                                    let dll = risk.daily_loss_limit.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
-                                                    let r_pnl = eng.realized_pnl.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
-                                                    if dll > 0.0 && r_pnl < -dll {
-                                                        // EMERGENCY STOP: cancel all, pause, alert
-                                                        let cancel_ids = collect_all_order_ids(eng);
-                                                        if !cancel_ids.is_empty() {
-                                                            let ids_str: Vec<String> = cancel_ids.iter().map(|id| id.to_string()).collect();
-                                                            let _ = order_tx.send(format!(r#"[0,"oc_multi",null,{{"id":[{}]}}]"#, ids_str.join(",")));
+                                            // ── SNIPER INTEL v6.2 (OBI + Dynamic Sizing) ──
+                                            const MIN_TICK: i64 = 100_000_000;
+                                            if best_bid > 0 && best_ask > 0 {
+                                                let now = Instant::now();
+                                                if now.duration_since(last_upd).as_millis() > 3000 {
+                                                    if risk.paused.load(Ordering::Acquire) == 0 {
+                                                        // ═══ L1 SWEEP FREEZE CHECK (v9.2 Hybrid Intelligence) ═══
+                                                        let freeze_until = eng.sweep_freeze_until.load(Ordering::Acquire);
+                                                        if freeze_until > 0 {
+                                                            let now_ms_check = std::time::SystemTime::now()
+                                                                .duration_since(std::time::UNIX_EPOCH).unwrap_or_default()
+                                                                .as_millis() as u64;
+                                                            if now_ms_check < freeze_until {
+                                                                info!(event = "l1_sweep_freeze", remaining_ms = freeze_until - now_ms_check);
+                                                                last_upd = now; // prevent rapid retries
+                                                                continue;
+                                                            } else {
+                                                                eng.sweep_freeze_until.store(0, Ordering::Release);
+                                                            }
                                                         }
-                                                        risk.paused.store(1, Ordering::SeqCst);
-                                                        notifier.alert(format!(
-                                                            "🛑 *EMERGENCY STOP*\nDaily Loss Limit reached: `${:.2}` (limit `-${:.2}`)\nAll orders cancelled. System *LOCKED*.\n_Dnes to trh vyhrál, odpočiň si, admirále._",
-                                                            r_pnl, dll
-                                                        ));
-                                                        info!(event = "dll_triggered", realized_pnl = r_pnl, limit = -dll);
-                                                        continue;
-                                                    }
+                                                        // 1. MICRO-PRICE (volume-weighted mid from L1)
+                                                        let mid_i = ((best_bid as i64) + (best_ask as i64)) / 2;
+                                                        let bid_vol_0 = eng.bids[0].amount.load(Ordering::Relaxed).unsigned_abs() as f64;
+                                                        let ask_vol_0 = eng.asks[0].amount.load(Ordering::Relaxed).unsigned_abs() as f64;
+                                                        let total_vol_0 = bid_vol_0 + ask_vol_0;
+                                                        let micro_i = if total_vol_0 > 0.0 {
+                                                            ((best_bid as f64 * ask_vol_0 + best_ask as f64 * bid_vol_0) / total_vol_0).round() as i64
+                                                        } else { mid_i };
+                                                        let micro_f = micro_i as f64 / beroun_types::PRICE_SCALE;
 
-                                                    // ═══ HYDRA GRID v9.0 (Multi-Level + Inventory Throttling) ═══
-                                                    let grid_levels = risk.grid_size.load(Ordering::Acquire).clamp(1, beroun_types::MAX_GRID_LEVELS as u64) as usize;
-                                                    let pos_ratio = if max_pos > 0 {
-                                                        (current_pos as f64 / max_pos as f64).clamp(-1.0, 1.0)
-                                                    } else { 0.0 };
+                                                        // 2. L2 ORDER BOOK IMBALANCE (OBI — top 10 levels)
+                                                        let mut sum_bid_vol: f64 = 0.0;
+                                                        let mut sum_ask_vol: f64 = 0.0;
+                                                        for i in 0..10 {
+                                                            sum_bid_vol += eng.bids[i].amount.load(Ordering::Relaxed).unsigned_abs() as f64;
+                                                            sum_ask_vol += eng.asks[i].amount.load(Ordering::Relaxed).unsigned_abs() as f64;
+                                                        }
+                                                        let obi = if (sum_bid_vol + sum_ask_vol) > 0.0 {
+                                                            (sum_bid_vol - sum_ask_vol) / (sum_bid_vol + sum_ask_vol)
+                                                        } else { 0.0 };
 
-                                                    // INVENTORY THROTTLING: asymmetric levels
-                                                    let (n_buy, n_sell) = if pos_ratio > 0.8 {
-                                                        (0, grid_levels)       // Hard cap long → sell only
-                                                    } else if pos_ratio > 0.4 {
-                                                        (1, grid_levels)       // Soft cap → 1 buy
-                                                    } else if pos_ratio < -0.8 {
-                                                        (grid_levels, 0)       // Hard cap short → buy only
-                                                    } else if pos_ratio < -0.4 {
-                                                        (grid_levels, 1)       // Soft cap → 1 sell
-                                                    } else {
-                                                        (grid_levels, grid_levels) // Neutral: full both sides
-                                                    };
+                                                        // ═══ LIQUIDITY HOLE DETECTION (v9.5) ═══
+                                                        let total_depth = sum_bid_vol + sum_ask_vol;
+                                                        let depth_btc = total_depth / beroun_types::PRICE_SCALE;
+                                                        depth_history.push_back(total_depth);
+                                                        if depth_history.len() > 60 { depth_history.pop_front(); }
+                                                        let avg_depth = if !depth_history.is_empty() {
+                                                            depth_history.iter().sum::<f64>() / depth_history.len() as f64
+                                                        } else { total_depth };
 
-                                                    // 6a. CANCEL ALL TRACKED ORDERS
-                                                    let cancel_ids = collect_all_order_ids(eng);
-                                                    let oc_payload = if !cancel_ids.is_empty() {
-                                                        let ids_str: Vec<String> = cancel_ids.iter().map(|id| id.to_string()).collect();
-                                                        format!(r#"["oc_multi",{{"id":[{}]}}],"#, ids_str.join(","))
-                                                    } else { String::new() };
+                                                        let liquidity_ratio = if avg_depth > 0.0 { total_depth / avg_depth } else { 1.0 };
+                                                        let in_liquidity_hole = liquidity_ratio < 0.5;
+                                                        let hole_recovering = liquidity_ratio >= 0.7;
 
-                                                    // 6b. BUILD MULTI-LEVEL ORDERS (with Capital Guard)
-                                                    const MIN_ORDER_BTC: f64 = 0.00015;
-                                                    let w_btc = eng.wallet_btc.load(Ordering::Relaxed) as f64 / beroun_types::PRICE_SCALE;
-                                                    let w_usd = eng.wallet_usd.load(Ordering::Relaxed) as f64 / beroun_types::PRICE_SCALE;
-                                                    let amt = (final_order_usd / micro_f / beroun_types::PRICE_SCALE).max(MIN_ORDER_BTC);
+                                                        if in_liquidity_hole && !was_in_hole {
+                                                            tracing::warn!(event = "liquidity_hole",
+                                                                depth_btc = format!("{:.4}", depth_btc),
+                                                                avg_depth_btc = format!("{:.4}", avg_depth / beroun_types::PRICE_SCALE),
+                                                                ratio = format!("{:.2}", liquidity_ratio));
+                                                            was_in_hole = true;
+                                                        } else if hole_recovering && was_in_hole {
+                                                            tracing::info!(event = "liquidity_recovered",
+                                                                depth_btc = format!("{:.4}", depth_btc),
+                                                                ratio = format!("{:.2}", liquidity_ratio));
+                                                            was_in_hole = false;
+                                                        }
 
-                                                    // ═══ CAPITAL GUARD (v9.0) ═══
-                                                    // Enforce authorized capital for position-INCREASING orders.
-                                                    // Position-CLOSING orders (buy when short, sell when long) always allowed.
-                                                    let auth_cap = risk.authorized_capital.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
-                                                    let mid_price = micro_i as f64 / beroun_types::PRICE_SCALE;
-                                                    let pos_f64 = current_pos as f64 / beroun_types::PRICE_SCALE;
-                                                    let pos_value = pos_f64.abs() * mid_price;
+                                                        // 3. DYNAMIC SIZING (signal convergence)
+                                                        let base_usd = risk.order_usd.load(Ordering::Acquire) as f64;
+                                                        let micro_bias = micro_i - mid_i;
+                                                        let final_order_usd = if in_liquidity_hole {
+                                                            // Liquidity hole: reduce order size to 50%
+                                                            base_usd * 0.5
+                                                        } else if (obi > 0.2 && micro_bias > 0) || (obi < -0.2 && micro_bias < 0) {
+                                                            (base_usd * 1.5).clamp(base_usd * 0.5, base_usd * 2.0)
+                                                        } else if (obi > 0.1 && micro_bias < 0) || (obi < -0.1 && micro_bias > 0) {
+                                                            (base_usd * 0.7).clamp(base_usd * 0.5, base_usd * 2.0)
+                                                        } else {
+                                                            base_usd
+                                                        };
 
-                                                    // Buy cap: if short (pos < 0), buys CLOSE position → use full wallet
-                                                    //          if long/neutral, buys INCREASE position → cap by auth_capital
-                                                    let cap_available = if pos_f64 < 0.0 || auth_cap <= 0.0 {
-                                                        w_usd // Closing short or unlimited: full wallet
-                                                    } else {
-                                                        (auth_cap - pos_value).max(0.0).min(w_usd)
-                                                    };
-                                                    // Sell cap: if long (pos > 0), sells CLOSE position → use full wallet_btc
-                                                    //           if short/neutral, sells INCREASE position → cap by auth_capital
-                                                    let btc_cap = if pos_f64 > 0.0 || auth_cap <= 0.0 {
-                                                        w_btc // Closing long or unlimited: full BTC wallet
-                                                    } else if mid_price > 0.0 {
-                                                        (auth_cap / mid_price).min(w_btc)
-                                                    } else {
-                                                        w_btc
-                                                    };
+                                                        // 4. INVENTORY SKEW
+                                                        let mut grid = risk.grid_step.load(Ordering::Acquire) as i64;
+                                                        // v9.5: Liquidity hole → emergency grid widening (3×)
+                                                        if in_liquidity_hole {
+                                                            grid = (grid * 3).min(2_000_000_000); // Max $20
+                                                        }
+                                                        let current_pos = eng.net_position.load(Ordering::Acquire);
+                                                        let max_pos = risk.max_inv_delta.load(Ordering::Acquire) as i64;
+                                                        let inv_skew = if max_pos > 0 {
+                                                            let ratio = (current_pos as f64 / max_pos as f64).clamp(-1.0, 1.0);
+                                                            (-ratio * grid as f64 * 2.0).round() as i64
+                                                        } else { 0 };
 
-                                                    let mut order_parts: Vec<String> = Vec::with_capacity(10);
-                                                    let mut total_buy_usd = 0.0;
-                                                    let mut total_sell_btc = 0.0;
+                                                        // 5. FINAL PRICES (with AI Safety Fuse)
+                                                        let raw_bias = risk.bias_offset.load(Ordering::Acquire);
+                                                        let ai_hb = eng.ai_heartbeat_ms.load(Ordering::Acquire);
+                                                        let now_ms = std::time::SystemTime::now()
+                                                            .duration_since(std::time::UNIX_EPOCH).unwrap_or_default()
+                                                            .as_millis() as u64;
+                                                        // If AI heartbeat is >30s stale, zero bias (safety fuse)
+                                                        let bias = if ai_hb > 0 && now_ms.saturating_sub(ai_hb) > 30_000 {
+                                                            0 // AI is dead, play safe
+                                                        } else {
+                                                            raw_bias
+                                                        };
+                                                        let final_bias = bias + inv_skew;
+                                                        // ═══ L1 MICRO-SKEW (v9.2 Hybrid Intelligence) ═══
+                                                        let l1_skew = eng.l1_skew_adjustment.load(Ordering::Acquire);
+                                                        let final_bias_with_l1 = final_bias + l1_skew;
+                                                        let mut buy_i = (micro_i - grid + final_bias_with_l1).max(0);
+                                                        let mut sell_i = (micro_i + grid + final_bias_with_l1).max(0);
 
-                                                    // BUY LEVELS (fibonacci spacing from micro-price)
-                                                    for i in 0..n_buy {
-                                                        let spacing = (grid as f64 * beroun_types::LEVEL_SPACING[i]) as i64;
-                                                        let bp_i = (micro_i - spacing + final_bias).max(0).min(ba_i - MIN_TICK);
-                                                        let bp = bp_i as f64 / beroun_types::PRICE_SCALE;
-                                                        let cost = amt * bp;
-                                                        if total_buy_usd + cost <= cap_available * 0.95 && amt >= MIN_ORDER_BTC {
-                                                            order_parts.push(format!(
-                                                                r#"["on",{{"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
-                                                                beroun_types::TRADING_SYMBOL, amt, bp
-                                                            ));
-                                                            total_buy_usd += cost;
+                                                        // ═══ ANTI-CROSS GUARD (L0 Safety) ═══
+                                                        // Prevent POSTONLY CANCELED: bid must be below best ask, ask must be above best bid
+                                                        let ba_i = best_ask as i64;
+                                                        let bb_i = best_bid as i64;
+                                                        if buy_i >= ba_i {
+                                                            buy_i = ba_i - MIN_TICK;
+                                                            info!(event = "anti_cross_guard", side = "buy", clamped_to = buy_i as f64 / beroun_types::PRICE_SCALE, best_ask = ba_i as f64 / beroun_types::PRICE_SCALE);
+                                                        }
+                                                        if sell_i <= bb_i {
+                                                            sell_i = bb_i + MIN_TICK;
+                                                            info!(event = "anti_cross_guard", side = "sell", clamped_to = sell_i as f64 / beroun_types::PRICE_SCALE, best_bid = bb_i as f64 / beroun_types::PRICE_SCALE);
+                                                        }
+                                                        // Spread integrity: if inverted after clamping, skip cycle
+                                                        if buy_i >= sell_i {
+                                                            info!(event = "spread_inverted", buy = buy_i as f64 / beroun_types::PRICE_SCALE,
+                                                                  sell = sell_i as f64 / beroun_types::PRICE_SCALE, grid = grid, bias = final_bias);
+                                                            continue;
+                                                        }
+
+                                                        let lb = eng.last_buy_price.load(Ordering::SeqCst);
+                                                        let ls = eng.last_sell_price.load(Ordering::SeqCst);
+                                                        let db = (buy_i - lb).abs();
+                                                        let ds = (sell_i - ls).abs();
+
+                                                        if db >= MIN_TICK || ds >= MIN_TICK || lb == 0 {
+                                                            // ═══ DAILY LOSS LIMIT — Circuit Breaker ═══
+                                                            let dll = risk.daily_loss_limit.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
+                                                            let r_pnl = eng.realized_pnl.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
+                                                            if dll > 0.0 && r_pnl < -dll {
+                                                                // EMERGENCY STOP: cancel all, pause, alert
+                                                                let cancel_ids = collect_all_order_ids(eng);
+                                                                if !cancel_ids.is_empty() {
+                                                                    let ids_str: Vec<String> = cancel_ids.iter().map(|id| id.to_string()).collect();
+                                                                    let _ = order_tx.send(format!(r#"[0,"oc_multi",null,{{"id":[{}]}}]"#, ids_str.join(",")));
+                                                                }
+                                                                risk.paused.store(1, Ordering::SeqCst);
+                                                                notifier.alert(format!(
+                                                                    "🛑 *EMERGENCY STOP*\nDaily Loss Limit reached: `${:.2}` (limit `-${:.2}`)\nAll orders cancelled. System *LOCKED*.\n_Dnes to trh vyhrál, odpočiň si, admirále._",
+                                                                    r_pnl, dll
+                                                                ));
+                                                                info!(event = "dll_triggered", realized_pnl = r_pnl, limit = -dll);
+                                                                continue;
+                                                            }
+
+                                                            // ═══ HYDRA GRID v9.0 (Multi-Level + Inventory Throttling) ═══
+                                                            let grid_levels = risk.grid_size.load(Ordering::Acquire).clamp(1, beroun_types::MAX_GRID_LEVELS as u64) as usize;
+                                                            let pos_ratio = if max_pos > 0 {
+                                                                (current_pos as f64 / max_pos as f64).clamp(-1.0, 1.0)
+                                                            } else { 0.0 };
+
+                                                            // INVENTORY THROTTLING: asymmetric levels
+                                                            let (n_buy, n_sell) = if pos_ratio > 0.8 {
+                                                                (0, grid_levels)       // Hard cap long → sell only
+                                                            } else if pos_ratio > 0.4 {
+                                                                (1, grid_levels)       // Soft cap → 1 buy
+                                                            } else if pos_ratio < -0.8 {
+                                                                (grid_levels, 0)       // Hard cap short → buy only
+                                                            } else if pos_ratio < -0.4 {
+                                                                (grid_levels, 1)       // Soft cap → 1 sell
+                                                            } else {
+                                                                (grid_levels, grid_levels) // Neutral: full both sides
+                                                            };
+
+                                                            // 6a. CANCEL ALL TRACKED ORDERS
+                                                            let cancel_ids = collect_all_order_ids(eng);
+                                                            let oc_payload = if !cancel_ids.is_empty() {
+                                                                let ids_str: Vec<String> = cancel_ids.iter().map(|id| id.to_string()).collect();
+                                                                format!(r#"["oc_multi",{{"id":[{}]}}],"#, ids_str.join(","))
+                                                            } else { String::new() };
+
+                                                            // 6b. BUILD MULTI-LEVEL ORDERS (with Capital Guard)
+                                                            const MIN_ORDER_BTC: f64 = 0.00015;
+                                                            let w_btc = eng.wallet_btc.load(Ordering::Relaxed) as f64 / beroun_types::PRICE_SCALE;
+                                                            let w_usd = eng.wallet_usd.load(Ordering::Relaxed) as f64 / beroun_types::PRICE_SCALE;
+                                                            let amt = (final_order_usd / micro_f / beroun_types::PRICE_SCALE).max(MIN_ORDER_BTC);
+
+                                                            // ═══ CAPITAL GUARD (v9.0) ═══
+                                                            // Enforce authorized capital for position-INCREASING orders.
+                                                            // Position-CLOSING orders (buy when short, sell when long) always allowed.
+                                                            let auth_cap = risk.authorized_capital.load(Ordering::Acquire) as f64 / beroun_types::PRICE_SCALE;
+                                                            let mid_price = micro_i as f64 / beroun_types::PRICE_SCALE;
+                                                            let pos_f64 = current_pos as f64 / beroun_types::PRICE_SCALE;
+                                                            let pos_value = pos_f64.abs() * mid_price;
+
+                                                            // Buy cap: if short (pos < 0), buys CLOSE position → use full wallet
+                                                            //          if long/neutral, buys INCREASE position → cap by auth_capital
+                                                            let cap_available = if pos_f64 < 0.0 || auth_cap <= 0.0 {
+                                                                w_usd // Closing short or unlimited: full wallet
+                                                            } else {
+                                                                (auth_cap - pos_value).max(0.0).min(w_usd)
+                                                            };
+                                                            // Sell cap: if long (pos > 0), sells CLOSE position → use full wallet_btc
+                                                            //           if short/neutral, sells INCREASE position → cap by auth_capital
+                                                            let btc_cap = if pos_f64 > 0.0 || auth_cap <= 0.0 {
+                                                                w_btc // Closing long or unlimited: full BTC wallet
+                                                            } else if mid_price > 0.0 {
+                                                                (auth_cap / mid_price).min(w_btc)
+                                                            } else {
+                                                                w_btc
+                                                            };
+
+                                                            let mut order_parts: Vec<String> = Vec::with_capacity(10);
+                                                            let mut total_buy_usd = 0.0;
+                                                            let mut total_sell_btc = 0.0;
+
+                                                            // BUY LEVELS (fibonacci spacing from micro-price)
+                                                            for i in 0..n_buy {
+                                                                let spacing = (grid as f64 * beroun_types::LEVEL_SPACING[i]) as i64;
+                                                                let bp_i = (micro_i - spacing + final_bias).max(0).min(ba_i - MIN_TICK);
+                                                                let bp = bp_i as f64 / beroun_types::PRICE_SCALE;
+                                                                let cost = amt * bp;
+                                                                if total_buy_usd + cost <= cap_available * 0.95 && amt >= MIN_ORDER_BTC {
+                                                                    order_parts.push(format!(
+                                                                        r#"["on",{{"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
+                                                                        beroun_types::TRADING_SYMBOL, amt, bp
+                                                                    ));
+                                                                    total_buy_usd += cost;
+                                                                }
+                                                            }
+
+                                                            // SELL LEVELS (fibonacci spacing from micro-price)
+                                                            for i in 0..n_sell {
+                                                                let spacing = (grid as f64 * beroun_types::LEVEL_SPACING[i]) as i64;
+                                                                let sp_i = (micro_i + spacing + final_bias).max(0).max(bb_i + MIN_TICK);
+                                                                let sp = sp_i as f64 / beroun_types::PRICE_SCALE;
+                                                                if total_sell_btc + amt <= btc_cap * 0.95 && amt >= MIN_ORDER_BTC {
+                                                                    order_parts.push(format!(
+                                                                        r#"["on",{{"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
+                                                                        beroun_types::TRADING_SYMBOL, -amt, sp
+                                                                    ));
+                                                                    total_sell_btc += amt;
+                                                                }
+                                                            }
+
+                                                            if order_parts.is_empty() {
+                                                                info!(event = "hydra_skipped", reason = "no_valid_levels",
+                                                                      wallet_btc = w_btc, wallet_usd = w_usd, pos_ratio = format!("{:.2}", pos_ratio));
+                                                                continue;
+                                                            }
+
+                                                            let orders_str = order_parts.join(",");
+                                                            let msg = format!(r#"[0,"ox_multi",null,[{}{}]]"#, oc_payload, orders_str);
+                                                            let _ = order_tx.send(msg);
+
+                                                            // 7. DASHBOARD METRICS
+                                                            eng.last_buy_price.store(buy_i, Ordering::SeqCst);
+                                                            eng.last_sell_price.store(sell_i, Ordering::SeqCst);
+                                                            let t2t_us = now.elapsed().as_micros() as u64;
+                                                            eng.t2t_micros.store(t2t_us, Ordering::SeqCst);
+                                                            eng.micro_price.store(micro_i as u64, Ordering::SeqCst);
+                                                            eng.current_skew.store(inv_skew, Ordering::SeqCst);
+                                                            eng.l2_imbalance.store((obi * beroun_types::PRICE_SCALE) as i64, Ordering::SeqCst);
+                                                            eng.current_order_usd.store(final_order_usd as u64, Ordering::SeqCst);
+                                                            last_upd = now;
+                                                            info!(event = "hydra_fire", bid = best_bid, ask = best_ask,
+                                                                  micro = micro_i, levels_buy = n_buy, levels_sell = n_sell,
+                                                                  obi = format!("{:.3}", obi),
+                                                                  order_usd = final_order_usd as f64 / beroun_types::PRICE_SCALE,
+                                                                  inv_skew = inv_skew, position = current_pos,
+                                                                  pos_ratio = format!("{:.2}", pos_ratio),
+                                                                  dynamic_grid = grid, total_orders = order_parts.len());
                                                         }
                                                     }
-
-                                                    // SELL LEVELS (fibonacci spacing from micro-price)
-                                                    for i in 0..n_sell {
-                                                        let spacing = (grid as f64 * beroun_types::LEVEL_SPACING[i]) as i64;
-                                                        let sp_i = (micro_i + spacing + final_bias).max(0).max(bb_i + MIN_TICK);
-                                                        let sp = sp_i as f64 / beroun_types::PRICE_SCALE;
-                                                        if total_sell_btc + amt <= btc_cap * 0.95 && amt >= MIN_ORDER_BTC {
-                                                            order_parts.push(format!(
-                                                                r#"["on",{{"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
-                                                                beroun_types::TRADING_SYMBOL, -amt, sp
-                                                            ));
-                                                            total_sell_btc += amt;
-                                                        }
-                                                    }
-
-                                                    if order_parts.is_empty() {
-                                                        info!(event = "hydra_skipped", reason = "no_valid_levels",
-                                                              wallet_btc = w_btc, wallet_usd = w_usd, pos_ratio = format!("{:.2}", pos_ratio));
-                                                        continue;
-                                                    }
-
-                                                    let orders_str = order_parts.join(",");
-                                                    let msg = format!(r#"[0,"ox_multi",null,[{}{}]]"#, oc_payload, orders_str);
-                                                    let _ = order_tx.send(msg);
-
-                                                    // 7. DASHBOARD METRICS
-                                                    eng.last_buy_price.store(buy_i, Ordering::SeqCst);
-                                                    eng.last_sell_price.store(sell_i, Ordering::SeqCst);
-                                                    let t2t_us = now.elapsed().as_micros() as u64;
-                                                    eng.t2t_micros.store(t2t_us, Ordering::SeqCst);
-                                                    eng.micro_price.store(micro_i as u64, Ordering::SeqCst);
-                                                    eng.current_skew.store(inv_skew, Ordering::SeqCst);
-                                                    eng.l2_imbalance.store((obi * beroun_types::PRICE_SCALE) as i64, Ordering::SeqCst);
-                                                    eng.current_order_usd.store(final_order_usd as u64, Ordering::SeqCst);
-                                                    last_upd = now;
-                                                    info!(event = "hydra_fire", bid = best_bid, ask = best_ask,
-                                                          micro = micro_i, levels_buy = n_buy, levels_sell = n_sell,
-                                                          obi = format!("{:.3}", obi),
-                                                          order_usd = final_order_usd as f64 / beroun_types::PRICE_SCALE,
-                                                          inv_skew = inv_skew, position = current_pos,
-                                                          pos_ratio = format!("{:.2}", pos_ratio),
-                                                          dynamic_grid = grid, total_orders = order_parts.len());
                                                 }
                                             }
                                         }
+                                    } else if let BorrowedValue::Object(obj) = v {
+                                        if obj.get("event") == Some(&BorrowedValue::from("subscribed")) {
+                                            chan_id = obj.get("chanId").and_then(|id: &BorrowedValue| id.as_i64());
+                                            info!(event = "mdata_subscribed", chan_id = ?chan_id);
+                                        }
+                                        if obj.get("event") == Some(&BorrowedValue::from("error")) {
+                                            info!(event = "mdata_error", msg = ?obj.get("msg"), code = ?obj.get("code"));
+                                        }
                                     }
-                                }
-                            } else if let BorrowedValue::Object(obj) = v {
-                                if obj.get("event") == Some(&BorrowedValue::from("subscribed")) {
-                                    chan_id = obj.get("chanId").and_then(|id: &BorrowedValue| id.as_i64());
-                                    info!(event = "mdata_subscribed", chan_id = ?chan_id);
-                                }
-                                if obj.get("event") == Some(&BorrowedValue::from("error")) {
-                                    info!(event = "mdata_error", msg = ?obj.get("msg"), code = ?obj.get("code"));
-                                }
+                                },
+                                OpCode::Close => { info!(event = "mdata_socket_closed"); shutdown_reason = "mdata_closed"; should_reconnect = true; },
+                                _ => {} // Ping/Pong/Binary
                             }
                         }
-                        Ok(Some(Ok(_))) => {} // Ping/Pong
-                        Ok(Some(Err(e))) => { info!(event = "mdata_read_error", error = %e); shutdown_reason = "mdata_error"; should_reconnect = true; }
-                        Ok(None) => { info!(event = "mdata_socket_closed"); shutdown_reason = "mdata_closed"; should_reconnect = true; }
+                        Ok(Err(e)) => { info!(event = "mdata_read_error", error = %e); shutdown_reason = "mdata_error"; should_reconnect = true; }
                         Err(_) => { info!(event = "mdata_timeout_15s"); shutdown_reason = "mdata_timeout"; should_reconnect = true; }
                     }
                 }
@@ -1126,7 +1152,7 @@ async fn graceful_shutdown(
 }
 
 /// TCP+TLS+WebSocket with TCP_NODELAY
-async fn connect_ws() -> Result<tokio_tungstenite::WebSocketStream<tokio_native_tls::TlsStream<tokio::net::TcpStream>>, std::io::Error> {
+async fn connect_ws() -> Result<fastwebsockets::FragmentCollector<hyper_util::rt::tokio::TokioIo<hyper::upgrade::Upgraded>>, Box<dyn std::error::Error + Send + Sync>> {
     let tcp = tokio::net::TcpStream::connect("api.bitfinex.com:443").await?;
     tcp.set_nodelay(true)?;
     let connector = tokio_native_tls::TlsConnector::from(
@@ -1134,7 +1160,20 @@ async fn connect_ws() -> Result<tokio_tungstenite::WebSocketStream<tokio_native_
     );
     let tls = connector.connect("api.bitfinex.com", tcp).await
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-    let (ws, _) = tokio_tungstenite::client_async("wss://api.bitfinex.com/ws/2", tls).await
+        
+    let req = Request::builder()
+        .method("GET")
+        .uri("wss://api.bitfinex.com/ws/2")
+        .header(HOST, "api.bitfinex.com")
+        .header(UPGRADE, "websocket")
+        .header(CONNECTION, "upgrade")
+        .header("Sec-WebSocket-Key", fastwebsockets::handshake::generate_key())
+        .header("Sec-WebSocket-Version", "13")
+        .body(http_body_util::Empty::<hyper::body::Bytes>::new())
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
-    Ok(ws)
+
+    let (ws, _) = fastwebsockets::handshake::client(&SpawnExecutor, req, tls).await
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        
+    Ok(fastwebsockets::FragmentCollector::new(ws))
 }
