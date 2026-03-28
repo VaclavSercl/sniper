@@ -411,6 +411,7 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
                     regime,
                     fear_greed: engine.macro_fear_greed.load(Ordering::Relaxed),
                     macro_bias: engine.macro_bias.load(Ordering::Relaxed) as f64 / 10000.0,
+                    portfolio_hedged: false, // TODO: read CL4 mmap when cortex integrates l2_command
                 });
             }
         }

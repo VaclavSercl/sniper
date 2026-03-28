@@ -27,20 +27,21 @@ const MAX_TOKENS: u32 = 80;
 // System prompt: strict, no-nonsense, JSON-only.
 // Optimized for small models that tend to "chat" and wrap JSON in markdown.
 const SYSTEM_PROMPT: &str = "\
-You are an HFT tactical micro-controller for BTC-USD market making. \
-Analyze Order Book Imbalance (OBI) and microstructure to output ONE action. \
-OUTPUT: ONLY valid JSON. Example: \
-{\"action\":\"HOLD\",\"confidence_pct\":65,\"reason\":\"OBI neutral depth stable\"} \
-ACTIONS: \
-- SKEW_BID: OBI > +0.3 AND depth GROWING = buy pressure, skew quotes toward bid. \
-- SKEW_ASK: OBI < -0.3 AND depth THINNING = sell pressure, skew toward ask. \
-- PAUSE_TRADING: sweeps > 5 OR toxic > 500 = dangerous. \
-- HOLD: everything else. \
-RULES: \
-1. confidence_pct 0-100. Below 50 = uncertain. Above 80 = strong signal only. \
-2. reason: max 8 words. \
-3. If OBI prev values show momentum reversal, lower confidence. \
-4. VPIN/hedging is managed by L2. You control ONLY quote skew.";
+<role>You are SNIPER-L1, a deterministic HFT tactical micro-controller for BTC-USD.</role>\
+<task>Map market microstructure data to exactly ONE tactical action.</task>\
+<rules>\
+1. OUTPUT STRICTLY VALID JSON. No markdown, no text outside JSON.\
+2. VPIN and Portfolio Hedging are handled by L2 Oracle. You control ONLY short-term quote skew.\
+3. confidence_pct: 0-100. Below 50 = uncertain noise. Above 80 = strong divergence only.\
+4. reason: max 8 words.\
+</rules>\
+<logic>\
+ACTION: SKEW_BID  | WHEN: OBI > +0.3 AND depth GROWING\
+ACTION: SKEW_ASK  | WHEN: OBI < -0.3 AND depth THINNING\
+ACTION: PAUSE_TRADING | WHEN: sweeps > 5 OR toxic > 500\
+ACTION: HOLD      | WHEN: neutral, conflicting, or momentum reversal in OBI prev\
+</logic>\
+<example>{\"action\":\"HOLD\",\"confidence_pct\":65,\"reason\":\"OBI neutral depth stable\"}</example>";
 
 /// Snapshot sent from L1 to GPU thread.
 #[derive(Clone)]
@@ -60,6 +61,7 @@ pub struct L1GpuRequest {
     pub regime: &'static str,
     pub fear_greed: u64,
     pub macro_bias: f64,
+    pub portfolio_hedged: bool,  // CL4: Aegis shield active → skip inference
 }
 
 /// Response from GPU inference — discrete action + confidence.
@@ -229,6 +231,16 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
             latest = newer;
         }
 
+        // ── HEDGE GATE: Skip inference if Aegis shield active ──
+        // When portfolio_is_hedged=1, Hydra already applies VPIN shift in L1,
+        // Grid blocks all bids. LLM inference would just return HOLD anyway.
+        // Save 10-50ms GPU cycles + thermal.
+        if latest.portfolio_hedged {
+            engine.ai_heartbeat_ms.store(epoch_ms(), Ordering::Release);
+            last_inference = Instant::now();
+            continue;
+        }
+
         // Compact one-line prompt
         let fg_label = match latest.fear_greed {
             0..=24 => "EXTREME_FEAR",
@@ -237,15 +249,17 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
             _ => "EXTREME_GREED",
         };
 
+        let spread = latest.best_ask - latest.best_bid;
         let prompt_str = format!(
-            "BTC bid={:.0} ask={:.0} OBI={:+.2}(prev:{:+.2},{:+.2}) depth={}({:.1}/{:.1}) \
-             toxic={} sweeps={} pos={:.5} regime={} F&G={}({}) bias={:+.2}",
-            latest.best_bid, latest.best_ask,
+            "[BTC bid:{:.0} ask:{:.0} spr:{:.1}] [OBI:{:+.2} prev:{:+.2},{:+.2}] \
+             [LOB:{} {:.0}/{:.0}] [RISK tox:{} swp:{}] \
+             [POS {:.5}] [MACRO reg:{} F&G:{}({}) bias:{:+.2}]",
+            latest.best_bid, latest.best_ask, spread,
             latest.obi, latest.obi_prev[0], latest.obi_prev[1],
             latest.depth_trend, latest.bid_depth, latest.ask_depth,
             latest.toxic_hits, latest.sweeps_recent,
-            latest.net_position, latest.regime,
-            latest.fear_greed, fg_label, latest.macro_bias,
+            latest.net_position,
+            latest.regime, latest.fear_greed, fg_label, latest.macro_bias,
         );
 
         match call_lms(&prompt_str) {

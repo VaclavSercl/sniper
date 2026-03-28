@@ -265,6 +265,9 @@ RULES:
 - Consider fees in ALL profitability calculations
 - If GPU total_inferences < 20: keep current l1_tuning defaults (insufficient data)
 - If GPU toxic_rate > 20%: reduce skew_max_usd and increase obi_threshold
+- ANTI-OSCILLATION: Do NOT radically change parameters just because PnL dropped slightly in the last cycle. Tolerate short-term drawdowns (up to -$1.00 per 5min). Adapt ONLY if HMM Regime structurally shifts, VPIN drops below -0.7, or the loss exceeds the tolerance threshold.
+- GAUSSIAN WARP: If volatility or VPIN toxicity is high, increase grid_warp_factor to prevent grid exhaustion instead of widening base step.
+- AEGIS SHIELD: If VPIN < -0.7 AND net spot exposure > 0.5 BTC, you MUST set aegis_target_delta to hedge. Check Portfolio Exposure section.
 
 ═══ MACRO INTELLIGENCE ═══
 Fear & Greed Index: {fg} ({fg_text})
