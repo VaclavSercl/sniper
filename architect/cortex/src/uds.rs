@@ -284,6 +284,11 @@ async fn handle_request(
             UdsResponse::ok()
         }
 
+        "GET_GPU_STATS" => {
+            let stats = crate::gpu::get_gpu_stats();
+            UdsResponse::ok_with_data(stats.to_json())
+        }
+
         _ => UdsResponse::err(&format!("Unknown command: {}", req.cmd)),
     }
 }

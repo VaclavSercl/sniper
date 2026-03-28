@@ -464,6 +464,36 @@ def cmd_pnl(message):
     except Exception as e:
         bot.reply_to(message, f"❌ PnL error: {e}")
 
+# ── GPU TELEMETRY (/gpu) ─────────────────────────────────────
+@bot.message_handler(commands=['gpu'])
+def cmd_gpu(message):
+    if not auth(message): return
+    try:
+        result = cortex.get_gpu_stats()
+        if not result.get("ok"):
+            bot.reply_to(message, f"❌ GPU stats error: {result.get('error', 'unknown')}")
+            return
+        d = result.get("data", {})
+        sb = d.get("skew_bid", {})
+        sa = d.get("skew_ask", {})
+        pa = d.get("pause", {})
+        ho = d.get("hold", {})
+        report = (
+            f"🤖 PHI-3.5 EVALUACE ({d.get('uptime_hours', 0):.1f}h)\n"
+            f"━━━━━━━━━━━━━━━━━━━\n"
+            f"📊 {d.get('total_inferences', 0)} rozhodnutí\n\n"
+            f"SKEW_BID: {sb.get('win_rate', 0):.1f}% win ({sb.get('total', 0)}x, {sb.get('toxic', 0)} toxic)\n"
+            f"SKEW_ASK: {sa.get('win_rate', 0):.1f}% win ({sa.get('total', 0)}x, {sa.get('toxic', 0)} toxic)\n"
+            f"PAUSE:    {pa.get('accuracy', 0):.1f}% správně ({pa.get('total', 0)}x)\n"
+            f"HOLD:     {ho.get('total', 0)}x\n\n"
+            f"💰 Dopad na PnL: ${d.get('net_pnl_impact_usd', 0):.4f}\n"
+            f"☠️ Toxic rate: {d.get('toxic_rate_pct', 0):.1f}%\n"
+            f"━━━━━━━━━━━━━━━━━━━"
+        )
+        bot.reply_to(message, report)
+    except Exception as e:
+        bot.reply_to(message, f"❌ GPU error: {e}")
+
 # ── BOT-SPECIFIC COMMANDS (/hydra start, /grid stop, etc.) ─
 @bot.message_handler(commands=list(BOTS.keys()))
 def cmd_bot(message):

@@ -98,6 +98,10 @@ class CortexClient:
     def unpause(self, bot: str = "hydra") -> dict:
         return self._send({"cmd": "UNPAUSE", "bot": bot})
 
+    def get_gpu_stats(self) -> dict:
+        """Get Phi-3.5 GPU inference telemetry (ring buffer stats)."""
+        return self._send({"cmd": "GET_GPU_STATS"})
+
     def is_online(self) -> bool:
         """Quick health check."""
         r = self.ping()
