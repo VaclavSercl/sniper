@@ -856,6 +856,19 @@ PARAMETER CONSTRAINTS:
         total_1h = total_24h = total_7d = 0.0
         total_fills = 0
 
+        # Ensure ALL 4 bots appear in report (even if Cortex doesn't report them)
+        ALL_BOTS = ["hydra", "moonshot", "grid", "trigon"]
+        BOT_EMOJIS = {"hydra": "🐍", "moonshot": "🌙", "grid": "📐", "trigon": "🔺"}
+        reported = {b["name"] for b in bots}
+        for name in ALL_BOTS:
+            if name not in reported:
+                bots.append({
+                    "name": name, "emoji": BOT_EMOJIS[name],
+                    "price": 0.0, "position": 0.0, "pnl": 0.0,
+                    "grid_step": 0.0, "fills": 0, "toxic": 0,
+                    "online": False,
+                })
+
         for b in bots:
             icon = "🟢" if b.get("online") else "🔴"
             lines.append(

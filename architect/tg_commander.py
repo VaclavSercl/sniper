@@ -285,10 +285,24 @@ def build_report(period="hourly"):
         total_fills = 0
         has_data = False
 
+        # Read persistent state for PAUSED detection
+        try:
+            with open(STATE_FILE, 'r') as _sf:
+                _saved_state = json.load(_sf)
+        except Exception:
+            _saved_state = {}
+
         for bname in ["hydra", "moonshot", "grid", "trigon"]:
             info = BOTS[bname]
             alive = is_running(bname)
-            icon = "🟢" if alive else "🔴"
+            bot_mode = _saved_state.get(bname, {}).get("mode", "LIVE" if alive else "OFFLINE")
+
+            if not alive:
+                icon = "🔴"
+            elif bot_mode == "PAUSED":
+                icon = "🟡"
+            else:
+                icon = "🟢"
 
             lines.append(f"\n{icon} {info['emoji']} {bname.upper()}")
 
