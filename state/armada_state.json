@@ -13,8 +13,8 @@
   },
   "trigon": {
     "mode": "PAUSED",
-    "since": "2026-03-28T23:47:07.161890"
+    "since": "2026-03-28T23:50:37.382867"
   },
-  "last_healthy_ts": "2026-03-28T23:50:32.381426",
+  "last_healthy_ts": "2026-03-28T23:55:37.452209",
   "shutdown_reason": "initial"
 }
