@@ -1,17 +1,44 @@
 // ═══════════════════════════════════════════════════════════
 // 🌐 SOVEREIGN CORTEX — L2 Strategic Module
-// Unified 5-minute Oracle cycle: snapshot → Gemini → report
+// Unified 5-minute Oracle cycle: snapshot → Gemini → dispatch
+// Phase 1.5: Full JSON parsing + mmap write-back
 // ═══════════════════════════════════════════════════════════
 
 use crate::memory::{ArmadaMemory, format_snapshot_for_prompt};
 use crate::telegram;
+use serde::Deserialize;
+use sniper_types::PRICE_SCALE;
 use std::process::Command;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::sync::RwLock;
 use tokio::time;
 
 const L2_INTERVAL_SECS: u64 = 300; // 5 minutes
+
+// Safety clamps — Gemini cannot set values outside these ranges
+const GRID_FLOOR: f64 = 2.0;
+const GRID_CEIL: f64 = 50.0;
+const MAX_POS_FLOOR: f64 = 0.001;
+const MAX_POS_CEIL: f64 = 0.02;
+
+/// Gemini's expected JSON response (permissive deserialization)
+#[derive(Debug, Deserialize, Default)]
+struct GeminiDecision {
+    regime: Option<String>,
+    hydra: Option<HydraDecision>,
+    reasoning: Option<String>,
+    tactical_recommendation: Option<String>,
+    strategic_insight: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+struct HydraDecision {
+    grid_step: Option<f64>,
+    max_position: Option<f64>,
+    risk_level: Option<String>,
+}
 
 /// Run the L2 strategic loop forever.
 pub async fn run_l2_loop(memory: Arc<RwLock<ArmadaMemory>>, dry_run: bool) {
@@ -58,13 +85,18 @@ pub async fn run_l2_loop(memory: Arc<RwLock<ArmadaMemory>>, dry_run: bool) {
                 Ok(response) => {
                     println!("  ✅ Gemini responded ({} bytes)", response.len());
 
-                    // 6. Build Telegram report
-                    let report = build_oracle_report(&snapshots, &response, cycle);
+                    // 6. Parse JSON and apply decisions
+                    let decision = parse_gemini_response(&response);
+                    if let Some(ref d) = decision {
+                        let mem = memory.read().await;
+                        apply_decision(d, &mem, cycle);
+                    }
+
+                    // 7. Build and send Telegram report
+                    let report = build_oracle_report(&snapshots, &response, &decision, cycle);
                     if let Err(e) = telegram::send(&report).await {
                         eprintln!("  ⚠️ Telegram send failed: {e}");
                     }
-
-                    // TODO Phase 1.5: Parse JSON response and write decisions to RiskState via mmap
                 }
                 Err(e) => {
                     eprintln!("  ❌ Gemini error: {e}");
@@ -78,6 +110,76 @@ pub async fn run_l2_loop(memory: Arc<RwLock<ArmadaMemory>>, dry_run: bool) {
         println!("═══ L2 CYCLE #{cycle} COMPLETE ═══");
         time::sleep(Duration::from_secs(L2_INTERVAL_SECS)).await;
     }
+}
+
+/// Parse Gemini's response — extract JSON from possibly markdown-wrapped output.
+fn parse_gemini_response(raw: &str) -> Option<GeminiDecision> {
+    // Try direct parse first
+    if let Ok(d) = serde_json::from_str::<GeminiDecision>(raw.trim()) {
+        return Some(d);
+    }
+
+    // Try to find JSON block in markdown-wrapped response
+    let trimmed = raw.trim();
+    // Look for { ... } containing "regime"
+    if let Some(start) = trimmed.find('{') {
+        if let Some(end) = trimmed.rfind('}') {
+            let json_str = &trimmed[start..=end];
+            if let Ok(d) = serde_json::from_str::<GeminiDecision>(json_str) {
+                return Some(d);
+            }
+        }
+    }
+
+    eprintln!("  ⚠️ Could not parse Gemini JSON from response");
+    None
+}
+
+/// Apply Gemini's decision to mmap (direct atomic writes — no subprocess).
+fn apply_decision(decision: &GeminiDecision, memory: &ArmadaMemory, cycle: u64) {
+    let risk = memory.hydra_risk();
+    let engine = memory.hydra_engine();
+
+    // 1. Grid step (clamped to safety range)
+    if let Some(ref hydra) = decision.hydra {
+        if let Some(grid) = hydra.grid_step {
+            let clamped = grid.clamp(GRID_FLOOR, GRID_CEIL);
+            let scaled = (clamped * PRICE_SCALE) as u64;
+            risk.grid_step.store(scaled, Ordering::SeqCst);
+            println!("  📐 Grid: ${clamped:.2} (raw: ${grid:.2})");
+        }
+
+        if let Some(max_pos) = hydra.max_position {
+            let clamped = max_pos.clamp(MAX_POS_FLOOR, MAX_POS_CEIL);
+            let scaled = (clamped * PRICE_SCALE) as u64;
+            risk.max_inv_delta.store(scaled, Ordering::SeqCst);
+            println!("  📦 MaxPos: {clamped:.6} BTC (raw: {max_pos:.6})");
+        }
+    }
+
+    // 2. Regime to EngineState
+    if let Some(ref regime) = decision.regime {
+        let regime_id: u64 = match regime.to_uppercase().as_str() {
+            "TRENDING" => 1,
+            "RANGING" => 2,
+            "CHAOS" => 3,
+            _ => 0,
+        };
+        engine.l2_regime_id.store(regime_id, Ordering::Release);
+        println!("  📈 Regime: {regime} (id={regime_id})");
+    }
+
+    // 3. L2 action timestamp + AI heartbeat
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+    engine.l2_last_action_ms.store(now_ms, Ordering::Release);
+    engine.ai_heartbeat_ms.store(now_ms, Ordering::Release);
+    engine.ai_registry_version.fetch_add(1, Ordering::Release);
+
+    println!("  ✅ Applied (cycle #{cycle}, registry v{})",
+        engine.ai_registry_version.load(Ordering::Relaxed));
 }
 
 fn build_gemini_prompt(bot_context: &str, cycle: u64) -> String {
@@ -128,10 +230,14 @@ async fn call_gemini(prompt: &str) -> anyhow::Result<String> {
     Ok(stdout)
 }
 
-fn build_oracle_report(snapshots: &[crate::memory::BotSnapshot], gemini_response: &str, cycle: u64) -> String {
+fn build_oracle_report(
+    snapshots: &[crate::memory::BotSnapshot],
+    gemini_response: &str,
+    decision: &Option<GeminiDecision>,
+    cycle: u64,
+) -> String {
     let now = chrono_now();
 
-    // Determine health from first bot
     let health = if let Some(s) = snapshots.first() {
         if s.toxic_hits < 5 && s.session_fills > 0 { "🟢" }
         else if s.toxic_hits < 20 { "🟡" }
@@ -139,7 +245,7 @@ fn build_oracle_report(snapshots: &[crate::memory::BotSnapshot], gemini_response
     } else { "❓" };
 
     let mut report = format!(
-        "{health} *SOVEREIGN CORTEX v13.0 | CYCLE #{cycle}* `{now}`\n\
+        "{health} *SOVEREIGN CORTEX v13.0 | #{cycle}* `{now}`\n\
          ━━━━━━━━━━━━━━━━━━━━━\n"
     );
 
@@ -161,21 +267,53 @@ fn build_oracle_report(snapshots: &[crate::memory::BotSnapshot], gemini_response
         ));
     }
 
-    // Truncate Gemini response for Telegram (4096 char limit)
-    let gemini_short = if gemini_response.len() > 1500 {
-        &gemini_response[..1500]
-    } else {
-        gemini_response
-    };
+    // Add decision summary
+    if let Some(d) = decision {
+        let regime = d.regime.as_deref().unwrap_or("?");
+        let regime_icon = match regime {
+            "TRENDING" => "📈",
+            "RANGING" => "↔️",
+            "CHAOS" => "🌪️",
+            _ => "❓",
+        };
 
-    report.push_str(&format!("\n🧠 *Oracle:*\n_{gemini_short}_"));
+        report.push_str(&format!("\n{regime_icon} *Režim:* `{regime}`\n"));
+
+        if let Some(ref hydra) = d.hydra {
+            report.push_str(&format!(
+                "📐 Grid: `${:.2}` | MaxPos: `{:.4} BTC` | Risk: `{}`\n",
+                hydra.grid_step.unwrap_or(0.0),
+                hydra.max_position.unwrap_or(0.0),
+                hydra.risk_level.as_deref().unwrap_or("?"),
+            ));
+        }
+
+        if let Some(ref reasoning) = d.reasoning {
+            report.push_str(&format!("\n🧠 _{reasoning}_\n"));
+        }
+        if let Some(ref tactic) = d.tactical_recommendation {
+            report.push_str(&format!("🎯 _{tactic}_\n"));
+        }
+        if let Some(ref insight) = d.strategic_insight {
+            report.push_str(&format!("💡 _{insight}_\n"));
+        }
+    } else {
+        // No parsed decision — show raw Gemini response
+        let gemini_short = if gemini_response.len() > 1200 {
+            &gemini_response[..1200]
+        } else {
+            gemini_response
+        };
+        report.push_str(&format!("\n🧠 *Oracle (raw):*\n_{gemini_short}_"));
+    }
+
     report
 }
 
 fn build_fallback_report(snapshots: &[crate::memory::BotSnapshot], cycle: u64) -> String {
     let now = chrono_now();
     let mut report = format!(
-        "🟡 *SOVEREIGN CORTEX v13.0 | CYCLE #{cycle}* `{now}`\n\
+        "🟡 *SOVEREIGN CORTEX v13.0 | #{cycle}* `{now}`\n\
          ━━━━━━━━━━━━━━━━━━━━━\n\
          ⚠️ _Gemini nedostupné — pouze lokální data_\n"
     );
@@ -191,7 +329,6 @@ fn build_fallback_report(snapshots: &[crate::memory::BotSnapshot], cycle: u64) -
 }
 
 fn chrono_now() -> String {
-    // Simple HH:MM CET without chrono dependency
     let epoch = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap_or_default()
