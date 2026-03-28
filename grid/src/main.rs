@@ -281,7 +281,7 @@ async fn main() -> Result<()> {
 
                                 // Place buy levels
                                 for price in &buys {
-                                    order_msg.push_str(",[\"on\",{\"symbol\":\"");
+                                    order_msg.push_str(",[\"on\",{\"gid\":3000,\"symbol\":\"");
                                     order_msg.push_str(symbol);
                                     order_msg.push_str("\",\"amount\":");
                                     order_msg.push_str(&format!("{:.5}", qty));
@@ -292,7 +292,7 @@ async fn main() -> Result<()> {
 
                                 // Place sell levels
                                 for price in &sells {
-                                    order_msg.push_str(",[\"on\",{\"symbol\":\"");
+                                    order_msg.push_str(",[\"on\",{\"gid\":3000,\"symbol\":\"");
                                     order_msg.push_str(symbol);
                                     order_msg.push_str("\",\"amount\":");
                                     order_msg.push_str(&format!("{:.5}", -qty));

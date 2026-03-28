@@ -247,6 +247,8 @@ async fn main() -> Result<()> {
 
         let mut authed = false;
         let mut last_scan = Instant::now();
+        let mut order_msg = String::with_capacity(2048);
+        let mut last_exec_ms: [u64; TRIGON_MAX_TRIANGLES] = [0; TRIGON_MAX_TRIANGLES];
 
         // ═══ MESSAGE LOOP ═══
         while let Some(msg) = read.next().await {
@@ -321,11 +323,60 @@ async fn main() -> Result<()> {
 
                                 // Execute if profitable and not paused
                                 let min_profit = tr.min_profit_bps.load(Ordering::Acquire) as f64 / 100.0;
-                                if !paused && profit > min_profit && et.executing.load(Ordering::Acquire) == 0 {
+                                let cooldown = tr.cooldown_ms.load(Ordering::Acquire);
+                                let max_usd = tr.max_order_usd.load(Ordering::Acquire) as f64 / PRICE_SCALE_I as f64;
+
+                                if !paused && profit > min_profit
+                                    && et.executing.load(Ordering::Acquire) == 0
+                                    && (now_ms - last_exec_ms[t]) > cooldown
+                                    && max_usd > 0.0
+                                {
                                     et.executing.store(1, Ordering::Release);
-                                    // TODO: Implement atomic 3-leg execution via ox_multi
-                                    info!(event = "arb_opportunity", triangle = t, profit_bps = format!("{:.2}", profit), rate = format!("{:.8}", rate));
-                                    notifier.send(format!("💰 ARB! Triangle {} profit={:.2}bps rate={:.8}", t, profit, rate));
+
+                                    // Build ox_multi with 3 IOC legs + GID 4000
+                                    // Each leg: symbol, direction (BUY=positive, SELL=negative), price
+                                    order_msg.clear();
+                                    order_msg.push_str("[0,\"ox_multi\",null,[");
+
+                                    for l in 0..TRIGON_LEGS {
+                                        let sym_hash = tr.leg_symbols[l].load(Ordering::Acquire);
+                                        let dir = dirs[l];
+                                        let sym = symbol_hash_to_str(sym_hash);
+                                        let price = if dir == 0 { asks[l] } else { bids[l] };
+                                        // Compute quantity: max_usd / price of this leg
+                                        let qty = if price > 0.0 { max_usd / price } else { 0.0 };
+                                        let signed_qty = if dir == 0 { qty } else { -qty };
+
+                                        if l > 0 { order_msg.push(','); }
+                                        order_msg.push_str("[\"on\",{\"gid\":4000,\"symbol\":\"");
+                                        order_msg.push_str(&sym);
+                                        order_msg.push_str("\",\"amount\":");
+                                        // Use ryu for fast float formatting
+                                        let mut buf = ryu::Buffer::new();
+                                        order_msg.push_str(buf.format(signed_qty));
+                                        order_msg.push_str(",\"price\":\"");
+                                        let mut buf2 = ryu::Buffer::new();
+                                        order_msg.push_str(buf2.format(price));
+                                        order_msg.push_str("\",\"type\":\"EXCHANGE IOC\"}]");
+                                    }
+                                    order_msg.push_str("]]");
+
+                                    match write.send(Message::Text(order_msg.clone().into())).await {
+                                        Ok(_) => {
+                                            et.executions.fetch_add(1, Ordering::Relaxed);
+                                            last_exec_ms[t] = now_ms;
+                                            info!(event = "arb_execute", triangle = t,
+                                                profit_bps = format!("{:.2}", profit),
+                                                rate = format!("{:.8}", rate),
+                                                max_usd = format!("{:.2}", max_usd));
+                                            notifier.send(format!(
+                                                "💰 ARB EXEC! Tri#{} profit={:.2}bps rate={:.8} size=${:.2}",
+                                                t, profit, rate, max_usd));
+                                        }
+                                        Err(e) => {
+                                            warn!(event = "arb_send_fail", triangle = t, error = %e);
+                                        }
+                                    }
                                     et.executing.store(0, Ordering::Release);
                                 }
                             }

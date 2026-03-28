@@ -286,13 +286,13 @@ async fn main() -> Result<()> {
                                     order_msg.clear();
                                     order_msg.push_str("[0,\"ox_multi\",null,[[\"oc_multi\",{\"symbol\":\"");
                                     order_msg.push_str(symbol);
-                                    order_msg.push_str("\"}],[\"on\",{\"symbol\":\"");
+                                    order_msg.push_str("\"}],[\"on\",{\"gid\":2000,\"symbol\":\"");
                                     order_msg.push_str(symbol);
                                     order_msg.push_str("\",\"amount\":");
                                     order_msg.push_str(&format!("{:.5}", coin_amount));
                                     order_msg.push_str(",\"price\":\"");
                                     order_msg.push_str(&format!("{:.4}", buy_p));
-                                    order_msg.push_str("\",\"type\":\"EXCHANGE LIMIT\"}],[\"on\",{\"symbol\":\"");
+                                    order_msg.push_str("\",\"type\":\"EXCHANGE LIMIT\"}],[\"on\",{\"gid\":2000,\"symbol\":\"");
                                     order_msg.push_str(symbol);
                                     order_msg.push_str("\",\"amount\":");
                                     order_msg.push_str(&format!("{:.5}", -coin_amount));
