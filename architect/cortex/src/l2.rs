@@ -10,7 +10,7 @@
 //   - My macro section with F&G/bias/sweeps
 // ═══════════════════════════════════════════════════════════
 
-use crate::memory::{ArmadaMemory, BotSnapshot, format_snapshot_for_prompt};
+use crate::memory::{ArmadaMemory, BotSnapshot, format_snapshot_for_prompt, enrich_with_pnl};
 use crate::telegram;
 use serde::Deserialize;
 use sniper_types::PRICE_SCALE;
@@ -124,10 +124,13 @@ pub async fn run_l2_loop(memory: Arc<RwLock<ArmadaMemory>>, dry_run: bool) {
         println!("\n═══ L2 ORACLE CYCLE #{cycle} ═══");
 
         // 1. Atomic snapshot of all bots (~400ns)
-        let snapshots = {
+        let mut snapshots = {
             let mem = memory.read().await;
             mem.snapshot_all()
         };
+
+        // 1b. Enrich with PnL from pnl_state.bin mmap
+        enrich_with_pnl(&mut snapshots);
 
         // 2. Log summary
         for snap in &snapshots {
@@ -403,16 +406,22 @@ fn build_oracle_report(
     } else { "❓" };
 
     let mut report = format!(
-        "{health} *SOVEREIGN CORTEX v13.1 | #{cycle}* `{now}`\n\
+        "{health} SOVEREIGN CORTEX v13.1 | #{cycle} {now}\n\
          ━━━━━━━━━━━━━━━━━━━━━\n"
     );
+
+    // Per-bot sections
+    let mut total_1h = 0.0;
+    let mut total_24h = 0.0;
+    let mut total_7d = 0.0;
+    let mut total_fills = 0u32;
 
     for s in snapshots {
         let icon = if s.online { "🟢" } else { "🔴" };
         report.push_str(&format!(
-            "\n{icon} {emoji} *{name}*\n\
-             💲 `${price:.2}` | 📦 `{pos:.5} BTC` | 💰 `${pnl:.4}`\n\
-             📐 Grid `${grid:.2}` ({levels}L) | Fills `{fills}` | Toxic `{toxic}`\n",
+            "\n{icon} {emoji} {name}\n\
+             💲 ${price:.2} | 📦 {pos:.5} BTC | 💰 ${pnl:.4}\n\
+             📐 Grid ${grid:.2} ({levels}L) | Fills {fills} | Toxic {toxic}\n",
             emoji = s.emoji,
             name = s.name.to_uppercase(),
             price = s.micro_price,
@@ -423,8 +432,36 @@ fn build_oracle_report(
             fills = s.session_fills,
             toxic = s.toxic_hits,
         ));
+
+        // PnL + trades (only if bot has data)
+        if s.fills_24h_fifo > 0 || s.pnl_7d.abs() > 0.0001 {
+            let buys = s.fills_24h_fifo.saturating_sub(s.closed_trades_24h);
+            let sells = s.closed_trades_24h;
+            report.push_str(&format!(
+                "📈 Obchodu: {} ({} nakup / {} prodej)\n\
+                 💰 PnL: {} 1h | {} 24h | {} 7d\n",
+                s.fills_24h_fifo, buys, sells,
+                fmt_pnl(s.pnl_1h), fmt_pnl(s.pnl_24h), fmt_pnl(s.pnl_7d),
+            ));
+        }
+
+        total_1h += s.pnl_1h;
+        total_24h += s.pnl_24h;
+        total_7d += s.pnl_7d;
+        total_fills += s.fills_24h_fifo;
     }
 
+    // PnL summary
+    if total_fills > 0 {
+        report.push_str(&format!(
+            "\n━━━━━━━━━━━━━━━━━━━\n\
+             Σ PnL: {} 1h | {} 24h | {} 7d\n\
+             Fills 24h: {total_fills}\n",
+            fmt_pnl(total_1h), fmt_pnl(total_24h), fmt_pnl(total_7d),
+        ));
+    }
+
+    // AI decision
     if let Some(d) = decision {
         let regime = d.effective_regime();
         let regime_icon = match regime {
@@ -433,39 +470,39 @@ fn build_oracle_report(
             _ => "↔️",
         };
 
-        report.push_str(&format!("\n{regime_icon} *Režim:* `{regime}`\n"));
+        report.push_str(&format!("\n{regime_icon} Rezim: {regime}\n"));
 
         if let Some(ref hydra) = d.hydra {
             let grid = hydra.effective_grid().unwrap_or(0.0);
             let max_p = hydra.effective_max_pos().unwrap_or(0.0);
             let paused = if hydra.pause_trading == Some(true) { "⏸️ YES" } else { "▶️ NO" };
             report.push_str(&format!(
-                "📐 Grid: `${grid:.2}` | MaxPos: `{max_p:.4}` | Paused: `{paused}`\n",
+                "📐 Grid: ${grid:.2} | MaxPos: {max_p:.4} | Paused: {paused}\n",
             ));
         }
 
         if let Some(ref ms) = d.moonshot {
             if let Some(ref bias) = ms.opportunity_bias {
-                report.push_str(&format!("🌙 Moonshot: `{bias}`\n"));
+                report.push_str(&format!("🌙 Moonshot: {bias}\n"));
             }
         }
 
         if let Some(ref g) = d.grid {
             if let Some(ref action) = g.action {
-                report.push_str(&format!("📐 Grid Bot: `{action}`\n"));
+                report.push_str(&format!("📐 Grid Bot: {action}\n"));
             }
         }
 
         let reasoning = d.effective_reasoning();
         if !reasoning.is_empty() {
-            report.push_str(&format!("\n🧠 _{reasoning}_\n"));
+            report.push_str(&format!("\n🧠 {reasoning}\n"));
         }
 
         if let Some(ref tactic) = d.tactical_recommendation {
-            report.push_str(&format!("🎯 _{tactic}_\n"));
+            report.push_str(&format!("🎯 {tactic}\n"));
         }
         if let Some(ref insight) = d.strategic_insight {
-            report.push_str(&format!("💡 _{insight}_\n"));
+            report.push_str(&format!("💡 {insight}\n"));
         }
     }
 
@@ -475,19 +512,71 @@ fn build_oracle_report(
 fn build_fallback_report(snapshots: &[BotSnapshot], cycle: u64) -> String {
     let now = chrono_now();
     let mut report = format!(
-        "🟡 *SOVEREIGN CORTEX v13.1 | #{cycle}* `{now}`\n\
+        "🟡 SOVEREIGN CORTEX v13.1 | #{cycle} {now}\n\
          ━━━━━━━━━━━━━━━━━━━━━\n\
-         ⚠️ _Gemini nedostupné — pouze lokální data_\n"
+         ⚠️ Gemini nedostupne — pouze lokalni data\n"
     );
+
+    let mut total_1h = 0.0;
+    let mut total_24h = 0.0;
+    let mut total_7d = 0.0;
+    let mut total_fills = 0u32;
 
     for s in snapshots {
         let icon = if s.online { "🟢" } else { "🔴" };
         report.push_str(&format!(
-            "\n{icon} {} *{}* | `${:.2}` | pos `{:.5}` | pnl `${:.4}`\n",
-            s.emoji, s.name.to_uppercase(), s.micro_price, s.net_position, s.realized_pnl,
+            "\n{icon} {emoji} {name}\n\
+             💲 ${price:.2} | 📦 {pos:.5} BTC | 💰 ${pnl:.4}\n\
+             📐 Grid ${grid:.2} ({levels}L) | Fills {fills} | Toxic {toxic}\n",
+            emoji = s.emoji,
+            name = s.name.to_uppercase(),
+            price = s.micro_price,
+            pos = s.net_position,
+            pnl = s.realized_pnl,
+            grid = s.grid_step,
+            levels = s.grid_levels,
+            fills = s.session_fills,
+            toxic = s.toxic_hits,
+        ));
+
+        if s.fills_24h_fifo > 0 || s.pnl_7d.abs() > 0.0001 {
+            let buys = s.fills_24h_fifo.saturating_sub(s.closed_trades_24h);
+            let sells = s.closed_trades_24h;
+            report.push_str(&format!(
+                "📈 Obchodu: {} ({} nakup / {} prodej)\n\
+                 💰 PnL: {} 1h | {} 24h | {} 7d\n",
+                s.fills_24h_fifo, buys, sells,
+                fmt_pnl(s.pnl_1h), fmt_pnl(s.pnl_24h), fmt_pnl(s.pnl_7d),
+            ));
+        }
+
+        total_1h += s.pnl_1h;
+        total_24h += s.pnl_24h;
+        total_7d += s.pnl_7d;
+        total_fills += s.fills_24h_fifo;
+    }
+
+    if total_fills > 0 {
+        report.push_str(&format!(
+            "\n━━━━━━━━━━━━━━━━━━━\n\
+             Σ PnL: {} 1h | {} 24h | {} 7d\n\
+             Fills 24h: {total_fills}\n",
+            fmt_pnl(total_1h), fmt_pnl(total_24h), fmt_pnl(total_7d),
         ));
     }
+
     report
+}
+
+fn fmt_pnl(v: f64) -> String {
+    let sign = if v >= 0.0 { "+" } else { "" };
+    if v.abs() >= 1000.0 {
+        format!("{sign}${:.0}", v)
+    } else if v.abs() >= 1.0 {
+        format!("{sign}${v:.2}")
+    } else {
+        format!("{sign}${v:.4}")
+    }
 }
 
 fn epoch_ms() -> u64 {

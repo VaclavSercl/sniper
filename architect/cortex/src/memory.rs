@@ -39,6 +39,13 @@ pub struct BotSnapshot {
     pub authorized_capital: f64,
     pub daily_loss_limit: f64,
     pub paused: bool,
+    // PnL from FIFO engine (pnl_state.bin mmap)
+    pub pnl_1h: f64,
+    pub pnl_24h: f64,
+    pub pnl_7d: f64,
+    pub pnl_30d: f64,
+    pub fills_24h_fifo: u32,
+    pub closed_trades_24h: u32,
 }
 
 /// Central memory manager — opens mmap handles for all bots.
@@ -196,8 +203,68 @@ impl ArmadaMemory {
             authorized_capital: r.authorized_capital.load(Ordering::Relaxed) as f64 / PRICE_SCALE,
             daily_loss_limit: r.daily_loss_limit.load(Ordering::Relaxed) as f64 / PRICE_SCALE,
             paused: r.paused.load(Ordering::Relaxed) != 0,
+            // PnL fields — filled after snapshot via enrich_with_pnl()
+            pnl_1h: 0.0,
+            pnl_24h: 0.0,
+            pnl_7d: 0.0,
+            pnl_30d: 0.0,
+            fills_24h_fifo: 0,
+            closed_trades_24h: 0,
         }
     }
+}
+
+// ═══ PnL mmap reader ═══
+// Reads from /dev/shm/beroun/pnl_state.bin written by pnl_daemon.py
+// Layout: 8 bots × 192 bytes each.
+// Per-bot offsets: realized_1h(i64@0), realized_24h(i64@8), realized_7d(i64@16),
+//   fills_24h(u32@52), closed_24h(u32@56)
+
+const PNL_MMAP_PATH: &str = "/dev/shm/beroun/pnl_state.bin";
+const PNL_BOT_SIZE: usize = 192;
+
+fn bot_pnl_index(name: &str) -> Option<usize> {
+    match name {
+        "hydra" => Some(0),
+        "moonshot" => Some(1),
+        "grid" => Some(2),
+        "trigon" => Some(3),
+        _ => None,
+    }
+}
+
+/// Enrich snapshots with PnL data from pnl_state.bin mmap.
+pub fn enrich_with_pnl(snapshots: &mut [BotSnapshot]) {
+    let path = std::path::Path::new(PNL_MMAP_PATH);
+    if !path.exists() {
+        return;
+    }
+    let data = match std::fs::read(path) {
+        Ok(d) => d,
+        Err(_) => return,
+    };
+
+    for snap in snapshots.iter_mut() {
+        if let Some(idx) = bot_pnl_index(snap.name) {
+            let base = idx * PNL_BOT_SIZE;
+            if base + PNL_BOT_SIZE <= data.len() {
+                snap.pnl_1h = read_i64(&data, base) as f64 / PRICE_SCALE;
+                snap.pnl_24h = read_i64(&data, base + 8) as f64 / PRICE_SCALE;
+                snap.pnl_7d = read_i64(&data, base + 16) as f64 / PRICE_SCALE;
+                snap.pnl_30d = read_i64(&data, base + 24) as f64 / PRICE_SCALE;
+                snap.fills_24h_fifo = read_u32(&data, base + 52);
+                snap.closed_trades_24h = read_u32(&data, base + 56);
+            }
+        }
+    }
+}
+
+fn read_i64(data: &[u8], offset: usize) -> i64 {
+    i64::from_le_bytes(data[offset..offset+8].try_into().unwrap_or([0;8]))
+}
+
+fn read_u32(data: &[u8], offset: usize) -> u32 {
+    u32::from_le_bytes(data[offset..offset+4].try_into().unwrap_or([0;4]))
 }
 
 /// Format a bot snapshot as a text block for the Gemini prompt.

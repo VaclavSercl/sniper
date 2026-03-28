@@ -215,23 +215,45 @@ def unpause_bot(name):
     except Exception as e:
         return f"❌ Unpause error: {e}"
 
-def get_status():
-    """Get status of all bots + PnL summary."""
-    lines = ["🏛️ *SNIPER ARMADA v13.0*\n"]
-    running = 0
-    for name, info in BOTS.items():
-        alive = is_running(name)
-        pid = get_pid(name) if alive else "—"
-        if alive:
-            running += 1
-        icon = "🟢" if alive else "🔴"
-        lines.append(f"{icon} {info['emoji']} *{name.upper()}* — {info['desc']}")
-        if alive:
-            lines.append(f"   PID: `{pid}` · Core {info['cpu']} · :{info['port']}")
+def read_cortex_state():
+    """Read live cortex_state.json for bot data."""
+    try:
+        path = "/dev/shm/beroun/cortex_state.json"
+        if os.path.exists(path):
+            with open(path) as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return None
 
-    lines.insert(1, f"Online: *{running}/{len(BOTS)}*\n")
+def build_report(period="hourly"):
+    """
+    Build unified report matching Cortex L2 format.
+    period: "hourly", "daily", "weekly", "monthly"
+    """
+    now_str = datetime.now(timezone(timedelta(hours=1))).strftime("%H:%M")
+    period_labels = {
+        "hourly":  ("⏰ HODINOVY REPORT", [1, 24, 168]),
+        "daily":   ("📅 DENNI REPORT",    [24, 168, 720]),
+        "weekly":  ("📊 TYDENNI REPORT",  [168, 720, 720*3]),
+        "monthly": ("📈 MESICNI REPORT",  [720, 720*3, 720*6]),
+    }
+    title, windows = period_labels.get(period, period_labels["hourly"])
+    w_labels = {
+        1: "1h", 24: "24h", 168: "7d", 720: "30d", 2160: "90d", 4320: "180d",
+    }
 
-    # ── PnL section ──
+    running = sum(1 for name in BOTS if is_running(name))
+    health = "🟢" if running > 0 else "🔴"
+
+    lines = [
+        f"{health} {title} | {now_str}",
+        f"━━━━━━━━━━━━━━━━━━━━━",
+        f"Online: {running}/{len(BOTS)}",
+    ]
+
+    cortex = read_cortex_state()
+
     try:
         pnl_path = os.path.join(PROJECT_ROOT, "shared")
         if pnl_path not in sys.path:
@@ -239,38 +261,87 @@ def get_status():
         from pnl_engine import PnlDatabase, format_pnl_short
 
         db = PnlDatabase()
-        total_1h = total_24h = total_7d = 0
-        total_fills_24h = 0
+        totals = [0.0] * 3
+        total_fills = 0
         has_data = False
 
-        lines.append("\n💰 *PnL (FIFO)*")
         for bname in ["hydra", "moonshot", "grid", "trigon"]:
-            w1 = db.get_realized_window(bname, 1)
-            w24 = db.get_realized_window(bname, 24)
-            w7 = db.get_realized_window(bname, 168)
-            if w24["fills"] == 0 and w7["fills"] == 0:
-                continue
-            has_data = True
-            emoji = {"hydra": "🐍", "moonshot": "🌙", "grid": "📐", "trigon": "🔺"}.get(bname, "🤖")
-            lines.append(f"{emoji} `{format_pnl_short(w1['realized'])}` 1h · `{format_pnl_short(w24['realized'])}` 24h · `{format_pnl_short(w7['realized'])}` 7d")
-            total_1h += w1["realized"]
-            total_24h += w24["realized"]
-            total_7d += w7["realized"]
-            total_fills_24h += w24["fills"]
+            info = BOTS[bname]
+            alive = is_running(bname)
+            icon = "🟢" if alive else "🔴"
+
+            lines.append(f"\n{icon} {info['emoji']} {bname.upper()}")
+
+            # Live data from Cortex
+            if cortex:
+                for bd in cortex.get("bots", []):
+                    if bd.get("name") == bname:
+                        lines.append(
+                            f"💲 ${bd.get('price', 0):.2f} | "
+                            f"📦 {bd.get('position', 0):.5f} BTC | "
+                            f"💰 ${bd.get('pnl', 0):.4f}"
+                        )
+                        lines.append(
+                            f"📐 Grid ${bd.get('grid', 0):.2f} ({bd.get('grid_levels', 0)}L) | "
+                            f"Fills {bd.get('fills', 0)} | Toxic {bd.get('toxic', 0)}"
+                        )
+                        break
+
+            # PnL from FIFO
+            pnl_vals = []
+            for w in windows:
+                r = db.get_realized_window(bname, w)
+                pnl_vals.append(r)
+
+            w0 = pnl_vals[0]
+            w1_data = pnl_vals[1]
+            w2_data = pnl_vals[2]
+
+            if w0["fills"] > 0 or w1_data["fills"] > 0:
+                has_data = True
+                buys = w0["fills"] - w0["closed_trades"]
+                sells = w0["closed_trades"]
+                lines.append(
+                    f"📈 Obchodu: {w0['fills']} ({buys} nakup / {sells} prodej)"
+                )
+                l0 = w_labels.get(windows[0], f"{windows[0]}h")
+                l1 = w_labels.get(windows[1], f"{windows[1]}h")
+                l2 = w_labels.get(windows[2], f"{windows[2]}h")
+                lines.append(
+                    f"💰 PnL: {format_pnl_short(w0['realized'])} {l0} | "
+                    f"{format_pnl_short(w1_data['realized'])} {l1} | "
+                    f"{format_pnl_short(w2_data['realized'])} {l2}"
+                )
+
+                for i in range(3):
+                    totals[i] += pnl_vals[i]["realized"]
+                total_fills += w0["fills"]
 
         if has_data:
-            lines.append(f"━━━━━━━━━━━━━━━━━━━")
-            lines.append(f"*Σ* `{format_pnl_short(total_1h)}` 1h · `{format_pnl_short(total_24h)}` 24h · `{format_pnl_short(total_7d)}` 7d")
-            lines.append(f"Fills 24h: `{total_fills_24h}`")
+            l0 = w_labels.get(windows[0], f"{windows[0]}h")
+            l1 = w_labels.get(windows[1], f"{windows[1]}h")
+            l2 = w_labels.get(windows[2], f"{windows[2]}h")
+            lines.append("\n━━━━━━━━━━━━━━━━━━━")
+            lines.append(
+                f"Σ PnL: {format_pnl_short(totals[0])} {l0} | "
+                f"{format_pnl_short(totals[1])} {l1} | "
+                f"{format_pnl_short(totals[2])} {l2}"
+            )
+            lines.append(f"Fills: {total_fills}")
         else:
-            lines.append("ℹ️ _Žádné fills_")
+            lines.append("\nℹ️ Zadne fills")
 
         db.close()
     except Exception as e:
         log.error(f"PnL status error: {e}")
-        lines.append(f"\n💰 _PnL: {e}_")
+        lines.append(f"\n💰 PnL: {e}")
 
     return "\n".join(lines)
+
+
+def get_status():
+    """Backward-compatible: returns hourly report."""
+    return build_report("hourly")
 
 # ── SLASH COMMANDS ──────────────────────────────────────────
 
@@ -600,16 +671,52 @@ Give a brief strategic analysis in Czech (5 sentences max):
         bot.send_message(message.chat.id, f"❌ Analýza selhala: {e}")
 
 
-# ── HOURLY REPORT ──────────────────────────────────────────
-def hourly_report_loop():
-    """Send armada status every hour."""
+# ── SCHEDULED REPORTS ──────────────────────────────────────
+def scheduled_reports_loop():
+    """Send hourly, daily, weekly, monthly reports automatically."""
+    last_hour = -1
+    last_day = -1
+    last_week = -1
+    last_month = -1
+
     while True:
-        time.sleep(3600)
+        time.sleep(60)  # Check every minute
         try:
-            status = get_status()
-            bot.send_message(AUTHORIZED_CHAT_ID, f"🐺 {status}", parse_mode="Markdown")
+            now = datetime.now(timezone(timedelta(hours=1)))  # CET
+            hour = now.hour
+            day = now.day
+            weekday = now.weekday()  # 0=Mon
+
+            # ── HOURLY (every hour, on the hour) ──
+            if hour != last_hour:
+                last_hour = hour
+                report = build_report("hourly")
+                bot.send_message(AUTHORIZED_CHAT_ID, f"🐺 {report}")
+                log.info(f"Hourly report sent ({hour}:00)")
+
+            # ── DAILY (every day at 00:00) ──
+            if hour == 0 and day != last_day:
+                last_day = day
+                report = build_report("daily")
+                bot.send_message(AUTHORIZED_CHAT_ID, f"🐺 {report}")
+                log.info("Daily report sent")
+
+            # ── WEEKLY (Monday at 00:00) ──
+            if hour == 0 and weekday == 0 and last_week != now.isocalendar()[1]:
+                last_week = now.isocalendar()[1]
+                report = build_report("weekly")
+                bot.send_message(AUTHORIZED_CHAT_ID, f"🐺 {report}")
+                log.info("Weekly report sent")
+
+            # ── MONTHLY (1st of month at 00:00) ──
+            if hour == 0 and day == 1 and last_month != now.month:
+                last_month = now.month
+                report = build_report("monthly")
+                bot.send_message(AUTHORIZED_CHAT_ID, f"🐺 {report}")
+                log.info("Monthly report sent")
+
         except Exception as e:
-            log.error(f"Hourly report error: {e}")
+            log.error(f"Scheduled report error: {e}")
 
 
 # ── MAIN ────────────────────────────────────────────────────
@@ -636,8 +743,8 @@ def main():
     # Wait for Telegram to release previous polling connection
     time.sleep(5)
 
-    # Start hourly report thread
-    threading.Thread(target=hourly_report_loop, daemon=True).start()
+    # Start scheduled reports thread (hourly/daily/weekly/monthly)
+    threading.Thread(target=scheduled_reports_loop, daemon=True).start()
 
     # Start bot polling with robust retry
     log.info("Polling Telegram...")
