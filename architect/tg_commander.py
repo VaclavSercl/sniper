@@ -23,6 +23,7 @@ from datetime import datetime, timezone, timedelta
 
 import telebot
 from telebot import apihelper
+from cortex_client import CortexClient
 
 # ── CONFIG ──────────────────────────────────────────────────
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -63,6 +64,7 @@ if not TOKEN:
     sys.exit(1)
 
 bot = telebot.TeleBot(TOKEN)
+cortex = CortexClient()  # UDS bridge to Rust Cortex
 
 # ── BOT REGISTRY ────────────────────────────────────────────
 BOTS = {
@@ -216,14 +218,13 @@ def unpause_bot(name):
         return f"❌ Unpause error: {e}"
 
 def read_cortex_state():
-    """Read live cortex_state.json for bot data."""
+    """Read live state from Cortex via UDS (replaces cortex_state.json)."""
     try:
-        path = "/dev/shm/beroun/cortex_state.json"
-        if os.path.exists(path):
-            with open(path) as f:
-                return json.load(f)
-    except Exception:
-        pass
+        r = cortex.get_snapshot()
+        if r.get("ok"):
+            return r.get("data")
+    except Exception as e:
+        log.debug(f"Cortex UDS read failed: {e}")
     return None
 
 def build_report(period="hourly"):
@@ -252,7 +253,7 @@ def build_report(period="hourly"):
         f"Online: {running}/{len(BOTS)}",
     ]
 
-    cortex = read_cortex_state()
+    cortex_data = read_cortex_state()
 
     try:
         pnl_path = os.path.join(PROJECT_ROOT, "shared")
@@ -272,14 +273,14 @@ def build_report(period="hourly"):
 
             lines.append(f"\n{icon} {info['emoji']} {bname.upper()}")
 
-            # Live data from Cortex
-            if cortex:
-                for bd in cortex.get("bots", []):
+            # Live data from Cortex (via UDS)
+            if cortex_data:
+                for bd in cortex_data.get("bots", []):
                     if bd.get("name") == bname:
                         price = float(bd.get('price', 0))
                         position = float(bd.get('position', 0))
                         pnl = float(bd.get('pnl', 0))
-                        grid = float(bd.get('grid', 0))
+                        grid = float(bd.get('grid_step', 0))
                         fills = bd.get('fills', 0)
                         toxic = bd.get('toxic', 0)
                         lines.append(
@@ -501,25 +502,22 @@ PID: `{pid}`
 Core: `{info['cpu']}`
 Port: `:{info['port']}`"""]
 
-    # ── Live state from cortex_state.json ──
+    # ── Live state from Cortex (UDS) ──
     try:
-        cortex_path = "/dev/shm/beroun/cortex_state.json"
-        if os.path.exists(cortex_path):
-            with open(cortex_path) as f:
-                cortex = json.load(f)
-            for bot_data in cortex.get("bots", []):
+        snap = read_cortex_state()
+        if snap:
+            for bot_data in snap.get("bots", []):
                 if bot_data.get("name") == name:
-                    lines.append(f"""
-📊 *Live State (Cortex):*
-💲 Price: `${bot_data.get('price', '?')}`
-📦 Position: `{bot_data.get('position', '?')} BTC`
-📐 Grid: `${bot_data.get('grid', '?')}`
-🎯 Regime: `{bot_data.get('regime', '?')}` | Intent: `{bot_data.get('intent', '?')}`
-🛡️ L1 Conf: `{bot_data.get('confidence', '?')}%`
-⚠️ Toxic: `{bot_data.get('toxic', '?')}`""")
+                    lines.append(
+                        f"\n📊 Live State (Cortex UDS):\n"
+                        f"💲 Price: ${bot_data.get('price', 0):.2f}\n"
+                        f"📦 Position: {bot_data.get('position', 0):.6f} BTC\n"
+                        f"📐 Grid: ${bot_data.get('grid_step', 0):.2f}\n"
+                        f"🎯 Regime: {bot_data.get('regime', '?')}\n"
+                        f"⚠️ Toxic: {bot_data.get('toxic', 0)}")
                     break
     except Exception as e:
-        log.debug(f"Cortex state read failed: {e}")
+        log.debug(f"Cortex UDS read failed: {e}")
 
     # ── PnL from FIFO engine ──
     try:
@@ -549,12 +547,19 @@ Port: `:{info['port']}`"""]
     return "\n".join(lines)
 
 # ── NATURAL LANGUAGE (AI) ──────────────────────────────────
+def _uds_action(fn, bot_name):
+    """Wrapper for UDS pause/unpause calls."""
+    r = fn(bot_name)
+    if r.get("ok"):
+        return f"✅ {bot_name.upper()}: OK"
+    return f"❌ {bot_name.upper()}: {r.get('error', 'unknown')}"
+
 NL_INTENT_PROMPT = """You are SNIPER Commander, an AI that controls a trading bot armada.
 Available bots: hydra, moonshot, grid, trigon
-Available actions: start, stop, restart, pause, unpause, status, panic, help, analyze
+Available actions: start, stop, restart, pause, unpause, status, panic, help, analyze, set_grid, set_maxpos, chat
 
 Parse the user's message (Czech or English) and return a JSON object:
-{"bot": "hydra|moonshot|grid|trigon|all|none", "action": "start|stop|restart|pause|unpause|status|panic|help|analyze|chat", "response": "short Czech response to user"}
+{"bot": "hydra|moonshot|grid|trigon|all|none", "action": "start|stop|restart|pause|unpause|status|panic|help|analyze|set_grid|set_maxpos|chat", "value": <number or null>, "response": "short Czech response to user"}
 
 Rules:
 - "vypni/zastav/kill" → action=stop
@@ -565,8 +570,10 @@ Rules:
 - "stav/status/jak se daří" → action=status, bot=all
 - "panika/panic/zastavit vše" → action=panic
 - "analýza/rozbor/analyze" → action=analyze
+- "nastav grid/mřížku na X" → action=set_grid, value=X (number in USD)
+- "nastav max pozici na X" → action=set_maxpos, value=X (number in BTC)
 - General chat/question → action=chat, include a friendly response
-- If bot is not specified but action is clear, ask which bot
+- If bot is not specified but action is clear, default to hydra
 
 User message: """
 
@@ -647,9 +654,34 @@ def handle_natural_language(message):
             "start": start_bot,
             "stop": stop_bot,
             "restart": restart_bot,
-            "pause": pause_bot,
-            "unpause": unpause_bot,
+            "pause": lambda b: _uds_action(cortex.pause, b),
+            "unpause": lambda b: _uds_action(cortex.unpause, b),
         }
+
+        # Handle parameter changes (via UDS)
+        if action == "set_grid":
+            val = intent.get("value")
+            if val is not None:
+                r = cortex.set_grid(float(val))
+                if r.get("ok"):
+                    bot.reply_to(message, f"✅ Grid: ${r.get('prev',0):.2f} → ${float(val):.2f}")
+                else:
+                    bot.reply_to(message, f"❌ {r.get('error')}")
+            else:
+                bot.reply_to(message, "❌ Chybí hodnota. Příklad: 'Nastav grid na 25'")
+            return
+
+        if action == "set_maxpos":
+            val = intent.get("value")
+            if val is not None:
+                r = cortex.set_maxpos(float(val))
+                if r.get("ok"):
+                    bot.reply_to(message, f"✅ MaxPos: {r.get('prev',0):.6f} → {float(val):.6f} BTC")
+                else:
+                    bot.reply_to(message, f"❌ {r.get('error')}")
+            else:
+                bot.reply_to(message, "❌ Chybí hodnota. Příklad: 'Nastav max pozici na 0.005'")
+            return
 
         handler = action_map.get(action)
         if handler:
