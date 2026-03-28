@@ -136,54 +136,13 @@ tg_alert "🐺 *SOVEREIGN BOOT v15.0*
 🤖 L2 Oracle deciding in ~15s...
 $(date '+%H:%M:%S')"
 
-# ═══ WATCHDOG ═══
-watchdog() {
-    local restart_count=0
-    while true; do
-        sleep 30
+# ═══ WATCHDOG (Delegated to cron) ═══
+# Process monitoring and piecewise restarts are now exclusively handled
+# by watchdog.sh (cron) to prevent duplicate process race conditions.
 
-        # Commander is CRITICAL (contains L2 Oracle)
-        if ! kill -0 "$COMMANDER_PID" 2>/dev/null; then
-            restart_count=$((restart_count + 1))
-            echo "⚠️ [WATCHDOG] Commander+Oracle DEAD — restarting (#$restart_count)"
-            python3 "$ARMADA_ROOT/architect/tg_commander.py" >> "$LOG_DIR/tg_commander.log" 2>&1 &
-            COMMANDER_PID=$!
-            tg_alert "⚠️ *WATCHDOG #$restart_count*
-📱 Commander+Oracle crashed → restarted
-PID: $COMMANDER_PID"
-        fi
+echo "🛡️ Watchdog duties delegated to cron (watchdog.sh)"
 
-        # Cortex
-        if ! kill -0 "$CORTEX_PID" 2>/dev/null; then
-            restart_count=$((restart_count + 1))
-            echo "⚠️ [WATCHDOG] Cortex DEAD — restarting (#$restart_count)"
-            taskset -c 3 "$BIN_DIR/sovereign-cortex" >> "$LOG_DIR/sovereign-cortex.log" 2>&1 &
-            CORTEX_PID=$!
-            tg_alert "⚠️ *WATCHDOG #$restart_count* 🧠 Cortex restarted PID: $CORTEX_PID"
-        fi
-
-        # Dashboard
-        if ! kill -0 "$DASHBOARD_PID" 2>/dev/null; then
-            taskset -c 3 "$BIN_DIR/hydra-dashboard" >> "$LOG_DIR/hydra-dashboard.log" 2>&1 &
-            DASHBOARD_PID=$!
-        fi
-
-        # Excessive restarts
-        if [ "$restart_count" -ge 10 ]; then
-            tg_alert "🚨 *WATCHDOG: 10+ restarts!* Kontrola nutná!"
-            restart_count=0
-            sleep 300
-        fi
-    done
-}
-
-watchdog &
-WATCHDOG_PID=$!
-echo "🛡️ Watchdog started (PID $WATCHDOG_PID)"
-
-# Wait for Commander (foreground — if it dies, watchdog restarts it)
-# But we keep the script alive for systemd
-wait $COMMANDER_PID
-echo "⚠️ Commander exited — watchdog will restart"
-# Keep alive for systemdog
-wait
+# Keep the deployment script alive so systemd doesn't think the service stopped
+while true; do
+    sleep 3600
+done
