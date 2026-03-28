@@ -255,7 +255,11 @@ Cycle: #{self.cycle} (every 5 min)
   \"grid\": {{
     \"pause_trading\": boolean,
     \"grid_spacing\": float_or_null,
-    \"order_qty\": float_or_null
+    \"order_qty\": float_or_null,
+    \"gaussian_warp\": {{
+      \"base_step_bps\": int,
+      \"warp_factor\": int
+    }}
   }},
   \"trigon\": {{
     \"pause_trading\": boolean,
@@ -397,7 +401,7 @@ PARAMETER CONSTRAINTS:
         try:
             import struct as _st
             L2_CMD_PATH = "/dev/shm/beroun/l2_command.bin"
-            L2_CMD_SIZE = 704  # CL1(64B) + CL2_AS(64B) + Ring(576B)
+            L2_CMD_SIZE = 768  # CL1(64) + CL2(64) + CL3_Grid(64) + Ring(576)
 
             os.makedirs(os.path.dirname(L2_CMD_PATH), exist_ok=True)
             fd = os.open(L2_CMD_PATH, os.O_RDWR | os.O_CREAT)
@@ -430,10 +434,10 @@ PARAMETER CONSTRAINTS:
             kill = 0
             try:
                 import numpy as np
-                head_offset = 128  # L1TelemetryRing at byte 128 (CL1=64 + CL2_AS=64)
+                head_offset = 192  # L1TelemetryRing at byte 192 (CL1+CL2+CL3=192)
                 head_val = _st.unpack_from('<Q', mm, head_offset)[0]
                 if head_val > 0:
-                    ring_offset = head_offset + 64  # ring data at byte 192 (after head + pad)
+                    ring_offset = head_offset + 64  # ring data at byte 256 (after head + pad)
                     count = min(head_val, 64)
                     latencies = []
                     for i in range(count):
@@ -545,8 +549,53 @@ PARAMETER CONSTRAINTS:
             half_spread = max(2, int(math.sqrt(variance) * dynamic_gamma * 2.0))
             _st.pack_into('<q', mm, CL2 + 16, half_spread)
 
-            # Step 3: Write EVEN version (= "data consistent", L1 can read)
+            # Step 3: Write EVEN version for CL1+CL2 (= "data consistent", L1 can read)
             _st.pack_into('<Q', mm, 0, next_ver + 1)
+
+            # ═══ CACHE LINE 3: Grid Gaussian Warp (own SeqLock at offset 128) ═══
+            CL3 = 128  # CL1(64) + CL2(64)
+            grid_cfg = decision.get("grid", {})
+            grid_warp_data = grid_cfg.get("gaussian_warp", {})
+
+            # Grid SeqLock: independent from Hydra's
+            grid_ver = _st.unpack_from('<Q', mm, CL3)[0]
+            grid_next = grid_ver + 1
+            _st.pack_into('<Q', mm, CL3, grid_next)  # ODD = writing
+
+            # Dynamic anchor: use current BTC price as POC (Kalman-filtered)
+            anchor_scaled = 0
+            if current_price > 0:
+                anchor_scaled = int(current_price * PRICE_SCALE)
+            _st.pack_into('<q', mm, CL3 + 8, anchor_scaled)
+
+            # Base step (bps) — Gemini can override
+            base_step = int(grid_warp_data.get("base_step_bps", 10))
+            _st.pack_into('<q', mm, CL3 + 16, base_step)
+
+            # Warp factor: 0 = linear, higher = more quadratic expansion
+            # Auto-compute from volatility if not set by Gemini
+            warp = int(grid_warp_data.get("warp_factor", 0))
+            if warp == 0 and rolling_vol_bps > 0:
+                # +1 warp per 20 bps of vol above baseline 20
+                warp = max(0, int((rolling_vol_bps - 20) / 20) * 2)
+            _st.pack_into('<q', mm, CL3 + 24, warp)
+
+            # Regime-based asymmetric levels
+            base_levels = 15
+            if "BULL" in regime:
+                max_bid_lvl = base_levels + 10  # Deep buy safety net
+                max_ask_lvl = 3                 # Don't sell the rocket
+            elif "BEAR" in regime:
+                max_bid_lvl = 3                 # Don't catch falling knives
+                max_ask_lvl = base_levels + 10  # Wait for dead cat bounce
+            else:
+                max_bid_lvl = base_levels
+                max_ask_lvl = base_levels
+            _st.pack_into('<q', mm, CL3 + 32, max_bid_lvl)
+            _st.pack_into('<q', mm, CL3 + 40, max_ask_lvl)
+
+            _st.pack_into('<Q', mm, CL3, grid_next + 1)  # EVEN = consistent
+
             mm.flush()
             mm.close()
 
@@ -555,6 +604,8 @@ PARAMETER CONSTRAINTS:
             log.info(f"  📐 A-S: target={target_btc:.2f}BTC skew={skew_factor}bps/BTC "
                      f"half_spread={half_spread}bps γ={dynamic_gamma:.3f} σ={rolling_vol_bps:.0f}bps "
                      f"L1_inv={l1_inv_btc:.4f}BTC")
+            log.info(f"  📐 Grid: anchor=${current_price:.0f} base={base_step}bps warp={warp} "
+                     f"bid_lvl={max_bid_lvl} ask_lvl={max_ask_lvl}")
 
         except Exception as e:
             log.error(f"L2CommandMatrix write failed: {e}")

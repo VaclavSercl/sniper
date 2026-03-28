@@ -76,7 +76,38 @@ pub struct L2ASMatrix {
 }
 
 // ═══════════════════════════════════════════════════════════
-// CACHE LINE 3+: Telemetry (L1 → L2) — SPSC Ring Buffer
+// CACHE LINE 3: Grid Gaussian Warp (L2 → L1) — Phase 2b
+// OWN SeqLock (grid_config_version) — independent from Hydra
+// 7 fields × 8B = 56B + 8B pad = 64B
+// ═══════════════════════════════════════════════════════════
+
+/// Gaussian Warp Grid: quadratic grid spacing with regime-aware level asymmetry
+#[repr(C, align(64))]
+pub struct L2GridWarpMatrix {
+    /// Independent SeqLock for Grid (separate from Hydra's config_version)
+    pub grid_config_version: AtomicU64,      // CL3 offset 0
+
+    /// Kalman-filtered dynamic anchor (POC from Volume Profile) × PRICE_SCALE
+    pub grid_dynamic_anchor: AtomicI64,      // CL3 offset 8
+
+    /// Base step: distance of level 1 from anchor in bps
+    pub grid_base_step_bps: AtomicI64,       // CL3 offset 16
+
+    /// Quadratic warp factor: 0 = linear grid, >0 = Gaussian expansion
+    /// distance = (base × level) + (warp × level²)
+    pub grid_warp_factor: AtomicI64,         // CL3 offset 24
+
+    /// Max active BID levels (buy side). L2 reduces in bear market.
+    pub grid_max_bid_levels: AtomicI64,      // CL3 offset 32
+
+    /// Max active ASK levels (sell side). L2 reduces in bull market.
+    pub grid_max_ask_levels: AtomicI64,      // CL3 offset 40
+
+    _pad_cl3: [u8; 16],                      // CL3 offset 48 (pad to 64B)
+}
+
+// ═══════════════════════════════════════════════════════════
+// CACHE LINE 4+: Telemetry (L1 → L2) — SPSC Ring Buffer
 // ═══════════════════════════════════════════════════════════
 
 #[repr(C, align(64))]
@@ -109,10 +140,24 @@ impl Default for L2ASMatrix {
     fn default() -> Self {
         Self {
             as_target_inventory: AtomicI64::new(0),
-            as_skew_factor_bps: AtomicI64::new(5),  // conservative default
-            as_half_spread_bps: AtomicI64::new(3),   // 3 bps half-spread
+            as_skew_factor_bps: AtomicI64::new(5),
+            as_half_spread_bps: AtomicI64::new(3),
             current_inventory: AtomicI64::new(0),
             _pad_cl2: [0u8; 32],
+        }
+    }
+}
+
+impl Default for L2GridWarpMatrix {
+    fn default() -> Self {
+        Self {
+            grid_config_version: AtomicU64::new(0),
+            grid_dynamic_anchor: AtomicI64::new(0),
+            grid_base_step_bps: AtomicI64::new(10), // 10 bps default
+            grid_warp_factor: AtomicI64::new(0),     // linear default
+            grid_max_bid_levels: AtomicI64::new(15),
+            grid_max_ask_levels: AtomicI64::new(15),
+            _pad_cl3: [0u8; 16],
         }
     }
 }
@@ -174,13 +219,7 @@ pub fn moonshot_check_and_disarm(
     }
 }
 
-/// 🐍 A-S Quote Calculator: Offense + Defense fusion (O(1), zero allocation)
-///
-/// Computes optimal bid/ask by fusing:
-///   1. A-S Reservation Price (inventory skew toward target)
-///   2. Phase 1 Quote Fading (toxic flow defense)
-///
-/// Returns (target_bid_scaled, target_ask_scaled)
+/// A-S Quote Calculator: Offense + Defense fusion
 #[inline(always)]
 pub fn calculate_as_quotes(
     cmd: &L2CommandMatrix,
@@ -188,48 +227,82 @@ pub fn calculate_as_quotes(
     fair_price: i64,
     current_inventory: i64,
 ) -> (i64, i64) {
-    // Report inventory to L2 (lock-free, separate cache line)
     as_mat.current_inventory.store(current_inventory, Ordering::Relaxed);
 
-    // SeqLock read: version protects BOTH cache lines
     let mut seq;
     let (mut bid_fade, mut ask_fade, mut target_inv, mut skew_bps, mut half_spread);
     loop {
         seq = cmd.config_version.load(Ordering::Acquire);
         if seq % 2 != 0 { std::hint::spin_loop(); continue; }
-
-        // Cache Line 1: defense
         bid_fade = cmd.bid_fade_bps.load(Ordering::Relaxed);
         ask_fade = cmd.ask_fade_bps.load(Ordering::Relaxed);
-
-        // Cache Line 2: offense (A-S)
         target_inv = as_mat.as_target_inventory.load(Ordering::Relaxed);
         skew_bps = as_mat.as_skew_factor_bps.load(Ordering::Relaxed);
         half_spread = as_mat.as_half_spread_bps.load(Ordering::Relaxed);
-
         std::sync::atomic::fence(Ordering::Acquire);
         if seq == cmd.config_version.load(Ordering::Relaxed) { break; }
     }
 
-    // A-S Reservation Price: shift center based on inventory delta
     let inventory_delta = current_inventory - target_inv;
     let as_shift_bps = (inventory_delta * skew_bps) / BTC_SCALE;
-
     let bps_val = fair_price / 10_000;
-
-    // Reservation price = fair - (inventory_overshoot × skew)
-    // Overweight long → reservation drops → asks get cheaper → dump inventory
     let reservation = fair_price - (as_shift_bps * bps_val);
-
-    // 💥 FUSION: A-S spread + Phase 1 toxic fade
     let target_bid = reservation - (half_spread * bps_val) - (bid_fade * bps_val);
     let target_ask = reservation + (half_spread * bps_val) + (ask_fade * bps_val);
-
     (target_bid, target_ask)
 }
 
-/// Total mmap file size: CL1(64) + CL2(64) + Ring(64+512) = 704B
+/// 📐 Grid Gaussian Warp: O(1) quadratic level calculator
+///
+/// Computes exact price for grid level N using pure i64 arithmetic:
+///   distance_bps = (base_step × level) + (warp × level²)
+///
+/// Returns None if level exceeds regime-based max (asymmetric cutoff).
+/// Returns Some(price_scaled) for the grid level's target price.
+#[inline(always)]
+pub fn calculate_warped_grid_level(
+    grid: &L2GridWarpMatrix,
+    level_index: i64,
+    is_bid: bool,
+) -> Option<i64> {
+    // SeqLock read (Grid has own version counter)
+    let mut seq;
+    let (mut anchor, mut base_step, mut warp, mut max_bid, mut max_ask);
+    loop {
+        seq = grid.grid_config_version.load(Ordering::Acquire);
+        if seq % 2 != 0 { std::hint::spin_loop(); continue; }
+        anchor = grid.grid_dynamic_anchor.load(Ordering::Relaxed);
+        base_step = grid.grid_base_step_bps.load(Ordering::Relaxed);
+        warp = grid.grid_warp_factor.load(Ordering::Relaxed);
+        max_bid = grid.grid_max_bid_levels.load(Ordering::Relaxed);
+        max_ask = grid.grid_max_ask_levels.load(Ordering::Relaxed);
+        std::sync::atomic::fence(Ordering::Acquire);
+        if seq == grid.grid_config_version.load(Ordering::Relaxed) { break; }
+    }
+
+    // Regime bias filter: asymmetric level cutoff
+    if is_bid && level_index > max_bid { return None; }
+    if !is_bid && level_index > max_ask { return None; }
+
+    // Quadratic warp: distance = base*n + warp*n² (pure i64, zero FPU)
+    let n_sq = level_index * level_index;
+    let distance_bps = (base_step * level_index) + (warp * n_sq);
+
+    let bps_val = anchor / 10_000;
+    if bps_val == 0 { return None; }
+    let price_delta = distance_bps * bps_val;
+
+    if is_bid {
+        Some(anchor - price_delta)
+    } else {
+        Some(anchor + price_delta)
+    }
+}
+
+/// Total mmap: CL1(64) + CL2(64) + CL3(64) + Ring(64+512) = 768B
 pub const L2_COMMAND_FILE_SIZE: usize =
     std::mem::size_of::<L2CommandMatrix>()
     + std::mem::size_of::<L2ASMatrix>()
+    + std::mem::size_of::<L2GridWarpMatrix>()
     + std::mem::size_of::<L1TelemetryRing>();
+

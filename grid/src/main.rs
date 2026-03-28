@@ -188,6 +188,20 @@ async fn main() -> Result<()> {
     let engine = unsafe { &*(engine_mmap.as_ptr() as *const GridEngineState) };
     let risk = unsafe { &*(risk_mmap.as_ptr() as *const GridRiskState) };
 
+    // L2 Grid Warp Matrix (Cache Line 3, offset 128 in l2_command.bin)
+    let l2cmd_mmap = {
+        let f = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false)
+            .open(sniper_types::l2_command::L2_COMMAND_PATH)?;
+        f.set_len(sniper_types::l2_command::L2_COMMAND_FILE_SIZE as u64)?;
+        unsafe { MmapMut::map_mut(&f)? }
+    };
+    let grid_warp = unsafe {
+        &*(l2cmd_mmap.as_ptr()
+            .add(std::mem::size_of::<sniper_types::l2_command::L2CommandMatrix>())
+            .add(std::mem::size_of::<sniper_types::l2_command::L2ASMatrix>())
+            as *const sniper_types::l2_command::L2GridWarpMatrix)
+    };
+
     let key = std::env::var("BITFINEX_API_KEY").context("Missing BITFINEX_API_KEY")?;
     let sec = std::env::var("BITFINEX_API_SECRET").context("Missing BITFINEX_API_SECRET")?;
 
@@ -252,7 +266,33 @@ async fn main() -> Result<()> {
                             let center = if center_override > 0.0 { center_override } else { mid_f64 };
 
                             if spacing > 0.0 && qty > 0.0 && center > 0.0 {
-                                let (buys, sells) = calculate_grid_levels(center, spacing, num_buy, num_sell, mode, geo_pct);
+                                // ═══ v14.3 GAUSSIAN WARP GRID (Issue #18 Phase 2b) ═══
+                                // If L2 has set a dynamic anchor, use warped quadratic levels
+                                // Otherwise fall back to linear calculate_grid_levels
+                                let anchor = grid_warp.grid_dynamic_anchor.load(Ordering::Relaxed);
+                                let (buys, sells) = if anchor > 0 {
+                                    // L2 controls grid topology
+                                    let mut warp_buys = Vec::new();
+                                    let mut warp_sells = Vec::new();
+                                    for lvl in 1..=30i64 {
+                                        if let Some(p) = sniper_types::l2_command::calculate_warped_grid_level(
+                                            grid_warp, lvl, true
+                                        ) {
+                                            if p > 0 {
+                                                warp_buys.push(p as f64 / PRICE_SCALE_I as f64);
+                                            }
+                                        }
+                                        if let Some(p) = sniper_types::l2_command::calculate_warped_grid_level(
+                                            grid_warp, lvl, false
+                                        ) {
+                                            warp_sells.push(p as f64 / PRICE_SCALE_I as f64);
+                                        }
+                                    }
+                                    (warp_buys, warp_sells)
+                                } else {
+                                    // Fallback: original linear grid
+                                    calculate_grid_levels(center, spacing, num_buy, num_sell, mode, geo_pct)
+                                };
 
                                 // Write levels to mmap for dashboard
                                 for (i, &price) in buys.iter().enumerate() {
