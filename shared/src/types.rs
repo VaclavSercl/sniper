@@ -14,6 +14,16 @@ pub const TRADING_SYMBOL: &str = "tBTCUSD";
 pub const TRADING_BASE: &str = "BTC";     // Base currency for wallet tracking
 pub const TRADING_QUOTE: &str = "USD";    // Quote currency
 
+/// v14.0: Per-bot GID (Group ID) ranges for trade attribution.
+/// Bitfinex tags every order/fill with the GID, enabling:
+///   1. PnL daemon → attributes fills to correct bot (same API key)
+///   2. Mass cancel → `oc_multi` by GID range (PANIC per-bot kill switch)
+///   3. Integer comparison → faster than string parsing in hot path
+pub const BOT_GID_HYDRA: u32 = 1000;    // Range: 1000–1999
+pub const BOT_GID_MOONSHOT: u32 = 2000;  // Range: 2000–2999
+pub const BOT_GID_GRID: u32 = 3000;      // Range: 3000–3999
+pub const BOT_GID_TRIGON: u32 = 4000;     // Range: 4000–4999
+
 /// Fibonacci-like spacing multipliers for grid levels
 /// Level 1: 1.0x grid, Level 2: 2.5x, Level 3: 4.5x, Level 4: 7.0x, Level 5: 10.0x
 pub const LEVEL_SPACING: [f64; MAX_GRID_LEVELS] = [1.0, 2.5, 4.5, 7.0, 10.0];

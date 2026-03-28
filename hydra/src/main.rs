@@ -846,8 +846,8 @@ async fn async_main() -> Result<()> {
                                                                     let amt_f = eng.current_order_usd.load(Ordering::Relaxed) as f64
                                                                         / sniper_types::PRICE_SCALE / price_f;
                                                                     let amt_f = amt_f.max(0.00015);
-                                                                    let msg = format!(r#"[0,"on",null,{{"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE IOC"}}]"#,
-                                                                        sniper_types::TRADING_SYMBOL, amt_f, price_f);
+                                                                    let msg = format!(r#"[0,"on",null,{{"gid":{},"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE IOC"}}]"#,
+                                                                        sniper_types::BOT_GID_HYDRA, sniper_types::TRADING_SYMBOL, amt_f, price_f);
                                                                     let _ = order_tx.send(msg);
                                                                     mask |= bit;
                                                                     eng.ghost_active_mask.store(mask, Ordering::Relaxed);
@@ -873,8 +873,8 @@ async fn async_main() -> Result<()> {
                                                                     let amt_f = eng.current_order_usd.load(Ordering::Relaxed) as f64
                                                                         / sniper_types::PRICE_SCALE / price_f;
                                                                     let amt_f = amt_f.max(0.00015);
-                                                                    let msg = format!(r#"[0,"on",null,{{"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE IOC"}}]"#,
-                                                                        sniper_types::TRADING_SYMBOL, -amt_f, price_f);
+                                                                    let msg = format!(r#"[0,"on",null,{{"gid":{},"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE IOC"}}]"#,
+                                                                        sniper_types::BOT_GID_HYDRA, sniper_types::TRADING_SYMBOL, -amt_f, price_f);
                                                                     let _ = order_tx.send(msg);
                                                                     mask |= bit;
                                                                     eng.ghost_active_mask.store(mask, Ordering::Relaxed);
@@ -1264,8 +1264,8 @@ async fn async_main() -> Result<()> {
                                                                     // PUBLIC: visible in orderbook (POSTONLY)
                                                                     if total_buy_usd + cost <= cap_available * 0.95 && amt >= MIN_ORDER_BTC {
                                                                         order_parts.push(format!(
-                                                                            r#"["on",{{"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
-                                                                            sniper_types::TRADING_SYMBOL, amt, bp
+                                                                            r#"["on",{{"gid":{},"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
+                                                                            sniper_types::BOT_GID_HYDRA, sniper_types::TRADING_SYMBOL, amt, bp
                                                                         ));
                                                                         total_buy_usd += cost;
                                                                     }
@@ -1285,8 +1285,8 @@ async fn async_main() -> Result<()> {
                                                                     // PUBLIC: visible in orderbook (POSTONLY)
                                                                     if total_sell_btc + amt <= btc_cap * 0.95 && amt >= MIN_ORDER_BTC {
                                                                         order_parts.push(format!(
-                                                                            r#"["on",{{"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
-                                                                            sniper_types::TRADING_SYMBOL, -amt, sp
+                                                                            r#"["on",{{"gid":{},"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
+                                                                            sniper_types::BOT_GID_HYDRA, sniper_types::TRADING_SYMBOL, -amt, sp
                                                                         ));
                                                                         total_sell_btc += amt;
                                                                     }

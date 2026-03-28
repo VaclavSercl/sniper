@@ -129,12 +129,24 @@ class FillProcessor:
     Reads fills from Bitfinex REST API, processes FIFO, writes results.
     """
 
+    # v14.0: GID range → bot mapping for trade attribution
+    # Rust bots tag every order with BOT_GID_X (1000/2000/3000/4000)
+    # Bitfinex order response has GID at index 1
+    GID_RANGES = [
+        (1000, 1999, "hydra"),
+        (2000, 2999, "moonshot"),
+        (3000, 3999, "grid"),
+        (4000, 4999, "trigon"),
+    ]
+
     def __init__(self):
         self.db = PnlDatabase()
         self.mmap_writer = PnlMmapWriter()
         self.engines: dict = {}  # (bot, symbol) → FIFOEngine
         self.last_trade_ids: dict = defaultdict(set)  # bot → set of seen trade_ids
+        self.order_gid_cache: dict = {}  # order_id → bot_name (from GID)
         self._load_all_engines()
+        self._refresh_order_gid_cache()
         log.info("FillProcessor initialized")
 
     def _load_all_engines(self):
@@ -149,14 +161,47 @@ class FillProcessor:
 
     def _get_symbols(self, bot: str) -> list:
         """Get trading symbols for a bot."""
-        # Default symbols per bot
         syms = {
             "hydra": ["tBTCUSD"],
-            "moonshot": ["tBTCUSD"],  # Will expand with moonshot pairs
+            "moonshot": ["tBTCUSD"],
             "grid": ["tBTCUSD"],
             "trigon": ["tBTCUSD", "tETHUSD", "tETHBTC"],
         }
         return syms.get(bot, ["tBTCUSD"])
+
+    def _refresh_order_gid_cache(self):
+        """Fetch recent orders from Bitfinex and cache order_id → bot mapping via GID."""
+        orders = bfx_authenticated("v2/auth/r/orders/hist", {"limit": 500})
+        if not orders or not isinstance(orders, list):
+            return
+        cached = 0
+        for o in orders:
+            if not isinstance(o, list) or len(o) < 4:
+                continue
+            order_id = str(o[0])
+            gid = o[1]  # GID is at index 1 in order response
+            if gid is not None:
+                bot = self._gid_to_bot(int(gid))
+                if bot:
+                    self.order_gid_cache[order_id] = bot
+                    cached += 1
+        # Keep cache bounded
+        if len(self.order_gid_cache) > 10000:
+            keys = sorted(self.order_gid_cache.keys())
+            self.order_gid_cache = {k: self.order_gid_cache[k] for k in keys[-5000:]}
+        if cached > 0:
+            log.info(f"GID cache: {cached} orders mapped, {len(self.order_gid_cache)} total")
+
+    def _gid_to_bot(self, gid: int) -> str:
+        """Map GID range to bot name."""
+        for lo, hi, bot in self.GID_RANGES:
+            if lo <= gid <= hi:
+                return bot
+        return ""
+
+    def _resolve_bot(self, order_id: str, default_bot: str) -> str:
+        """Resolve bot name from order GID cache, fallback to default."""
+        return self.order_gid_cache.get(order_id, default_bot)
 
     def process_api_fills(self, bot: str, symbol: str = "tBTCUSD"):
         """
@@ -195,6 +240,13 @@ class FillProcessor:
             #  ORDER_TYPE, ORDER_PRICE, MAKER, FEE, FEE_CURRENCY]
             ts_ms = int(trade[2])
             order_id = str(trade[3])
+
+            # v14.0: Resolve bot from GID cache (order_id → bot)
+            resolved_bot = self._resolve_bot(order_id, bot)
+            if resolved_bot != bot:
+                # This fill belongs to a different bot — skip, it'll be processed in that bot's cycle
+                continue
+
             exec_amount = float(trade[4])
             exec_price = float(trade[5])
             fee = abs(float(trade[9]))  # fees are negative
@@ -362,8 +414,12 @@ class FillProcessor:
         log.info(f"Wallet: USD={usd:.2f} BTC={btc:.6f} Total=${total_usd:.2f} "
                  f"Δ1h={format_pnl_short(delta_1h)} Δ24h={format_pnl_short(delta_24h)}")
 
-    def run_cycle(self):
+    def run_cycle(self, cycle_num: int = 0):
         """Run one processing cycle: fetch fills → FIFO → mmap."""
+        # Refresh GID cache every 10 cycles (~5 min)
+        if cycle_num % 10 == 0:
+            self._refresh_order_gid_cache()
+
         # Process fills for running bots
         import subprocess
         for bot in ["hydra", "moonshot", "grid", "trigon"]:
@@ -430,7 +486,7 @@ def main():
             cycle += 1
 
             # Process fills every 30 seconds
-            processor.run_cycle()
+            processor.run_cycle(cycle)
 
             # Wallet snapshot every hour (cycle 120 = 120×30s = 1 hour)
             if cycle % 120 == 0:
