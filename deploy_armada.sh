@@ -42,6 +42,7 @@ pkill -f tg_commander.py 2>/dev/null || true
 pkill -f tg_listener.py 2>/dev/null || true
 pkill -f sniper_architect.py 2>/dev/null || true
 pkill -f pnl_daemon.py 2>/dev/null || true
+pkill -f sovereign-cortex 2>/dev/null || true
 sleep 2
 
 # ═══ LAUNCH HYDRA (Bot #1 — LIVE) ═══
@@ -69,6 +70,11 @@ echo "💰 Launching PnL Daemon (FIFO engine)..."
 python3 "$ARMADA_ROOT/architect/pnl_daemon.py" >> "$LOG_DIR/pnl_daemon.log" 2>&1 &
 PNL_PID=$!
 
+# ═══ LAUNCH SOVEREIGN CORTEX ═══
+echo "🧠 Launching Sovereign Cortex (L2 Oracle)..."
+taskset -c 3 "$BIN_DIR/sovereign-cortex" >> "$LOG_DIR/sovereign-cortex.log" 2>&1 &
+CORTEX_PID=$!
+
 echo ""
 echo "🐺 ═══════════════════════════════════════════"
 echo "   ARMADA ONLINE"
@@ -76,6 +82,7 @@ echo "   🐍 Hydra:     Core 0 — BTC-USD Delta Lead    :3000 (PID $HYDRA_PID)
 echo "   🏛️ Architect:  Dashboard                      :3004"
 echo "   📱 Commander: Telegram C2                     (PID $COMMANDER_PID)"
 echo "   💰 PnL:       FIFO Engine                     (PID $PNL_PID)"
+echo "   🧠 Cortex:    Sovereign Oracle L2             (PID $CORTEX_PID)"
 echo ""
 echo "   🌙 Moonshot:  /moonshot start (via Telegram)"
 echo "   📐 Grid:      /grid start     (via Telegram)"

@@ -6,6 +6,7 @@ members = [
     "grid",
     "trigon",
     "mdf",
+    "architect/cortex",
 ]
 resolver = "3"
 
