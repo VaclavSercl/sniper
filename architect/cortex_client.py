@@ -102,3 +102,70 @@ class CortexClient:
         """Quick health check."""
         r = self.ping()
         return r.get("ok", False)
+
+
+# ═══════════════════════════════════════════════════════════
+# 🚨 Event Listener — receives push alerts from Cortex Sentinel
+# Cortex → /tmp/commander_events.sock → Python → Telegram
+# ═══════════════════════════════════════════════════════════
+
+import os
+import threading
+
+EVENT_SOCKET_PATH = "/tmp/commander_events.sock"
+
+
+def start_event_listener(telegram_send_fn):
+    """
+    Start a UDS server that receives push alerts from Rust Sentinel.
+    Runs in a daemon thread — never blocks Commander.
+    """
+    # Clean up stale socket
+    if os.path.exists(EVENT_SOCKET_PATH):
+        os.remove(EVENT_SOCKET_PATH)
+
+    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    server.bind(EVENT_SOCKET_PATH)
+    server.listen(5)
+
+    log.info("🚨 [EventListener] Listening on %s", EVENT_SOCKET_PATH)
+
+    def _loop():
+        while True:
+            try:
+                conn, _ = server.accept()
+                with conn:
+                    data = conn.recv(4096)
+                    if not data:
+                        continue
+
+                    for line in data.decode("utf-8").strip().split("\n"):
+                        if not line:
+                            continue
+                        try:
+                            event = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+
+                        if event.get("cmd") == "ALERT":
+                            level = event.get("level", "INFO")
+                            msg = event.get("msg", "")
+
+                            if level == "FATAL":
+                                tg_msg = f"🚨 FATAL ALERT\n{msg}"
+                            elif level == "WARNING":
+                                tg_msg = f"⚠️ WARNING\n{msg}"
+                            else:
+                                tg_msg = f"ℹ️ INFO\n{msg}"
+
+                            try:
+                                telegram_send_fn(tg_msg)
+                                log.info("Alert forwarded: %s", level)
+                            except Exception as e:
+                                log.error("Alert Telegram send failed: %s", e)
+
+            except Exception as e:
+                log.error("EventListener error: %s", e)
+
+    threading.Thread(target=_loop, daemon=True, name="event-listener").start()
+

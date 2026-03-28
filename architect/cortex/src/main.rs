@@ -25,7 +25,6 @@ mod gpu;
 mod l1;
 mod macro_intel;
 mod sentinel;
-mod telegram;
 mod uds;
 
 use memory::ArmadaMemory;

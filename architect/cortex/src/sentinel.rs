@@ -6,17 +6,32 @@
 // Layer 3: Business Logic — PnL anomaly, toxic spike, position drift
 // Layer 4: Boot Alert     — startup notification + version info
 //
-// All alerts sent via Telegram with 15-minute anti-spam per type.
+// All alerts pushed to Python Commander via /tmp/commander_events.sock.
 // ═══════════════════════════════════════════════════════════
 
 use crate::memory::ArmadaMemory;
-use crate::telegram;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use tokio::io::AsyncWriteExt;
+use tokio::net::UnixStream;
 use tokio::sync::RwLock;
 use tokio::time;
+
+const EVENT_SOCKET: &str = "/tmp/commander_events.sock";
+
+/// Fire-and-forget alert push to Python Commander via UDS.
+async fn push_alert(level: &str, msg: &str) {
+    let safe_msg = msg.replace('"', "'").replace('\n', " | ");
+    let payload = format!(
+        "{{\"cmd\":\"ALERT\",\"level\":\"{level}\",\"msg\":\"{safe_msg}\"}}\n"
+    );
+    match UnixStream::connect(EVENT_SOCKET).await {
+        Ok(mut stream) => { let _ = stream.write_all(payload.as_bytes()).await; }
+        Err(_) => { eprintln!("  ⚠️ [Sentinel] Commander offline. Alert dropped."); }
+    }
+}
 
 // ── Thresholds ──
 const MMAP_STALE_SECS: u64 = 5;       // Bot heartbeat timeout
@@ -75,20 +90,10 @@ pub async fn send_boot_alert() {
     let mins = ((now + 3600) % 3600) / 60;
 
     let msg = format!(
-        "🟢 SOVEREIGN CORTEX BOOT\n\
-         ━━━━━━━━━━━━━━━━━━━\n\
-         🖥️ Host: {hostname}\n\
-         🧠 Version: v13.1\n\
-         ⏰ {hours:02}:{mins:02} CET\n\
-         🛡️ Sentinel: ONLINE (4 vrstvy)\n\
-         \n\
-         Pokud vidis tuto zpravu v noci,\n\
-         server se restartoval!"
+        "🟢 SOVEREIGN CORTEX v14.0 BOOT | {hostname} | {hours:02}:{mins:02} CET | Sentinel ONLINE (5 vrstev) | Pokud vidis v noci = server restart!"
     );
 
-    if let Err(e) = telegram::send(&msg).await {
-        eprintln!("  ⚠️ Boot alert failed: {e}");
-    }
+    push_alert("INFO", &msg).await;
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -239,9 +244,7 @@ pub async fn run_sentinel(memory: Arc<RwLock<ArmadaMemory>>) {
         // ── Send alerts ──
         for alert in &alerts {
             eprintln!("  🚨 [SENTINEL] {}", alert.lines().next().unwrap_or(""));
-            if let Err(e) = telegram::send(alert).await {
-                eprintln!("  ⚠️ Sentinel Telegram failed: {e}");
-            }
+            push_alert("WARNING", alert).await;
             // Small delay between alerts to avoid rate limiting
             time::sleep(Duration::from_millis(500)).await;
         }
@@ -277,7 +280,7 @@ async fn check_lm_studio(history: &mut SentinelHistory) {
         let msg = "⚠️ SENTINEL: LM Studio OFFLINE\n\
                    GPU inference na :1234 neodpovida\n\
                    L1 bezi v fallback modu (bez AI)";
-        let _ = telegram::send(msg).await;
+        push_alert("WARNING", msg).await;
     }
 }
 
@@ -294,7 +297,7 @@ async fn check_system_resources(history: &mut SentinelHistory) {
                  Teplota: {temp}°C > 85°C limit\n\
                  VRAM: {mem_used}/{mem_total} MB"
             );
-            let _ = telegram::send(&msg).await;
+            push_alert("FATAL", &msg).await;
         }
         let pct = if mem_total > 0 { mem_used * 100 / mem_total } else { 0 };
         if pct > 95 && history.should_alert("gpu_vram") {
@@ -302,7 +305,7 @@ async fn check_system_resources(history: &mut SentinelHistory) {
                 "💾 SENTINEL: GPU VRAM CRITICAL\n\
                  {mem_used}/{mem_total} MB ({pct}%)"
             );
-            let _ = telegram::send(&msg).await;
+            push_alert("FATAL", &msg).await;
         }
     }
 
@@ -313,7 +316,7 @@ async fn check_system_resources(history: &mut SentinelHistory) {
                 "💾 SENTINEL: DISK CRITICAL\n\
                  Pouziti: {pct}% > 90%"
             );
-            let _ = telegram::send(&msg).await;
+            push_alert("WARNING", &msg).await;
         }
     }
 
@@ -324,7 +327,7 @@ async fn check_system_resources(history: &mut SentinelHistory) {
                 "💾 SENTINEL: RAM CRITICAL\n\
                  Pouziti: {pct}% > 90%"
             );
-            let _ = telegram::send(&msg).await;
+            push_alert("WARNING", &msg).await;
         }
     }
 
@@ -344,7 +347,7 @@ async fn check_system_resources(history: &mut SentinelHistory) {
         let msg = "🌐 SENTINEL: NETWORK DOWN\n\
                    api.bitfinex.com nedostupne!\n\
                    WS konekce pravdepodobne padla";
-        let _ = telegram::send(msg).await;
+        push_alert("WARNING", msg).await;
     }
 }
 

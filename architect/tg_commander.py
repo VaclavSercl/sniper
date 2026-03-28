@@ -23,7 +23,7 @@ from datetime import datetime, timezone, timedelta
 
 import telebot
 from telebot import apihelper
-from cortex_client import CortexClient
+from cortex_client import CortexClient, start_event_listener
 from l2_oracle import L2Oracle
 
 # ── CONFIG ──────────────────────────────────────────────────
@@ -822,6 +822,15 @@ def main():
             time.sleep(300)  # 5 minutes
 
     threading.Thread(target=l2_oracle_loop, daemon=True).start()
+
+    # Start Cortex Event Listener (receives push alerts from Sentinel)
+    def tg_send_alert(msg):
+        try:
+            bot.send_message(AUTHORIZED_CHAT_ID, msg)
+        except Exception as e:
+            log.error(f"Event alert send failed: {e}")
+
+    start_event_listener(tg_send_alert)
 
     # Start bot polling with robust retry
     log.info("Polling Telegram...")
