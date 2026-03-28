@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🏛️ Sniper Architect — Multi-Bot Command Center</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#0a0e17;color:#e1e5ee;font-family:'Inter',system-ui,sans-serif;min-height:100vh}
+.header{padding:20px 32px;background:linear-gradient(135deg,#0d1117 0%,#161b22 100%);border-bottom:1px solid rgba(139,148,158,0.1)}
+.header h1{font-size:1.5em;background:linear-gradient(90deg,#7c3aed,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;display:inline}
+.header .version{color:#8b949e;font-size:0.8em;margin-left:12px}
+.header .status{float:right;padding:4px 12px;border-radius:12px;font-size:0.75em;font-weight:600}
+.status.online{background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3)}
+.status.partial{background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.3)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;padding:24px 32px}
+.card{background:linear-gradient(145deg,#161b22,#0d1117);border:1px solid rgba(139,148,158,0.1);border-radius:12px;padding:20px;transition:all 0.3s}
+.card:hover{border-color:rgba(124,58,237,0.3);transform:translateY(-2px);box-shadow:0 8px 25px rgba(0,0,0,0.3)}
+.card .bot-name{font-size:1.2em;font-weight:700;margin-bottom:4px}
+.card .strategy{color:#8b949e;font-size:0.8em;margin-bottom:12px}
+.card .metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.metric{background:rgba(255,255,255,0.02);padding:8px 12px;border-radius:8px}
+.metric .label{font-size:0.7em;color:#8b949e;text-transform:uppercase;letter-spacing:0.4px}
+.metric .value{font-size:1.1em;font-weight:600;margin-top:2px}
+.metric .value.green{color:#22c55e}
+.metric .value.red{color:#ef4444}
+.metric .value.blue{color:#06b6d4}
+.indicator{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px}
+.indicator.live{background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,0.5);animation:pulse 2s infinite}
+.indicator.dead{background:#ef4444;box-shadow:0 0 8px rgba(239,68,68,0.5)}
+.indicator.paused{background:#fbbf24;box-shadow:0 0 8px rgba(251,191,36,0.5)}
+.summary{padding:16px 32px;display:flex;gap:24px;flex-wrap:wrap}
+.summary-item{background:linear-gradient(145deg,#161b22,#0d1117);border:1px solid rgba(139,148,158,0.1);border-radius:12px;padding:16px 24px;min-width:200px}
+.summary-item .label{font-size:0.75em;color:#8b949e;text-transform:uppercase}
+.summary-item .value{font-size:1.8em;font-weight:700;margin-top:4px}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+.footer{text-align:center;padding:20px;color:#8b949e;font-size:0.75em}
+</style>
+</head>
+<body>
+<div class="header">
+    <h1>🏛️ Sniper Architect</h1>
+    <span class="version">v11.2 Multi-Bot Command Center</span>
+    <span class="status online" id="armada-status">CONNECTING...</span>
+</div>
+
+<div class="summary" id="summary">
+    <div class="summary-item">
+        <div class="label">Bots Online</div>
+        <div class="value blue" id="bots-online">—</div>
+    </div>
+    <div class="summary-item">
+        <div class="label">Daily PnL</div>
+        <div class="value" id="daily-pnl">—</div>
+    </div>
+    <div class="summary-item">
+        <div class="label">Last Update</div>
+        <div class="value blue" id="last-update" style="font-size:1em">—</div>
+    </div>
+</div>
+
+<div class="grid" id="bot-grid"></div>
+
+<div class="footer">
+    Sniper Armada v11.2 · Architect Module · Real-time SSE
+</div>
+
+<script>
+const icons = {hydra:'🐍',moonshot:'🌙',grid:'📐',trigon:'🔺'};
+const grid = document.getElementById('bot-grid');
+
+function renderBots(data) {
+    document.getElementById('bots-online').textContent = data.bots_running + '/' + data.bots_total;
+    const pnl = data.total_daily_pnl;
+    const pnlEl = document.getElementById('daily-pnl');
+    pnlEl.textContent = '$' + pnl.toFixed(2);
+    pnlEl.className = 'value ' + (pnl >= 0 ? 'green' : 'red');
+    document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+
+    const st = document.getElementById('armada-status');
+    if (data.bots_running === data.bots_total) {
+        st.className = 'status online'; st.textContent = 'ALL ONLINE';
+    } else if (data.bots_running > 0) {
+        st.className = 'status partial'; st.textContent = data.bots_running + '/' + data.bots_total + ' ONLINE';
+    } else {
+        st.className = 'status'; st.textContent = 'OFFLINE';
+    }
+
+    grid.innerHTML = data.bots.map(b => {
+        const icon = icons[b.name] || '🤖';
+        const ind = b.running ? (b.paused ? 'paused' : 'live') : 'dead';
+        const stLabel = b.running ? (b.paused ? 'PAUSED' : 'LIVE') : 'OFFLINE';
+        return `<div class="card">
+            <div class="bot-name"><span class="indicator ${ind}"></span>${icon} ${b.name.toUpperCase()}</div>
+            <div class="strategy">${b.strategy} · Core ${b.core} · :${b.port} · ${stLabel}</div>
+            <div class="metrics">
+                <div class="metric"><div class="label">Status</div><div class="value ${b.running?'green':'red'}">${stLabel}</div></div>
+                <div class="metric"><div class="label">Daily PnL</div><div class="value ${b.daily_pnl>=0?'green':'red'}">$${b.daily_pnl.toFixed(2)}</div></div>
+                <div class="metric"><div class="label">mmap</div><div class="value ${b.mmap_exists?'green':'red'}">${b.mmap_exists?'OK':'N/A'}</div></div>
+                <div class="metric"><div class="label">mmap Age</div><div class="value blue">${b.mmap_age_s >= 0 ? b.mmap_age_s +'s' : '—'}</div></div>
+            </div>
+        </div>`;
+    }).join('');
+}
+
+const es = new EventSource('/events');
+es.onmessage = e => { try { renderBots(JSON.parse(e.data)); } catch(err) {} };
+es.onerror = () => { document.getElementById('armada-status').textContent = 'RECONNECTING...'; };
+</script>
+</body>
+</html>
