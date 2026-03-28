@@ -339,6 +339,9 @@ async fn async_main() -> Result<()> {
     let notifier = Arc::new(AsyncNotifier::new());
     let mut engine_mmap = init_mmap_ptr::<EngineState>(&ENGINE_STATE_PATH)?;
     let risk_mmap = init_mmap_ptr::<RiskState>(&RISK_STATE_PATH)?;
+    let fee_mmap = init_mmap_ptr::<sniper_types::fee_types::GlobalFeeState>(
+        sniper_types::fee_types::FEE_STATE_PATH)?;
+    let fee_state = unsafe { &*(fee_mmap.as_ptr() as *const sniper_types::fee_types::GlobalFeeState) };
 
     let engine_ptr: *mut EngineState = engine_mmap.as_mut_ptr() as *mut EngineState;
     let risk = unsafe { &*(risk_mmap.as_ptr() as *const RiskState) };
@@ -1138,9 +1141,12 @@ async fn async_main() -> Result<()> {
 
                                                         // ═══ v11.3 FEE SENTINEL: Profitability Guard ═══
                                                         // Skip cycle if fees eat the entire spread profit
-                                                        let maker_fee = eng.maker_fee_bps.load(Ordering::Relaxed);
-                                                        let taker_fee = eng.taker_fee_bps.load(Ordering::Relaxed);
-                                                        let round_trip_fee_bps = maker_fee + taker_fee; // worst case
+                                                        // Read from shared GlobalFeeState mmap (written by PnL daemon)
+                                                        let maker_fee = fee_state.maker_fee_bps.load(Ordering::Relaxed); // bps×100
+                                                        let taker_fee = fee_state.taker_fee_bps.load(Ordering::Relaxed); // bps×100
+                                                        // Round-trip = maker (our resting order) + taker (fill)
+                                                        // Scale: 1000 = 10 bps = 0.10%
+                                                        let round_trip_fee_bps = (maker_fee + taker_fee) / 100; // convert to bps
                                                         if round_trip_fee_bps > 0 {
                                                             let spread_bps = ((sell_i - buy_i) as f64 / micro_i as f64 * 10000.0) as u64;
                                                             if spread_bps < round_trip_fee_bps * 2 {

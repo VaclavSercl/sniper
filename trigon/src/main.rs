@@ -183,8 +183,11 @@ async fn main() -> Result<()> {
     let notifier = Arc::new(AsyncNotifier::new());
     let engine_mmap = init_mmap_ptr::<TrigonEngineState>(TRIGON_ENGINE_PATH)?;
     let risk_mmap = init_mmap_ptr::<TrigonRiskState>(TRIGON_RISK_PATH)?;
+    let fee_mmap = init_mmap_ptr::<sniper_types::fee_types::GlobalFeeState>(
+        sniper_types::fee_types::FEE_STATE_PATH)?;
     let engine = unsafe { &*(engine_mmap.as_ptr() as *const TrigonEngineState) };
     let risk = unsafe { &*(risk_mmap.as_ptr() as *const TrigonRiskState) };
+    let fee_state = unsafe { &*(fee_mmap.as_ptr() as *const sniper_types::fee_types::GlobalFeeState) };
 
     let key = std::env::var("BITFINEX_API_KEY").context("Missing BITFINEX_API_KEY")?;
     let sec = std::env::var("BITFINEX_API_SECRET").context("Missing BITFINEX_API_SECRET")?;
@@ -285,7 +288,10 @@ async fn main() -> Result<()> {
 
                         // Triangle scan every 100ms
                         if authed && last_scan.elapsed().as_millis() >= 100 {
-                            let fee_bps = risk.fee_bps.load(Ordering::Acquire) as f64;
+                            // Read real taker fee from shared GlobalFeeState
+                            // All 3 legs are IOC → taker fee applies to each
+                            // Scale: bps×100 → bps (e.g., 2000 → 20 bps)
+                            let fee_bps = fee_state.taker_fee_bps.load(Ordering::Relaxed) as f64 / 100.0;
                             let paused = risk.global_paused.load(Ordering::Acquire) != 0;
                             let mut best_profit = -10000.0f64;
 

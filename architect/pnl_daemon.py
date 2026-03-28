@@ -121,6 +121,148 @@ def fetch_wallets():
     return wallets
 
 
+# ── GLOBAL FEE STATE (shared mmap for ALL bots & AI) ────────
+# Layout matches Rust GlobalFeeState in fee_types.rs:
+#   offset 0:  maker_fee_bps    (u64, bps×100)
+#   offset 8:  taker_fee_bps    (u64, bps×100)
+#   offset 16: deriv_maker_bps  (u64, bps×100)
+#   offset 24: deriv_taker_bps  (u64, bps×100)
+#   offset 32: last_updated_ms  (u64, epoch ms)
+#   offset 40: monthly_volume   (i64, USD)
+#   offset 48: fee_tier         (u64)
+#   offset 56: heartbeat_ms     (u64, epoch ms)
+
+FEE_STATE_PATH = "/dev/shm/beroun/fee_state.bin"
+FEE_STATE_SIZE = 64  # 1 cache line
+
+class FeeStateWriter:
+    """Writes GlobalFeeState to shared mmap. Read by all Rust bots."""
+
+    def __init__(self):
+        self.mm = None
+        try:
+            os.makedirs(os.path.dirname(FEE_STATE_PATH), exist_ok=True)
+            fd = os.open(FEE_STATE_PATH, os.O_RDWR | os.O_CREAT)
+            os.ftruncate(fd, FEE_STATE_SIZE)
+            import mmap
+            self.mm = mmap.mmap(fd, FEE_STATE_SIZE)
+            os.close(fd)
+            # Write conservative defaults if empty
+            if self.mm[:8] == b'\x00' * 8:
+                self._write_defaults()
+            log.info(f"FeeStateWriter: mmap opened at {FEE_STATE_PATH}")
+        except Exception as e:
+            log.error(f"FeeStateWriter init failed: {e}")
+
+    def _write_defaults(self):
+        """Write conservative defaults (Bitfinex standard tier)."""
+        self.write(maker_bps=1000, taker_bps=2000,
+                   deriv_maker=200, deriv_taker=650)
+
+    def write(self, maker_bps=None, taker_bps=None,
+              deriv_maker=None, deriv_taker=None,
+              volume_usd=None, tier=None):
+        """Write fee values to shared mmap."""
+        if not self.mm:
+            return
+        now_ms = int(time.time() * 1000)
+        if maker_bps is not None:
+            struct.pack_into('<Q', self.mm, 0, int(maker_bps))
+        if taker_bps is not None:
+            struct.pack_into('<Q', self.mm, 8, int(taker_bps))
+        if deriv_maker is not None:
+            struct.pack_into('<Q', self.mm, 16, int(deriv_maker))
+        if deriv_taker is not None:
+            struct.pack_into('<Q', self.mm, 24, int(deriv_taker))
+        struct.pack_into('<Q', self.mm, 32, now_ms)  # last_updated_ms
+        if volume_usd is not None:
+            struct.pack_into('<q', self.mm, 40, int(volume_usd))
+        if tier is not None:
+            struct.pack_into('<Q', self.mm, 48, int(tier))
+        struct.pack_into('<Q', self.mm, 56, now_ms)  # heartbeat
+        self.mm.flush()
+
+    def read(self):
+        """Read current fee state (for logging/debug)."""
+        if not self.mm:
+            return {}
+        return {
+            "maker_bps": struct.unpack_from('<Q', self.mm, 0)[0] / 100.0,
+            "taker_bps": struct.unpack_from('<Q', self.mm, 8)[0] / 100.0,
+            "deriv_maker_bps": struct.unpack_from('<Q', self.mm, 16)[0] / 100.0,
+            "deriv_taker_bps": struct.unpack_from('<Q', self.mm, 24)[0] / 100.0,
+            "last_updated": struct.unpack_from('<Q', self.mm, 32)[0],
+            "volume_usd": struct.unpack_from('<q', self.mm, 40)[0],
+            "fee_tier": struct.unpack_from('<Q', self.mm, 48)[0],
+        }
+
+    def close(self):
+        if self.mm:
+            self.mm.close()
+
+
+def fetch_and_update_fees(fee_writer: FeeStateWriter):
+    """Fetch fee tier from Bitfinex /v2/auth/r/summary and update shared mmap."""
+    result = bfx_authenticated("v2/auth/r/summary")
+    if not result:
+        log.warning("Fee fetch: API returned None")
+        return False
+
+    try:
+        # Bitfinex summary response format:
+        # [TRADE_VOL_30D, [MAKER_FEE, _, TAKER_FEE, _], [DERIV_MAKER, _, DERIV_TAKER, _], ...]
+        # Fees are returned as decimals (e.g., 0.001 = 0.10%)
+        if isinstance(result, list) and len(result) >= 2:
+            # Trade volume
+            vol_30d = 0
+            if isinstance(result[0], (int, float)):
+                vol_30d = int(result[0])
+
+            # Exchange fees
+            maker_pct = 0.001  # 0.10% default
+            taker_pct = 0.002  # 0.20% default
+            if isinstance(result[1], list) and len(result[1]) >= 4:
+                if result[1][0] is not None:
+                    maker_pct = abs(float(result[1][0]))
+                if result[1][2] is not None:
+                    taker_pct = abs(float(result[1][2]))
+
+            # Derivative fees
+            deriv_maker = 0.0002  # 0.02% default
+            deriv_taker = 0.00065  # 0.065% default
+            if isinstance(result, list) and len(result) >= 3:
+                if isinstance(result[2], list) and len(result[2]) >= 4:
+                    if result[2][0] is not None:
+                        deriv_maker = abs(float(result[2][0]))
+                    if result[2][2] is not None:
+                        deriv_taker = abs(float(result[2][2]))
+
+            # Convert to bps×100: 0.001 (0.10%) = 10 bps = 1000 in our scale
+            maker_bps100 = int(maker_pct * 1_000_000)
+            taker_bps100 = int(taker_pct * 1_000_000)
+            dm_bps100 = int(deriv_maker * 1_000_000)
+            dt_bps100 = int(deriv_taker * 1_000_000)
+
+            fee_writer.write(
+                maker_bps=maker_bps100,
+                taker_bps=taker_bps100,
+                deriv_maker=dm_bps100,
+                deriv_taker=dt_bps100,
+                volume_usd=vol_30d,
+            )
+
+            log.info(f"💰 Fee update: maker={maker_pct*100:.3f}% taker={taker_pct*100:.3f}% "
+                     f"vol_30d=${vol_30d:,.0f}")
+            return True
+
+        log.warning(f"Fee fetch: unexpected format: {str(result)[:200]}")
+        return False
+
+    except Exception as e:
+        log.error(f"Fee parse error: {e}")
+        return False
+
+
 # ── FILL PROCESSOR ──────────────────────────────────────────
 
 class FillProcessor:
@@ -463,12 +605,22 @@ def main():
     log.info("💰 PnL Daemon v2.0 — Volatility-Neutral FIFO Engine")
     log.info(f"   DB: {os.path.expanduser('~/.local/share/sniper/pnl.db')}")
     log.info(f"   mmap: /dev/shm/beroun/pnl_state.bin")
+    log.info(f"   fee_state: {FEE_STATE_PATH}")
     log.info(f"   Bots: {', '.join(BOT_INDEX.keys())}")
 
     processor = FillProcessor()
+    fee_writer = FeeStateWriter()
 
     # Initial wallet snapshot
     processor.record_wallet_snapshot()
+
+    # Initial fee fetch
+    log.info("Fetching initial fee tier from Bitfinex...")
+    if not fetch_and_update_fees(fee_writer):
+        log.warning("Initial fee fetch failed — using conservative defaults")
+    fees = fee_writer.read()
+    if fees:
+        log.info(f"  Maker: {fees['maker_bps']:.1f} bps | Taker: {fees['taker_bps']:.1f} bps")
 
     cycle = 0
     running = True
@@ -487,6 +639,10 @@ def main():
 
             # Process fills every 30 seconds
             processor.run_cycle(cycle)
+
+            # Fee refresh every 30 minutes (cycle 60 = 60×30s)
+            if cycle % 60 == 0:
+                fetch_and_update_fees(fee_writer)
 
             # Wallet snapshot every hour (cycle 120 = 120×30s = 1 hour)
             if cycle % 120 == 0:
@@ -516,6 +672,7 @@ def main():
     log.info("PnL Daemon stopped")
     processor.db.close()
     processor.mmap_writer.close()
+    fee_writer.close()
 
 
 if __name__ == "__main__":
