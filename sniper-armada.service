@@ -1,5 +1,5 @@
 [Unit]
-Description=Sniper Armada v11.2 — 3-Bot HFT Platform (Hydra + Moonshot + Grid)
+Description=Sniper Armada v11.2 — Multi-Bot HFT + Telegram C2
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=0
@@ -10,7 +10,7 @@ User=wwwenda
 WorkingDirectory=/home/wwwenda/sniper
 ExecStart=/home/wwwenda/sniper/deploy_armada.sh
 Restart=always
-RestartSec=5
+RestartSec=10
 
 # Performance
 Nice=-10
