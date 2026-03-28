@@ -62,7 +62,7 @@ if not TOKEN:
     log.error("TELEGRAM_BOT_TOKEN not set!")
     sys.exit(1)
 
-bot = telebot.TeleBot(TOKEN, parse_mode="Markdown")
+bot = telebot.TeleBot(TOKEN)
 
 # ── BOT REGISTRY ────────────────────────────────────────────
 BOTS = {
