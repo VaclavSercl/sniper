@@ -1,82 +1,93 @@
 // ═══════════════════════════════════════════════════════════
-// L2 Command Matrix v3 — Issue #18 Quick Wins (Complete Phase 1)
-// "Thin L1, Fat L2" + SPSC Ring Buffer + CAS Single Bullet
+// L2 Command Matrix v4 — Phase 1 Defense + Phase 2 Offense
+// "Thin L1, Fat L2" + A-S Model + SPSC Ring Buffer
 //
-// TWO independent data highways:
-//   Cache Line 1 (64B): L2 → L1 (General commands soldiers)
-//   Cache Line 2+ (576B): L1 → L2 (Soldiers report telemetry)
+// THREE independent cache-line highways:
+//   Cache Line 1 (64B): L2 → L1 Tactical Defense (Phase 1)
+//   Cache Line 2 (64B): L2 → L1 Structural Offense (Phase 2 A-S)
+//   Cache Line 3+ (576B): L1 → L2 Telemetry (Ring Buffer)
 //
+// SeqLock (config_version) protects BOTH cache lines 1+2 atomically.
 // mmap path: /dev/shm/beroun/l2_command.bin
 // ═══════════════════════════════════════════════════════════
 
 use std::sync::atomic::{AtomicI64, AtomicU64, AtomicUsize, Ordering};
 
-/// mmap file path
 pub const L2_COMMAND_PATH: &str = "/dev/shm/beroun/l2_command.bin";
 
-/// Ring buffer size (must be power of 2 for bitwise AND indexing)
 pub const LATENCY_RING_SIZE: usize = 64;
 pub const LATENCY_RING_MASK: usize = LATENCY_RING_SIZE - 1;
 
-/// Minimum accumulated fade (bps) before Hydra sends Amend API call
-/// Prevents API rate limit exhaustion from micro-adjustments
 pub const MIN_AMEND_THRESHOLD_BPS: i64 = 3;
 
+pub const BTC_SCALE: i64 = 100_000_000;
+
 // ═══════════════════════════════════════════════════════════
-// CACHE LINE 1: General commands (L2 → L1) — EXACTLY 64 BYTES
-// Written by L2 Oracle (Python), read by L1 (Rust)
-// 7 fields × 8B = 56B + 8B pad = 64B = 1 x86-64 cache line
+// CACHE LINE 1: Tactical Defense (L2 → L1) — Phase 1
+// 7 fields × 8B = 56B + 8B pad = 64B
 // ═══════════════════════════════════════════════════════════
 
 #[repr(C, align(64))]
 pub struct L2CommandMatrix {
-    /// SeqLock: L2 sets to ODD before write, EVEN after write
-    pub config_version: AtomicU64,           // offset 0   (8B)
+    /// SeqLock: protects BOTH cache lines 1 and 2
+    pub config_version: AtomicU64,           // CL1 offset 0
 
     // ═══ HYDRA: Asymmetric Quote Fading ═══
-    /// BID fade: push bids deeper by N bps (positive = defensive vs falling knife)
-    pub bid_fade_bps: AtomicI64,             // offset 8   (8B)
-    /// ASK fade: push asks deeper by N bps (positive = defensive vs pump)
-    pub ask_fade_bps: AtomicI64,             // offset 16  (8B)
+    pub bid_fade_bps: AtomicI64,             // CL1 offset 8
+    pub ask_fade_bps: AtomicI64,             // CL1 offset 16
 
     // ═══ TRIGON: Latency-Aware Profit Padding ═══
-    /// L2-computed padding added to min_profit (from p95 Tick-to-Trade)
-    pub latency_padding_bps: AtomicI64,      // offset 24  (8B)
-    /// Kill switch: 1 = stop all arbitrage, 0 = OK
-    pub latency_killswitch: AtomicI64,       // offset 32  (8B)
+    pub latency_padding_bps: AtomicI64,      // CL1 offset 24
+    pub latency_killswitch: AtomicI64,       // CL1 offset 32
 
-    // ═══ 🌙 MOONSHOT: Pre-computed Trigger + CAS Armed ═══
-    /// Absolute trigger price × PRICE_SCALE (L2 pre-computes: ema_price - 3.5σ)
-    /// L1 just does: if current_price < moonshot_trigger_price → check fire
-    pub moonshot_trigger_price: AtomicI64,   // offset 40  (8B)
-    /// CAS armed flag: 1 = loaded (awaiting crash), 0 = safe/fired
-    /// L1 uses compare_exchange(1→0) to guarantee Single Bullet Pattern
-    pub moonshot_armed: AtomicI64,           // offset 48  (8B)
+    // ═══ 🌙 MOONSHOT: CAS Tripwire ═══
+    pub moonshot_trigger_price: AtomicI64,   // CL1 offset 40
+    pub moonshot_armed: AtomicI64,           // CL1 offset 48
 
-    // Padding: 7 × 8B = 56B → 8B pad to fill cache line
-    _pad_control: [u8; 8],                   // offset 56  (8B)
+    _pad_cl1: [u8; 8],                       // CL1 offset 56 (pad to 64B)
 }
 
 // ═══════════════════════════════════════════════════════════
-// CACHE LINE 2+: Soldier telemetry (L1 → L2)
-// Separate struct = separate cache line = ZERO false sharing
+// CACHE LINE 2: Structural Offense / A-S Model (L2 → L1) — Phase 2
+// Protected by same SeqLock (config_version) as Cache Line 1
+// 3 L2→L1 params + 1 L1→L2 report + pad = 64B
 // ═══════════════════════════════════════════════════════════
 
-/// Lock-Free SPSC Ring Buffer for Tick-to-Trade latency measurement
+/// Avellaneda-Stoikov Regime-Aware Market Making parameters
+#[repr(C, align(64))]
+pub struct L2ASMatrix {
+    /// Target inventory × PRICE_SCALE (0 = delta-neutral, +50M = +0.5 BTC long)
+    /// L2 sets based on HMM regime: bull → positive target, bear → negative
+    pub as_target_inventory: AtomicI64,      // CL2 offset 0
+
+    /// Skew factor: bps shift per 1 BTC deviation from target
+    /// = gamma × variance, pre-computed by L2 (higher = more aggressive rebalancing)
+    pub as_skew_factor_bps: AtomicI64,       // CL2 offset 8
+
+    /// Half of optimal spread in bps (bid = reservation - half, ask = reservation + half)
+    pub as_half_spread_bps: AtomicI64,       // CL2 offset 16
+
+    // ═══ L1 → L2: Inventory Report ═══
+    /// L1 atomically writes current position here (× PRICE_SCALE)
+    /// L2 reads this to compute regime awareness
+    pub current_inventory: AtomicI64,        // CL2 offset 24
+
+    _pad_cl2: [u8; 32],                      // CL2 offset 32 (pad to 64B)
+}
+
+// ═══════════════════════════════════════════════════════════
+// CACHE LINE 3+: Telemetry (L1 → L2) — SPSC Ring Buffer
+// ═══════════════════════════════════════════════════════════
+
 #[repr(C, align(64))]
 pub struct L1TelemetryRing {
-    /// Ring buffer write head (L1 increments with Release ordering)
-    pub latency_head: AtomicUsize,           // offset 0
-
-    // Padding: isolate head from ring data (own cache line)
-    _pad_head: [u8; 56],                     // offset 8-63
-
-    /// 64 most recent Tick-to-Trade latencies in microseconds
-    pub latency_ring_us: [AtomicU64; LATENCY_RING_SIZE], // offset 64+
+    pub latency_head: AtomicUsize,
+    _pad_head: [u8; 56],
+    pub latency_ring_us: [AtomicU64; LATENCY_RING_SIZE],
 }
 
 // ═══════════════════════════════════════════════════════════
-// Default implementations
+// Defaults
 // ═══════════════════════════════════════════════════════════
 
 impl Default for L2CommandMatrix {
@@ -89,7 +100,19 @@ impl Default for L2CommandMatrix {
             latency_killswitch: AtomicI64::new(0),
             moonshot_trigger_price: AtomicI64::new(0),
             moonshot_armed: AtomicI64::new(0),
-            _pad_control: [0u8; 8],
+            _pad_cl1: [0u8; 8],
+        }
+    }
+}
+
+impl Default for L2ASMatrix {
+    fn default() -> Self {
+        Self {
+            as_target_inventory: AtomicI64::new(0),
+            as_skew_factor_bps: AtomicI64::new(5),  // conservative default
+            as_half_spread_bps: AtomicI64::new(3),   // 3 bps half-spread
+            current_inventory: AtomicI64::new(0),
+            _pad_cl2: [0u8; 32],
         }
     }
 }
@@ -101,17 +124,15 @@ impl Default for L1TelemetryRing {
 }
 
 // ═══════════════════════════════════════════════════════════
-// L1 Hot-Path Helpers (all #[inline(always)], zero allocation)
+// L1 Hot-Path Helpers
 // ═══════════════════════════════════════════════════════════
 
-/// SeqLock read: returns (version, is_consistent)
 #[inline(always)]
 pub fn l2cmd_version_check(cmd: &L2CommandMatrix) -> (u64, bool) {
     let v = cmd.config_version.load(Ordering::Acquire);
     (v, v % 2 == 0)
 }
 
-/// Record Tick-to-Trade latency into ring buffer (O(1), lock-free)
 #[inline(always)]
 pub fn record_latency(ring: &L1TelemetryRing, send_ts: std::time::Instant) {
     let latency_us = send_ts.elapsed().as_micros() as u64;
@@ -121,7 +142,6 @@ pub fn record_latency(ring: &L1TelemetryRing, send_ts: std::time::Instant) {
     ring.latency_head.store(head.wrapping_add(1), Ordering::Release);
 }
 
-/// Check if arbitrage should fire (O(1))
 #[inline(always)]
 pub fn can_execute_arb(cmd: &L2CommandMatrix, gross_profit_bps: i64, base_fee_bps: i64) -> bool {
     if cmd.latency_killswitch.load(Ordering::Acquire) == 1 { return false; }
@@ -129,7 +149,6 @@ pub fn can_execute_arb(cmd: &L2CommandMatrix, gross_profit_bps: i64, base_fee_bp
     gross_profit_bps >= (base_fee_bps + padding)
 }
 
-/// Check if Hydra should amend order (hysteresis prevents API rate limit burn)
 #[inline(always)]
 pub fn should_amend(current_price: i64, target_price: i64, fair_price: i64) -> bool {
     if fair_price == 0 { return false; }
@@ -137,13 +156,7 @@ pub fn should_amend(current_price: i64, target_price: i64, fair_price: i64) -> b
     diff_bps >= MIN_AMEND_THRESHOLD_BPS
 }
 
-/// 🌙 Moonshot Tripwire: O(1) check + CAS Single Bullet
-///
-/// Returns Some(trigger_price) if we should fire, None otherwise.
-/// Uses hardware Compare-And-Swap to guarantee exactly ONE execution
-/// across all threads/ticks, even during 100k ticks/sec flash crash.
-///
-/// Caller must check SeqLock BEFORE calling this (for trigger_price consistency).
+/// Moonshot CAS Single Bullet
 #[inline(always)]
 pub fn moonshot_check_and_disarm(
     cmd: &L2CommandMatrix,
@@ -151,38 +164,72 @@ pub fn moonshot_check_and_disarm(
     recent_volume_scaled: i64,
     avg_volume_scaled: i64,
 ) -> Option<i64> {
-    // 1. O(1): Is weapon armed? (L2 detected macro capitulation)
-    //    Branch predictor skips this 99.999% of the time
-    if cmd.moonshot_armed.load(Ordering::Relaxed) != 1 {
-        return None;
-    }
-
-    // 2. O(1): Price tripwire — just an integer comparison
+    if cmd.moonshot_armed.load(Ordering::Relaxed) != 1 { return None; }
     let trigger = cmd.moonshot_trigger_price.load(Ordering::Relaxed);
-    if trigger == 0 || current_price_scaled > trigger {
-        return None;
-    }
-
-    // 3. 🛡️ Anti-spoofing: volume must be abnormal (5× above average)
-    //    Filters out empty-book HFT spoofing from real liquidation cascades
-    if avg_volume_scaled > 0 && recent_volume_scaled < (avg_volume_scaled * 5) {
-        return None;
-    }
-
-    // 4. 🚨 ATOMIC DISARM: Compare-And-Swap (1 → 0)
-    //    Hardware guarantees exactly ONE thread wins this race.
-    //    All other ticks see "already fired" and return None.
-    match cmd.moonshot_armed.compare_exchange(
-        1,                  // expect: armed
-        0,                  // set: disarmed (fired)
-        Ordering::Acquire,  // success: full barrier
-        Ordering::Relaxed,  // failure: someone else won
-    ) {
-        Ok(_) => Some(trigger),  // 🔥 WE FIRED — caller executes IOC buy
-        Err(_) => None,          // Another tick beat us, no-op
+    if trigger == 0 || current_price_scaled > trigger { return None; }
+    if avg_volume_scaled > 0 && recent_volume_scaled < (avg_volume_scaled * 5) { return None; }
+    match cmd.moonshot_armed.compare_exchange(1, 0, Ordering::Acquire, Ordering::Relaxed) {
+        Ok(_) => Some(trigger),
+        Err(_) => None,
     }
 }
 
-/// Total mmap file size
+/// 🐍 A-S Quote Calculator: Offense + Defense fusion (O(1), zero allocation)
+///
+/// Computes optimal bid/ask by fusing:
+///   1. A-S Reservation Price (inventory skew toward target)
+///   2. Phase 1 Quote Fading (toxic flow defense)
+///
+/// Returns (target_bid_scaled, target_ask_scaled)
+#[inline(always)]
+pub fn calculate_as_quotes(
+    cmd: &L2CommandMatrix,
+    as_mat: &L2ASMatrix,
+    fair_price: i64,
+    current_inventory: i64,
+) -> (i64, i64) {
+    // Report inventory to L2 (lock-free, separate cache line)
+    as_mat.current_inventory.store(current_inventory, Ordering::Relaxed);
+
+    // SeqLock read: version protects BOTH cache lines
+    let mut seq;
+    let (mut bid_fade, mut ask_fade, mut target_inv, mut skew_bps, mut half_spread);
+    loop {
+        seq = cmd.config_version.load(Ordering::Acquire);
+        if seq % 2 != 0 { std::hint::spin_loop(); continue; }
+
+        // Cache Line 1: defense
+        bid_fade = cmd.bid_fade_bps.load(Ordering::Relaxed);
+        ask_fade = cmd.ask_fade_bps.load(Ordering::Relaxed);
+
+        // Cache Line 2: offense (A-S)
+        target_inv = as_mat.as_target_inventory.load(Ordering::Relaxed);
+        skew_bps = as_mat.as_skew_factor_bps.load(Ordering::Relaxed);
+        half_spread = as_mat.as_half_spread_bps.load(Ordering::Relaxed);
+
+        std::sync::atomic::fence(Ordering::Acquire);
+        if seq == cmd.config_version.load(Ordering::Relaxed) { break; }
+    }
+
+    // A-S Reservation Price: shift center based on inventory delta
+    let inventory_delta = current_inventory - target_inv;
+    let as_shift_bps = (inventory_delta * skew_bps) / BTC_SCALE;
+
+    let bps_val = fair_price / 10_000;
+
+    // Reservation price = fair - (inventory_overshoot × skew)
+    // Overweight long → reservation drops → asks get cheaper → dump inventory
+    let reservation = fair_price - (as_shift_bps * bps_val);
+
+    // 💥 FUSION: A-S spread + Phase 1 toxic fade
+    let target_bid = reservation - (half_spread * bps_val) - (bid_fade * bps_val);
+    let target_ask = reservation + (half_spread * bps_val) + (ask_fade * bps_val);
+
+    (target_bid, target_ask)
+}
+
+/// Total mmap file size: CL1(64) + CL2(64) + Ring(64+512) = 704B
 pub const L2_COMMAND_FILE_SIZE: usize =
-    std::mem::size_of::<L2CommandMatrix>() + std::mem::size_of::<L1TelemetryRing>();
+    std::mem::size_of::<L2CommandMatrix>()
+    + std::mem::size_of::<L2ASMatrix>()
+    + std::mem::size_of::<L1TelemetryRing>();

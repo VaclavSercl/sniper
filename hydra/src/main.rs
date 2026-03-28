@@ -350,6 +350,11 @@ async fn async_main() -> Result<()> {
         unsafe { MmapMut::map_mut(&f)? }
     };
     let l2cmd = unsafe { &*(l2cmd_mmap.as_ptr() as *const sniper_types::l2_command::L2CommandMatrix) };
+    // A-S Matrix lives at offset 64 (cache line 2)
+    let l2as = unsafe {
+        &*(l2cmd_mmap.as_ptr().add(std::mem::size_of::<sniper_types::l2_command::L2CommandMatrix>())
+           as *const sniper_types::l2_command::L2ASMatrix)
+    };
 
     let engine_ptr: *mut EngineState = engine_mmap.as_mut_ptr() as *mut EngineState;
     let risk = unsafe { &*(risk_mmap.as_ptr() as *const RiskState) };
@@ -1125,24 +1130,21 @@ async fn async_main() -> Result<()> {
                                                             shift_i
                                                         } else { 0 };
 
-                                                        let mut buy_i = (micro_i - grid + final_bias_with_l1 + delta_shift).max(0);
-                                                        let mut sell_i = (micro_i + grid + final_bias_with_l1 + delta_shift).max(0);
+                                                        // ═══ v14.3 AVELLANEDA-STOIKOV + TOXIC FADE FUSION ═══
+                                                        // calculate_as_quotes reads BOTH cache lines:
+                                                        //   CL1: bid/ask_fade_bps (Phase 1 defense)
+                                                        //   CL2: target_inventory, skew_factor, half_spread (Phase 2 offense)
+                                                        // Returns (target_bid, target_ask) with:
+                                                        //   Reservation price = fair - skew(inventory_delta)
+                                                        //   Final = reservation ± half_spread ± toxic_fade
+                                                        let current_inv = eng.net_position.load(Ordering::Acquire);
+                                                        let (as_bid, as_sell) = sniper_types::l2_command::calculate_as_quotes(
+                                                            l2cmd, l2as, micro_i, current_inv
+                                                        );
 
-                                                        // ═══ v14.2 ASYMMETRIC QUOTE FADING (Issue #18) ═══
-                                                        // L2 pre-computes fade values; L1 just applies O(1)
-                                                        // SeqLock: read version before+after, discard if odd/changed
-                                                        {
-                                                            let (v1, ok1) = sniper_types::l2_command::l2cmd_version_check(l2cmd);
-                                                            let bf = l2cmd.bid_fade_bps.load(Ordering::Relaxed);
-                                                            let af = l2cmd.ask_fade_bps.load(Ordering::Relaxed);
-                                                            let (v2, ok2) = sniper_types::l2_command::l2cmd_version_check(l2cmd);
-                                                            if v1 == v2 && ok1 && ok2 && (bf != 0 || af != 0) {
-                                                                // Convert bps to price delta: 1 bps = micro_i / 10000
-                                                                let bps_unit = micro_i / 10000;
-                                                                buy_i -= bf * bps_unit;   // positive bf = deeper bid
-                                                                sell_i += af * bps_unit;  // positive af = deeper ask
-                                                            }
-                                                        }
+                                                        // Layer grid + bias + delta on top of A-S quotes
+                                                        let mut buy_i = (as_bid - grid + final_bias_with_l1 + delta_shift).max(0);
+                                                        let mut sell_i = (as_sell + grid + final_bias_with_l1 + delta_shift).max(0);
 
                                                         // ═══ ANTI-CROSS GUARD (L0 Safety) ═══
                                                         // Prevent POSTONLY CANCELED: bid must be below best ask, ask must be above best bid

@@ -237,7 +237,12 @@ Cycle: #{self.cycle} (every 5 min)
     \"max_position_limit\": float,
     \"pause_trading\": boolean,
     \"bid_fade_bps\": int,
-    \"ask_fade_bps\": int
+    \"ask_fade_bps\": int,
+    \"avellaneda_stoikov\": {{
+      \"target_inventory_btc\": float,
+      \"rolling_volatility_bps\": float,
+      \"gamma\": float
+    }}
   }},
   \"moonshot\": {{
     \"pause_trading\": boolean,
@@ -266,6 +271,9 @@ PARAMETER CONSTRAINTS:
   hydra.max_position: {MAX_POS_FLOOR}-{MAX_POS_CEIL} BTC
   hydra.bid_fade_bps: 0-20 (0=no fade, 10=defensive, 20=maximum retreat)
   hydra.ask_fade_bps: 0-20 (asymmetric: set different vs bid for directional)
+  hydra.avellaneda_stoikov.target_inventory_btc: -1.0 to +1.0 (0=neutral, +0.3=bull ride, -0.1=bear hedge)
+  hydra.avellaneda_stoikov.rolling_volatility_bps: 10-200 (from recent price variance)
+  hydra.avellaneda_stoikov.gamma: 0.01-0.5 (risk aversion: 0.05=normal, 0.2=aggressive rebalancing)
   moonshot.order_usd: 0-100 USD (0=scanner only)
   moonshot.trigger_price: absolute USD (pre-compute: current_price - 3*sigma)
   moonshot.armed: true only if OI/volume conditions indicate real crash
@@ -389,7 +397,7 @@ PARAMETER CONSTRAINTS:
         try:
             import struct as _st
             L2_CMD_PATH = "/dev/shm/beroun/l2_command.bin"
-            L2_CMD_SIZE = 640  # L2CommandMatrix(64B) + L1TelemetryRing(64+512B)
+            L2_CMD_SIZE = 704  # CL1(64B) + CL2_AS(64B) + Ring(576B)
 
             os.makedirs(os.path.dirname(L2_CMD_PATH), exist_ok=True)
             fd = os.open(L2_CMD_PATH, os.O_RDWR | os.O_CREAT)
@@ -422,10 +430,10 @@ PARAMETER CONSTRAINTS:
             kill = 0
             try:
                 import numpy as np
-                head_offset = 64  # L1TelemetryRing starts at byte 64
+                head_offset = 128  # L1TelemetryRing at byte 128 (CL1=64 + CL2_AS=64)
                 head_val = _st.unpack_from('<Q', mm, head_offset)[0]
                 if head_val > 0:
-                    ring_offset = head_offset + 64  # ring data at byte 128 (after head + pad)
+                    ring_offset = head_offset + 64  # ring data at byte 192 (after head + pad)
                     count = min(head_val, 64)
                     latencies = []
                     for i in range(count):
@@ -494,6 +502,49 @@ PARAMETER CONSTRAINTS:
             armed = 1 if moonshot.get("armed") else 0
             _st.pack_into('<q', mm, 48, armed)
 
+            # ═══ CACHE LINE 2: A-S Structural Offense (Phase 2) ═══
+            # Layout at offset 64: target_inv(8) + skew(8) + half_spread(8) + current_inv(8) + pad(32)
+            CL2 = 64  # Cache line 2 starts at byte 64
+
+            hydra_as = hydra.get("avellaneda_stoikov", {})
+
+            # Read L1's current inventory report (written by Rust L1 at CL2+24)
+            l1_inventory = _st.unpack_from('<q', mm, CL2 + 24)[0]
+            l1_inv_btc = l1_inventory / 100_000_000.0
+
+            # Regime-Aware Target Inventory
+            regime = decision.get("global_regime", "CHOPPING_RANGE")
+            # Gemini can override, otherwise compute from regime
+            target_btc = float(hydra_as.get("target_inventory_btc", 0.0))
+            if target_btc == 0.0:
+                if "BULL" in regime:
+                    target_btc = 0.3   # Ride the wave
+                elif "BEAR" in regime:
+                    target_btc = -0.1  # Slight short bias
+                # CHOPPING_RANGE = 0.0 (delta neutral)
+
+            target_scaled = int(target_btc * 100_000_000)
+            _st.pack_into('<q', mm, CL2 + 0, target_scaled)
+
+            # Dynamic Gamma × Variance → Skew Factor
+            import math
+            rolling_vol_bps = float(hydra_as.get("rolling_volatility_bps", 30.0))
+            base_gamma = float(hydra_as.get("gamma", 0.05))
+
+            # Higher regime confidence → higher gamma → more aggressive rebalancing
+            regime_strength = 1.0
+            if "SHOCK" in regime or "TREND" in regime:
+                regime_strength = 3.0  # Extreme: 3× gamma multiplier
+
+            dynamic_gamma = base_gamma * (1.0 + regime_strength)
+            variance = rolling_vol_bps ** 2
+            skew_factor = max(1, int(dynamic_gamma * variance * 0.1))
+            _st.pack_into('<q', mm, CL2 + 8, skew_factor)
+
+            # Optimal Half Spread
+            half_spread = max(2, int(math.sqrt(variance) * dynamic_gamma * 2.0))
+            _st.pack_into('<q', mm, CL2 + 16, half_spread)
+
             # Step 3: Write EVEN version (= "data consistent", L1 can read)
             _st.pack_into('<Q', mm, 0, next_ver + 1)
             mm.flush()
@@ -501,6 +552,9 @@ PARAMETER CONSTRAINTS:
 
             log.info(f"  📡 L2Cmd: ver={next_ver+1} bid_fade={bid_fade}bps ask_fade={ask_fade}bps "
                      f"lat_pad={lat_pad}bps armed={armed} trig=${trigger_price_scaled / PRICE_SCALE:.0f}")
+            log.info(f"  📐 A-S: target={target_btc:.2f}BTC skew={skew_factor}bps/BTC "
+                     f"half_spread={half_spread}bps γ={dynamic_gamma:.3f} σ={rolling_vol_bps:.0f}bps "
+                     f"L1_inv={l1_inv_btc:.4f}BTC")
 
         except Exception as e:
             log.error(f"L2CommandMatrix write failed: {e}")
