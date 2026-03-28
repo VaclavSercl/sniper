@@ -855,6 +855,10 @@ def main():
 
     threading.Thread(target=l2_oracle_loop, daemon=True).start()
 
+    # Start Master Dashboard SSE Server (port 3004)
+    from dashboard_server import start_dashboard_server
+    start_dashboard_server(cortex)
+
     # Start Cortex Event Listener (receives push alerts from Sentinel)
     def tg_send_alert(msg):
         try:

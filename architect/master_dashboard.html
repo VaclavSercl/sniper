@@ -1,166 +1,285 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="cs">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🏛️ Sniper Architect — Multi-Bot Command Center</title>
+<title>🏛️ Sniper Armada — Master Command Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{background:#0a0e17;color:#e1e5ee;font-family:'Inter',system-ui,sans-serif;min-height:100vh}
-.header{padding:20px 32px;background:linear-gradient(135deg,#0d1117 0%,#161b22 100%);border-bottom:1px solid rgba(139,148,158,0.1)}
-.header h1{font-size:1.5em;background:linear-gradient(90deg,#7c3aed,#06b6d4);-webkit-background-clip:text;-webkit-text-fill-color:transparent;display:inline}
-.header .version{color:#8b949e;font-size:0.8em;margin-left:12px}
-.header .status{float:right;padding:4px 12px;border-radius:12px;font-size:0.75em;font-weight:600}
-.status.online{background:rgba(34,197,94,0.15);color:#22c55e;border:1px solid rgba(34,197,94,0.3)}
-.status.partial{background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.3)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;padding:24px 32px}
-.card{background:linear-gradient(145deg,#161b22,#0d1117);border:1px solid rgba(139,148,158,0.1);border-radius:12px;padding:20px;transition:all 0.3s}
-.card:hover{border-color:rgba(124,58,237,0.3);transform:translateY(-2px);box-shadow:0 8px 25px rgba(0,0,0,0.3)}
-.card .bot-name{font-size:1.2em;font-weight:700;margin-bottom:4px}
-.card .strategy{color:#8b949e;font-size:0.8em;margin-bottom:12px}
-.card .metrics{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.metric{background:rgba(255,255,255,0.02);padding:8px 12px;border-radius:8px}
-.metric .label{font-size:0.7em;color:#8b949e;text-transform:uppercase;letter-spacing:0.4px}
-.metric .value{font-size:1.1em;font-weight:600;margin-top:2px}
-.metric .value.green{color:#22c55e}
-.metric .value.red{color:#ef4444}
-.metric .value.blue{color:#06b6d4}
-.indicator{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px}
-.indicator.live{background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,0.5);animation:pulse 2s infinite}
-.indicator.dead{background:#ef4444;box-shadow:0 0 8px rgba(239,68,68,0.5)}
-.indicator.paused{background:#fbbf24;box-shadow:0 0 8px rgba(251,191,36,0.5)}
-.summary{padding:16px 32px;display:flex;gap:24px;flex-wrap:wrap}
-.summary-item{background:linear-gradient(145deg,#161b22,#0d1117);border:1px solid rgba(139,148,158,0.1);border-radius:12px;padding:16px 24px;min-width:200px}
-.summary-item .label{font-size:0.75em;color:#8b949e;text-transform:uppercase}
-.summary-item .value{font-size:1.8em;font-weight:700;margin-top:4px}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
-.footer{text-align:center;padding:20px;color:#8b949e;font-size:0.75em}
+:root {
+    --bg: #0a0e17; --bg-card: #0f1319; --bg-card-hover: #141920;
+    --border: rgba(139,148,158,0.08); --border-accent: rgba(124,58,237,0.25);
+    --text: #e1e5ee; --text-muted: #6b7280; --text-dim: #4b5563;
+    --green: #22c55e; --red: #ef4444; --blue: #3b82f6;
+    --cyan: #06b6d4; --purple: #a855f7; --yellow: #fbbf24;
+    --orange: #f97316;
+    --radius: 12px; --radius-sm: 8px;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sans-serif; min-height:100vh; }
+
+/* Header */
+.header { padding:16px 24px; background:linear-gradient(135deg,#0d1117,#161b22); border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+.header-left { display:flex; align-items:center; gap:12px; }
+.logo { font-size:1.4em; font-weight:800; background:linear-gradient(135deg,#7c3aed,#06b6d4); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.version { color:var(--text-muted); font-size:0.75em; font-family:'JetBrains Mono',monospace; }
+.health-bar { display:flex; gap:8px; align-items:center; }
+.health-dot { display:flex; align-items:center; gap:4px; font-size:0.7em; font-family:'JetBrains Mono',monospace; color:var(--text-muted); }
+.dot { width:7px; height:7px; border-radius:50%; }
+.dot.on { background:var(--green); box-shadow:0 0 6px rgba(34,197,94,0.5); }
+.dot.off { background:var(--red); box-shadow:0 0 6px rgba(239,68,68,0.5); }
+.dot.pulse { animation:pulse 2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+/* Summary Row */
+.summary { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; padding:16px 24px; }
+.summary-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; }
+.summary-card .label { font-size:0.65em; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; font-weight:600; }
+.summary-card .value { font-size:1.5em; font-weight:700; margin-top:4px; font-family:'JetBrains Mono',monospace; }
+
+/* Bot Grid */
+.bot-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:12px; padding:0 24px 12px; }
+.bot-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:16px; transition:all 0.3s ease; }
+.bot-card:hover { border-color:var(--border-accent); transform:translateY(-1px); box-shadow:0 6px 20px rgba(0,0,0,0.3); }
+.bot-header { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+.bot-icon { font-size:1.3em; }
+.bot-name { font-weight:700; font-size:1.05em; }
+.bot-status { font-size:0.65em; font-weight:600; padding:2px 8px; border-radius:10px; margin-left:auto; }
+.bot-status.live { background:rgba(34,197,94,0.12); color:var(--green); border:1px solid rgba(34,197,94,0.2); }
+.bot-status.offline { background:rgba(239,68,68,0.12); color:var(--red); border:1px solid rgba(239,68,68,0.2); }
+.bot-status.paused { background:rgba(251,191,36,0.12); color:var(--yellow); border:1px solid rgba(251,191,36,0.2); }
+.bot-metrics { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+.bm { background:rgba(255,255,255,0.015); padding:6px 10px; border-radius:var(--radius-sm); }
+.bm .bl { font-size:0.6em; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.3px; }
+.bm .bv { font-size:0.95em; font-weight:600; margin-top:1px; font-family:'JetBrains Mono',monospace; }
+
+/* Panels */
+.panels { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:0 24px 12px; }
+@media(max-width:900px) { .panels { grid-template-columns:1fr; } }
+.panel { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:16px; }
+.panel-title { font-size:0.8em; font-weight:700; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+.panel-title .accent { color:var(--purple); }
+
+/* GPU Stats */
+.gpu-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.gpu-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.03); }
+.gpu-row:last-child { border-bottom:none; }
+.gpu-action { font-size:0.8em; font-weight:600; font-family:'JetBrains Mono',monospace; }
+.gpu-bar { height:6px; border-radius:3px; background:rgba(255,255,255,0.05); flex:1; margin:0 10px; max-width:120px; }
+.gpu-bar-fill { height:100%; border-radius:3px; transition:width 0.5s ease; }
+.gpu-val { font-size:0.75em; font-family:'JetBrains Mono',monospace; min-width:50px; text-align:right; }
+
+/* L2 Oracle */
+.l2-regime { display:inline-block; padding:3px 10px; border-radius:8px; font-size:0.75em; font-weight:700; font-family:'JetBrains Mono',monospace; }
+.l2-regime.bull { background:rgba(34,197,94,0.12); color:var(--green); }
+.l2-regime.bear { background:rgba(239,68,68,0.12); color:var(--red); }
+.l2-regime.chop { background:rgba(251,191,36,0.12); color:var(--yellow); }
+.l2-reasoning { font-size:0.78em; color:var(--text-muted); line-height:1.5; margin-top:8px; padding:10px; background:rgba(255,255,255,0.02); border-radius:var(--radius-sm); border-left:3px solid var(--purple); }
+.l2-tuning { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; margin-top:10px; }
+.l2-param { text-align:center; padding:6px; background:rgba(255,255,255,0.02); border-radius:var(--radius-sm); }
+.l2-param .pl { font-size:0.6em; color:var(--text-muted); text-transform:uppercase; }
+.l2-param .pv { font-size:0.9em; font-weight:600; font-family:'JetBrains Mono',monospace; margin-top:2px; }
+
+/* PnL Sparkline */
+.sparkline-container { padding:8px 0; }
+.sparkline-container svg { width:100%; display:block; }
+
+/* Footer */
+.footer { text-align:center; padding:16px; color:var(--text-dim); font-size:0.7em; font-family:'JetBrains Mono',monospace; }
+
+/* Color helpers */
+.green { color:var(--green); } .red { color:var(--red); } .blue { color:var(--blue); }
+.cyan { color:var(--cyan); } .purple { color:var(--purple); } .yellow { color:var(--yellow); }
 </style>
 </head>
 <body>
+
 <div class="header">
-    <h1>🏛️ Sniper Architect</h1>
-    <span class="version">v13.0 Sovereign Intelligence</span>
-    <span class="status online" id="armada-status">CONNECTING...</span>
-</div>
-
-<!-- Cortex Status Panel -->
-<div class="summary" id="cortex-panel">
-    <div class="summary-item" style="border-left:3px solid #7c3aed">
-        <div class="label">🧠 Cortex</div>
-        <div class="value blue" id="cortex-status" style="font-size:1em">—</div>
+    <div class="header-left">
+        <div class="logo">🏛️ SNIPER ARMADA</div>
+        <span class="version">v14.0</span>
     </div>
-    <div class="summary-item">
-        <div class="label">Uptime</div>
-        <div class="value green" id="cortex-uptime" style="font-size:1em">—</div>
-    </div>
-    <div class="summary-item">
-        <div class="label">Fear & Greed</div>
-        <div class="value" id="cortex-fg" style="font-size:1.4em">—</div>
-    </div>
-    <div class="summary-item">
-        <div class="label">Macro Bias</div>
-        <div class="value" id="cortex-bias" style="font-size:1em">—</div>
-    </div>
-    <div class="summary-item">
-        <div class="label">GPU</div>
-        <div class="value blue" id="cortex-gpu" style="font-size:1em">—</div>
+    <div class="health-bar" id="health-bar">
+        <div class="health-dot"><div class="dot off" id="h-cortex"></div>CORTEX</div>
+        <div class="health-dot"><div class="dot off" id="h-gpu"></div>GPU</div>
+        <div class="health-dot"><div class="dot off" id="h-uds"></div>UDS</div>
+        <div class="health-dot"><div class="dot off" id="h-l2"></div>L2</div>
     </div>
 </div>
 
-<div class="summary" id="summary">
-    <div class="summary-item">
-        <div class="label">Bots Online</div>
-        <div class="value blue" id="bots-online">—</div>
-    </div>
-    <div class="summary-item">
-        <div class="label">Daily PnL</div>
-        <div class="value" id="daily-pnl">—</div>
-    </div>
-    <div class="summary-item">
-        <div class="label">Last Update</div>
-        <div class="value blue" id="last-update" style="font-size:1em">—</div>
-    </div>
+<div class="summary" id="summary-row">
+    <div class="summary-card"><div class="label">Bots Online</div><div class="value blue" id="s-bots">—</div></div>
+    <div class="summary-card"><div class="label">Armada PnL</div><div class="value" id="s-pnl">—</div></div>
+    <div class="summary-card"><div class="label">Total Fills</div><div class="value cyan" id="s-fills">—</div></div>
+    <div class="summary-card"><div class="label">GPU Inferences</div><div class="value purple" id="s-gpu">—</div></div>
+    <div class="summary-card"><div class="label">Toxic Rate</div><div class="value" id="s-toxic">—</div></div>
+    <div class="summary-card"><div class="label">Last Update</div><div class="value blue" id="s-time" style="font-size:0.85em">—</div></div>
 </div>
 
-<div class="grid" id="bot-grid"></div>
+<div class="bot-grid" id="bot-grid"></div>
+
+<div class="panels">
+    <!-- GPU Telemetry Panel -->
+    <div class="panel" id="gpu-panel">
+        <div class="panel-title"><span class="accent">🤖</span> PHI-3.5 GPU INTELLIGENCE</div>
+        <div id="gpu-content"><span style="color:var(--text-muted);font-size:0.8em">Waiting for data...</span></div>
+    </div>
+
+    <!-- L2 Oracle Panel -->
+    <div class="panel" id="l2-panel">
+        <div class="panel-title"><span class="accent">🧠</span> L2 ORACLE (Gemini)</div>
+        <div id="l2-content"><span style="color:var(--text-muted);font-size:0.8em">Waiting for data...</span></div>
+    </div>
+</div>
 
 <div class="footer">
-    Sniper Armada v13.0 · Sovereign Cortex · Real-time SSE + Cortex JSON
+    Sniper Armada v14.0 · Sovereign Cortex · SSE Real-time · Port 3004
 </div>
 
 <script>
-const icons = {hydra:'🐍',moonshot:'🌙',grid:'📐',trigon:'🔺'};
-const grid = document.getElementById('bot-grid');
+const ICONS = {hydra:'🐍', moonshot:'🌙', grid:'📐', trigon:'🔺'};
+let pnlHistory = [];
+const MAX_HISTORY = 100;
 
-function renderBots(data) {
-    document.getElementById('bots-online').textContent = data.bots_running + '/' + data.bots_total;
-    const pnl = data.total_daily_pnl;
-    const pnlEl = document.getElementById('daily-pnl');
-    pnlEl.textContent = '$' + pnl.toFixed(2);
-    pnlEl.className = 'value ' + (pnl >= 0 ? 'green' : 'red');
-    document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+function fmtPnl(v) {
+    if (v === undefined || v === null) return '$0.00';
+    return (v >= 0 ? '+$' : '-$') + Math.abs(v).toFixed(4);
+}
 
-    const st = document.getElementById('armada-status');
-    if (data.bots_running === data.bots_total) {
-        st.className = 'status online'; st.textContent = 'ALL ONLINE';
-    } else if (data.bots_running > 0) {
-        st.className = 'status partial'; st.textContent = data.bots_running + '/' + data.bots_total + ' ONLINE';
-    } else {
-        st.className = 'status'; st.textContent = 'OFFLINE';
-    }
+function pnlClass(v) { return v >= 0 ? 'green' : 'red'; }
 
-    grid.innerHTML = data.bots.map(b => {
-        const icon = icons[b.name] || '🤖';
-        const ind = b.running ? (b.paused ? 'paused' : 'live') : 'dead';
-        const stLabel = b.running ? (b.paused ? 'PAUSED' : 'LIVE') : 'OFFLINE';
-        return `<div class="card">
-            <div class="bot-name"><span class="indicator ${ind}"></span>${icon} ${b.name.toUpperCase()}</div>
-            <div class="strategy">${b.strategy} · Core ${b.core} · :${b.port} · ${stLabel}</div>
-            <div class="metrics">
-                <div class="metric"><div class="label">Status</div><div class="value ${b.running?'green':'red'}">${stLabel}</div></div>
-                <div class="metric"><div class="label">Daily PnL</div><div class="value ${b.daily_pnl>=0?'green':'red'}">$${b.daily_pnl.toFixed(2)}</div></div>
-                <div class="metric"><div class="label">mmap</div><div class="value ${b.mmap_exists?'green':'red'}">${b.mmap_exists?'OK':'N/A'}</div></div>
-                <div class="metric"><div class="label">mmap Age</div><div class="value blue">${b.mmap_age_s >= 0 ? b.mmap_age_s +'s' : '—'}</div></div>
+function renderSvgSparkline(data, w, h, color) {
+    if (data.length < 3) return '<svg viewBox="0 0 '+w+' '+h+'" style="aspect-ratio:'+w+'/'+h+'"><text x="50%" y="50%" text-anchor="middle" fill="#4b5563" font-size="10" font-family="Inter">Collecting...</text></svg>';
+    const min = Math.min(...data), max = Math.max(...data);
+    const range = Math.max(max - min, 0.0001);
+    const m = 4, pw = w - 2*m, ph = h - 2*m;
+    const pts = data.map((v,i) => {
+        const x = m + (i/(data.length-1)) * pw;
+        const y = m + ph - ((v-min)/range) * ph;
+        return x.toFixed(1)+','+y.toFixed(1);
+    }).join(' ');
+    return `<svg viewBox="0 0 ${w} ${h}" style="aspect-ratio:${w}/${h}" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${color}" stop-opacity="0.15"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
+    <polygon points="${m},${h} ${pts} ${m+pw},${h}" fill="url(#sg)"/>
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+    <text x="${w-4}" y="${m+10}" text-anchor="end" fill="${color}" font-size="9" font-family="JetBrains Mono">${fmtPnl(data[data.length-1])}</text></svg>`;
+}
+
+function renderBots(bots) {
+    if (!bots || !bots.length) { document.getElementById('bot-grid').innerHTML = ''; return; }
+    document.getElementById('bot-grid').innerHTML = bots.map(b => {
+        const icon = ICONS[b.name] || '🤖';
+        const st = b.online ? (b.paused ? 'paused' : 'live') : 'offline';
+        const stLabel = b.online ? (b.paused ? 'PAUSED' : 'LIVE') : 'OFF';
+        return `<div class="bot-card">
+            <div class="bot-header">
+                <span class="bot-icon">${icon}</span>
+                <span class="bot-name">${b.name.toUpperCase()}</span>
+                <span class="bot-status ${st}">${stLabel}</span>
+            </div>
+            <div class="bot-metrics">
+                <div class="bm"><div class="bl">Price</div><div class="bv blue">$${(b.price||0).toFixed(0)}</div></div>
+                <div class="bm"><div class="bl">PnL</div><div class="bv ${pnlClass(b.pnl)}">${fmtPnl(b.pnl)}</div></div>
+                <div class="bm"><div class="bl">Position</div><div class="bv">${(b.position||0).toFixed(5)}</div></div>
+                <div class="bm"><div class="bl">Grid</div><div class="bv cyan">$${(b.grid_step||0).toFixed(2)}</div></div>
+                <div class="bm"><div class="bl">Fills</div><div class="bv">${b.fills||0}</div></div>
+                <div class="bm"><div class="bl">Toxic</div><div class="bv ${(b.toxic||0)>10?'red':'green'}">${b.toxic||0}</div></div>
             </div>
         </div>`;
     }).join('');
 }
 
-// Cortex Health Reader
-async function fetchCortexHealth() {
-    try {
-        const r = await fetch('/cortex_state.json?t=' + Date.now());
-        if (!r.ok) return;
-        const d = await r.json();
-        const age = (Date.now() - d.timestamp_ms) / 1000;
-        document.getElementById('cortex-status').textContent = age < 30 ? '🟢 ONLINE' : '🟡 STALE (' + age.toFixed(0) + 's)';
-        document.getElementById('cortex-status').className = 'value ' + (age < 30 ? 'green' : 'red');
-
-        const hrs = Math.floor(d.uptime_s / 3600);
-        const mins = Math.floor((d.uptime_s % 3600) / 60);
-        document.getElementById('cortex-uptime').textContent = hrs + 'h ' + mins + 'm';
-
-        const fg = d.fear_greed;
-        const fgEl = document.getElementById('cortex-fg');
-        fgEl.textContent = fg;
-        fgEl.className = 'value ' + (fg < 25 ? 'red' : fg < 50 ? '' : 'green');
-
-        const bias = parseFloat(d.macro_bias);
-        const biasEl = document.getElementById('cortex-bias');
-        biasEl.textContent = (bias >= 0 ? '+' : '') + bias.toFixed(4);
-        biasEl.className = 'value ' + (bias > 0 ? 'green' : bias < 0 ? 'red' : 'blue');
-
-        document.getElementById('cortex-gpu').textContent = d.modules.gpu ? '🟢 Phi-3.5' : '⬜ OFF';
-    } catch(e) {}
+function renderGpu(gpu) {
+    if (!gpu || !gpu.total_inferences) {
+        document.getElementById('gpu-content').innerHTML = '<span style="color:var(--text-muted);font-size:0.8em">GPU offline or no data</span>';
+        return;
+    }
+    const sb = gpu.skew_bid||{}, sa = gpu.skew_ask||{}, pa = gpu.pause||{}, ho = gpu.hold||{};
+    const tuning = gpu.l1_tuning||{};
+    const rows = [
+        {label:'SKEW_BID', total:sb.total||0, wins:sb.wins||0, wr:sb.win_rate||0, toxic:sb.toxic||0, color:'var(--green)'},
+        {label:'SKEW_ASK', total:sa.total||0, wins:sa.wins||0, wr:sa.win_rate||0, toxic:sa.toxic||0, color:'var(--red)'},
+        {label:'PAUSE', total:pa.total||0, wins:pa.correct||0, wr:pa.accuracy||0, toxic:0, color:'var(--yellow)'},
+        {label:'HOLD', total:ho.total||0, wins:0, wr:0, toxic:0, color:'var(--text-muted)'},
+    ];
+    let html = rows.map(r => {
+        const pct = Math.min(r.wr, 100);
+        return `<div class="gpu-row">
+            <span class="gpu-action" style="color:${r.color}">${r.label}</span>
+            <div class="gpu-bar"><div class="gpu-bar-fill" style="width:${pct}%;background:${r.color}"></div></div>
+            <span class="gpu-val">${r.wr.toFixed(1)}% <span style="color:var(--text-dim)">(${r.total}x)</span></span>
+        </div>`;
+    }).join('');
+    html += `<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px">
+        <div class="bm"><div class="bl">PnL Impact</div><div class="bv ${(gpu.net_pnl_impact_usd||0)>=0?'green':'red'}">${fmtPnl(gpu.net_pnl_impact_usd)}</div></div>
+        <div class="bm"><div class="bl">Toxic Rate</div><div class="bv ${(gpu.toxic_rate_pct||0)>15?'red':'green'}">${(gpu.toxic_rate_pct||0).toFixed(1)}%</div></div>
+    </div>`;
+    html += `<div class="l2-tuning"><div class="l2-param"><div class="pl">Skew Max</div><div class="pv">$${(tuning.skew_max_usd||3).toFixed(1)}</div></div>
+        <div class="l2-param"><div class="pl">OBI Thr</div><div class="pv">${(tuning.obi_threshold||0).toFixed(2)}</div></div>
+        <div class="l2-param"><div class="pl">Interval</div><div class="pv">${(tuning.inference_interval_ms||2000)}ms</div></div></div>`;
+    document.getElementById('gpu-content').innerHTML = html;
 }
-setInterval(fetchCortexHealth, 5000);
-fetchCortexHealth();
 
+function renderL2(l2, gpu) {
+    const regime = (l2 && l2.regime) || 'UNKNOWN';
+    const reasoning = (l2 && l2.reasoning) || '';
+    const r = regime.toUpperCase();
+    const cls = r.includes('BULL') || r === 'TRENDING' ? 'bull' : (r.includes('BEAR') || r === 'CHAOS' ? 'bear' : 'chop');
+    const icon = cls === 'bull' ? '📈' : (cls === 'bear' ? '🌪️' : '↔️');
+    let html = `<div style="margin-bottom:8px"><span class="l2-regime ${cls}">${icon} ${regime}</span></div>`;
+    if (reasoning) {
+        html += `<div class="l2-reasoning">${reasoning}</div>`;
+    }
+    // PnL sparkline
+    html += `<div style="margin-top:12px"><div style="font-size:0.7em;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Armada PnL Trend</div>
+        <div class="sparkline-container">${renderSvgSparkline(pnlHistory, 400, 80, '#22c55e')}</div></div>`;
+    document.getElementById('l2-content').innerHTML = html;
+}
+
+function update(state) {
+    const snap = state.snapshot || {};
+    const bots = snap.bots || [];
+    const gpu = state.gpu || {};
+    const l2 = state.l2 || {};
+
+    // Health bar
+    const cortexAlive = bots.length > 0;
+    const gpuAlive = (gpu.total_inferences || 0) > 0;
+    document.getElementById('h-cortex').className = 'dot ' + (cortexAlive ? 'on pulse' : 'off');
+    document.getElementById('h-gpu').className = 'dot ' + (gpuAlive ? 'on pulse' : 'off');
+    document.getElementById('h-uds').className = 'dot ' + (cortexAlive ? 'on' : 'off');
+    document.getElementById('h-l2').className = 'dot ' + (l2.regime && l2.regime !== 'UNKNOWN' ? 'on' : 'off');
+
+    // Summary
+    const online = bots.filter(b => b.online).length;
+    document.getElementById('s-bots').textContent = online + '/' + bots.length;
+    const totalPnl = bots.reduce((s,b) => s + (b.pnl||0), 0);
+    const pnlEl = document.getElementById('s-pnl');
+    pnlEl.textContent = fmtPnl(totalPnl);
+    pnlEl.className = 'value ' + pnlClass(totalPnl);
+    document.getElementById('s-fills').textContent = bots.reduce((s,b) => s + (b.fills||0), 0);
+    document.getElementById('s-gpu').textContent = gpu.total_inferences || 0;
+    const toxicEl = document.getElementById('s-toxic');
+    toxicEl.textContent = (gpu.toxic_rate_pct||0).toFixed(1) + '%';
+    toxicEl.className = 'value ' + ((gpu.toxic_rate_pct||0) > 15 ? 'red' : 'green');
+    document.getElementById('s-time').textContent = new Date().toLocaleTimeString('cs-CZ');
+
+    // PnL history for sparkline
+    if (totalPnl !== 0 || pnlHistory.length > 0) {
+        pnlHistory.push(totalPnl);
+        if (pnlHistory.length > MAX_HISTORY) pnlHistory.shift();
+    }
+
+    renderBots(bots);
+    renderGpu(gpu);
+    renderL2(l2, gpu);
+}
+
+// SSE Connection
 const es = new EventSource('/events');
-es.onmessage = e => { try { renderBots(JSON.parse(e.data)); } catch(err) {} };
-es.onerror = () => { document.getElementById('armada-status').textContent = 'RECONNECTING...'; };
+es.onmessage = e => { try { update(JSON.parse(e.data)); } catch(err) { console.error(err); } };
+es.onerror = () => { document.getElementById('h-cortex').className = 'dot off'; };
 </script>
 </body>
 </html>
-
