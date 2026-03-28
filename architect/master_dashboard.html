@@ -139,6 +139,7 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
 
 <script>
 const ICONS = {hydra:'🐍', moonshot:'🌙', grid:'📐', trigon:'🔺'};
+const PORTS = {hydra:3000, moonshot:3001, grid:3002, trigon:3003};
 let pnlHistory = [];
 const MAX_HISTORY = 100;
 
@@ -172,7 +173,11 @@ function renderBots(bots) {
         const icon = ICONS[b.name] || '🤖';
         const st = b.online ? (b.paused ? 'paused' : 'live') : 'offline';
         const stLabel = b.online ? (b.paused ? 'PAUSED' : 'LIVE') : 'OFF';
-        return `<div class="bot-card">
+        const port = PORTS[b.name] || 3000;
+        const host = location.hostname || 'localhost';
+        const href = `http://${host}:${port}`;
+        return `<a href="${href}" target="_blank" style="text-decoration:none;color:inherit" title="Open ${b.name.toUpperCase()} dashboard on :${port}">
+            <div class="bot-card">
             <div class="bot-header">
                 <span class="bot-icon">${icon}</span>
                 <span class="bot-name">${b.name.toUpperCase()}</span>
@@ -186,7 +191,7 @@ function renderBots(bots) {
                 <div class="bm"><div class="bl">Fills</div><div class="bv">${b.fills||0}</div></div>
                 <div class="bm"><div class="bl">Toxic</div><div class="bv ${(b.toxic||0)>10?'red':'green'}">${b.toxic||0}</div></div>
             </div>
-        </div>`;
+        </div></a>`;
     }).join('');
 }
 

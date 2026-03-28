@@ -12,7 +12,6 @@
 use crate::memory::ArmadaMemory;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::io::AsyncWriteExt;
 use tokio::net::UnixStream;

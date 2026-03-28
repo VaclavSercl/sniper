@@ -1,6 +1,6 @@
 #!/bin/bash
-# 🐺 SNIPER ARMADA v13.1 — Master Deployment Script
-# Manages ALL bots + Architect + Telegram Commander + PnL Engine + Cortex
+# 🐺 SNIPER ARMADA v14.0 — Master Deployment Script
+# Manages ALL bots + Cortex + Commander + PnL Engine + Dashboard
 # Called by: systemd (sniper-armada.service) or manually
 #
 # Architecture:
@@ -33,7 +33,7 @@ if [ -f "$ARMADA_ROOT/.env" ]; then
 fi
 
 echo "🐺 ═══════════════════════════════════════════"
-echo "   SNIPER ARMADA v13.1 — DEPLOY"
+echo "   SNIPER ARMADA v14.0 — DEPLOY"
 echo "   $(date '+%Y-%m-%d %H:%M:%S %Z')"
 echo "═══════════════════════════════════════════════"
 
@@ -60,9 +60,9 @@ fi
 echo ""
 echo "🧹 Cleaning old instances..."
 pkill -f tg_commander.py 2>/dev/null || true
-pkill -f sniper_architect.py 2>/dev/null || true
 pkill -f pnl_daemon.py 2>/dev/null || true
 pkill -f sovereign-cortex 2>/dev/null || true
+fuser -k 3004/tcp 2>/dev/null || true
 sleep 2
 
 # ═══ LAUNCH FUNCTIONS (with logging) ═══
@@ -77,11 +77,6 @@ launch_dashboard() {
     DASHBOARD_PID=$!
 }
 
-launch_architect() {
-    python3 "$ARMADA_ROOT/architect/sniper_architect.py" >> "$LOG_DIR/architect.log" 2>&1 &
-    ARCHITECT_PID=$!
-    echo "  🏛️ Architect started (PID $ARCHITECT_PID)"
-}
 
 launch_commander() {
     python3 "$ARMADA_ROOT/architect/tg_commander.py" >> "$LOG_DIR/tg_commander.log" 2>&1 &
@@ -106,29 +101,28 @@ echo ""
 launch_hydra
 launch_dashboard
 sleep 3
-launch_architect
+launch_cortex
+sleep 2
 launch_commander
 launch_pnl
-launch_cortex
 
 echo ""
 echo "🐺 ═══════════════════════════════════════════"
-echo "   ARMADA ONLINE"
+echo "   ARMADA v14.0 ONLINE"
 echo "   🐍 Hydra:     Core 0 — BTC-USD Delta Lead    :3000 (PID $HYDRA_PID)"
-echo "   🏛️ Architect:  Dashboard                      :3004 (PID $ARCHITECT_PID)"
-echo "   📱 Commander: Telegram C2                     (PID $COMMANDER_PID)"
+echo "   🧠 Cortex:    Sovereign AI (L1+GPU+UDS)      (PID $CORTEX_PID)"
+echo "   📱 Commander: Telegram C2 + Dashboard :3004  (PID $COMMANDER_PID)"
 echo "   💰 PnL:       FIFO Engine                     (PID $PNL_PID)"
-echo "   🧠 Cortex:    Sovereign Oracle L2             (PID $CORTEX_PID)"
 echo ""
 echo "   🌙 Moonshot:  /moonshot start (via Telegram)"
 echo "   📐 Grid:      /grid start     (via Telegram)"
 echo "   🔺 Trigon:    /trigon start   (via Telegram)"
 echo "═══════════════════════════════════════════════"
 
-tg_alert "🐺 *SNIPER ARMADA v13.1 DEPLOYED*
+tg_alert "🐺 *SNIPER ARMADA v14.0 DEPLOYED*
 🐍 Hydra PID $HYDRA_PID
-📱 Commander PID $COMMANDER_PID
 🧠 Cortex PID $CORTEX_PID
+📱 Commander PID $COMMANDER_PID
 💰 PnL PID $PNL_PID
 $(date '+%H:%M:%S')"
 
@@ -154,7 +148,7 @@ New PID: $COMMANDER_PID
 $(date '+%H:%M:%S')"
         fi
 
-        # ── Cortex (CRITICAL — L1 + L2 intelligence) ──
+        # ── Cortex (CRITICAL — AI intelligence) ──
         if ! kill -0 "$CORTEX_PID" 2>/dev/null; then
             restart_count=$((restart_count + 1))
             echo "⚠️ [WATCHDOG] Cortex DEAD — restarting (#$restart_count)"
@@ -163,24 +157,6 @@ $(date '+%H:%M:%S')"
 🧠 Cortex crashed and was restarted
 New PID: $CORTEX_PID
 $(date '+%H:%M:%S')"
-        fi
-
-        # ── PnL Daemon (important — but not critical for trading) ──
-        if ! kill -0 "$PNL_PID" 2>/dev/null; then
-            restart_count=$((restart_count + 1))
-            echo "⚠️ [WATCHDOG] PnL Daemon DEAD — restarting (#$restart_count)"
-            launch_pnl
-            tg_alert "⚠️ *WATCHDOG RESTART #$restart_count*
-💰 PnL Daemon crashed and was restarted
-New PID: $PNL_PID
-$(date '+%H:%M:%S')"
-        fi
-
-        # ── Architect Dashboard (nice-to-have) ──
-        if ! kill -0 "$ARCHITECT_PID" 2>/dev/null; then
-            restart_count=$((restart_count + 1))
-            echo "⚠️ [WATCHDOG] Architect DEAD — restarting (#$restart_count)"
-            launch_architect
         fi
 
         # ── Dashboard ──

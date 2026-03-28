@@ -1,50 +1,62 @@
-# 🏗️ SNIPER ARMADA v13.0 — Architecture Document
+# 🏗️ SNIPER ARMADA v14.0 — Architecture Document
 
-## System Overview
+## System Overview: "Separated Hemispheres"
 
 ```
-                  ┌─────────────────────────────────────────┐
-                  │          📱 TELEGRAM COMMANDER v2.0      │
-                  │  /hydra /moonshot /grid /trigon /pnl     │
-                  │  Natural Language via Gemini AI          │
-                  └────────────┬─────────────────────────────┘
-                               │ telebot polling
-┌──────────────────────────────┴──────────────────────────────────────────┐
-│                     SNIPER ARMADA WORKSPACE (Cargo)                      │
+                   ┌─────────────────────────────────────────────┐
+                   │          📱 TELEGRAM COMMANDER v14.0        │
+                   │  /hydra /moonshot /grid /gpu /pnl /panic    │
+                   │  Natural Language via Gemini AI              │
+                   └──────────────┬──────────────────────────────┘
+                                  │ telebot polling
+┌─────────────────────────────────┴──────────────────────────────────────┐
+│                    CONTROL PLANE (Python Commander)                      │
+│                                                                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                  │
+│  │ 📱 Telegram   │  │ 🧠 L2 Oracle  │  │ 🎛️ Dashboard  │                  │
+│  │ Commander     │  │ Gemini 5min  │  │ SSE :3004    │                  │
+│  │ 901 LOC       │  │ 430 LOC      │  │ 141 LOC      │                  │
+│  └──────────────┘  └──────────────┘  └──────────────┘                  │
+│                          │                                               │
+│                    UDS Bridge                                            │
+│           /tmp/cortex.sock (JSON-line, bidirectional)                    │
+│           /tmp/commander_events.sock (Sentinel push)                     │
+│                          │                                               │
+├──────────────────────────┴───────────────────────────────────────────────┤
+│                     DATA PLANE (Rust Cortex)                              │
+│           100% network-isolated from Telegram/Internet                    │
+│                                                                          │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐               │
+│  │ L1 Loop  │  │ GPU      │  │ Macro    │  │ Sentinel │               │
+│  │ 50ms OBI │  │ Phi-3.5  │  │ F&G/BNB  │  │ Alerts   │               │
+│  │ 451 LOC  │  │ 480 LOC  │  │ 262 LOC  │  │ 412 LOC  │               │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘               │
+│       └──────────────┴─────────────┴──────────────┘                     │
+│                    UDS Server (321 LOC)                                   │
+│                    Memory Reader (336 LOC)                                │
+│                          │                                               │
+├──────────────────────────┴───────────────────────────────────────────────┤
+│                  SNIPER ARMADA WORKSPACE (Cargo 2024)                     │
 │                                                                          │
 │  ┌────────────────────────────────────────────────────────────────────┐ │
 │  │  shared/ (sniper_types crate)                                       │ │
 │  │  EngineState │ MoonshotState │ GridState │ TrigonState │ PnlState  │ │
-│  │  math.rs (fixed-point)  │  logging.rs (tracing)                    │ │
+│  │  math.rs (PRICE_SCALE 1e8)   │  logging.rs (tracing)              │ │
 │  └────────────────────────────────────────────────────────────────────┘ │
-│                               │                                          │
-│       ┌───────────────┬───────┼───────────┬───────────────┐              │
-│       ▼               ▼       ▼           ▼               ▼              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐ │
-│  │  hydra/   │  │moonshot/ │  │  grid/   │  │ trigon/  │  │  mdf/    │ │
-│  │  Bot #1   │  │  Bot #2  │  │  Bot #3  │  │  Bot #4  │  │  Feed    │ │
-│  │  BTC-USD  │  │  Multi-  │  │ Dynamic  │  │ Triangl. │  │  Market  │ │
-│  │  Delta    │  │  Symbol  │  │  Grid    │  │  Arb     │  │  Data    │ │
-│  │  Core 0   │  │  Core 1  │  │  Core 2  │  │  Core 3  │  │         │ │
-│  │  :3000    │  │  :3001   │  │  :3002   │  │  :3003   │  │         │ │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬─────┘  └────┬────┘ │
-│       │              │             │              │              │       │
-│       ▼              ▼             ▼              ▼              ▼       │
+│       ┌───────────┬───────────┬───────────┬───────────┐                 │
+│       ▼           ▼           ▼           ▼           ▼                 │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐    │
+│  │  hydra   │ │ moonshot │ │  grid    │ │ trigon   │ │  mdf     │    │
+│  │  Bot #1  │ │  Bot #2  │ │  Bot #3  │ │  Bot #4  │ │  Feed    │    │
+│  │  Core 0  │ │  Core 1  │ │  Core 2  │ │  Core 3  │ │          │    │
+│  │  :3000   │ │  :3001   │ │  :3002   │ │  :3003   │ │          │    │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘    │
+│       └────────────┴────────────┴─────────────┴─────────────┘          │
 │  ┌────────────────────────────────────────────────────────────────────┐ │
-│  │                /dev/shm/beroun/ (Lock-free mmap IPC)               │ │
-│  │  engine_state  │ moonshot_engine │ grid_engine │ trigon_engine      │ │
-│  │  risk_state    │ moonshot_risk   │ grid_risk   │ trigon_risk        │ │
-│  │  pnl_state.bin │ mdf.bin         (Atomic, Zero-copy, <1μs)        │ │
+│  │           /dev/shm/beroun/ (Lock-free mmap IPC, <1µs)              │ │
+│  │  engine_state │ moonshot_engine │ grid_engine │ trigon_engine       │ │
+│  │  risk_state   │ pnl_state.bin   │ mdf.bin                         │ │
 │  └────────────────────────────────────────────────────────────────────┘ │
-│                               │                                          │
-│       ┌───────────────────────┼───────────────────────┐                  │
-│       ▼                       ▼                       ▼                  │
-│  ┌──────────────┐  ┌──────────────────┐  ┌──────────────────┐          │
-│  │ 🏛️ Architect  │  │ 💰 PnL Engine    │  │ 🧠 Hydra AI      │          │
-│  │ Dashboard     │  │ FIFO Tracking    │  │ L1: Shield       │          │
-│  │ :3004 (REST)  │  │ SQLite + mmap    │  │ L2: Orchestrator │          │
-│  │ SSE Events    │  │ 30s cycles       │  │ L3: Macro Mon.   │          │
-│  └──────────────┘  └──────────────────┘  └──────────────────┘          │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -53,147 +65,101 @@
 | Component | Language | LOC | Role | Port | CPU |
 |-----------|----------|-----|------|------|-----|
 | **hydra-core** | Rust | 1,434 | BTC-USD Delta Lead HFT | :3000 | Core 0 |
-| **hydra-brain** | Rust | 1,099 | SQLite analytics + Neural Cross | — | Core 0 |
-| **hydra-dashboard** | Rust | 816 | SSE Dashboard server | :3000 | Core 3 |
-| **hydra-config** | Rust | 247 | Live config via mmap | — | — |
+| **hydra-brain** | Rust | 1,099 | SQLite analytics | — | Core 0 |
+| **hydra-dashboard** | Rust | 816 | SSE Dashboard | :3000 | Core 3 |
 | **moonshot-core** | Rust | 344 | Multi-Symbol Flash Crash | :3001 | Core 1 |
 | **grid-core** | Rust | 334 | Dynamic Multi-Level Grid | :3002 | Core 2 |
 | **trigon-core** | Rust | 363 | Triangular Arbitrage | :3003 | Core 3 |
-| **shared** | Rust | 929 | Type definitions + math + logging | — | — |
-| **l1_shield** | Python | 621 | Tactical AI (OBI, sweep, ghost) | — | Core 3 |
-| **sniper_orchestrator** | Python | 1,146 | Sovereign Oracle (Gemini + Brain) | — | Core 3 |
-| **sniper_architect** | Python | 235 | Master Dashboard + REST | :3004 | Core 3 |
-| **tg_commander** | Python | 590 | Telegram C2 (Slash + NL) | — | Core 3 |
-| **pnl_daemon** | Python | 467 | FIFO PnL Engine + mmap writer | — | Core 3 |
+| **sovereign-cortex** | Rust | 2,448 | L1 + GPU + Macro + Sentinel + UDS | — | Core 3 |
+| **shared (sniper_types)** | Rust | 929 | Type definitions + math + logging | — | — |
+| **tg_commander** | Python | 901 | Telegram C2 (Slash + NL + Dashboard) | — | Core 3 |
+| **l2_oracle** | Python | 430 | Strategic Oracle (Gemini + GPU feedback) | — | Core 3 |
+| **cortex_client** | Python | 184 | UDS client library | — | — |
+| **dashboard_server** | Python | 141 | Master Dashboard SSE server | :3004 | Core 3 |
+| **pnl_daemon** | Python | 466 | FIFO PnL Engine + mmap writer | — | Core 3 |
 
-**Total:** 6,477 Rust LOC + ~3,100 Python LOC = **~9,600 LOC**
+**Total:** ~7,767 Rust LOC + ~2,122 Python LOC = **~9,889 LOC**
 
-## Bot Template (Standard Structure)
-
-```
-bot/
-├── Cargo.toml               ← depends on sniper-shared
-├── src/
-│   ├── main.rs              ← L0 Engine (Rust, hot loop)
-│   ├── dashboard.rs         ← SSE Dashboard server
-│   ├── brain.rs             ← SQLite analytics/history
-│   └── config_cli.rs        ← Live config via mmap
-└── dashboard.html           ← Dashboard frontend (HTMX + SSE)
-```
-
-Only Hydra has the full AI stack (`scripts/`) because it's the primary live trading bot.
-
-## Memory Layout (EngineState)
-
-Critical mmap offsets for cross-language IPC (Rust ↔ Python):
-
-| Field | Offset | Size | Type |
-|-------|--------|------|------|
-| `latency_ns` | 0 | 8 | AtomicU64 |
-| `_pad_heartbeat` | 8 | 56 | [u8; 56] |
-| `best_bid` | 64 | 8 | AtomicU64 |
-| `best_ask` | 72 | 8 | AtomicU64 |
-| `bids[25]` | 80 | 600 | [OrderBookLevel; 25] |
-| `asks[25]` | 680 | 600 | [OrderBookLevel; 25] |
-| `t2t_micros` | 1280 | 8 | AtomicU64 |
-| `micro_price` | 1288 | 8 | AtomicU64 |
-| `net_position` | 1408 | 8 | AtomicI64 |
-| `realized_pnl` | 1416 | 8 | AtomicI64 |
-| `ai_heartbeat_ms` | 1480 | 8 | AtomicU64 |
-| `toxic_flow_hits` | 1568 | 8 | AtomicU64 |
-| `l1_confidence_score` | 1600 | 8 | AtomicU64 |
-| `l2_regime_id` | 1608 | 8 | AtomicU64 |
-| `maker_fee_bps` | 1928 | 8 | AtomicU64 |
-| `taker_fee_bps` | 1936 | 8 | AtomicU64 |
-
-**Total struct size:** 1,960 bytes (cache-line aligned, `repr(C, align(64))`)
-
-## PnL Engine (v2.0 — Volatility-Neutral)
+## GPU Telemetry Pipeline
 
 ```
-Bitfinex REST → 30s poll → FIFOEngine
-                               │
-                    ┌──────────┼──────────┐
-                    ▼          ▼          ▼
-              FIFO Match   SQLite    mmap write
-              USD fixace   fills     pnl_state.bin
-              at exec ms   table     ↓
-                    │                dashboards
-                    ▼
-              Time Windows: 1h / 24h / 7d / 30d
+L1 Loop (50ms) → mpsc channel → GPU Thread
+                                     │
+                          ┌──────────┴──────────┐
+                          │ Phi-3.5 Inference    │
+                          │ localhost:1234       │
+                          │ Actions: SKEW_BID,   │
+                          │ SKEW_ASK, PAUSE, HOLD│
+                          └──────────┬──────────┘
+                                     │
+                          Ring Buffer (10,000 slots)
+                          ~50ns per record, zero I/O
+                                     │
+                          Evaluator (every 60s)
+                          Pre/post snapshot comparison
+                                     │
+                          GpuStats (LazyLock<Mutex>)
+                          Win rates, toxic rates, PnL
+                                     │
+                    ┌────────────────┼────────────────┐
+                    ▼                ▼                ▼
+              GET_GPU_STATS    /gpu Telegram    L2 Oracle Feed
+              (UDS command)    (on-demand)      (every 5 min)
+                                                     │
+                                              SET_L1_TUNING
+                                              skew_max, obi_thr
+                                              inference_interval
 ```
 
-**Key Principles:**
-- FIFO matching (First In, First Out)
-- USD fixation at execution millisecond
-- Fees tracked separately (transparency)
-- Wallet PnL = info only (not trading PnL)
+## IPC Map
+
+| Path | Type | Protocol | Written By | Read By |
+|------|------|----------|-----------|---------|
+| `/dev/shm/beroun/engine_state.bin` | mmap | Atomic loads | hydra-core | cortex, dashboard |
+| `/dev/shm/beroun/risk_state.bin` | mmap | Atomic stores | cortex (L1) | hydra-core |
+| `/dev/shm/beroun/moonshot_engine.bin` | mmap | Atomic | moonshot-core | cortex |
+| `/dev/shm/beroun/grid_engine.bin` | mmap | Atomic | grid-core | cortex |
+| `/dev/shm/beroun/trigon_engine.bin` | mmap | Atomic | trigon-core | cortex |
+| `/dev/shm/beroun/pnl_state.bin` | mmap | Atomic | pnl_daemon | dashboards |
+| `/dev/shm/beroun/mdf.bin` | mmap | Atomic | mdf | pnl_daemon, trigon |
+| `/tmp/cortex.sock` | UDS | JSON-line | cortex | commander, l2_oracle |
+| `/tmp/commander_events.sock` | UDS | JSON push | cortex (sentinel) | commander |
+
+## UDS Command Protocol
+
+| Command | Direction | Payload |
+|---------|-----------|---------|
+| `PING` | → Cortex | — |
+| `GET_SNAPSHOT` | → Cortex | returns all bot states + metadata |
+| `GET_GPU_STATS` | → Cortex | returns ring buffer telemetry + L1 tuning |
+| `SET_GRID` | → Cortex | `{value: float}` — grid step |
+| `SET_MAXPOS` | → Cortex | `{value: float}` — max position |
+| `SET_REGIME` | → Cortex | `{regime: "BULLISH_TREND"}` |
+| `SET_L1_TUNING` | → Cortex | `{skew_max_usd, obi_threshold, inference_interval_ms}` |
+| Push Alert | Cortex → | `{type: "mmap_stale", bot: "hydra", age_s: 45}` |
 
 ## Safety Architecture
 
 ```
-┌─── NON-OVERRIDABLE (Hardcoded) ──────────────────────────────┐
+┌─── NON-OVERRIDABLE (Hardcoded in Rust) ──────────────────────┐
 │  • Daily Loss Limit (DLL) circuit breaker                     │
 │  • Max position size (capital guard)                          │
 │  • Anti-Cross Guard (bid < best_ask, ask > best_bid)         │
-│  • Fee Sentinel: spread < 2× fees → skip (Hydra)             │
-│  • AI Heartbeat > 30s → zero bias (Hydra)                     │
-│  • AI Heartbeat > 120min → safe mode (Moonshot)              │
-│  • BTC Volatility Kill > 4%/h (Moonshot, Grid)              │
-│  • Active Trade Lock (Moonshot)                               │
-│  • Consecutive Loss Halt: 3 losses → 24h pause (Grid)       │
+│  • Fee Sentinel: spread < 2× fees → skip cycle              │
+│  • L1 Tuning clamps: skew [0.5-5.0], OBI [0.0-0.8]         │
+│  • GPU inference interval clamp: [500-10000ms]               │
 │  • Instance Lock: fs2 exclusive file lock (no dual-trade)    │
 │  • Telegram PANIC: /panic → stops ALL bots                   │
+│  • L1 tuning resets to defaults on restart (no persistence)  │
 └──────────────────────────────────────────────────────────────┘
 ```
-
-## Telegram Commands
-
-| Command | Description |
-|---------|-------------|
-| `/status` | All bots status overview |
-| `/hydra start\|stop\|restart\|pause` | Manage Hydra |
-| `/moonshot start\|stop\|restart` | Manage Moonshot |
-| `/grid start\|stop\|restart` | Manage Grid |
-| `/trigon start\|stop\|restart` | Manage Trigon |
-| `/pnl` | FIFO PnL report (1h/24h/7d/30d) |
-| `/panic` | Emergency: stop ALL bots |
-| `/analyze` | Gemini market analysis |
-| `/help` | Show all commands |
-| *Natural language* | Gemini AI intent parsing |
-
-## Hardware Profile (Beroun Server)
-
-| Resource | Spec | Allocation |
-|----------|------|------------|
-| CPU | i5-6400 (4 cores, no HT) | Core 0: Hydra, Core 1: Moonshot, Core 2: Grid, Core 3: OS + AI |
-| RAM | 16 GB | ~4 GB used (4 bots), 12 GB available |
-| GPU | GTX 1060 6GB | NVIDIA MPS for shared AI inference |
-| SHM | 7.6 GB tmpfs | 10 mmap files for IPC |
-
-## IPC Map
-
-| Path | Written By | Read By |
-|------|-----------|---------| 
-| `/dev/shm/beroun/engine_state.bin` | hydra-core | dashboard, brain, l1_shield |
-| `/dev/shm/beroun/risk_state.bin` | l1_shield, orchestrator | hydra-core |
-| `/dev/shm/beroun/moonshot_engine.bin` | moonshot-core | dashboard, brain |
-| `/dev/shm/beroun/moonshot_risk.bin` | AI sidecar | moonshot-core |
-| `/dev/shm/beroun/grid_engine.bin` | grid-core | dashboard, brain |
-| `/dev/shm/beroun/grid_risk.bin` | AI sidecar | grid-core |
-| `/dev/shm/beroun/trigon_engine.bin` | trigon-core | dashboard, brain |
-| `/dev/shm/beroun/trigon_risk.bin` | AI sidecar | trigon-core |
-| `/dev/shm/beroun/pnl_state.bin` | pnl_daemon | all dashboards, architect |
-| `/dev/shm/beroun/mdf.bin` | mdf | pnl_daemon, trigon |
 
 ## Version History
 
 | Version | Codename | Key Feature |
 |---------|----------|-------------|
-| v13.0 | Sovereign Intelligence | Zero-Debt Audit + L1 offset fix + 7GB cleanup |
-| v12.0 | Armada PnL | PnL FIFO Engine + Telegram Commander v2.0 |
-| v11.2 | Full Armada | 4-bot workspace (+ Trigon + MDF) |
-| v11.1 | Delta Lead + Moonshot | Cross-venue arb + flash crash |
-| v11.0 | Sentinel Singularity | Fair Value + Anti-Flicker |
-| v10.9 | Omniscient Predator | Macro monitor + Binance sync |
+| v14.0 | Separated Hemispheres | Cortex/Commander split, GPU telemetry, L2 feedback loop, Master Dashboard SSE |
+| v13.0 | Sovereign Intelligence | Zero-Debt Audit, unified standard |
+| v12.0 | Armada PnL | FIFO PnL Engine + Telegram Commander v2.0 |
+| v11.2 | Full Armada | 4-bot workspace + MDF |
 | v10.0 | Apex Predator | Dynamic grid + analytics |
