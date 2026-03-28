@@ -266,8 +266,9 @@ def get_status():
             lines.append("ℹ️ _Žádné fills_")
 
         db.close()
-    except Exception:
-        lines.append("\n💰 _PnL: daemon offline_")
+    except Exception as e:
+        log.error(f"PnL status error: {e}")
+        lines.append(f"\n💰 _PnL: {e}_")
 
     return "\n".join(lines)
 
@@ -398,13 +399,59 @@ def _bot_status(name):
     alive = is_running(name)
     pid = get_pid(name) if alive else "—"
     icon = "🟢 LIVE" if alive else "🔴 OFFLINE"
-    return f"""{info['emoji']} *{name.upper()}* — {info['desc']}
+    lines = [f"""{info['emoji']} *{name.upper()}* — {info['desc']}
 
 Status: *{icon}*
 PID: `{pid}`
 Core: `{info['cpu']}`
-Port: `:{info['port']}`
-Dashboard: `http://localhost:{info['port']}`"""
+Port: `:{info['port']}`"""]
+
+    # ── Live state from cortex_state.json ──
+    try:
+        cortex_path = "/dev/shm/beroun/cortex_state.json"
+        if os.path.exists(cortex_path):
+            with open(cortex_path) as f:
+                cortex = json.load(f)
+            for bot_data in cortex.get("bots", []):
+                if bot_data.get("name") == name:
+                    lines.append(f"""
+📊 *Live State (Cortex):*
+💲 Price: `${bot_data.get('price', '?')}`
+📦 Position: `{bot_data.get('position', '?')} BTC`
+📐 Grid: `${bot_data.get('grid', '?')}`
+🎯 Regime: `{bot_data.get('regime', '?')}` | Intent: `{bot_data.get('intent', '?')}`
+🛡️ L1 Conf: `{bot_data.get('confidence', '?')}%`
+⚠️ Toxic: `{bot_data.get('toxic', '?')}`""")
+                    break
+    except Exception as e:
+        log.debug(f"Cortex state read failed: {e}")
+
+    # ── PnL from FIFO engine ──
+    try:
+        pnl_path = os.path.join(PROJECT_ROOT, "shared")
+        if pnl_path not in sys.path:
+            sys.path.insert(0, pnl_path)
+        from pnl_engine import PnlDatabase, format_pnl_short
+
+        db = PnlDatabase()
+        w1 = db.get_realized_window(name, 1)
+        w24 = db.get_realized_window(name, 24)
+        w7 = db.get_realized_window(name, 168)
+        db.close()
+
+        if w24["fills"] > 0 or w7["fills"] > 0:
+            lines.append(f"""
+💰 *PnL (FIFO):*
+1h:  `{format_pnl_short(w1['realized'])}` ({w1['fills']} fills)
+24h: `{format_pnl_short(w24['realized'])}` ({w24['fills']} fills, {w24['closed_trades']} trades)
+7d:  `{format_pnl_short(w7['realized'])}` ({w7['fills']} fills)""")
+        else:
+            lines.append("\n💰 _Žádné fills_")
+    except Exception as e:
+        log.debug(f"PnL query failed for {name}: {e}")
+        lines.append("\n💰 _PnL: nedostupné_")
+
+    return "\n".join(lines)
 
 # ── NATURAL LANGUAGE (AI) ──────────────────────────────────
 NL_INTENT_PROMPT = """You are SNIPER Commander, an AI that controls a trading bot armada.
