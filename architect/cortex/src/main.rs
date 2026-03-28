@@ -20,6 +20,7 @@ mod l2;
 mod macro_intel;
 mod sentinel;
 mod telegram;
+mod uds;
 
 use memory::ArmadaMemory;
 use std::sync::Arc;
@@ -156,18 +157,25 @@ async fn main() -> anyhow::Result<()> {
         sentinel::run_sentinel(sentinel_memory).await;
     });
 
+    // 9. Launch UDS Server (hemisphere bridge)
+    let uds_memory = Arc::clone(&memory);
+    let uds_handle = tokio::spawn(async move {
+        uds::run_uds_server(uds_memory).await;
+    });
+
     // 9. Send boot alert (Layer 4)
     sentinel::send_boot_alert().await;
 
     println!("🌐 L2 Strategic Oracle: ONLINE (5 min cycle)");
     println!("📊 Health Writer: ONLINE (cortex_state.json every 5s)");
     println!("🛡️ Sentinel: ONLINE (5-layer guardian)");
+    println!("🔌 UDS Server: ONLINE (/tmp/cortex.sock)");
     println!();
-    println!("✅ SOVEREIGN CORTEX v13.1 FULLY OPERATIONAL");
+    println!("✅ SOVEREIGN CORTEX v14.0 FULLY OPERATIONAL");
     println!("   Press Ctrl+C to stop.\n");
 
     // Wait for tasks
-    let _ = tokio::join!(l2_handle, health_handle, sentinel_handle);
+    let _ = tokio::join!(l2_handle, health_handle, sentinel_handle, uds_handle);
 
     Ok(())
 }
