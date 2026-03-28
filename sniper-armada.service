@@ -1,5 +1,5 @@
 [Unit]
-Description=Sniper Armada v11.2 — Multi-Bot HFT + Telegram C2
+Description=Sniper Armada v12.0 — Multi-Bot HFT + PnL + Telegram C2
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=0

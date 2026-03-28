@@ -34,7 +34,7 @@ use anyhow::{Context, Result};
 
 use sniper_types::trigon_types::*;
 use sniper_types::moonshot_types::{str_to_symbol_hash, symbol_hash_to_str};
-use sniper_types::{PRICE_SCALE, PRICE_SCALE_I};
+use sniper_types::PRICE_SCALE_I;
 
 const BITFINEX_WS_URL: &str = "wss://api.bitfinex.com/ws/2";
 const VERSION: &str = "1.0.0";

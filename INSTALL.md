@@ -1,34 +1,46 @@
-# 🐺 SNIPER ARMADA v11.2 — Instalace na čistý server
+# 🐺 SNIPER ARMADA v12.0 — Installation Guide
 
-## Požadavky
+## Requirements
 
 ### Hardware (minimum)
-- CPU: 4+ jádra (Intel i5-6400 nebo lepší)
+- CPU: 4+ cores (Intel i5-6400 or better)
 - RAM: 8+ GB
-- GPU: NVIDIA GTX 1060+ (pro AI inferenci, volitelné)
+- GPU: NVIDIA GTX 1060+ (optional, for AI inference)
 - Disk: 20+ GB SSD
 - OS: Ubuntu 22.04+ / Debian 12+
 
 ### Software
 ```bash
+# Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 rustup default stable
+
+# System deps
 sudo apt install python3 python3-pip build-essential pkg-config libssl-dev
-pip install --user websocket-client requests google-generativeai python-telegram-bot
+
+# Python deps
+pip install --user pyTelegramBotAPI websocket-client requests
 ```
 
-## Instalace
+## Installation
 
-### 1. Klonování
+### 1. Clone
 ```bash
-cd /home/$USER
-git clone git@github.com:VaclavSercl/sniper.git sniper
-cd sniper
+git clone git@github.com:VaclavSercl/sniper.git ~/sniper
+cd ~/sniper
 ```
 
-### 2. Konfigurace
+### 2. Configure
 ```bash
 cp .env.example .env && nano .env
+```
+
+Required variables:
+```
+BITFINEX_API_KEY=...
+BITFINEX_API_SECRET=...
+TELEGRAM_BOT_TOKEN=...
+TELEGRAM_CHAT_ID=...
 ```
 
 ### 3. Build
@@ -36,74 +48,83 @@ cp .env.example .env && nano .env
 cargo build --release --workspace
 ```
 
-Výstup: 12 binárních souborů:
-```
-target/release/hydra-{core,dashboard,brain,config}
-target/release/moonshot-{core,dashboard,brain,config}
-target/release/grid-{core,dashboard,brain,config}
-```
-
 ### 4. IPC
 ```bash
 mkdir -p /dev/shm/beroun
 ```
 
-### 5. Spuštění
+### 5. Deploy
 ```bash
-./deploy_armada.sh           # Všechny 3 boty
-./hydra/hydra-start.sh       # Hydra (Core 0)
-./moonshot/moonshot-start.sh # Moonshot (Core 1)
-./grid/grid-start.sh         # Grid (Core 2)
+./deploy_armada.sh
 ```
 
-### 6. Systemd
+This starts:
+- 🐍 Hydra L0 (Core 0, :3000)
+- 🏛️ Architect Dashboard (:3004)
+- 📱 Telegram Commander
+- 💰 PnL Daemon
+
+Other bots are started on-demand via Telegram:
+```
+/moonshot start
+/grid start
+/trigon start
+```
+
+### 6. Systemd (auto-start on boot)
 ```bash
 sudo cp sniper-armada.service /etc/systemd/system/
 sudo systemctl daemon-reload && sudo systemctl enable sniper-armada
 sudo systemctl start sniper-armada
 ```
 
-## Verifikace
+## Verification
 ```bash
 systemctl is-active sniper-armada
-curl -s -o /dev/null -w "%{http_code}" http://localhost:3000  # 200
-curl -s -o /dev/null -w "%{http_code}" http://localhost:3001  # 200
-curl -s -o /dev/null -w "%{http_code}" http://localhost:3002  # 200
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3000  # 200 (Hydra)
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3004  # 200 (Architect)
 journalctl -u sniper-armada --since "1 min ago" | grep -c panic  # 0
 ```
 
-## Porty
+## Ports
 
-| Port | Bot | Služba |
-|------|-----|--------|
-| 3000 | Hydra | BTC-USD Dashboard |
-| 3001 | Moonshot | Multi-Symbol Dashboard |
-| 3002 | Grid | Grid Levels Dashboard |
+| Port | Service | Description |
+|------|---------|-------------|
+| 3000 | Hydra Dashboard | BTC-USD Market Making |
+| 3001 | Moonshot Dashboard | Multi-Symbol Flash Crash |
+| 3002 | Grid Dashboard | Dynamic Multi-Level Grid |
+| 3003 | Trigon Dashboard | Triangular Arbitrage |
+| 3004 | Architect Dashboard | Master Control Panel |
 
-## mmap cesty
+## mmap Paths
 
-| Cesta | Bot | Účel |
-|-------|-----|------|
+| Path | Bot | Purpose |
+|------|-----|---------|
 | `/dev/shm/beroun/engine_state.bin` | Hydra | Engine IPC |
 | `/dev/shm/beroun/risk_state.bin` | Hydra | Risk IPC |
 | `/dev/shm/beroun/moonshot_engine.bin` | Moonshot | Engine IPC |
 | `/dev/shm/beroun/moonshot_risk.bin` | Moonshot | Risk IPC |
 | `/dev/shm/beroun/grid_engine.bin` | Grid | Engine IPC |
 | `/dev/shm/beroun/grid_risk.bin` | Grid | Risk IPC |
+| `/dev/shm/beroun/trigon_engine.bin` | Trigon | Engine IPC |
+| `/dev/shm/beroun/trigon_risk.bin` | Trigon | Risk IPC |
+| `/dev/shm/beroun/pnl_state.bin` | PnL Daemon | FIFO PnL data |
+| `/dev/shm/beroun/mdf.bin` | MDF | Market data feed |
 
-## SQLite databáze
+## SQLite Databases
 
-| Cesta | Bot |
-|-------|-----|
-| `~/.local/share/sniper/sniper.db` | Hydra |
-| `~/.local/share/sniper/moonshot.db` | Moonshot |
-| `~/.local/share/sniper/grid.db` | Grid |
+| Path | Service |
+|------|---------|
+| `~/.local/share/sniper/sniper.db` | Hydra Brain |
+| `~/.local/share/sniper/moonshot.db` | Moonshot Brain |
+| `~/.local/share/sniper/grid.db` | Grid Brain |
+| `~/.local/share/sniper/pnl.db` | PnL Engine (FIFO fills) |
 
 ## CPU Allocation
 
-| Core | Proces | Priority |
-|------|--------|----------|
+| Core | Process | Priority |
+|------|---------|----------|
 | 0 | Hydra L0 | SCHED_FIFO 90 |
 | 1 | Moonshot L0 | SCHED_FIFO 70 |
 | 2 | Grid L0 | normal |
-| 3 | OS + Python AI + Dashboards | normal |
+| 3 | Trigon L0 + OS + Python AI + Dashboards | normal |
