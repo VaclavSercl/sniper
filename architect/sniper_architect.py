@@ -22,6 +22,7 @@ import mmap
 import signal
 from datetime import datetime, timezone, timedelta
 from http.server import HTTPServer, SimpleHTTPRequestHandler
+from socketserver import ThreadingMixIn
 from threading import Thread
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -69,7 +70,20 @@ BOTS = {
 
 PRICE_SCALE_I = 100_000_000  # 1e8
 
-# ═══ HEALTH CHECK ═══
+# ═══ MMAP OFFSETS (global_paused is AtomicU64 at start of global section) ═══
+# These offsets come from the #[repr(C, align(64))] Rust structs.
+# Each bot stores global_paused as the first field after the per-pair/triangle array.
+RISK_PAUSED_OFFSETS = {
+    # Hydra: EngineConfig has global_paused at offset 0 in risk file (simple layout)
+    "hydra":    {"offset": 0, "width": 8},
+    # Moonshot: 20 pairs × 80 bytes = 1600, then global_paused at 1600
+    "moonshot": {"offset": 1600, "width": 8},
+    # Grid: grid_paused at a known offset after GridRiskState fields
+    "grid":     {"offset": 0, "width": 8},
+    # Trigon: 10 triangles × risk, then global_paused
+    "trigon":   {"offset": 0, "width": 8},
+}
+
 def check_bot_health(name, info):
     """Check if a bot is alive and healthy."""
     result = {
@@ -79,8 +93,9 @@ def check_bot_health(name, info):
         "core": info["core"],
         "running": False,
         "mmap_exists": False,
+        "mmap_age_s": -1,
         "heartbeat_age_s": -1,
-        "paused": True,
+        "paused": False,  # Default: NOT paused (will be overridden by mmap read)
         "daily_pnl": 0.0,
     }
 
@@ -92,8 +107,14 @@ def check_bot_health(name, info):
     except Exception:
         pass
 
+    # If not running, mark as paused
+    if not result["running"]:
+        result["paused"] = True
+
     # mmap check
     engine_path = info["engine"]
+    risk_path = info["risk"]
+
     if os.path.exists(engine_path):
         result["mmap_exists"] = True
         try:
@@ -103,18 +124,17 @@ def check_bot_health(name, info):
         except Exception:
             pass
 
-    # Read heartbeat and PnL from mmap (bot-specific offsets)
-    try:
-        with open(engine_path, "rb") as f:
-            data = f.read()
-            if len(data) >= 16:
-                # Heartbeat is typically near the end of the struct
-                # For simplicity, read the last known heartbeat field
-                if name == "hydra" and len(data) >= 1984:
-                    # Hydra: heartbeat_ms at known offset
-                    pass  # Simplified — real offset depends on struct layout
-    except Exception:
-        pass
+    # Read paused from risk mmap (only if bot is running)
+    if result["running"] and os.path.exists(risk_path):
+        try:
+            with open(risk_path, "rb") as f:
+                data = f.read()
+                if len(data) >= 8:
+                    paused_val = struct.unpack_from("<Q", data, 0)[0]
+                    if paused_val in (0, 1):
+                        result["paused"] = bool(paused_val)
+        except Exception:
+            pass
 
     return result
 
@@ -190,6 +210,10 @@ class ArchitectHandler(SimpleHTTPRequestHandler):
         pass  # Suppress access logs
 
 
+class ThreadingHTTPServer(ThreadingMixIn, HTTPServer):
+    daemon_threads = True
+
+
 def main():
     port = 3004
     print(f"🏛️ Sniper Architect — Multi-Bot Orchestrator")
@@ -198,7 +222,7 @@ def main():
     print(f"   SSE:       http://localhost:{port}/events")
     print(f"   Monitoring: {len(BOTS)} bots")
 
-    server = HTTPServer(("0.0.0.0", port), ArchitectHandler)
+    server = ThreadingHTTPServer(("0.0.0.0", port), ArchitectHandler)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
