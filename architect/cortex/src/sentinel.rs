@@ -32,6 +32,7 @@ struct SentinelHistory {
     prev_pnl: f64,
     prev_toxic: u64,
     prev_fills: u64,
+    zero_fill_cycles: u64,
     last_alerts: HashMap<String, Instant>,
 }
 
@@ -41,6 +42,7 @@ impl SentinelHistory {
             prev_pnl: 0.0,
             prev_toxic: 0,
             prev_fills: 0,
+            zero_fill_cycles: 0,
             last_alerts: HashMap::new(),
         }
     }
@@ -198,24 +200,29 @@ pub async fn run_sentinel(memory: Arc<RwLock<ArmadaMemory>>) {
                 }
             }
 
-            // ── LAYER 3e: Zero Activity (bot online but no new fills in 1h) ──
+            // ── LAYER 3e: Zero Activity (1 hour of no fills) ──
             let total_fills: u64 = snapshots.iter().map(|s| s.session_fills).sum();
             let fills_delta = total_fills.saturating_sub(history.prev_fills);
-            // Check every ~12 cycles (60s) for no activity
             if fills_delta == 0 && history.prev_fills > 0 {
-                // Only alert if we've been monitoring for a while
-                // (handled by anti-spam cooldown)
-                if history.should_alert("zero_activity") {
-                    let online = snapshots.iter().filter(|s| s.online).count();
-                    if online > 0 {
-                        let msg = format!(
-                            "⚠️ SENTINEL: ZADNA AKTIVITA\n\
-                             {online} botu online ale 0 novych fillu\n\
-                             Mozny problem s WS konekci!"
-                        );
-                        alerts.push(msg);
+                history.zero_fill_cycles += 1;
+                // 720 cycles × 5s = 1 hour without any fill
+                if history.zero_fill_cycles >= 720 {
+                    if history.should_alert("zero_activity") {
+                        let online = snapshots.iter().filter(|s| s.online).count();
+                        if online > 0 {
+                            let hours = history.zero_fill_cycles * SENTINEL_INTERVAL_SECS / 3600;
+                            let msg = format!(
+                                "⚠️ SENTINEL: ZADNA AKTIVITA\n\
+                                 {online} botu online ale 0 novych fillu za {hours}h+\n\
+                                 Mozny problem s WS konekci!"
+                            );
+                            alerts.push(msg);
+                        }
                     }
+                    history.zero_fill_cycles = 0; // Reset after alert
                 }
+            } else {
+                history.zero_fill_cycles = 0; // Reset on any fill
             }
 
             history.prev_pnl = total_pnl;

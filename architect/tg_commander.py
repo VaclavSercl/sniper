@@ -276,14 +276,20 @@ def build_report(period="hourly"):
             if cortex:
                 for bd in cortex.get("bots", []):
                     if bd.get("name") == bname:
+                        price = float(bd.get('price', 0))
+                        position = float(bd.get('position', 0))
+                        pnl = float(bd.get('pnl', 0))
+                        grid = float(bd.get('grid', 0))
+                        fills = bd.get('fills', 0)
+                        toxic = bd.get('toxic', 0)
                         lines.append(
-                            f"💲 ${bd.get('price', 0):.2f} | "
-                            f"📦 {bd.get('position', 0):.5f} BTC | "
-                            f"💰 ${bd.get('pnl', 0):.4f}"
+                            f"💲 ${price:.2f} | "
+                            f"📦 {position:.5f} BTC | "
+                            f"💰 ${pnl:.4f}"
                         )
                         lines.append(
-                            f"📐 Grid ${bd.get('grid', 0):.2f} ({bd.get('grid_levels', 0)}L) | "
-                            f"Fills {bd.get('fills', 0)} | Toxic {bd.get('toxic', 0)}"
+                            f"📐 Grid ${grid:.2f} | "
+                            f"Fills {fills} | Toxic {toxic}"
                         )
                         break
 
