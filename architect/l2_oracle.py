@@ -205,6 +205,50 @@ class L2Oracle:
         except Exception:
             fee_info = "\nExchange Fees: ~10bps maker / ~20bps taker (default)\n"
 
+        # Portfolio Exposure from CL5 (mmap)
+        portfolio_section = ""
+        try:
+            import struct as _st
+            PRICE_SCALE = 100_000_000
+            with open("/dev/shm/beroun/l2_command.bin", "rb") as f:
+                mm_data = f.read(320)  # CL1-5
+            if len(mm_data) >= 320:
+                CL4, CL5 = 192, 256
+                vpin_raw = _st.unpack_from('<q', mm_data, CL4 + 8)[0] / PRICE_SCALE
+                aegis_tgt = _st.unpack_from('<q', mm_data, CL4 + 16)[0] / PRICE_SCALE
+                urgency = _st.unpack_from('<q', mm_data, CL4 + 24)[0]
+                hedged = _st.unpack_from('<q', mm_data, CL4 + 32)[0]
+                h_inv = _st.unpack_from('<q', mm_data, CL5 + 0)[0] / PRICE_SCALE
+                g_inv = _st.unpack_from('<q', mm_data, CL5 + 8)[0] / PRICE_SCALE
+                m_inv = _st.unpack_from('<q', mm_data, CL5 + 16)[0] / PRICE_SCALE
+                a_delta = _st.unpack_from('<q', mm_data, CL5 + 24)[0] / PRICE_SCALE
+                total_spot = h_inv + g_inv + m_inv
+                net = total_spot + a_delta
+                portfolio_section = (
+                    f"\n═══ PORTFOLIO EXPOSURE (Phase 3 mmap) ═══\n"
+                    f"Spot: Hydra={h_inv:.4f} Grid={g_inv:.4f} Moon={m_inv:.4f}\n"
+                    f"Total Spot: {total_spot:.4f} BTC\n"
+                    f"Aegis Hedge: {a_delta:.4f} BTC (urgency={'EMERGENCY' if urgency else 'passive'})\n"
+                    f"Net Exposure: {net:.4f} BTC\n"
+                    f"Shield: {'ACTIVE — Grid bids BLOCKED' if hedged else 'OFF'}\n"
+                    f"Last VPIN: {vpin_raw:+.2f}\n"
+                )
+        except Exception:
+            portfolio_section = "\n═══ PORTFOLIO EXPOSURE ═══\nUnavailable (mmap not ready)\n"
+
+        # Brain Context (permanent memory)
+        brain_section = ""
+        try:
+            result = subprocess.run(
+                ["./target/release/hydra-brain", "context", "--cycles", "3"],
+                capture_output=True, text=True, timeout=5,
+                cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                brain_section = f"\n═══ PERMANENT MEMORY (hydra-brain) ═══\n{result.stdout.strip()}\n"
+        except Exception:
+            pass
+
         return f"""You are SNIPER, the Sovereign AI Oracle managing an automated multi-bot trading Armada.
 You have FULL AUTHORITY over ALL bots. Analyze macro, fees, and each bot's state.
 Make coordinated, profit-maximizing decisions across the entire system.
@@ -228,7 +272,7 @@ News Sentiment: {bias:+.4f} ({bias_label})
 Cycle: #{self.cycle} (every 5 min)
 {fee_info}{feedback}
 ═══ PHI-3.5 GPU INTELLIGENCE ═══{self._format_gpu_section(gpu_data)}
-═══ ARMADA STATE ═══{bot_states}
+═══ ARMADA STATE ═══{bot_states}{portfolio_section}{brain_section}
 ═══ RESPOND WITH THIS JSON ═══
 {{"global_reasoning": "Analyze macro + cross-bot correlations + fees + GPU telemetry here FIRST...",
   "global_regime": "BEARISH_SHOCK|BULLISH_TREND|CHOPPING_RANGE",
