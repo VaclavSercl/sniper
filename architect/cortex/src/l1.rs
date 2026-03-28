@@ -362,16 +362,41 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
                     3 => "CHAOS",
                     _ => "UNKNOWN",
                 };
+
+                // OBI history: last 2 values for momentum
+                let obi_prev = [
+                    brain.obi_history.iter().rev().nth(1).copied().unwrap_or(0.0),
+                    brain.obi_history.iter().rev().nth(2).copied().unwrap_or(0.0),
+                ];
+
+                // Depth trend from recent history
+                let depth_trend = if brain.depth_history.len() >= 10 {
+                    let recent: f64 = brain.depth_history.iter().rev().take(5).sum::<f64>() / 5.0;
+                    let older: f64 = brain.depth_history.iter().rev().skip(5).take(5).sum::<f64>() / 5.0;
+                    if older < 0.001 { "STABLE" }
+                    else if recent / older < 0.7 { "THINNING" }
+                    else if recent / older > 1.3 { "GROWING" }
+                    else { "STABLE" }
+                } else {
+                    "STABLE"
+                };
+
                 let _ = tx.try_send(L1GpuRequest {
                     price: engine.micro_price.load(Ordering::Relaxed) as f64 / PRICE_SCALE,
+                    best_bid: engine.best_bid.load(Ordering::Relaxed) as f64 / PRICE_SCALE,
+                    best_ask: engine.best_ask.load(Ordering::Relaxed) as f64 / PRICE_SCALE,
                     obi,
+                    obi_prev,
                     bid_depth,
                     ask_depth,
+                    depth_trend,
                     toxic_hits: engine.toxic_flow_hits.load(Ordering::Relaxed),
+                    sweeps_recent: brain.total_sweeps as u64,
                     confidence,
                     net_position: engine.net_position.load(Ordering::Relaxed) as f64 / PRICE_SCALE,
-                    spread: skew_usd.abs(), // approximate
                     regime,
+                    fear_greed: engine.macro_fear_greed.load(Ordering::Relaxed),
+                    macro_bias: engine.macro_bias.load(Ordering::Relaxed) as f64 / 10000.0,
                 });
             }
         }

@@ -3,9 +3,15 @@
 // Non-blocking L1 tactical AI via local Phi-3.5 Mini
 //
 // Architecture:
-//   L1 loop (50ms) → pushes snapshots to channel
+//   L1 loop (50ms) → pushes snapshots to channel (every 2s)
 //   GPU thread → pops from channel, infers, writes result to mmap
 //   L1 NEVER waits for GPU — fire-and-forget
+//
+// v13.1: Merged prompt design:
+//   - JSON structured input (better for small models)
+//   - Discrete actions (HOLD, SKEW_BID, SKEW_ASK, PAUSE_TRADING)
+//   - System prompt enforcing strict JSON-only output
+//   - OBI history + macro context for trend awareness
 // ═══════════════════════════════════════════════════════════
 
 use sniper_types::{EngineState, PRICE_SCALE};
@@ -15,33 +21,51 @@ use std::time::{Duration, Instant};
 
 const LMS_URL: &str = "http://localhost:1234/v1/chat/completions";
 const LMS_MODEL: &str = "phi-3.5-mini-instruct";
-const INFERENCE_INTERVAL_MS: u64 = 2000; // Max 1 inference every 2s (GPU throttle)
-const MAX_TOKENS: u32 = 60;
+const INFERENCE_INTERVAL_MS: u64 = 2000;
+const MAX_TOKENS: u32 = 80;
+
+// System prompt: strict, no-nonsense, JSON-only.
+// Optimized for small models that tend to "chat" and wrap JSON in markdown.
+const SYSTEM_PROMPT: &str = "\
+You are a High-Frequency Trading (HFT) tactical micro-controller. \
+Your ONLY goal is to analyze Order Book Imbalance (OBI) and short-term volatility to output a single tactical action. \
+CRITICAL RULES: \
+1. Output EXACTLY AND ONLY valid JSON. \
+2. No pleasantries, no markdown formatting, no backticks, no explanations outside the JSON. \
+3. Valid actions: HOLD, SKEW_BID, SKEW_ASK, PAUSE_TRADING. \
+4. confidence_pct: 0-100 integer. \
+5. reason: max 8 words.";
 
 /// Snapshot sent from L1 to GPU thread.
 #[derive(Clone)]
 pub struct L1GpuRequest {
     pub price: f64,
+    pub best_bid: f64,
+    pub best_ask: f64,
     pub obi: f64,
+    pub obi_prev: [f64; 2],        // 2 previous OBI values for momentum
     pub bid_depth: f64,
     pub ask_depth: f64,
+    pub depth_trend: &'static str, // "THINNING" | "STABLE" | "GROWING"
     pub toxic_hits: u64,
+    pub sweeps_recent: u64,        // sweep count in last 5 min
     pub confidence: f64,
     pub net_position: f64,
-    pub spread: f64,
     pub regime: &'static str,
+    pub fear_greed: u64,
+    pub macro_bias: f64,
 }
 
-/// Response from GPU inference.
+/// Response from GPU inference — discrete action + confidence.
 #[derive(Debug, serde::Deserialize, Default)]
 struct GpuDecision {
-    bias: Option<f64>,
-    risk: Option<String>,
+    action: Option<String>,       // HOLD | SKEW_BID | SKEW_ASK | PAUSE_TRADING
+    confidence_pct: Option<u32>,  // 0-100
+    reason: Option<String>,       // Short explanation
 }
 
 /// Create L1→GPU channel. Returns sender for L1 and spawns the GPU consumer thread.
 pub fn spawn_gpu_thread(engine: &'static EngineState) -> mpsc::SyncSender<L1GpuRequest> {
-    // Bounded channel (capacity 1) — L1 never blocks, latest wins
     let (tx, rx) = mpsc::sync_channel::<L1GpuRequest>(1);
 
     std::thread::Builder::new()
@@ -56,16 +80,15 @@ pub fn spawn_gpu_thread(engine: &'static EngineState) -> mpsc::SyncSender<L1GpuR
 }
 
 fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
-    let mut last_inference = Instant::now() - Duration::from_secs(10); // Allow immediate first
+    let mut last_inference = Instant::now() - Duration::from_secs(10);
+    let mut inference_count: u64 = 0;
 
     loop {
-        // Block waiting for next L1 snapshot request
         let req = match rx.recv() {
             Ok(r) => r,
-            Err(_) => break, // Channel closed
+            Err(_) => break,
         };
 
-        // Throttle: skip if too soon
         if last_inference.elapsed().as_millis() < INFERENCE_INTERVAL_MS as u128 {
             continue;
         }
@@ -76,52 +99,126 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
             latest = newer;
         }
 
-        // Build prompt
-        let prompt = format!(
-            "BTC ${:.0} spread=${:.2} OBI={:+.3} bid_depth={:.3}BTC ask_depth={:.3}BTC \
-             toxic={} conf={:.0}% pos={:.6}BTC regime={}. \
-             Respond ONLY JSON: {{\"bias\": float(-1..1), \"risk\": \"low|med|high\"}}",
-            latest.price, latest.spread, latest.obi,
-            latest.bid_depth, latest.ask_depth,
-            latest.toxic_hits, latest.confidence * 100.0,
-            latest.net_position, latest.regime,
-        );
+        // Build structured JSON input (small models handle JSON input better than prose)
+        let user_prompt = serde_json::json!({
+            "market_data": {
+                "symbol": "BTC-USD",
+                "best_bid": round2(latest.best_bid),
+                "best_ask": round2(latest.best_ask),
+                "spread": round2(latest.best_ask - latest.best_bid),
+                "obi_current": round3(latest.obi),
+                "obi_prev": [round3(latest.obi_prev[0]), round3(latest.obi_prev[1])],
+                "bid_depth_btc": round3(latest.bid_depth),
+                "ask_depth_btc": round3(latest.ask_depth),
+                "depth_trend": latest.depth_trend,
+                "recent_sweeps_5min": latest.sweeps_recent,
+            },
+            "bot_state": {
+                "position_btc": round6(latest.net_position),
+                "toxic_fills": latest.toxic_hits,
+                "confidence_pct": (latest.confidence * 100.0).round() as u32,
+                "regime": latest.regime,
+            },
+            "macro": {
+                "fear_greed": latest.fear_greed,
+                "sentiment_bias": round4(latest.macro_bias),
+            },
+            "respond_with_format": {
+                "action": "HOLD|SKEW_BID|SKEW_ASK|PAUSE_TRADING",
+                "confidence_pct": "0-100",
+                "reason": "max 8 words"
+            }
+        });
 
-        match call_lms(&prompt) {
+        let prompt_str = serde_json::to_string(&user_prompt).unwrap_or_default();
+
+        match call_lms(&prompt_str) {
             Ok(decision) => {
-                // Write AI bias to mmap
-                if let Some(bias) = decision.bias {
-                    let clamped = bias.clamp(-1.0, 1.0);
-                    // Scale bias to skew adjustment: ±$3 max
-                    let skew_boost = clamped * 3.0 * PRICE_SCALE;
-                    // Combine with existing L1 OBI skew (additive GPU bias)
-                    let current_skew = engine.l1_skew_adjustment.load(Ordering::Relaxed) as f64;
-                    let gpu_weight = 0.3; // 30% GPU, 70% pure OBI
-                    let blended = current_skew * (1.0 - gpu_weight) + skew_boost * gpu_weight;
-                    engine.l1_skew_adjustment.store(blended as i64, Ordering::Release);
+                apply_gpu_decision(&decision, engine);
+
+                inference_count += 1;
+                last_inference = Instant::now();
+
+                // Log every 30th inference (~1 min)
+                if inference_count % 30 == 1 {
+                    println!("  🤖 [GPU] #{inference_count}: {} ({}%) — {}",
+                        decision.action.as_deref().unwrap_or("?"),
+                        decision.confidence_pct.unwrap_or(0),
+                        decision.reason.as_deref().unwrap_or(""));
                 }
 
-                // Update AI heartbeat
-                let now_ms = std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap_or_default()
-                    .as_millis() as u64;
-                engine.ai_heartbeat_ms.store(now_ms, Ordering::Release);
-
-                last_inference = Instant::now();
+                engine.ai_heartbeat_ms.store(epoch_ms(), Ordering::Release);
             }
             Err(e) => {
                 eprintln!("  ⚠️ [GPU] Inference failed: {e}");
-                // Don't update last_inference — retry sooner
             }
         }
     }
 }
 
-fn call_lms(prompt: &str) -> anyhow::Result<GpuDecision> {
+/// Translate discrete GPU action into mmap writes.
+fn apply_gpu_decision(decision: &GpuDecision, engine: &EngineState) {
+    let confidence = decision.confidence_pct.unwrap_or(0);
+    let action = decision.action.as_deref().unwrap_or("HOLD");
+
+    // Scale confidence → skew magnitude (0-100% → $0-$3)
+    let skew_magnitude = (confidence as f64 / 100.0) * 3.0 * PRICE_SCALE;
+
+    match action {
+        "SKEW_BID" => {
+            // Skew quotes toward buy side (negative skew = cheaper bids)
+            let skew = -(skew_magnitude as i64);
+            blend_skew(engine, skew);
+        }
+        "SKEW_ASK" => {
+            // Skew quotes toward sell side (positive skew = cheaper asks)
+            let skew = skew_magnitude as i64;
+            blend_skew(engine, skew);
+        }
+        "PAUSE_TRADING" => {
+            // Set freeze for 4 seconds
+            let now_ms = epoch_ms();
+            let current_freeze = engine.sweep_freeze_until.load(Ordering::Relaxed);
+            if now_ms > current_freeze {
+                engine.sweep_freeze_until.store(now_ms + 4000, Ordering::Release);
+                engine.ai_freeze_ms.store(4000, Ordering::Release);
+            }
+        }
+        _ => {
+            // HOLD — gently decay skew toward zero
+            let current = engine.l1_skew_adjustment.load(Ordering::Relaxed);
+            let decayed = (current as f64 * 0.95) as i64; // 5% decay per inference
+            engine.l1_skew_adjustment.store(decayed, Ordering::Release);
+        }
+    }
+}
+
+/// Blend GPU skew with existing OBI skew (30% GPU, 70% OBI).
+fn blend_skew(engine: &EngineState, gpu_skew: i64) {
+    let current_skew = engine.l1_skew_adjustment.load(Ordering::Relaxed);
+    let blended = (current_skew as f64 * 0.7 + gpu_skew as f64 * 0.3) as i64;
+    engine.l1_skew_adjustment.store(blended, Ordering::Release);
+}
+
+fn epoch_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
+
+fn round2(v: f64) -> f64 { (v * 100.0).round() / 100.0 }
+fn round3(v: f64) -> f64 { (v * 1000.0).round() / 1000.0 }
+fn round4(v: f64) -> f64 { (v * 10000.0).round() / 10000.0 }
+fn round6(v: f64) -> f64 { (v * 1000000.0).round() / 1000000.0 }
+
+fn call_lms(user_prompt: &str) -> anyhow::Result<GpuDecision> {
     let body = serde_json::json!({
         "model": LMS_MODEL,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt}
+        ],
         "temperature": 0.1,
         "max_tokens": MAX_TOKENS,
     });
@@ -140,17 +237,16 @@ fn call_lms(prompt: &str) -> anyhow::Result<GpuDecision> {
         .as_str()
         .unwrap_or("{}");
 
-    // Extract JSON from possible markdown wrapping
+    // Sanitizer: find first { and last }, strip everything else
     parse_gpu_json(content)
 }
 
 fn parse_gpu_json(raw: &str) -> anyhow::Result<GpuDecision> {
-    // Try direct parse
     if let Ok(d) = serde_json::from_str::<GpuDecision>(raw.trim()) {
         return Ok(d);
     }
 
-    // Extract from ```json ... ``` block
+    // Sanitizer for models that wrap JSON in markdown or prose
     if let Some(start) = raw.find('{') {
         if let Some(end) = raw.rfind('}') {
             if let Ok(d) = serde_json::from_str::<GpuDecision>(&raw[start..=end]) {
