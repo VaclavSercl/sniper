@@ -188,6 +188,9 @@ async fn main() -> Result<()> {
     let engine = unsafe { &*(engine_mmap.as_ptr() as *const TrigonEngineState) };
     let risk = unsafe { &*(risk_mmap.as_ptr() as *const TrigonRiskState) };
     let fee_state = unsafe { &*(fee_mmap.as_ptr() as *const sniper_types::fee_types::GlobalFeeState) };
+    let l2cmd_mmap = init_mmap_ptr::<sniper_types::l2_command::L2CommandMatrix>(
+        sniper_types::l2_command::L2_COMMAND_PATH)?;
+    let l2cmd = unsafe { &*(l2cmd_mmap.as_ptr() as *const sniper_types::l2_command::L2CommandMatrix) };
 
     let key = std::env::var("BITFINEX_API_KEY").context("Missing BITFINEX_API_KEY")?;
     let sec = std::env::var("BITFINEX_API_SECRET").context("Missing BITFINEX_API_SECRET")?;
@@ -332,7 +335,25 @@ async fn main() -> Result<()> {
                                 let cooldown = tr.cooldown_ms.load(Ordering::Acquire);
                                 let max_usd = tr.max_order_usd.load(Ordering::Acquire) as f64 / PRICE_SCALE_I as f64;
 
-                                if !paused && profit > min_profit
+                                // ═══ v14.2 LATENCY-AWARE PADDING (Issue #18) ═══
+                                // L2 pre-computes p95 Tick-to-Trade latency → padding bps
+                                // L1 just adds it to min_profit (O(1))
+                                let latency_pad = {
+                                    let (v1, ok1) = sniper_types::l2_command::l2cmd_version_check(l2cmd);
+                                    let pad = l2cmd.latency_padding_bps.load(Ordering::Relaxed);
+                                    let kill = l2cmd.latency_killswitch_ms.load(Ordering::Relaxed);
+                                    let (v2, ok2) = sniper_types::l2_command::l2cmd_version_check(l2cmd);
+                                    if v1 == v2 && ok1 && ok2 {
+                                        // Check killswitch: if last measured latency > threshold, skip
+                                        if kill > 0 && kill < 100 { // killswitch triggered (abnormally low = stop)
+                                            continue;
+                                        }
+                                        pad.max(0) as f64
+                                    } else { 0.0 }
+                                };
+                                let effective_min_profit = min_profit + latency_pad;
+
+                                if !paused && profit > effective_min_profit
                                     && et.executing.load(Ordering::Acquire) == 0
                                     && (now_ms - last_exec_ms[t]) > cooldown
                                     && max_usd > 0.0

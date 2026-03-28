@@ -1,5 +1,6 @@
 mod types;
 pub mod fee_types;
+pub mod l2_command;
 pub mod math;
 pub mod logging;
 pub mod moonshot_types;

@@ -227,38 +227,49 @@ Cycle: #{self.cycle} (every 5 min)
 ═══ RESPOND WITH THIS JSON ═══
 {{"global_reasoning": "Analyze macro + cross-bot correlations + fees + GPU telemetry here FIRST...",
   "global_regime": "BEARISH_SHOCK|BULLISH_TREND|CHOPPING_RANGE",
-  "hydra": {{
-    "recommended_grid_step": float,
-    "max_position_limit": float,
-    "pause_trading": boolean
+  \"hydra\": {{
+    \"recommended_grid_step\": float,
+    \"max_position_limit\": float,
+    \"pause_trading\": boolean,
+    \"bid_fade_bps\": int,
+    \"ask_fade_bps\": int
   }},
-  "moonshot": {{
-    "pause_trading": boolean,
-    "order_usd": float,
-    "drop_pct_override": float_or_null,
-    "tp_pct_override": float_or_null
+  \"moonshot\": {{
+    \"pause_trading\": boolean,
+    \"order_usd\": float,
+    \"trigger_price\": float_or_null,
+    \"armed\": boolean,
+    \"drop_pct_override\": float_or_null,
+    \"tp_pct_override\": float_or_null
   }},
-  "grid": {{
-    "pause_trading": boolean,
-    "grid_spacing": float_or_null,
-    "order_qty": float_or_null
+  \"grid\": {{
+    \"pause_trading\": boolean,
+    \"grid_spacing\": float_or_null,
+    \"order_qty\": float_or_null
   }},
-  "trigon": {{
-    "pause_trading": boolean,
-    "min_profit_bps": float,
-    "max_order_usd": float
+  \"trigon\": {{
+    \"pause_trading\": boolean,
+    \"min_profit_bps\": float,
+    \"max_order_usd\": float,
+    \"latency_padding_bps\": int,
+    \"latency_killswitch_ms\": int
   }},
-  "l1_tuning": {{"skew_max_usd": float, "obi_threshold": float, "inference_interval_ms": int}}}}
+  \"l1_tuning\": {{\"skew_max_usd\": float, \"obi_threshold\": float, \"inference_interval_ms\": int}}}}
 
 PARAMETER CONSTRAINTS:
   hydra.grid_step: {GRID_FLOOR}-{GRID_CEIL} USD
   hydra.max_position: {MAX_POS_FLOOR}-{MAX_POS_CEIL} BTC
+  hydra.bid_fade_bps: 0-20 (0=no fade, 10=defensive, 20=maximum retreat)
+  hydra.ask_fade_bps: 0-20 (asymmetric: set different vs bid for directional)
   moonshot.order_usd: 0-100 USD (0=scanner only)
-  moonshot.drop_pct: 1.0-10.0% (flash crash distance)
+  moonshot.trigger_price: absolute USD (pre-compute: current_price - 3*sigma)
+  moonshot.armed: true only if OI/volume conditions indicate real crash
   grid.grid_spacing: 5-200 USD
   grid.order_qty: 0.0001-0.01 BTC
   trigon.min_profit_bps: 5-50 bps (after 3×taker fee)
   trigon.max_order_usd: 0-50 USD (0=scanner only)
+  trigon.latency_padding_bps: 0-30 (added to min_profit as slippage buffer)
+  trigon.latency_killswitch_ms: 50-2000 (stop arb if latency exceeds this)
   l1_tuning.skew_max_usd: 0.5-5.0
   l1_tuning.obi_threshold: 0.0-0.8
   l1_tuning.inference_interval_ms: 500-10000"""
@@ -353,6 +364,80 @@ PARAMETER CONSTRAINTS:
         # ═══ TRIGON ═══
         trigon = decision.get("trigon", {})
         self._apply_trigon(trigon)
+
+        # ═══ L2 COMMAND MATRIX (Issue #18 Quick Wins) ═══
+        self._write_l2_command(decision, bots=None)
+
+    def _write_l2_command(self, decision, bots=None):
+        """Write L2CommandMatrix to shared mmap with SeqLock protection.
+
+        Layout (64 bytes, matches Rust L2CommandMatrix):
+          offset 0:  config_version    (u64) — odd=writing, even=consistent
+          offset 8:  bid_fade_bps      (i64) — Hydra bid fade
+          offset 16: ask_fade_bps      (i64) — Hydra ask fade
+          offset 24: moonshot_trigger   (i64) — pre-computed trigger price
+          offset 32: moonshot_armed     (u64) — 0/1
+          offset 40: latency_padding    (i64) — Trigon latency pad
+          offset 48: latency_killswitch (u64) — ms threshold
+          offset 56: l2_heartbeat_ms    (u64)
+        """
+        try:
+            import struct as _st
+            L2_CMD_PATH = "/dev/shm/beroun/l2_command.bin"
+            L2_CMD_SIZE = 64
+
+            os.makedirs(os.path.dirname(L2_CMD_PATH), exist_ok=True)
+            fd = os.open(L2_CMD_PATH, os.O_RDWR | os.O_CREAT)
+            os.ftruncate(fd, L2_CMD_SIZE)
+            import mmap
+            mm = mmap.mmap(fd, L2_CMD_SIZE)
+            os.close(fd)
+
+            # Read current version
+            cur_ver = _st.unpack_from('<Q', mm, 0)[0]
+            next_ver = cur_ver + 1
+
+            # Step 1: Write ODD version (= "writing in progress")
+            _st.pack_into('<Q', mm, 0, next_ver)
+            mm.flush()
+
+            # Step 2: Write all fields
+            hydra = decision.get("hydra", {})
+            bid_fade = int(hydra.get("bid_fade_bps", 0))
+            ask_fade = int(hydra.get("ask_fade_bps", 0))
+            _st.pack_into('<q', mm, 8, bid_fade)
+            _st.pack_into('<q', mm, 16, ask_fade)
+
+            # Moonshot trigger price (L2 pre-computes: price - N*sigma)
+            moonshot = decision.get("moonshot", {})
+            trigger = moonshot.get("trigger_price")
+            if trigger is not None:
+                PRICE_SCALE = 100_000_000.0
+                _st.pack_into('<q', mm, 24, int(float(trigger) * PRICE_SCALE))
+            armed = 1 if moonshot.get("armed") else 0
+            _st.pack_into('<Q', mm, 32, armed)
+
+            # Trigon latency padding
+            trigon = decision.get("trigon", {})
+            lat_pad = int(trigon.get("latency_padding_bps", 0))
+            lat_kill = int(trigon.get("latency_killswitch_ms", 500))
+            _st.pack_into('<q', mm, 40, lat_pad)
+            _st.pack_into('<Q', mm, 48, lat_kill)
+
+            # Heartbeat
+            import time
+            _st.pack_into('<Q', mm, 56, int(time.time() * 1000))
+
+            # Step 3: Write EVEN version (= "data consistent")
+            _st.pack_into('<Q', mm, 0, next_ver + 1)
+            mm.flush()
+            mm.close()
+
+            log.info(f"  📡 L2Cmd: ver={next_ver+1} bid_fade={bid_fade}bps ask_fade={ask_fade}bps "
+                     f"trig={'$'+str(trigger) if trigger else 'N/A'} lat_pad={lat_pad}bps")
+
+        except Exception as e:
+            log.error(f"L2CommandMatrix write failed: {e}")
 
     def _apply_moonshot(self, cfg):
         """Apply AI decisions to Moonshot risk mmap."""

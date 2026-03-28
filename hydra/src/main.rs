@@ -342,6 +342,9 @@ async fn async_main() -> Result<()> {
     let fee_mmap = init_mmap_ptr::<sniper_types::fee_types::GlobalFeeState>(
         sniper_types::fee_types::FEE_STATE_PATH)?;
     let fee_state = unsafe { &*(fee_mmap.as_ptr() as *const sniper_types::fee_types::GlobalFeeState) };
+    let l2cmd_mmap = init_mmap_ptr::<sniper_types::l2_command::L2CommandMatrix>(
+        sniper_types::l2_command::L2_COMMAND_PATH)?;
+    let l2cmd = unsafe { &*(l2cmd_mmap.as_ptr() as *const sniper_types::l2_command::L2CommandMatrix) };
 
     let engine_ptr: *mut EngineState = engine_mmap.as_mut_ptr() as *mut EngineState;
     let risk = unsafe { &*(risk_mmap.as_ptr() as *const RiskState) };
@@ -1119,6 +1122,22 @@ async fn async_main() -> Result<()> {
 
                                                         let mut buy_i = (micro_i - grid + final_bias_with_l1 + delta_shift).max(0);
                                                         let mut sell_i = (micro_i + grid + final_bias_with_l1 + delta_shift).max(0);
+
+                                                        // ═══ v14.2 ASYMMETRIC QUOTE FADING (Issue #18) ═══
+                                                        // L2 pre-computes fade values; L1 just applies O(1)
+                                                        // SeqLock: read version before+after, discard if odd/changed
+                                                        {
+                                                            let (v1, ok1) = sniper_types::l2_command::l2cmd_version_check(l2cmd);
+                                                            let bf = l2cmd.bid_fade_bps.load(Ordering::Relaxed);
+                                                            let af = l2cmd.ask_fade_bps.load(Ordering::Relaxed);
+                                                            let (v2, ok2) = sniper_types::l2_command::l2cmd_version_check(l2cmd);
+                                                            if v1 == v2 && ok1 && ok2 && (bf != 0 || af != 0) {
+                                                                // Convert bps to price delta: 1 bps = micro_i / 10000
+                                                                let bps_unit = micro_i / 10000;
+                                                                buy_i -= bf * bps_unit;   // positive bf = deeper bid
+                                                                sell_i += af * bps_unit;  // positive af = deeper ask
+                                                            }
+                                                        }
 
                                                         // ═══ ANTI-CROSS GUARD (L0 Safety) ═══
                                                         // Prevent POSTONLY CANCELED: bid must be below best ask, ask must be above best bid
