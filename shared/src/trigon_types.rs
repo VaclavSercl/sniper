@@ -120,13 +120,30 @@ impl Default for TrigonRiskState {
 // Pre-defined Triangle Configurations
 // ═══════════════════════════════════════════════════════════
 
-/// Bitfinex triangles — BTC + Fiat only (no altcoins)
+/// Bitfinex triangles — BTC + Fiat + Stablecoins only (no altcoins)
 /// Format: (leg_A, leg_B, leg_C)
 pub const KNOWN_TRIANGLES: &[(&str, &str, &str)] = &[
-    // USD → BTC → EUR → UST  (fiat cross: EUR/USD via BTC bridge)
+    // ═══ EUR CROSSES ═══
+    // USD → BTC → EUR → UST
     ("tBTCUSD", "tBTCEUR", "tEURUST"),
-    // USD → BTC → GBP → UST  (fiat cross: GBP/USD via BTC bridge)
+    // USD → BTC → EURQ → USD  (Quantoz tokenized EUR)
+    ("tBTCUSD", "tBTC:EURQ", "tEURQ:USD"),
+    // USD → BTC → EURR → USD  (tokenized EUR #2)
+    ("tBTCUSD", "tBTC:EURR", "tEURR:USD"),
+
+    // ═══ GBP CROSSES ═══
+    // USD → BTC → GBP → UST
     ("tBTCUSD", "tBTCGBP", "tGBPUST"),
-    // USD → BTC → UST → USD  (stablecoin peg deviation capture)
+
+    // ═══ STABLECOIN ARBITRAGE ═══
+    // USD → BTC → UST → USD  (USDT peg deviation)
     ("tBTCUSD", "tBTCUST", "tUSTUSD"),
+    // UST → UDC → USD  (USDC/USDT/USD triple stablecoin arb)
+    ("tUSTUSD", "tUDCUST", "tUDCUSD"),
+
+    // ═══ CROSS-STABLECOIN EUR ═══
+    // UST → BTC → EURQ → UST  (EUR/USDT via EURQ token)
+    ("tBTCUST", "tBTC:EURQ", "tEURQ:UST"),
+    // UST → BTC → EURR → UST  (EUR/USDT via EURR token)
+    ("tBTCUST", "tBTC:EURR", "tEURR:UST"),
 ];
