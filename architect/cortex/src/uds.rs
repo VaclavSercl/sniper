@@ -207,13 +207,16 @@ async fn handle_request(
                 return UdsResponse::err("Missing 'value' field");
             };
             let clamped = value.clamp(GRID_FLOOR, GRID_CEIL);
+            let bot_name = req.bot.as_deref().unwrap_or("hydra");
             let mem = memory.read().await;
-            let risk = mem.hydra_risk();
+            let Some(risk) = mem.risk_for_bot(bot_name) else {
+                return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));
+            };
             let prev_raw = risk.grid_step.load(Ordering::SeqCst);
             let prev = prev_raw as f64 / PRICE_SCALE;
             let scaled = (clamped * PRICE_SCALE) as u64;
             risk.grid_step.store(scaled, Ordering::SeqCst);
-            println!("  🔌 [UDS] SET_GRID: ${prev:.2} → ${clamped:.2}");
+            println!("  🔌 [UDS] SET_GRID [{bot_name}]: ${prev:.2} → ${clamped:.2}");
             UdsResponse::ok_with_prev(prev)
         }
 
@@ -222,13 +225,16 @@ async fn handle_request(
                 return UdsResponse::err("Missing 'value' field");
             };
             let clamped = value.clamp(MAX_POS_FLOOR, MAX_POS_CEIL);
+            let bot_name = req.bot.as_deref().unwrap_or("hydra");
             let mem = memory.read().await;
-            let risk = mem.hydra_risk();
+            let Some(risk) = mem.risk_for_bot(bot_name) else {
+                return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));
+            };
             let prev_raw = risk.max_inv_delta.load(Ordering::SeqCst);
             let prev = prev_raw as f64 / PRICE_SCALE;
             let scaled = (clamped * PRICE_SCALE) as u64;
             risk.max_inv_delta.store(scaled, Ordering::SeqCst);
-            println!("  🔌 [UDS] SET_MAXPOS: {prev:.6} → {clamped:.6} BTC");
+            println!("  🔌 [UDS] SET_MAXPOS [{bot_name}]: {prev:.6} → {clamped:.6} BTC");
             UdsResponse::ok_with_prev(prev)
         }
 
@@ -242,30 +248,39 @@ async fn handle_request(
                 "CHAOS" | "BEARISH_SHOCK" => 3,
                 _ => 0,
             };
+            let bot_name = req.bot.as_deref().unwrap_or("hydra");
             let mem = memory.read().await;
-            let engine = mem.hydra_engine();
+            let Some(engine) = mem.engine_for_bot(bot_name) else {
+                return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));
+            };
             engine.l2_regime_id.store(regime_id, Ordering::Release);
             let now = epoch_ms();
             engine.l2_last_action_ms.store(now, Ordering::Release);
             engine.ai_heartbeat_ms.store(now, Ordering::Release);
             engine.ai_registry_version.fetch_add(1, Ordering::Release);
-            println!("  🔌 [UDS] SET_REGIME: {regime} (id={regime_id})");
+            println!("  🔌 [UDS] SET_REGIME [{bot_name}]: {regime} (id={regime_id})");
             UdsResponse::ok()
         }
 
         "PAUSE" => {
+            let bot_name = req.bot.as_deref().unwrap_or("hydra");
             let mem = memory.read().await;
-            let risk = mem.hydra_risk();
+            let Some(risk) = mem.risk_for_bot(bot_name) else {
+                return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));
+            };
             risk.paused.store(1, Ordering::SeqCst);
-            println!("  🔌 [UDS] PAUSE: Hydra paused");
+            println!("  🔌 [UDS] PAUSE: {bot_name} paused");
             UdsResponse::ok()
         }
 
         "UNPAUSE" => {
+            let bot_name = req.bot.as_deref().unwrap_or("hydra");
             let mem = memory.read().await;
-            let risk = mem.hydra_risk();
+            let Some(risk) = mem.risk_for_bot(bot_name) else {
+                return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));
+            };
             risk.paused.store(0, Ordering::SeqCst);
-            println!("  🔌 [UDS] UNPAUSE: Hydra unpaused");
+            println!("  🔌 [UDS] UNPAUSE: {bot_name} unpaused");
             UdsResponse::ok()
         }
 

@@ -129,6 +129,34 @@ impl ArmadaMemory {
         unsafe { &mut *(self.hydra_risk.as_mut_ptr() as *mut RiskState) }
     }
 
+    /// Get RiskState for any bot by name. Returns None if bot's mmap is offline.
+    pub fn risk_for_bot(&self, name: &str) -> Option<&RiskState> {
+        match name {
+            "hydra" => Some(self.hydra_risk()),
+            "moonshot" => self.moonshot_risk.as_ref()
+                .map(|m| unsafe { &*(m.as_ptr() as *const RiskState) }),
+            "grid" => self.grid_risk.as_ref()
+                .map(|m| unsafe { &*(m.as_ptr() as *const RiskState) }),
+            "trigon" => self.trigon_risk.as_ref()
+                .map(|m| unsafe { &*(m.as_ptr() as *const RiskState) }),
+            _ => None,
+        }
+    }
+
+    /// Get EngineState for any bot by name. Returns None if bot's mmap is offline.
+    pub fn engine_for_bot(&self, name: &str) -> Option<&EngineState> {
+        match name {
+            "hydra" => Some(self.hydra_engine()),
+            "moonshot" => self.moonshot_engine.as_ref()
+                .map(|m| unsafe { &*(m.as_ptr() as *const EngineState) }),
+            "grid" => self.grid_engine.as_ref()
+                .map(|m| unsafe { &*(m.as_ptr() as *const EngineState) }),
+            "trigon" => self.trigon_engine.as_ref()
+                .map(|m| unsafe { &*(m.as_ptr() as *const EngineState) }),
+            _ => None,
+        }
+    }
+
     /// Take an atomic snapshot of Hydra's full state.
     /// All reads are Acquire-ordered for consistency.
     pub fn snapshot_hydra(&self) -> BotSnapshot {
