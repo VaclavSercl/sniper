@@ -68,23 +68,15 @@ async fn main() -> anyhow::Result<()> {
         println!();
     }
 
-    // 3. Launch GPU inference (if LM Studio is running)
+    // 3. Launch GPU inference (spawns thread which natively handles retries)
     let gpu_tx = if !no_gpu {
         let mem = memory.read().await;
         let engine_ptr = mem.hydra_engine() as *const sniper_types::EngineState;
         let engine_ref: &'static sniper_types::EngineState = unsafe { &*engine_ptr };
 
-        match ureq::get("http://localhost:1234/v1/models").call() {
-            Ok(_) => {
-                let tx = gpu::spawn_gpu_thread(engine_ref);
-                println!("🤖 GPU Inference: ONLINE (Phi-3.5 Mini @ :1234)");
-                Some(tx)
-            }
-            Err(_) => {
-                println!("⚠️  GPU Inference: OFFLINE (LM Studio not running on :1234)");
-                None
-            }
-        }
+        let tx = gpu::spawn_gpu_thread(engine_ref);
+        println!("🤖 GPU Inference: INITIALIZED (Phi-3.5 Mini @ :1234)");
+        Some(tx)
     } else {
         println!("⚠️  GPU DISABLED by --no-gpu");
         None
