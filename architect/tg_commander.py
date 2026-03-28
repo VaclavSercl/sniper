@@ -374,9 +374,10 @@ def get_status():
 @bot.message_handler(commands=["help", "start"])
 def cmd_help(message):
     if not auth(message): return
-    bot.reply_to(message, """🐺 *SNIPER ARMADA v13.0*
+    bot.reply_to(message, """🐺 *SNIPER ARMADA v14.0*
 
 📊 `/status` — Stav + PnL všech botů
+💰 `/pnl` — Detailní PnL report
 
 🎮 *Ovládání:*
 `/hydra start` · `stop` · `restart` · `pause`
@@ -385,12 +386,13 @@ def cmd_help(message):
 `/trigon start` · `stop` · `restart`
 
 🧠 *AI:*
+`/gpu` — Phi-3.5 evaluace (win rate, toxic fills)
 `/analyze` — Gemini analýza trhu
 `/oracle` — L2 strategický cyklus
 
 🚨 `/panic` — Zastavit VŠE
 
-💬 Nebo piš česky: _"Jak se daří?"_""")
+💬 Nebo piš česky: _"Nastav grid na 25"_""")
 
 @bot.message_handler(commands=["status"])
 def cmd_status(message):
