@@ -111,94 +111,16 @@ impl CycleHistory {
     }
 }
 
-/// Run the L2 strategic loop forever.
+/// L2 Strategic Oracle — DISABLED in Cortex v14.0
+/// Oracle now runs in Python Commander (l2_oracle.py) via UDS.
+/// This task is kept alive but idle to not break tokio::join!.
+#[allow(unused_variables)]
 pub async fn run_l2_loop(memory: Arc<RwLock<ArmadaMemory>>, dry_run: bool) {
-    time::sleep(Duration::from_secs(10)).await;
-    println!("🌐 [L2] Strategic Oracle online (cycle every {}s)", L2_INTERVAL_SECS);
-
-    let mut cycle: u64 = 0;
-    let mut history = CycleHistory::new();
-
+    println!("🌐 [L2] Strategic Oracle: DELEGATED to Python Commander (via UDS)");
+    println!("🌐 [L2] Cortex L2 loop idle — waiting for shutdown signal.");
+    // Sleep forever — L2 decisions now come via UDS from Python
     loop {
-        cycle += 1;
-        println!("\n═══ L2 ORACLE CYCLE #{cycle} ═══");
-
-        // 1. Atomic snapshot of all bots (~400ns)
-        let mut snapshots = {
-            let mem = memory.read().await;
-            mem.snapshot_all()
-        };
-
-        // 1b. Enrich with PnL from pnl_state.bin mmap
-        enrich_with_pnl(&mut snapshots);
-
-        // 2. Log summary
-        for snap in &snapshots {
-            let status = if snap.online { "🟢" } else { "🔴" };
-            println!("  {status} {} ${:.2} pos={:.6} pnl=${:.4} grid=${:.2} fills={}",
-                snap.name, snap.micro_price, snap.net_position,
-                snap.realized_pnl, snap.grid_step, snap.session_fills);
-        }
-
-        if dry_run {
-            // Build context for display but don't call Gemini
-            let mut bot_context = String::new();
-            for snap in &snapshots {
-                bot_context.push_str(&format_snapshot_for_prompt(snap));
-                bot_context.push('\n');
-            }
-            println!("  [DRY-RUN] Skipping Gemini call. Snapshot:\n{bot_context}");
-        } else {
-            // 3. Build Gemini prompt with feedback loop
-            let prompt = build_gemini_prompt(&snapshots, &history, cycle);
-
-            // 4. Call Gemini CLI
-            println!("  🤖 Calling Gemini CLI...");
-            match call_gemini(&prompt).await {
-                Ok(response) => {
-                    println!("  ✅ Gemini responded ({} bytes)", response.len());
-
-                    // 5. Parse JSON and apply decisions
-                    let decision = parse_gemini_response(&response);
-                    if let Some(ref d) = decision {
-                        let mem = memory.read().await;
-                        apply_decision(d, &mem, cycle);
-                    }
-
-                    // 6. Save AI reasoning to file for TG Commander
-                    if let Some(ref d) = decision {
-                        let reasoning = d.effective_reasoning();
-                        if !reasoning.is_empty() {
-                            let regime = d.effective_regime();
-                            let ai_text = format!("{}\n{}", regime, reasoning);
-                            let _ = std::fs::write("/dev/shm/beroun/l2_reasoning.txt", &ai_text);
-                        }
-                    }
-
-                    // 7. Build and send Telegram report
-                    let report = build_oracle_report(&snapshots, &response, &decision, cycle);
-                    if let Err(e) = telegram::send(&report).await {
-                        eprintln!("  ⚠️ Telegram send failed: {e}");
-                    }
-
-                    // 7. Update feedback loop history
-                    if let Some(hydra) = snapshots.first() {
-                        history.prev_pnl = hydra.realized_pnl;
-                        history.prev_fills = hydra.session_fills;
-                        history.prev_toxic = hydra.toxic_hits;
-                    }
-                    history.prev_decision = decision;
-                }
-                Err(e) => {
-                    eprintln!("  ❌ Gemini error: {e}");
-                    let report = build_fallback_report(&snapshots, cycle);
-                    let _ = telegram::send(&report).await;
-                }
-            }
-        }
-
-        println!("═══ L2 CYCLE #{cycle} COMPLETE ═══");
-        time::sleep(Duration::from_secs(L2_INTERVAL_SECS)).await;
+        time::sleep(Duration::from_secs(86400)).await;
     }
 }
 

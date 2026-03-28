@@ -24,6 +24,7 @@ from datetime import datetime, timezone, timedelta
 import telebot
 from telebot import apihelper
 from cortex_client import CortexClient
+from l2_oracle import L2Oracle
 
 # ── CONFIG ──────────────────────────────────────────────────
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -801,6 +802,26 @@ def main():
 
     # Start scheduled reports thread (hourly/daily/weekly/monthly)
     threading.Thread(target=scheduled_reports_loop, daemon=True).start()
+
+    # Start L2 Strategic Oracle thread (5 min cycle via UDS)
+    def l2_oracle_loop():
+        def tg_send(msg):
+            try:
+                bot.send_message(AUTHORIZED_CHAT_ID, msg)
+            except Exception as e:
+                log.error(f"L2 Telegram send failed: {e}")
+
+        oracle = L2Oracle(cortex, tg_send)
+        time.sleep(15)  # Let Cortex initialize
+        log.info("🌐 L2 Strategic Oracle: ONLINE (5 min cycle via UDS)")
+        while True:
+            try:
+                oracle.run_cycle()
+            except Exception as e:
+                log.error(f"L2 Oracle error: {e}")
+            time.sleep(300)  # 5 minutes
+
+    threading.Thread(target=l2_oracle_loop, daemon=True).start()
 
     # Start bot polling with robust retry
     log.info("Polling Telegram...")
