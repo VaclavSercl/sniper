@@ -1,0 +1,8 @@
+{
+  "hydra":    {"mode": "LIVE",    "since": "2026-03-28T23:11:00+01:00"},
+  "moonshot": {"mode": "PAUSED",  "since": "2026-03-28T23:11:00+01:00"},
+  "grid":     {"mode": "PAUSED",  "since": "2026-03-28T23:11:00+01:00"},
+  "trigon":   {"mode": "OFFLINE", "since": "2026-03-28T23:11:00+01:00"},
+  "last_healthy_ts": "2026-03-28T23:11:00+01:00",
+  "shutdown_reason": "initial"
+}

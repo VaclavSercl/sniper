@@ -29,6 +29,8 @@ MAX_POS_CEIL = 0.02
 
 L2_INTERVAL = 300  # 5 minutes
 GEMINI_TIMEOUT = 60  # seconds
+STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'state', 'armada_state.json')
+PROJECT_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 
 
 class L2Oracle:
@@ -42,6 +44,7 @@ class L2Oracle:
         self.prev_fills = 0
         self.prev_toxic = 0
         self.prev_decision = None
+        self.recovery_done = False  # True after first cycle restores bots
 
         # 🌙 Moonshot EMA Volatility Engine (O(1) memory)
         self.ema_price = None
@@ -51,6 +54,16 @@ class L2Oracle:
     def run_cycle(self):
         """Execute one L2 Oracle cycle. Called every 5 min."""
         self.cycle += 1
+
+        # ── HEALTH HEARTBEAT: update last_healthy_ts every cycle ──
+        self._update_health_heartbeat()
+
+        # ── SOVEREIGN RECOVERY: First cycle restores pre-crash state ──
+        if not self.recovery_done:
+            self._sovereign_recovery()
+            self.recovery_done = True
+            return  # Skip normal cycle — recovery IS the first cycle
+
         log.info(f"═══ L2 ORACLE CYCLE #{self.cycle} ═══")
 
         # 1. Get live snapshot from Cortex (via UDS → mmap)
@@ -905,6 +918,172 @@ PARAMETER CONSTRAINTS:
                 lines.append(f"\n🧠 {reasoning}")
 
         return "\n".join(lines)
+
+    # ═══════════════════════════════════════════════════════════
+    # 🧠 SOVEREIGN RECOVERY — Restore pre-crash state
+    # ═══════════════════════════════════════════════════════════
+
+    def _read_saved_state(self):
+        """Read pre-crash bot states from persistent disk file."""
+        try:
+            with open(STATE_FILE, 'r') as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            log.warning(f"State file read failed: {e}")
+            return {}
+
+    def _save_bot_state(self, bot_name, mode):
+        """Persist bot mode to disk for crash recovery."""
+        try:
+            state = self._read_saved_state()
+            state[bot_name] = {"mode": mode, "since": datetime.now().isoformat()}
+            state["last_healthy_ts"] = datetime.now().isoformat()
+            with open(STATE_FILE, 'w') as f:
+                json.dump(state, f, indent=2)
+        except Exception as e:
+            log.warning(f"save_bot_state failed: {e}")
+
+    def _update_health_heartbeat(self):
+        """Update last_healthy_ts — proves Oracle was alive at this time."""
+        try:
+            state = self._read_saved_state()
+            state["last_healthy_ts"] = datetime.now().isoformat()
+            with open(STATE_FILE, 'w') as f:
+                json.dump(state, f, indent=2)
+        except Exception:
+            pass
+
+    def _calc_downtime(self, state):
+        """Calculate how long the system was down."""
+        last = state.get("last_healthy_ts")
+        if not last:
+            return "unknown"
+        try:
+            last_dt = datetime.fromisoformat(last)
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone(timedelta(hours=1)))
+            delta = datetime.now(timezone(timedelta(hours=1))) - last_dt
+            mins = int(delta.total_seconds() / 60)
+            if mins < 60:
+                return f"{mins} min"
+            return f"{mins // 60}h {mins % 60}m"
+        except Exception:
+            return "unknown"
+
+    def _sovereign_recovery(self):
+        """First cycle after reboot: restore pre-crash bot states."""
+        log.info("🧠 ═══ SOVEREIGN RECOVERY — Cycle #1 ═══")
+
+        state = self._read_saved_state()
+        downtime = self._calc_downtime(state)
+        log.info(f"  Downtime: {downtime}")
+
+        # Collect pre-crash states
+        bot_states = {}
+        for bot in ["hydra", "moonshot", "grid", "trigon"]:
+            info = state.get(bot, {})
+            mode = info.get("mode", "OFFLINE") if isinstance(info, dict) else "OFFLINE"
+            bot_states[bot] = mode
+            emoji = {"LIVE": "🟢", "PAUSED": "🟡", "OFFLINE": "🔴"}.get(mode, "❓")
+            log.info(f"  {emoji} {bot.upper()}: was {mode}")
+
+        # Send recovery report to Telegram
+        lines = [
+            "🧠 *SOVEREIGN RECOVERY*",
+            f"⏱ Downtime: {downtime}",
+            "",
+            "*Pre-crash state:*",
+        ]
+        for bot, mode in bot_states.items():
+            emoji = {"LIVE": "🟢", "PAUSED": "🟡", "OFFLINE": "🔴"}.get(mode, "❓")
+            lines.append(f"  {emoji} {bot.upper()}: {mode}")
+        lines.append("\n🔄 *Obnovuji...*")
+
+        try:
+            self.send_telegram("\n".join(lines))
+        except Exception:
+            pass
+
+        # Progressively restore bots
+        restored = []
+        for bot, mode in bot_states.items():
+            if mode == "LIVE":
+                log.info(f"  🟢 Starting {bot} → LIVE")
+                self._start_trading_bot(bot)
+                time.sleep(10)
+                self._unpause_bot(bot)
+                self._save_bot_state(bot, "LIVE")
+                restored.append(f"🟢 {bot.upper()} → LIVE")
+            elif mode == "PAUSED":
+                log.info(f"  🟡 Starting {bot} → PAUSED (Scanner)")
+                self._start_trading_bot(bot)
+                time.sleep(5)
+                self._pause_bot(bot)
+                self._save_bot_state(bot, "PAUSED")
+                restored.append(f"🟡 {bot.upper()} → PAUSED (Scanner)")
+            else:
+                log.info(f"  🔴 {bot} → stays OFFLINE")
+                restored.append(f"🔴 {bot.upper()} → OFFLINE")
+
+        # Final Telegram report
+        final = [
+            "✅ *RECOVERY COMPLETE*",
+            "",
+        ] + restored
+
+        try:
+            self.send_telegram("\n".join(final))
+        except Exception:
+            pass
+
+        log.info("🧠 ═══ SOVEREIGN RECOVERY COMPLETE ═══")
+
+    def _start_trading_bot(self, bot_name):
+        """Start a trading bot process."""
+        bin_map = {
+            "hydra": ("hydra-core", "0"),
+            "moonshot": ("moonshot-core", "1"),
+            "grid": ("grid-core", "2"),
+            "trigon": ("trigon-core", "3"),
+        }
+        binary, cpu = bin_map.get(bot_name, (None, None))
+        if not binary:
+            log.error(f"Unknown bot: {bot_name}")
+            return
+        bin_path = os.path.join(PROJECT_ROOT, "target", "release", binary)
+        log_path = os.path.join(PROJECT_ROOT, "logs", f"{binary}.log")
+        try:
+            subprocess.Popen(
+                ["taskset", "-c", cpu, bin_path],
+                stdout=open(log_path, "a"),
+                stderr=subprocess.STDOUT,
+                cwd=PROJECT_ROOT,
+            )
+            log.info(f"  ✅ {bot_name} process started")
+        except Exception as e:
+            log.error(f"  ❌ Failed to start {bot_name}: {e}")
+
+    def _pause_bot(self, bot_name):
+        """Pause bot via Cortex UDS (Scanner mode)."""
+        try:
+            result = self.cortex.pause(bot_name)
+            if result.get("ok"):
+                log.info(f"  ⏸️ {bot_name} paused (Scanner)")
+            else:
+                log.warning(f"  Pause failed for {bot_name}: {result}")
+        except Exception as e:
+            log.warning(f"  Pause error for {bot_name}: {e}")
+
+    def _unpause_bot(self, bot_name):
+        """Unpause bot via Cortex UDS (LIVE mode)."""
+        try:
+            result = self.cortex.unpause(bot_name)
+            if result.get("ok"):
+                log.info(f"  ▶️ {bot_name} unpaused (LIVE)")
+            else:
+                log.warning(f"  Unpause failed for {bot_name}: {result}")
+        except Exception as e:
+            log.warning(f"  Unpause error for {bot_name}: {e}")
 
     def _send_fallback_report(self, error_msg):
         """Send minimal report when Gemini is unavailable."""

@@ -31,7 +31,25 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 BIN_DIR = os.path.join(PROJECT_ROOT, "target", "release")
 LOG_DIR = os.path.join(PROJECT_ROOT, "logs")
+STATE_FILE = os.path.join(PROJECT_ROOT, "state", "armada_state.json")
 os.makedirs(LOG_DIR, exist_ok=True)
+os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+
+def save_bot_state(bot_name, mode):
+    """Persist bot mode (LIVE/PAUSED/OFFLINE) to disk for crash recovery.
+    L2 Oracle reads this after restart to restore previous state."""
+    try:
+        try:
+            with open(STATE_FILE, 'r') as f:
+                data = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            data = {}
+        data[bot_name] = {"mode": mode, "since": datetime.now().isoformat()}
+        data["last_healthy_ts"] = datetime.now().isoformat()
+        with open(STATE_FILE, 'w') as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        logging.getLogger("tg").warning(f"save_bot_state failed: {e}")
 
 # Load .env file manually
 def load_dotenv(path):
@@ -407,6 +425,7 @@ def cmd_panic(message):
     for name in BOTS:
         if is_running(name):
             results.append(stop_bot(name))
+        save_bot_state(name, "OFFLINE")
     msg = "🚨 *PANIC — Všechny boty zastaveny!*\n\n" + "\n".join(results) if results else "🚨 Žádný bot neběžel."
     bot.reply_to(message, msg)
 
@@ -506,6 +525,10 @@ def cmd_bot(message):
 
     log.info(f"Command: /{bot_name} {action}")
 
+    # State persistence mapping
+    state_map = {"start": "LIVE", "stop": "OFFLINE", "restart": "LIVE",
+                 "pause": "PAUSED", "unpause": "LIVE", "resume": "LIVE"}
+
     actions = {
         "start": lambda: start_bot(bot_name),
         "stop": lambda: stop_bot(bot_name),
@@ -519,6 +542,9 @@ def cmd_bot(message):
     handler = actions.get(action)
     if handler:
         result = handler()
+        # Persist state to disk for crash recovery
+        if action in state_map:
+            save_bot_state(bot_name, state_map[action])
         bot.reply_to(message, result)
     else:
         bot.reply_to(message, f"❌ Neznámá akce: `{action}`\nPoužij: `start`, `stop`, `restart`, `pause`, `unpause`, `status`")
@@ -744,6 +770,11 @@ def handle_natural_language(message):
         handler = action_map.get(action)
         if handler:
             result_msg = handler(bot_name)
+            # Persist state to disk for crash recovery
+            nl_state_map = {"start": "LIVE", "stop": "OFFLINE", "restart": "LIVE",
+                            "pause": "PAUSED", "unpause": "LIVE"}
+            if action in nl_state_map and bot_name in BOTS:
+                save_bot_state(bot_name, nl_state_map[action])
             prefix = f"🐺 {response}\n\n" if response else ""
             bot.reply_to(message, f"{prefix}{result_msg}")
         else:
