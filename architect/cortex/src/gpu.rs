@@ -99,38 +99,25 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
             latest = newer;
         }
 
-        // Build structured JSON input (small models handle JSON input better than prose)
-        let user_prompt = serde_json::json!({
-            "market_data": {
-                "symbol": "BTC-USD",
-                "best_bid": round2(latest.best_bid),
-                "best_ask": round2(latest.best_ask),
-                "spread": round2(latest.best_ask - latest.best_bid),
-                "obi_current": round3(latest.obi),
-                "obi_prev": [round3(latest.obi_prev[0]), round3(latest.obi_prev[1])],
-                "bid_depth_btc": round3(latest.bid_depth),
-                "ask_depth_btc": round3(latest.ask_depth),
-                "depth_trend": latest.depth_trend,
-                "recent_sweeps_5min": latest.sweeps_recent,
-            },
-            "bot_state": {
-                "position_btc": round6(latest.net_position),
-                "toxic_fills": latest.toxic_hits,
-                "confidence_pct": (latest.confidence * 100.0).round() as u32,
-                "regime": latest.regime,
-            },
-            "macro": {
-                "fear_greed": latest.fear_greed,
-                "sentiment_bias": round4(latest.macro_bias),
-            },
-            "respond_with_format": {
-                "action": "HOLD|SKEW_BID|SKEW_ASK|PAUSE_TRADING",
-                "confidence_pct": "0-100",
-                "reason": "max 8 words"
-            }
-        });
+        // Compact one-line prompt — Phi-3.5 echoes back verbose JSON inputs.
+        // Keep it short so the model generates a response, not a parrot.
+        let fg_label = match latest.fear_greed {
+            0..=24 => "EXTREME_FEAR",
+            25..=49 => "FEAR",
+            50..=74 => "GREED",
+            _ => "EXTREME_GREED",
+        };
 
-        let prompt_str = serde_json::to_string(&user_prompt).unwrap_or_default();
+        let prompt_str = format!(
+            "BTC bid={:.0} ask={:.0} OBI={:+.2}(prev:{:+.2},{:+.2}) depth={}({:.1}/{:.1}) \
+             toxic={} sweeps={} pos={:.5} regime={} F&G={}({}) bias={:+.2}",
+            latest.best_bid, latest.best_ask,
+            latest.obi, latest.obi_prev[0], latest.obi_prev[1],
+            latest.depth_trend, latest.bid_depth, latest.ask_depth,
+            latest.toxic_hits, latest.sweeps_recent,
+            latest.net_position, latest.regime,
+            latest.fear_greed, fg_label, latest.macro_bias,
+        );
 
         match call_lms(&prompt_str) {
             Ok(decision) => {
