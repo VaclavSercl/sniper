@@ -188,9 +188,21 @@ class L2Oracle:
                 f"MaxPos={b.get('max_position', 0):.4f} Fills={b['fills']} Toxic={b['toxic']}\n"
             )
 
-        return f"""You are SNIPER, the Sovereign Oracle Cortex managing an automated BTC trading Armada.
-Analyze the global macro environment and the exact state of all sub-bots.
-Make highly coordinated, multi-bot strategic decisions to maximize PnL and survive flash crashes.
+        # Read current fee state for prompt
+        fee_info = ""
+        try:
+            import struct as _st
+            with open("/dev/shm/beroun/fee_state.bin", "rb") as f:
+                fd = f.read(64)
+            maker = _st.unpack_from('<Q', fd, 0)[0] / 100.0
+            taker = _st.unpack_from('<Q', fd, 8)[0] / 100.0
+            fee_info = f"\nExchange Fees: Maker={maker:.1f}bps Taker={taker:.1f}bps (live from API)\n"
+        except Exception:
+            fee_info = "\nExchange Fees: ~10bps maker / ~20bps taker (default)\n"
+
+        return f"""You are SNIPER, the Sovereign AI Oracle managing an automated multi-bot trading Armada.
+You have FULL AUTHORITY over ALL bots. Analyze macro, fees, and each bot's state.
+Make coordinated, profit-maximizing decisions across the entire system.
 
 RULES:
 - Grid step MUST be between ${GRID_FLOOR} and ${GRID_CEIL}
@@ -200,30 +212,56 @@ RULES:
 - Always fill "global_reasoning" FIRST to establish logic BEFORE setting parameters
 - Write global_reasoning in CZECH language (cesky)
 - Respond ONLY in valid JSON. No markdown, no prose outside JSON.
+- ALL bots share one API key — coordinate to avoid conflicting orders
+- Consider fees in ALL profitability calculations
 - If GPU total_inferences < 20: keep current l1_tuning defaults (insufficient data)
 - If GPU toxic_rate > 20%: reduce skew_max_usd and increase obi_threshold
-- If GPU SKEW_BID win_rate < 40%: increase obi_threshold to filter weak signals
-- If GPU PAUSE accuracy > 90%: keep current freeze behavior (model is accurate)
 
 ═══ MACRO INTELLIGENCE ═══
 Fear & Greed Index: {fg} ({fg_text})
 News Sentiment: {bias:+.4f} ({bias_label})
 Cycle: #{self.cycle} (every 5 min)
-{feedback}
+{fee_info}{feedback}
 ═══ PHI-3.5 GPU INTELLIGENCE ═══{self._format_gpu_section(gpu_data)}
 ═══ ARMADA STATE ═══{bot_states}
 ═══ RESPOND WITH THIS JSON ═══
-{{"global_reasoning": "Analyze macro + cross-bot correlations + GPU telemetry here FIRST...",
+{{"global_reasoning": "Analyze macro + cross-bot correlations + fees + GPU telemetry here FIRST...",
   "global_regime": "BEARISH_SHOCK|BULLISH_TREND|CHOPPING_RANGE",
-  "hydra": {{"recommended_grid_step": float, "max_position_limit": float, "pause_trading": boolean}},
-  "moonshot": {{"opportunity_bias": "LONG|SHORT|NEUTRAL"}},
-  "grid": {{"action": "KEEP_PAUSED|RESUME"}},
+  "hydra": {{
+    "recommended_grid_step": float,
+    "max_position_limit": float,
+    "pause_trading": boolean
+  }},
+  "moonshot": {{
+    "pause_trading": boolean,
+    "order_usd": float,
+    "drop_pct_override": float_or_null,
+    "tp_pct_override": float_or_null
+  }},
+  "grid": {{
+    "pause_trading": boolean,
+    "grid_spacing": float_or_null,
+    "order_qty": float_or_null
+  }},
+  "trigon": {{
+    "pause_trading": boolean,
+    "min_profit_bps": float,
+    "max_order_usd": float
+  }},
   "l1_tuning": {{"skew_max_usd": float, "obi_threshold": float, "inference_interval_ms": int}}}}
 
-l1_tuning constraints:
-  skew_max_usd: 0.5-5.0 (default 3.0, lower = less aggressive quotes)
-  obi_threshold: 0.0-0.8 (default 0.0, higher = ignore weak OBI signals)
-  inference_interval_ms: 500-10000 (default 2000, higher = slower GPU cycles)"""
+PARAMETER CONSTRAINTS:
+  hydra.grid_step: {GRID_FLOOR}-{GRID_CEIL} USD
+  hydra.max_position: {MAX_POS_FLOOR}-{MAX_POS_CEIL} BTC
+  moonshot.order_usd: 0-100 USD (0=scanner only)
+  moonshot.drop_pct: 1.0-10.0% (flash crash distance)
+  grid.grid_spacing: 5-200 USD
+  grid.order_qty: 0.0001-0.01 BTC
+  trigon.min_profit_bps: 5-50 bps (after 3×taker fee)
+  trigon.max_order_usd: 0-50 USD (0=scanner only)
+  l1_tuning.skew_max_usd: 0.5-5.0
+  l1_tuning.obi_threshold: 0.0-0.8
+  l1_tuning.inference_interval_ms: 500-10000"""
 
     def _format_gpu_section(self, gpu_data):
         """Format GPU telemetry for Gemini prompt."""
@@ -269,44 +307,165 @@ l1_tuning constraints:
         return None
 
     def _apply_decision(self, decision):
-        """Apply L2 decisions to Cortex via UDS."""
-        hydra = decision.get("hydra", {})
+        """Apply L2 decisions to ALL bots via UDS + mmap."""
 
-        # Pause/unpause
+        # ═══ HYDRA ═══
+        hydra = decision.get("hydra", {})
         if hydra.get("pause_trading") is True:
             r = self.cortex.pause("hydra")
             log.info(f"  ⏸️ HYDRA PAUSED: {r}")
         elif hydra.get("pause_trading") is False:
             self.cortex.unpause("hydra")
 
-        # Grid step
         grid = hydra.get("recommended_grid_step") or hydra.get("grid_step")
         if grid is not None:
             r = self.cortex.set_grid(float(grid))
-            prev = r.get("prev", "?")
-            log.info(f"  📐 Grid: ${prev} → ${grid}")
+            log.info(f"  📐 Hydra Grid: ${r.get('prev', '?')} → ${grid}")
 
-        # Max position
         maxp = hydra.get("max_position_limit") or hydra.get("max_position")
         if maxp is not None:
             r = self.cortex.set_maxpos(float(maxp))
-            prev = r.get("prev", "?")
-            log.info(f"  📦 MaxPos: {prev} → {maxp}")
+            log.info(f"  📦 Hydra MaxPos: {r.get('prev', '?')} → {maxp}")
 
-        # Regime
+        # Regime (global)
         regime = decision.get("global_regime") or decision.get("regime")
         if regime:
             self.cortex.set_regime(regime)
             log.info(f"  📈 Regime: {regime}")
 
-        # L1 tuning (Phi-3.5 parameter adjustment)
+        # L1 tuning (Phi-3.5)
         l1 = decision.get("l1_tuning", {})
         if l1:
             skew = float(l1.get("skew_max_usd", 3.0))
             obi = float(l1.get("obi_threshold", 0.0))
             interval = int(l1.get("inference_interval_ms", 2000))
-            r = self.cortex.set_l1_tuning(skew, obi, interval)
-            log.info(f"  🤖 L1 Tuning: skew_max=${skew:.1f} obi_thr={obi:.2f} interval={interval}ms")
+            self.cortex.set_l1_tuning(skew, obi, interval)
+            log.info(f"  🤖 L1: skew=${skew:.1f} obi={obi:.2f} int={interval}ms")
+
+        # ═══ MOONSHOT ═══
+        moonshot = decision.get("moonshot", {})
+        self._apply_moonshot(moonshot)
+
+        # ═══ GRID ═══
+        grid_bot = decision.get("grid", {})
+        self._apply_grid(grid_bot)
+
+        # ═══ TRIGON ═══
+        trigon = decision.get("trigon", {})
+        self._apply_trigon(trigon)
+
+    def _apply_moonshot(self, cfg):
+        """Apply AI decisions to Moonshot risk mmap."""
+        if not cfg:
+            return
+        try:
+            import struct as _st
+            MOONSHOT_RISK_PATH = "/dev/shm/beroun/moonshot_risk.bin"
+            PAIR_SIZE = 128
+            MAX_PAIRS = 20
+            GLOBAL_OFF = MAX_PAIRS * PAIR_SIZE
+            SCALE = 100_000_000.0
+
+            fd = os.open(MOONSHOT_RISK_PATH, os.O_RDWR)
+            import mmap
+            mm = mmap.mmap(fd, 0)
+            os.close(fd)
+
+            # Pause/unpause
+            if cfg.get("pause_trading") is True:
+                _st.pack_into('<Q', mm, GLOBAL_OFF, 1)
+                log.info("  ⏸️ Moonshot PAUSED")
+            elif cfg.get("pause_trading") is False:
+                _st.pack_into('<Q', mm, GLOBAL_OFF, 0)
+                log.info("  ▶️ Moonshot UNPAUSED")
+
+            # Per-pair order_usd override (all pairs)
+            order_usd = cfg.get("order_usd")
+            if order_usd is not None:
+                for i in range(MAX_PAIRS):
+                    sym = _st.unpack_from('<Q', mm, i * PAIR_SIZE)[0]
+                    if sym != 0:  # active pair
+                        _st.pack_into('<Q', mm, i * PAIR_SIZE + 56, int(float(order_usd) * SCALE))
+                log.info(f"  🌙 Moonshot order_usd: ${order_usd}")
+
+            # Drop% and TP% overrides
+            drop = cfg.get("drop_pct_override")
+            tp = cfg.get("tp_pct_override")
+            if drop is not None or tp is not None:
+                for i in range(MAX_PAIRS):
+                    sym = _st.unpack_from('<Q', mm, i * PAIR_SIZE)[0]
+                    if sym != 0:
+                        if drop is not None:
+                            _st.pack_into('<Q', mm, i * PAIR_SIZE + 8, int(float(drop) * SCALE))
+                        if tp is not None:
+                            _st.pack_into('<Q', mm, i * PAIR_SIZE + 40, int(float(tp) * SCALE))
+                if drop: log.info(f"  🌙 Moonshot drop%: {drop}")
+                if tp: log.info(f"  🌙 Moonshot tp%: {tp}")
+
+            # AI heartbeat
+            import time
+            _st.pack_into('<Q', mm, GLOBAL_OFF + 24, int(time.time() * 1000))
+
+            mm.flush()
+            mm.close()
+        except Exception as e:
+            log.error(f"Moonshot mmap write failed: {e}")
+
+    def _apply_grid(self, cfg):
+        """Apply AI decisions to Grid via Cortex UDS."""
+        if not cfg:
+            return
+        if cfg.get("pause_trading") is True:
+            self.cortex.pause("grid")
+            log.info("  ⏸️ Grid PAUSED")
+        elif cfg.get("pause_trading") is False:
+            self.cortex.unpause("grid")
+            log.info("  ▶️ Grid UNPAUSED")
+
+        spacing = cfg.get("grid_spacing")
+        if spacing is not None:
+            self.cortex.set_grid(float(spacing), bot="grid")
+            log.info(f"  📐 Grid spacing: ${spacing}")
+
+    def _apply_trigon(self, cfg):
+        """Apply AI decisions to Trigon risk mmap."""
+        if not cfg:
+            return
+        try:
+            import struct as _st
+            TRIGON_RISK_PATH = "/dev/shm/beroun/trigon_risk.bin"
+
+            fd = os.open(TRIGON_RISK_PATH, os.O_RDWR)
+            import mmap
+            mm = mmap.mmap(fd, 0)
+            os.close(fd)
+
+            SCALE = 100_000_000.0
+
+            # global_paused at offset 0
+            if cfg.get("pause_trading") is True:
+                _st.pack_into('<Q', mm, 0, 1)
+                log.info("  ⏸️ Trigon PAUSED")
+            elif cfg.get("pause_trading") is False:
+                _st.pack_into('<Q', mm, 0, 0)
+                log.info("  ▶️ Trigon UNPAUSED")
+
+            # min_profit_bps at offset 8
+            mpb = cfg.get("min_profit_bps")
+            if mpb is not None:
+                _st.pack_into('<Q', mm, 8, int(float(mpb) * 100))  # stored as bps×100
+                log.info(f"  🔺 Trigon min_profit: {mpb} bps")
+
+            # max_order_usd at offset 16
+            mou = cfg.get("max_order_usd")
+            if mou is not None:
+                _st.pack_into('<Q', mm, 16, int(float(mou) * SCALE))
+                log.info(f"  🔺 Trigon max_order: ${mou}")
+
+            mm.flush()
+            mm.close()
+        except Exception as e:
+            log.error(f"Trigon mmap write failed: {e}")
 
     def _build_report(self, bots, decision):
         """Build Telegram report from snapshot + decision."""
