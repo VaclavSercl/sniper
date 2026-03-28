@@ -40,8 +40,32 @@ body{background:#0a0e17;color:#e1e5ee;font-family:'Inter',system-ui,sans-serif;m
 <body>
 <div class="header">
     <h1>🏛️ Sniper Architect</h1>
-    <span class="version">v11.2 Multi-Bot Command Center</span>
+    <span class="version">v13.0 Sovereign Intelligence</span>
     <span class="status online" id="armada-status">CONNECTING...</span>
+</div>
+
+<!-- Cortex Status Panel -->
+<div class="summary" id="cortex-panel">
+    <div class="summary-item" style="border-left:3px solid #7c3aed">
+        <div class="label">🧠 Cortex</div>
+        <div class="value blue" id="cortex-status" style="font-size:1em">—</div>
+    </div>
+    <div class="summary-item">
+        <div class="label">Uptime</div>
+        <div class="value green" id="cortex-uptime" style="font-size:1em">—</div>
+    </div>
+    <div class="summary-item">
+        <div class="label">Fear & Greed</div>
+        <div class="value" id="cortex-fg" style="font-size:1.4em">—</div>
+    </div>
+    <div class="summary-item">
+        <div class="label">Macro Bias</div>
+        <div class="value" id="cortex-bias" style="font-size:1em">—</div>
+    </div>
+    <div class="summary-item">
+        <div class="label">GPU</div>
+        <div class="value blue" id="cortex-gpu" style="font-size:1em">—</div>
+    </div>
 </div>
 
 <div class="summary" id="summary">
@@ -62,7 +86,7 @@ body{background:#0a0e17;color:#e1e5ee;font-family:'Inter',system-ui,sans-serif;m
 <div class="grid" id="bot-grid"></div>
 
 <div class="footer">
-    Sniper Armada v11.2 · Architect Module · Real-time SSE
+    Sniper Armada v13.0 · Sovereign Cortex · Real-time SSE + Cortex JSON
 </div>
 
 <script>
@@ -103,9 +127,40 @@ function renderBots(data) {
     }).join('');
 }
 
+// Cortex Health Reader
+async function fetchCortexHealth() {
+    try {
+        const r = await fetch('/cortex_state.json?t=' + Date.now());
+        if (!r.ok) return;
+        const d = await r.json();
+        const age = (Date.now() - d.timestamp_ms) / 1000;
+        document.getElementById('cortex-status').textContent = age < 30 ? '🟢 ONLINE' : '🟡 STALE (' + age.toFixed(0) + 's)';
+        document.getElementById('cortex-status').className = 'value ' + (age < 30 ? 'green' : 'red');
+
+        const hrs = Math.floor(d.uptime_s / 3600);
+        const mins = Math.floor((d.uptime_s % 3600) / 60);
+        document.getElementById('cortex-uptime').textContent = hrs + 'h ' + mins + 'm';
+
+        const fg = d.fear_greed;
+        const fgEl = document.getElementById('cortex-fg');
+        fgEl.textContent = fg;
+        fgEl.className = 'value ' + (fg < 25 ? 'red' : fg < 50 ? '' : 'green');
+
+        const bias = parseFloat(d.macro_bias);
+        const biasEl = document.getElementById('cortex-bias');
+        biasEl.textContent = (bias >= 0 ? '+' : '') + bias.toFixed(4);
+        biasEl.className = 'value ' + (bias > 0 ? 'green' : bias < 0 ? 'red' : 'blue');
+
+        document.getElementById('cortex-gpu').textContent = d.modules.gpu ? '🟢 Phi-3.5' : '⬜ OFF';
+    } catch(e) {}
+}
+setInterval(fetchCortexHealth, 5000);
+fetchCortexHealth();
+
 const es = new EventSource('/events');
 es.onmessage = e => { try { renderBots(JSON.parse(e.data)); } catch(err) {} };
 es.onerror = () => { document.getElementById('armada-status').textContent = 'RECONNECTING...'; };
 </script>
 </body>
 </html>
+

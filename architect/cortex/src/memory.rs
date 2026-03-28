@@ -45,12 +45,16 @@ pub struct BotSnapshot {
 pub struct ArmadaMemory {
     hydra_engine: MmapMut,
     hydra_risk: MmapMut,
-    // Future: moonshot_engine, grid_engine, trigon_engine
+    moonshot_engine: Option<MmapMut>,
+    moonshot_risk: Option<MmapMut>,
+    grid_engine: Option<MmapMut>,
+    grid_risk: Option<MmapMut>,
+    trigon_engine: Option<MmapMut>,
+    trigon_risk: Option<MmapMut>,
 }
 
 impl ArmadaMemory {
-    /// Open all bot mmap files. Panics if Hydra files don't exist
-    /// (other bots are optional — will be added when they have mmap).
+    /// Open all bot mmap files. Hydra is required, others are optional.
     pub fn new() -> anyhow::Result<Self> {
         println!("🔗 Mapping shared memory...");
 
@@ -62,9 +66,19 @@ impl ArmadaMemory {
         println!("  ✅ Hydra engine_state.bin mapped ({engine_size} bytes → EngineState)");
         println!("  ✅ Hydra risk_state.bin mapped ({risk_size} bytes → RiskState)");
 
+        // Optional bots — logged but not fatal
+        let moonshot_engine = Self::try_map_file("/dev/shm/beroun/moonshot_engine.bin", "Moonshot");
+        let moonshot_risk = Self::try_map_file("/dev/shm/beroun/moonshot_risk.bin", "Moonshot Risk");
+        let grid_engine = Self::try_map_file("/dev/shm/beroun/grid_engine.bin", "Grid");
+        let grid_risk = Self::try_map_file("/dev/shm/beroun/grid_risk.bin", "Grid Risk");
+        let trigon_engine = Self::try_map_file("/dev/shm/beroun/trigon_engine.bin", "Trigon");
+        let trigon_risk = Self::try_map_file("/dev/shm/beroun/trigon_risk.bin", "Trigon Risk");
+
         Ok(ArmadaMemory {
-            hydra_engine,
-            hydra_risk,
+            hydra_engine, hydra_risk,
+            moonshot_engine, moonshot_risk,
+            grid_engine, grid_risk,
+            trigon_engine, trigon_risk,
         })
     }
 
@@ -78,6 +92,19 @@ impl ArmadaMemory {
             .open(path)?;
         let mm = unsafe { MmapOptions::new().map_mut(&file)? };
         Ok(mm)
+    }
+
+    fn try_map_file(path: &str, name: &str) -> Option<MmapMut> {
+        match Self::map_file(path) {
+            Ok(mm) => {
+                println!("  ✅ {name} mapped ({} bytes)", mm.len());
+                Some(mm)
+            }
+            Err(_) => {
+                println!("  ⬜ {name} not found (bot offline)");
+                None
+            }
+        }
     }
 
     /// Type-safe reference to Hydra EngineState (zero-copy).
@@ -98,9 +125,33 @@ impl ArmadaMemory {
     /// Take an atomic snapshot of Hydra's full state.
     /// All reads are Acquire-ordered for consistency.
     pub fn snapshot_hydra(&self) -> BotSnapshot {
-        let e = self.hydra_engine();
-        let r = self.hydra_risk();
+        self.snapshot_bot(self.hydra_engine(), self.hydra_risk(), "hydra", "🐍")
+    }
 
+    /// Snapshot all online bots (for L2 unified prompt).
+    pub fn snapshot_all(&self) -> Vec<BotSnapshot> {
+        let mut snapshots = Vec::with_capacity(4);
+        snapshots.push(self.snapshot_hydra());
+        if let (Some(e), Some(r)) = (&self.moonshot_engine, &self.moonshot_risk) {
+            let engine = unsafe { &*(e.as_ptr() as *const EngineState) };
+            let risk = unsafe { &*(r.as_ptr() as *const RiskState) };
+            snapshots.push(self.snapshot_bot(engine, risk, "moonshot", "🌙"));
+        }
+        if let (Some(e), Some(r)) = (&self.grid_engine, &self.grid_risk) {
+            let engine = unsafe { &*(e.as_ptr() as *const EngineState) };
+            let risk = unsafe { &*(r.as_ptr() as *const RiskState) };
+            snapshots.push(self.snapshot_bot(engine, risk, "grid", "📐"));
+        }
+        if let (Some(e), Some(r)) = (&self.trigon_engine, &self.trigon_risk) {
+            let engine = unsafe { &*(e.as_ptr() as *const EngineState) };
+            let risk = unsafe { &*(r.as_ptr() as *const RiskState) };
+            snapshots.push(self.snapshot_bot(engine, risk, "trigon", "🔺"));
+        }
+        snapshots
+    }
+
+    /// Generic bot snapshot from EngineState + RiskState references.
+    fn snapshot_bot(&self, e: &EngineState, r: &RiskState, name: &'static str, emoji: &'static str) -> BotSnapshot {
         let bid = e.best_bid.load(Ordering::Acquire) as f64 / PRICE_SCALE;
         let ask = e.best_ask.load(Ordering::Acquire) as f64 / PRICE_SCALE;
 
@@ -108,8 +159,8 @@ impl ArmadaMemory {
         let intent_id = e.ai_intent.load(Ordering::Relaxed);
 
         BotSnapshot {
-            name: "hydra",
-            emoji: "🐍",
+            name,
+            emoji,
             online: e.latency_ns.load(Ordering::Relaxed) > 0,
             best_bid: bid,
             best_ask: ask,
@@ -139,7 +190,6 @@ impl ArmadaMemory {
                 3 => "SCOUT",
                 _ => "UNKNOWN",
             },
-            // Risk params from RiskState
             grid_step: r.grid_step.load(Ordering::Acquire) as f64 / PRICE_SCALE,
             grid_levels: r.grid_size.load(Ordering::Relaxed),
             max_position: r.max_inv_delta.load(Ordering::Relaxed) as f64 / PRICE_SCALE,
@@ -147,16 +197,6 @@ impl ArmadaMemory {
             daily_loss_limit: r.daily_loss_limit.load(Ordering::Relaxed) as f64 / PRICE_SCALE,
             paused: r.paused.load(Ordering::Relaxed) != 0,
         }
-    }
-
-    /// Snapshot all bots (for L2 unified prompt).
-    pub fn snapshot_all(&self) -> Vec<BotSnapshot> {
-        let mut snapshots = Vec::with_capacity(4);
-        snapshots.push(self.snapshot_hydra());
-        // Future: snapshots.push(self.snapshot_moonshot());
-        // Future: snapshots.push(self.snapshot_grid());
-        // Future: snapshots.push(self.snapshot_trigon());
-        snapshots
     }
 }
 

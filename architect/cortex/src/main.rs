@@ -13,6 +13,8 @@
 // ═══════════════════════════════════════════════════════════
 
 mod memory;
+mod gpu;
+mod health;
 mod l1;
 mod l2;
 mod macro_intel;
@@ -27,6 +29,7 @@ async fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let dry_run = args.iter().any(|a| a == "--dry-run");
     let no_macro = args.iter().any(|a| a == "--no-macro");
+    let no_gpu = args.iter().any(|a| a == "--no-gpu");
 
     // Load .env from project root (sniper/)
     load_dotenv();
@@ -63,7 +66,30 @@ async fn main() -> anyhow::Result<()> {
         println!();
     }
 
-    // 3. Launch L1 Tactical Shield (dedicated OS thread — 50ms cycle)
+    // 3. Launch GPU inference (if LM Studio is running)
+    let gpu_tx = if !no_gpu && !dry_run {
+        let mem = memory.read().await;
+        let engine_ptr = mem.hydra_engine() as *const sniper_types::EngineState;
+        let engine_ref: &'static sniper_types::EngineState = unsafe { &*engine_ptr };
+
+        // Check if LM Studio is alive
+        match ureq::get("http://localhost:1234/v1/models").call() {
+            Ok(_) => {
+                let tx = gpu::spawn_gpu_thread(engine_ref);
+                println!("🤖 GPU Inference: ONLINE (Phi-3.5 Mini @ :1234)");
+                Some(tx)
+            }
+            Err(_) => {
+                println!("⚠️  GPU Inference: OFFLINE (LM Studio not running on :1234)");
+                None
+            }
+        }
+    } else {
+        if no_gpu { println!("⚠️  GPU DISABLED by --no-gpu"); }
+        None
+    };
+
+    // 4. Launch L1 Tactical Shield (dedicated OS thread — 50ms cycle)
     {
         let mem = memory.read().await;
         let engine_ptr = mem.hydra_engine() as *const sniper_types::EngineState;
@@ -72,12 +98,12 @@ async fn main() -> anyhow::Result<()> {
         std::thread::Builder::new()
             .name("l1-hydra".into())
             .spawn(move || {
-                l1::run_l1_hydra(engine_ref);
+                l1::run_l1_hydra(engine_ref, gpu_tx);
             })?;
     }
     println!("🛡️ L1 Tactical Shield: ONLINE (50ms cycle)");
 
-    // 4. Launch Macro Intelligence (3 dedicated OS threads)
+    // 5. Launch Macro Intelligence (3 dedicated OS threads)
     if !no_macro {
         let mem = memory.read().await;
         let engine_ptr = mem.hydra_engine() as *const sniper_types::EngineState;
@@ -110,19 +136,26 @@ async fn main() -> anyhow::Result<()> {
         println!("🌍 Macro Intelligence: ONLINE (Binance WS + F&G + RSS)");
     }
 
-    // 5. Launch L2 Strategic Oracle (tokio async task)
+    // 6. Launch L2 Strategic Oracle (tokio async task)
     let l2_memory = Arc::clone(&memory);
     let l2_handle = tokio::spawn(async move {
         l2::run_l2_loop(l2_memory, dry_run).await;
     });
 
+    // 7. Launch Health State Writer (tokio async task)
+    let health_memory = Arc::clone(&memory);
+    let health_handle = tokio::spawn(async move {
+        health::run_health_writer(health_memory).await;
+    });
+
     println!("🌐 L2 Strategic Oracle: ONLINE (5 min cycle)");
+    println!("📊 Health Writer: ONLINE (cortex_state.json every 5s)");
     println!();
     println!("✅ SOVEREIGN CORTEX FULLY OPERATIONAL");
     println!("   Press Ctrl+C to stop.\n");
 
     // Wait for tasks
-    let _ = tokio::join!(l2_handle);
+    let _ = tokio::join!(l2_handle, health_handle);
 
     Ok(())
 }

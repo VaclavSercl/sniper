@@ -7,9 +7,11 @@
 // Zero-copy mmap access via sniper_types
 // ═══════════════════════════════════════════════════════════
 
+use crate::gpu::L1GpuRequest;
 use sniper_types::{EngineState, PRICE_SCALE, BOOK_LEVELS};
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
+use std::sync::mpsc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const CYCLE_MS: u64 = 50;
@@ -257,7 +259,8 @@ fn epoch_secs() -> f64 {
 }
 
 /// Run the L1 tactical loop for Hydra (50ms cycle).
-pub fn run_l1_hydra(engine: &EngineState) {
+/// gpu_tx: Optional channel to fire snapshots for GPU inference (non-blocking).
+pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuRequest>>) {
     println!("🛡️ [L1] Hydra tactical shield starting ({}ms cycle)...", CYCLE_MS);
 
     let mut brain = AdaptiveL1Brain::new();
@@ -347,6 +350,29 @@ pub fn run_l1_hydra(engine: &EngineState) {
                 } else {
                     brain.record_active_time();
                 }
+            }
+        }
+
+        // ── GPU INFERENCE (fire-and-forget every ~2s = 40 cycles) ──
+        if let Some(ref tx) = gpu_tx {
+            if cycle % 40 == 0 {
+                let regime = match engine.l2_regime_id.load(Ordering::Relaxed) {
+                    1 => "TRENDING",
+                    2 => "RANGING",
+                    3 => "CHAOS",
+                    _ => "UNKNOWN",
+                };
+                let _ = tx.try_send(L1GpuRequest {
+                    price: engine.micro_price.load(Ordering::Relaxed) as f64 / PRICE_SCALE,
+                    obi,
+                    bid_depth,
+                    ask_depth,
+                    toxic_hits: engine.toxic_flow_hits.load(Ordering::Relaxed),
+                    confidence,
+                    net_position: engine.net_position.load(Ordering::Relaxed) as f64 / PRICE_SCALE,
+                    spread: skew_usd.abs(), // approximate
+                    regime,
+                });
             }
         }
 
