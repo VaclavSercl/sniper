@@ -4,6 +4,7 @@ members = [
     "hydra",
     "moonshot",
     "grid",
+    "trigon",
 ]
 resolver = "3"
 
