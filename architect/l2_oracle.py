@@ -252,7 +252,7 @@ Cycle: #{self.cycle} (every 5 min)
     \"min_profit_bps\": float,
     \"max_order_usd\": float,
     \"latency_padding_bps\": int,
-    \"latency_killswitch_ms\": int
+    \"latency_killswitch\": int
   }},
   \"l1_tuning\": {{\"skew_max_usd\": float, \"obi_threshold\": float, \"inference_interval_ms\": int}}}}
 
@@ -269,7 +269,7 @@ PARAMETER CONSTRAINTS:
   trigon.min_profit_bps: 5-50 bps (after 3×taker fee)
   trigon.max_order_usd: 0-50 USD (0=scanner only)
   trigon.latency_padding_bps: 0-30 (added to min_profit as slippage buffer)
-  trigon.latency_killswitch_ms: 50-2000 (stop arb if latency exceeds this)
+  trigon.latency_killswitch: 0 or 1 (L2 auto-sets from p95 > 250ms)
   l1_tuning.skew_max_usd: 0.5-5.0
   l1_tuning.obi_threshold: 0.0-0.8
   l1_tuning.inference_interval_ms: 500-10000"""
@@ -384,7 +384,7 @@ PARAMETER CONSTRAINTS:
         try:
             import struct as _st
             L2_CMD_PATH = "/dev/shm/beroun/l2_command.bin"
-            L2_CMD_SIZE = 64
+            L2_CMD_SIZE = 640  # L2CommandMatrix(64B) + L1TelemetryRing(64+512B)
 
             os.makedirs(os.path.dirname(L2_CMD_PATH), exist_ok=True)
             fd = os.open(L2_CMD_PATH, os.O_RDWR | os.O_CREAT)
@@ -397,38 +397,53 @@ PARAMETER CONSTRAINTS:
             cur_ver = _st.unpack_from('<Q', mm, 0)[0]
             next_ver = cur_ver + 1
 
-            # Step 1: Write ODD version (= "writing in progress")
+            # Step 1: Write ODD version (= "writing in progress", L1 will spin)
             _st.pack_into('<Q', mm, 0, next_ver)
             mm.flush()
 
-            # Step 2: Write all fields
+            # Step 2: Write control fields (Cache Line 1: L2 → L1)
+            # Layout: ver(8) + bid_fade(8) + ask_fade(8) + lat_pad(8) + killswitch(8) + pad(24)
             hydra = decision.get("hydra", {})
             bid_fade = int(hydra.get("bid_fade_bps", 0))
             ask_fade = int(hydra.get("ask_fade_bps", 0))
             _st.pack_into('<q', mm, 8, bid_fade)
             _st.pack_into('<q', mm, 16, ask_fade)
 
-            # Moonshot trigger price (L2 pre-computes: price - N*sigma)
-            moonshot = decision.get("moonshot", {})
-            trigger = moonshot.get("trigger_price")
-            if trigger is not None:
-                PRICE_SCALE = 100_000_000.0
-                _st.pack_into('<q', mm, 24, int(float(trigger) * PRICE_SCALE))
-            armed = 1 if moonshot.get("armed") else 0
-            _st.pack_into('<Q', mm, 32, armed)
-
-            # Trigon latency padding
+            # Trigon latency — L2 reads ring buffer, computes p95, writes padding + killswitch
             trigon = decision.get("trigon", {})
             lat_pad = int(trigon.get("latency_padding_bps", 0))
-            lat_kill = int(trigon.get("latency_killswitch_ms", 500))
-            _st.pack_into('<q', mm, 40, lat_pad)
-            _st.pack_into('<Q', mm, 48, lat_kill)
 
-            # Heartbeat
-            import time
-            _st.pack_into('<Q', mm, 56, int(time.time() * 1000))
+            # Compute killswitch from ring buffer p95 (Cache Line 2+)
+            kill = 0
+            try:
+                import numpy as np
+                head_offset = 64  # L1TelemetryRing starts at byte 64
+                head_val = _st.unpack_from('<Q', mm, head_offset)[0]
+                if head_val > 0:
+                    ring_offset = head_offset + 64  # ring data at byte 128 (after head + pad)
+                    count = min(head_val, 64)
+                    latencies = []
+                    for i in range(count):
+                        idx = (head_val - count + i) & 63
+                        val = _st.unpack_from('<Q', mm, ring_offset + idx * 8)[0]
+                        if val > 0:
+                            latencies.append(val / 1000.0)  # µs → ms
+                    if latencies:
+                        p95 = np.percentile(latencies, 95)
+                        if p95 > 250.0:
+                            kill = 1  # Exchange overloaded
+                            lat_pad = max(lat_pad, 30)
+                        elif p95 > 20.0:
+                            # +1 bps padding per 10ms over 20ms baseline
+                            lat_pad = max(lat_pad, int((p95 - 20) / 10))
+                        log.info(f"  📊 Tick-to-Trade p95: {p95:.1f}ms → pad={lat_pad}bps kill={kill}")
+            except Exception as e:
+                log.debug(f"Ring buffer read skipped: {e}")
 
-            # Step 3: Write EVEN version (= "data consistent")
+            _st.pack_into('<q', mm, 24, lat_pad)
+            _st.pack_into('<q', mm, 32, kill)
+
+            # Step 3: Write EVEN version (= "data consistent", L1 can read)
             _st.pack_into('<Q', mm, 0, next_ver + 1)
             mm.flush()
             mm.close()

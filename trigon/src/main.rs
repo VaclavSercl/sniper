@@ -336,18 +336,15 @@ async fn main() -> Result<()> {
                                 let max_usd = tr.max_order_usd.load(Ordering::Acquire) as f64 / PRICE_SCALE_I as f64;
 
                                 // ═══ v14.2 LATENCY-AWARE PADDING (Issue #18) ═══
-                                // L2 pre-computes p95 Tick-to-Trade latency → padding bps
-                                // L1 just adds it to min_profit (O(1))
+                                // L2 pre-computes p95 Tick-to-Trade → padding & killswitch
+                                // L1: O(1) check via SeqLock-protected reads
                                 let latency_pad = {
                                     let (v1, ok1) = sniper_types::l2_command::l2cmd_version_check(l2cmd);
                                     let pad = l2cmd.latency_padding_bps.load(Ordering::Relaxed);
-                                    let kill = l2cmd.latency_killswitch_ms.load(Ordering::Relaxed);
+                                    let kill = l2cmd.latency_killswitch.load(Ordering::Relaxed);
                                     let (v2, ok2) = sniper_types::l2_command::l2cmd_version_check(l2cmd);
                                     if v1 == v2 && ok1 && ok2 {
-                                        // Check killswitch: if last measured latency > threshold, skip
-                                        if kill > 0 && kill < 100 { // killswitch triggered (abnormally low = stop)
-                                            continue;
-                                        }
+                                        if kill == 1 { continue; } // Killswitch: exchange overloaded
                                         pad.max(0) as f64
                                     } else { 0.0 }
                                 };
