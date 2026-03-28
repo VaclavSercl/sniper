@@ -18,6 +18,7 @@ mod health;
 mod l1;
 mod l2;
 mod macro_intel;
+mod sentinel;
 mod telegram;
 
 use memory::ArmadaMemory;
@@ -35,8 +36,9 @@ async fn main() -> anyhow::Result<()> {
     load_dotenv();
 
     println!("🧠 ══════════════════════════════════════════");
-    println!("🧠  SOVEREIGN CORTEX v13.0");
+    println!("🧠  SOVEREIGN CORTEX v13.1");
     println!("🧠  L1 Tactical + L2 Strategic + Macro Intel");
+    println!("🧠  🛡️ Sentinel: 4-Layer Guardian");
     println!("🧠 ══════════════════════════════════════════");
     if dry_run {
         println!("⚠️  DRY-RUN MODE — no Gemini calls, no writes");
@@ -148,14 +150,24 @@ async fn main() -> anyhow::Result<()> {
         health::run_health_writer(health_memory).await;
     });
 
+    // 8. Launch Sentinel Guardian (tokio async task)
+    let sentinel_memory = Arc::clone(&memory);
+    let sentinel_handle = tokio::spawn(async move {
+        sentinel::run_sentinel(sentinel_memory).await;
+    });
+
+    // 9. Send boot alert (Layer 4)
+    sentinel::send_boot_alert().await;
+
     println!("🌐 L2 Strategic Oracle: ONLINE (5 min cycle)");
     println!("📊 Health Writer: ONLINE (cortex_state.json every 5s)");
+    println!("🛡️ Sentinel: ONLINE (5-layer guardian)");
     println!();
-    println!("✅ SOVEREIGN CORTEX FULLY OPERATIONAL");
+    println!("✅ SOVEREIGN CORTEX v13.1 FULLY OPERATIONAL");
     println!("   Press Ctrl+C to stop.\n");
 
     // Wait for tasks
-    let _ = tokio::join!(l2_handle, health_handle);
+    let _ = tokio::join!(l2_handle, health_handle, sentinel_handle);
 
     Ok(())
 }

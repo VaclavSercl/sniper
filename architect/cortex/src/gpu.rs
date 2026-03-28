@@ -212,7 +212,12 @@ fn call_lms(user_prompt: &str) -> anyhow::Result<GpuDecision> {
 
     let json_body = serde_json::to_string(&body)?;
 
-    let resp_body: String = ureq::post(LMS_URL)
+    let agent = ureq::Agent::config_builder()
+        .timeout_global(Some(std::time::Duration::from_millis(2000)))
+        .build()
+        .new_agent();
+
+    let resp_body: String = agent.post(LMS_URL)
         .header("Content-Type", "application/json")
         .send(&json_body)?
         .body_mut()
