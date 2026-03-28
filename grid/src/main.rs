@@ -201,6 +201,23 @@ async fn main() -> Result<()> {
             .add(std::mem::size_of::<sniper_types::l2_command::L2ASMatrix>())
             as *const sniper_types::l2_command::L2GridWarpMatrix)
     };
+    // CL4: Global Risk (hedge shield check)
+    let l2risk = unsafe {
+        &*(l2cmd_mmap.as_ptr()
+            .add(std::mem::size_of::<sniper_types::l2_command::L2CommandMatrix>())
+            .add(std::mem::size_of::<sniper_types::l2_command::L2ASMatrix>())
+            .add(std::mem::size_of::<sniper_types::l2_command::L2GridWarpMatrix>())
+            as *const sniper_types::l2_command::L2GlobalRiskMatrix)
+    };
+    // CL5: Portfolio telemetry
+    let l2portfolio = unsafe {
+        &*(l2cmd_mmap.as_ptr()
+            .add(std::mem::size_of::<sniper_types::l2_command::L2CommandMatrix>())
+            .add(std::mem::size_of::<sniper_types::l2_command::L2ASMatrix>())
+            .add(std::mem::size_of::<sniper_types::l2_command::L2GridWarpMatrix>())
+            .add(std::mem::size_of::<sniper_types::l2_command::L2GlobalRiskMatrix>())
+            as *const sniper_types::l2_command::L2PortfolioTelemetry)
+    };
 
     let key = std::env::var("BITFINEX_API_KEY").context("Missing BITFINEX_API_KEY")?;
     let sec = std::env::var("BITFINEX_API_SECRET").context("Missing BITFINEX_API_SECRET")?;
@@ -253,6 +270,14 @@ async fn main() -> Result<()> {
 
                         // Grid recalculation every 3 seconds
                         let paused = risk.global_paused.load(Ordering::Acquire) != 0;
+
+                        // Phase 3: Report grid inventory to L2 portfolio aggregator
+                        let grid_inv = engine.net_position.load(Ordering::Relaxed);
+                        l2portfolio.grid_inventory.store(grid_inv, Ordering::Relaxed);
+
+                        // Phase 3: Portfolio shield check (VPIN crisis → stop buying)
+                        let hedge_active = !sniper_types::l2_command::should_grid_place_bid(l2risk);
+
                         if authed && !paused && last_grid_calc.elapsed().as_secs() >= 3 {
                             let spacing = risk.grid_spacing.load(Ordering::Acquire) as f64 / PRICE_SCALE;
                             let num_buy = risk.num_buy_levels.load(Ordering::Acquire);
@@ -275,11 +300,14 @@ async fn main() -> Result<()> {
                                     let mut warp_buys = Vec::new();
                                     let mut warp_sells = Vec::new();
                                     for lvl in 1..=30i64 {
-                                        if let Some(p) = sniper_types::l2_command::calculate_warped_grid_level(
-                                            grid_warp, lvl, true
-                                        ) {
-                                            if p > 0 {
-                                                warp_buys.push(p as f64 / PRICE_SCALE_I as f64);
+                                        // Phase 3: Skip ALL bids if hedge shield is active
+                                        if !hedge_active {
+                                            if let Some(p) = sniper_types::l2_command::calculate_warped_grid_level(
+                                                grid_warp, lvl, true
+                                            ) {
+                                                if p > 0 {
+                                                    warp_buys.push(p as f64 / PRICE_SCALE_I as f64);
+                                                }
                                             }
                                         }
                                         if let Some(p) = sniper_types::l2_command::calculate_warped_grid_level(

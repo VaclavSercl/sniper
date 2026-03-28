@@ -232,6 +232,7 @@ Cycle: #{self.cycle} (every 5 min)
 ═══ RESPOND WITH THIS JSON ═══
 {{"global_reasoning": "Analyze macro + cross-bot correlations + fees + GPU telemetry here FIRST...",
   "global_regime": "BEARISH_SHOCK|BULLISH_TREND|CHOPPING_RANGE",
+  "vpin_toxicity": float,
   \"hydra\": {{
     \"recommended_grid_step\": float,
     \"max_position_limit\": float,
@@ -271,6 +272,7 @@ Cycle: #{self.cycle} (every 5 min)
   \"l1_tuning\": {{\"skew_max_usd\": float, \"obi_threshold\": float, \"inference_interval_ms\": int}}}}
 
 PARAMETER CONSTRAINTS:
+  vpin_toxicity: -1.0 to +1.0 (-1=massive dump detected, +1=massive buy, 0=neutral. From order flow imbalance)
   hydra.grid_step: {GRID_FLOOR}-{GRID_CEIL} USD
   hydra.max_position: {MAX_POS_FLOOR}-{MAX_POS_CEIL} BTC
   hydra.bid_fade_bps: 0-20 (0=no fade, 10=defensive, 20=maximum retreat)
@@ -401,7 +403,7 @@ PARAMETER CONSTRAINTS:
         try:
             import struct as _st
             L2_CMD_PATH = "/dev/shm/beroun/l2_command.bin"
-            L2_CMD_SIZE = 768  # CL1(64) + CL2(64) + CL3_Grid(64) + Ring(576)
+            L2_CMD_SIZE = 896  # CL1-5(320) + Ring(576)
 
             os.makedirs(os.path.dirname(L2_CMD_PATH), exist_ok=True)
             fd = os.open(L2_CMD_PATH, os.O_RDWR | os.O_CREAT)
@@ -434,10 +436,10 @@ PARAMETER CONSTRAINTS:
             kill = 0
             try:
                 import numpy as np
-                head_offset = 192  # L1TelemetryRing at byte 192 (CL1+CL2+CL3=192)
+                head_offset = 320  # L1TelemetryRing at byte 320 (CL1-5 = 5×64)
                 head_val = _st.unpack_from('<Q', mm, head_offset)[0]
                 if head_val > 0:
-                    ring_offset = head_offset + 64  # ring data at byte 256 (after head + pad)
+                    ring_offset = head_offset + 64  # ring data at byte 384 (after head + pad)
                     count = min(head_val, 64)
                     latencies = []
                     for i in range(count):
@@ -596,6 +598,53 @@ PARAMETER CONSTRAINTS:
 
             _st.pack_into('<Q', mm, CL3, grid_next + 1)  # EVEN = consistent
 
+            # ═══ CACHE LINE 4: Global Risk & VPIN (own SeqLock at offset 192) ═══
+            CL4 = 192  # CL1(64) + CL2(64) + CL3(64)
+            CL5 = 256  # CL4(64) + CL5 portfolio telemetry
+
+            risk_ver = _st.unpack_from('<Q', mm, CL4)[0]
+            risk_next = risk_ver + 1
+            _st.pack_into('<Q', mm, CL4, risk_next)  # ODD = writing
+
+            # Read portfolio telemetry from L1 bots (CL5, lock-free reads)
+            hydra_inv = _st.unpack_from('<q', mm, CL5 + 0)[0] / PRICE_SCALE
+            grid_inv = _st.unpack_from('<q', mm, CL5 + 8)[0] / PRICE_SCALE
+            moonshot_inv = _st.unpack_from('<q', mm, CL5 + 16)[0] / PRICE_SCALE
+            aegis_delta = _st.unpack_from('<q', mm, CL5 + 24)[0] / PRICE_SCALE
+
+            total_spot = hydra_inv + grid_inv + moonshot_inv
+            net_exposure = total_spot + aegis_delta  # Hedged = near 0
+
+            # VPIN-based toxicity (computed from Gemini's assessment or defaults)
+            vpin_score = float(decision.get("vpin_toxicity", 0.0))  # -1.0 to +1.0
+            vpin_scaled = int(max(-1.0, min(1.0, vpin_score)) * PRICE_SCALE)
+            _st.pack_into('<q', mm, CL4 + 8, vpin_scaled)
+
+            # Cross-Bot Hedging Logic
+            max_unhedged = 1.0  # Max 1 BTC unhedged spot exposure
+            is_crisis = vpin_score < -0.75
+            portfolio_hedged = 0
+            aegis_target = 0
+            urgency = 0
+
+            if is_crisis and total_spot > max_unhedged:
+                # SHIELD ACTIVE: short perps to neutralize spot
+                aegis_target = int(-total_spot * PRICE_SCALE)
+                urgency = 1
+                portfolio_hedged = 1
+                log.warning(f"  🚨 AEGIS SHIELD! Short {total_spot:.2f} BTC perps (VPIN={vpin_score:.2f})")
+            elif not is_crisis and vpin_score > -0.2:
+                # All clear: unwind hedge
+                aegis_target = 0
+                urgency = 0
+                portfolio_hedged = 0
+
+            _st.pack_into('<q', mm, CL4 + 16, aegis_target)
+            _st.pack_into('<q', mm, CL4 + 24, urgency)
+            _st.pack_into('<q', mm, CL4 + 32, portfolio_hedged)
+
+            _st.pack_into('<Q', mm, CL4, risk_next + 1)  # EVEN = consistent
+
             mm.flush()
             mm.close()
 
@@ -606,6 +655,8 @@ PARAMETER CONSTRAINTS:
                      f"L1_inv={l1_inv_btc:.4f}BTC")
             log.info(f"  📐 Grid: anchor=${current_price:.0f} base={base_step}bps warp={warp} "
                      f"bid_lvl={max_bid_lvl} ask_lvl={max_ask_lvl}")
+            log.info(f"  👁️ Risk: VPIN={vpin_score:.2f} spot={total_spot:.3f}BTC "
+                     f"net={net_exposure:.3f}BTC hedged={'YES' if portfolio_hedged else 'NO'}")
 
         except Exception as e:
             log.error(f"L2CommandMatrix write failed: {e}")

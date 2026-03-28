@@ -355,6 +355,23 @@ async fn async_main() -> Result<()> {
         &*(l2cmd_mmap.as_ptr().add(std::mem::size_of::<sniper_types::l2_command::L2CommandMatrix>())
            as *const sniper_types::l2_command::L2ASMatrix)
     };
+    // CL4: Global Risk (VPIN + Aegis)
+    let l2risk = unsafe {
+        &*(l2cmd_mmap.as_ptr()
+            .add(std::mem::size_of::<sniper_types::l2_command::L2CommandMatrix>())
+            .add(std::mem::size_of::<sniper_types::l2_command::L2ASMatrix>())
+            .add(std::mem::size_of::<sniper_types::l2_command::L2GridWarpMatrix>())
+            as *const sniper_types::l2_command::L2GlobalRiskMatrix)
+    };
+    // CL5: Portfolio telemetry (Hydra reports inventory here)
+    let l2portfolio = unsafe {
+        &*(l2cmd_mmap.as_ptr()
+            .add(std::mem::size_of::<sniper_types::l2_command::L2CommandMatrix>())
+            .add(std::mem::size_of::<sniper_types::l2_command::L2ASMatrix>())
+            .add(std::mem::size_of::<sniper_types::l2_command::L2GridWarpMatrix>())
+            .add(std::mem::size_of::<sniper_types::l2_command::L2GlobalRiskMatrix>())
+            as *const sniper_types::l2_command::L2PortfolioTelemetry)
+    };
 
     let engine_ptr: *mut EngineState = engine_mmap.as_mut_ptr() as *mut EngineState;
     let risk = unsafe { &*(risk_mmap.as_ptr() as *const RiskState) };
@@ -1130,21 +1147,23 @@ async fn async_main() -> Result<()> {
                                                             shift_i
                                                         } else { 0 };
 
-                                                        // ═══ v14.3 AVELLANEDA-STOIKOV + TOXIC FADE FUSION ═══
-                                                        // calculate_as_quotes reads BOTH cache lines:
-                                                        //   CL1: bid/ask_fade_bps (Phase 1 defense)
-                                                        //   CL2: target_inventory, skew_factor, half_spread (Phase 2 offense)
-                                                        // Returns (target_bid, target_ask) with:
-                                                        //   Reservation price = fair - skew(inventory_delta)
-                                                        //   Final = reservation ± half_spread ± toxic_fade
+                                                        // ═══ v14.3 A-S + FADE + VPIN FUSION ═══
                                                         let current_inv = eng.net_position.load(Ordering::Acquire);
+
+                                                        // Report inventory to L2 portfolio aggregator (CL5)
+                                                        l2portfolio.hydra_inventory.store(current_inv, Ordering::Relaxed);
+
                                                         let (as_bid, as_sell) = sniper_types::l2_command::calculate_as_quotes(
                                                             l2cmd, l2as, micro_i, current_inv
                                                         );
 
-                                                        // Layer grid + bias + delta on top of A-S quotes
-                                                        let mut buy_i = (as_bid - grid + final_bias_with_l1 + delta_shift).max(0);
-                                                        let mut sell_i = (as_sell + grid + final_bias_with_l1 + delta_shift).max(0);
+                                                        // Phase 3: VPIN branchless shift (±30 bps max)
+                                                        let vpin_bps = sniper_types::l2_command::vpin_shift_bps(l2risk);
+                                                        let vpin_delta = vpin_bps * (micro_i / 10_000);
+
+                                                        // Layer: A-S + VPIN + grid + bias + delta
+                                                        let mut buy_i = (as_bid + vpin_delta - grid + final_bias_with_l1 + delta_shift).max(0);
+                                                        let mut sell_i = (as_sell + vpin_delta + grid + final_bias_with_l1 + delta_shift).max(0);
 
                                                         // ═══ ANTI-CROSS GUARD (L0 Safety) ═══
                                                         // Prevent POSTONLY CANCELED: bid must be below best ask, ask must be above best bid
