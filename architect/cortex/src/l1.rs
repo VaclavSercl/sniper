@@ -19,12 +19,13 @@ const OBI_SKEW_FACTOR: f64 = 0.3;
 const MAX_SKEW_USD: f64 = 3.0;
 const SWEEP_VOL_DROP_PCT: f64 = 0.85;
 const SWEEP_FREEZE_MS: u64 = 4000;
-const SWEEP_DEBOUNCE_MS: u64 = 500;
+const SWEEP_DEBOUNCE_MS: u64 = 2000;
+const SWEEP_MIN_VOLUME: f64 = 0.05;  // Ignore sweeps on thin books (<0.05 BTC total)
 const BOOK_DEPTH: usize = 10;
 
 // Adaptive learning
 const CONFIDENCE_WINDOW: usize = 100;
-const ADAPTATION_INTERVAL_SECS: u64 = 600;
+const ADAPTATION_INTERVAL_SECS: u64 = 120;
 const MIN_SWEEP_THRESHOLD: f64 = 0.60;
 const MAX_SWEEP_THRESHOLD: f64 = 0.90;
 
@@ -32,7 +33,7 @@ const MAX_SWEEP_THRESHOLD: f64 = 0.90;
 const PARALYSIS_FREEZE_RATIO: f64 = 0.60;
 const PARALYSIS_CHECK_WINDOW_SECS: f64 = 300.0;
 const PARALYSIS_DESENSITIZE_STEP: f64 = 0.05;
-const MAX_CONSECUTIVE_FREEZES: u32 = 8;
+const MAX_CONSECUTIVE_FREEZES: u32 = 4;
 
 // Ghost mode
 const GHOST_TOXIC_ACTIVATE: u64 = 300;
@@ -104,16 +105,28 @@ impl AdaptiveL1Brain {
 
     fn record_active_time(&mut self) {
         self.active_time_ms += CYCLE_MS;
-        self.consecutive_freezes = 0;
+        // Don't reset consecutive_freezes here — that was the bug!
+        // Instead, decay naturally in the sliding-window check below
     }
 
     fn record_consecutive_freeze(&mut self) {
         self.consecutive_freezes += 1;
-        if self.consecutive_freezes >= MAX_CONSECUTIVE_FREEZES {
+    }
+
+    /// v14.0: Check if L1 is in paralysis (flapping).
+    /// Uses uptime ratio over rolling window instead of broken consecutive counter.
+    fn check_paralysis(&mut self) {
+        let uptime = self.get_uptime_pct();
+        // If frozen >50% of time in the window, desensitize
+        if uptime < 0.50 && (self.freeze_time_ms + self.active_time_ms) > 10_000 {
             self.sweep_threshold = (self.sweep_threshold + PARALYSIS_DESENSITIZE_STEP)
                 .min(MAX_SWEEP_THRESHOLD);
-            println!("  🆘 L1: {} consecutive freezes → threshold {:.2}", 
-                self.consecutive_freezes, self.sweep_threshold);
+            println!("  🆘 L1 ANTI-FLAP: uptime {:.0}% → threshold raised to {:.2}",
+                uptime * 100.0, self.sweep_threshold);
+            // Reset window
+            self.freeze_time_ms = 0;
+            self.active_time_ms = 0;
+            self.uptime_window_start = Instant::now();
             self.consecutive_freezes = 0;
         }
     }
@@ -226,7 +239,8 @@ fn detect_sweep(prev: &[BookLevel], curr: &[BookLevel], threshold: f64) -> bool 
     if prev.is_empty() || curr.is_empty() { return false; }
     let prev_vol: f64 = prev.iter().map(|l| l.amount).sum();
     let curr_vol: f64 = curr.iter().map(|l| l.amount).sum();
-    if prev_vol < 0.001 { return false; }
+    // Need meaningful volume to detect a sweep (avoid false positives on thin books)
+    if prev_vol < SWEEP_MIN_VOLUME { return false; }
     let drop = (prev_vol - curr_vol) / prev_vol;
     drop > threshold
 }
@@ -407,6 +421,11 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
 
         // ── ADAPTIVE LEARNING ──
         brain.adapt_threshold();
+
+        // ── ANTI-FLAP CHECK (every 10s = 200 cycles) ──
+        if cycle % 200 == 0 {
+            brain.check_paralysis();
+        }
 
         // ── PERIODIC STATUS + GHOST MODE (every ~60s = 1200 cycles) ──
         if cycle % 1200 == 0 {
