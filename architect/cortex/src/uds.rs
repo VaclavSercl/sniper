@@ -47,6 +47,13 @@ struct UdsRequest {
     value: Option<f64>,
     #[serde(default)]
     regime: Option<String>,
+    // L1 tuning (SET_L1_TUNING)
+    #[serde(default)]
+    skew_max_usd: Option<f64>,
+    #[serde(default)]
+    obi_threshold: Option<f64>,
+    #[serde(default)]
+    inference_interval_ms: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -287,6 +294,19 @@ async fn handle_request(
         "GET_GPU_STATS" => {
             let stats = crate::gpu::get_gpu_stats();
             UdsResponse::ok_with_data(stats.to_json())
+        }
+
+        "SET_L1_TUNING" => {
+            let skew = req.skew_max_usd.unwrap_or(3.0).clamp(0.5, 5.0);
+            let obi = req.obi_threshold.unwrap_or(0.0).clamp(0.0, 0.8);
+            let interval = req.inference_interval_ms.unwrap_or(2000).clamp(500, 10000);
+            crate::gpu::set_l1_tuning(skew, obi, interval);
+            println!("  🔌 [UDS] SET_L1_TUNING: skew_max=${skew:.1} obi_thr={obi:.2} interval={interval}ms");
+            UdsResponse::ok_with_data(serde_json::json!({
+                "skew_max_usd": skew,
+                "obi_threshold": obi,
+                "inference_interval_ms": interval,
+            }))
         }
 
         _ => UdsResponse::err(&format!("Unknown command: {}", req.cmd)),

@@ -58,6 +58,10 @@ class L2Oracle:
         data = snap_resp["data"]
         bots = data.get("bots", [])
 
+        # 1b. Get GPU telemetry (Phi-3.5 performance)
+        gpu_resp = self.cortex.get_gpu_stats()
+        gpu_data = gpu_resp.get("data", {}) if gpu_resp.get("ok") else {}
+
         # Log summary
         for b in bots:
             status = "🟢" if b.get("online") else "🔴"
@@ -66,7 +70,7 @@ class L2Oracle:
                      f"grid=${b['grid_step']:.2f} fills={b['fills']}")
 
         # 2. Build Gemini prompt
-        prompt = self._build_prompt(bots)
+        prompt = self._build_prompt(bots, gpu_data)
 
         # 3. Call Gemini CLI
         log.info("  🤖 Calling Gemini CLI...")
@@ -123,8 +127,8 @@ class L2Oracle:
 
         log.info(f"═══ L2 CYCLE #{self.cycle} COMPLETE ═══")
 
-    def _build_prompt(self, bots):
-        """Build the Gemini prompt with macro context and feedback loop."""
+    def _build_prompt(self, bots, gpu_data=None):
+        """Build the Gemini prompt with macro context, feedback loop, and GPU telemetry."""
         hydra = next((b for b in bots if b["name"] == "hydra"), None)
         fg = hydra.get("fear_greed", 50) if hydra else 50
         bias = hydra.get("macro_bias", 0.0) if hydra else 0.0
@@ -196,19 +200,54 @@ RULES:
 - Always fill "global_reasoning" FIRST to establish logic BEFORE setting parameters
 - Write global_reasoning in CZECH language (cesky)
 - Respond ONLY in valid JSON. No markdown, no prose outside JSON.
+- If GPU total_inferences < 20: keep current l1_tuning defaults (insufficient data)
+- If GPU toxic_rate > 20%: reduce skew_max_usd and increase obi_threshold
+- If GPU SKEW_BID win_rate < 40%: increase obi_threshold to filter weak signals
+- If GPU PAUSE accuracy > 90%: keep current freeze behavior (model is accurate)
 
 ═══ MACRO INTELLIGENCE ═══
 Fear & Greed Index: {fg} ({fg_text})
 News Sentiment: {bias:+.4f} ({bias_label})
 Cycle: #{self.cycle} (every 5 min)
 {feedback}
+═══ PHI-3.5 GPU INTELLIGENCE ═══{self._format_gpu_section(gpu_data)}
 ═══ ARMADA STATE ═══{bot_states}
 ═══ RESPOND WITH THIS JSON ═══
-{{"global_reasoning": "Analyze macro + cross-bot correlations here FIRST...",
+{{"global_reasoning": "Analyze macro + cross-bot correlations + GPU telemetry here FIRST...",
   "global_regime": "BEARISH_SHOCK|BULLISH_TREND|CHOPPING_RANGE",
   "hydra": {{"recommended_grid_step": float, "max_position_limit": float, "pause_trading": boolean}},
   "moonshot": {{"opportunity_bias": "LONG|SHORT|NEUTRAL"}},
-  "grid": {{"action": "KEEP_PAUSED|RESUME"}}}}"""
+  "grid": {{"action": "KEEP_PAUSED|RESUME"}},
+  "l1_tuning": {{"skew_max_usd": float, "obi_threshold": float, "inference_interval_ms": int}}}}
+
+l1_tuning constraints:
+  skew_max_usd: 0.5-5.0 (default 3.0, lower = less aggressive quotes)
+  obi_threshold: 0.0-0.8 (default 0.0, higher = ignore weak OBI signals)
+  inference_interval_ms: 500-10000 (default 2000, higher = slower GPU cycles)"""
+
+    def _format_gpu_section(self, gpu_data):
+        """Format GPU telemetry for Gemini prompt."""
+        if not gpu_data or gpu_data.get("total_inferences", 0) == 0:
+            return "\nGPU offline or no data yet.\n"
+
+        sb = gpu_data.get("skew_bid", {})
+        sa = gpu_data.get("skew_ask", {})
+        pa = gpu_data.get("pause", {})
+        ho = gpu_data.get("hold", {})
+        tuning = gpu_data.get("l1_tuning", {})
+
+        return (
+            f"\nTotal inferences: {gpu_data.get('total_inferences', 0)}\n"
+            f"SKEW_BID: {sb.get('win_rate', 0):.1f}% win ({sb.get('total', 0)}x, {sb.get('toxic', 0)} toxic)\n"
+            f"SKEW_ASK: {sa.get('win_rate', 0):.1f}% win ({sa.get('total', 0)}x, {sa.get('toxic', 0)} toxic)\n"
+            f"PAUSE:    {pa.get('accuracy', 0):.1f}% accuracy ({pa.get('total', 0)}x)\n"
+            f"HOLD:     {ho.get('total', 0)}x\n"
+            f"Net PnL impact: ${gpu_data.get('net_pnl_impact_usd', 0):.4f}\n"
+            f"Toxic rate: {gpu_data.get('toxic_rate_pct', 0):.1f}%\n"
+            f"Current L1 tuning: skew_max=${tuning.get('skew_max_usd', 3.0):.1f} "
+            f"obi_thr={tuning.get('obi_threshold', 0.0):.2f} "
+            f"interval={tuning.get('inference_interval_ms', 2000)}ms\n"
+        )
 
     def _parse_decision(self, raw):
         """Parse Gemini JSON response with sanitizer."""
@@ -259,6 +298,15 @@ Cycle: #{self.cycle} (every 5 min)
         if regime:
             self.cortex.set_regime(regime)
             log.info(f"  📈 Regime: {regime}")
+
+        # L1 tuning (Phi-3.5 parameter adjustment)
+        l1 = decision.get("l1_tuning", {})
+        if l1:
+            skew = float(l1.get("skew_max_usd", 3.0))
+            obi = float(l1.get("obi_threshold", 0.0))
+            interval = int(l1.get("inference_interval_ms", 2000))
+            r = self.cortex.set_l1_tuning(skew, obi, interval)
+            log.info(f"  🤖 L1 Tuning: skew_max=${skew:.1f} obi_thr={obi:.2f} interval={interval}ms")
 
     def _build_report(self, bots, decision):
         """Build Telegram report from snapshot + decision."""

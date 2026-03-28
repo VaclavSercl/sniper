@@ -104,6 +104,10 @@ pub struct GpuStats {
     pub hold_total: u64,
     pub total_pnl_delta: i64,
     pub start_ms: u64,
+    // L2-tunable params (written by UDS SET_L1_TUNING, read by GPU thread)
+    pub skew_max_usd: f64,          // default 3.0, range [0.5, 5.0]
+    pub obi_threshold: f64,         // default 0.0, range [0.0, 0.8]
+    pub inference_interval_ms: u64, // default 2000, range [500, 10000]
 }
 
 impl GpuStats {
@@ -124,6 +128,11 @@ impl GpuStats {
             "net_pnl_impact_usd": round4(self.total_pnl_delta as f64 / PRICE_SCALE),
             "toxic_rate_pct": round2(toxic_pct),
             "uptime_hours": round2(uptime_h),
+            "l1_tuning": {
+                "skew_max_usd": self.skew_max_usd,
+                "obi_threshold": self.obi_threshold,
+                "inference_interval_ms": self.inference_interval_ms,
+            },
         })
     }
 }
@@ -145,6 +154,23 @@ static GPU_STATS: std::sync::LazyLock<Arc<Mutex<GpuStats>>> =
 /// Get a clone of current GPU stats (called from UDS handler).
 pub fn get_gpu_stats() -> GpuStats {
     GPU_STATS.lock().map(|s| GpuStats { ..*s }).unwrap_or_default()
+}
+
+/// Set L1 tuning parameters (called from UDS SET_L1_TUNING).
+pub fn set_l1_tuning(skew_max: f64, obi_threshold: f64, interval_ms: u64) {
+    if let Ok(mut stats) = GPU_STATS.lock() {
+        stats.skew_max_usd = skew_max;
+        stats.obi_threshold = obi_threshold;
+        stats.inference_interval_ms = interval_ms;
+        println!("  🤖 [GPU] L2 tuning applied: skew_max=${skew_max:.1} obi_thr={obi_threshold:.2} interval={interval_ms}ms");
+    }
+}
+
+/// Read current L1 tuning (called by GPU consumer thread).
+fn read_l1_tuning() -> (f64, f64, u64) {
+    GPU_STATS.lock()
+        .map(|s| (s.skew_max_usd, s.obi_threshold, s.inference_interval_ms))
+        .unwrap_or((3.0, 0.0, INFERENCE_INTERVAL_MS))
 }
 
 /// Create L1→GPU channel. Returns sender for L1 and spawns the GPU consumer thread.
@@ -171,9 +197,12 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
     let mut ring = vec![DecisionRecord::default(); RING_SIZE];
     let mut write_idx: usize = 0;
 
-    // Initialize stats start time
+    // Initialize stats start time + defaults
     if let Ok(mut stats) = GPU_STATS.lock() {
         stats.start_ms = epoch_ms();
+        stats.skew_max_usd = 3.0;
+        stats.obi_threshold = 0.0;
+        stats.inference_interval_ms = INFERENCE_INTERVAL_MS;
     }
 
     loop {
@@ -182,7 +211,9 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
             Err(_) => break,
         };
 
-        if last_inference.elapsed().as_millis() < INFERENCE_INTERVAL_MS as u128 {
+        // Read L2-tunable inference interval
+        let (_, _, tuned_interval) = read_l1_tuning();
+        if last_inference.elapsed().as_millis() < tuned_interval as u128 {
             continue;
         }
 
@@ -328,23 +359,37 @@ fn evaluate_ring(ring: &mut [DecisionRecord], engine: &EngineState) {
 }
 
 /// Translate discrete GPU action into mmap writes.
+/// Reads L2-tuned parameters from GpuStats.
 fn apply_gpu_decision(decision: &GpuDecision, engine: &EngineState) {
     let confidence = decision.confidence_pct.unwrap_or(0);
     let action = decision.action.as_deref().unwrap_or("HOLD");
 
-    // Scale confidence → skew magnitude (0-100% → $0-$3)
-    let skew_magnitude = (confidence as f64 / 100.0) * 3.0 * PRICE_SCALE;
+    // Read L2-tunable params
+    let (skew_max_usd, obi_threshold, _) = read_l1_tuning();
+
+    // OBI gate: skip SKEW actions if OBI below threshold
+    let current_obi = (engine.l2_imbalance.load(Ordering::Relaxed) as f64 / PRICE_SCALE).abs();
+    let obi_gated = current_obi < obi_threshold;
+
+    // Scale confidence → skew magnitude (0-100% → $0-$skew_max)
+    let skew_magnitude = (confidence as f64 / 100.0) * skew_max_usd * PRICE_SCALE;
 
     match action {
-        "SKEW_BID" => {
+        "SKEW_BID" if !obi_gated => {
             // Skew quotes toward buy side (negative skew = cheaper bids)
             let skew = -(skew_magnitude as i64);
             blend_skew(engine, skew);
         }
-        "SKEW_ASK" => {
+        "SKEW_ASK" if !obi_gated => {
             // Skew quotes toward sell side (positive skew = cheaper asks)
             let skew = skew_magnitude as i64;
             blend_skew(engine, skew);
+        }
+        "SKEW_BID" | "SKEW_ASK" => {
+            // OBI below threshold — treat as HOLD (decay)
+            let current = engine.l1_skew_adjustment.load(Ordering::Relaxed);
+            let decayed = (current as f64 * 0.95) as i64;
+            engine.l1_skew_adjustment.store(decayed, Ordering::Release);
         }
         "PAUSE_TRADING" => {
             // Set freeze for 4 seconds

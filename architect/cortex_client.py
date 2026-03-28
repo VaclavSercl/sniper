@@ -102,6 +102,15 @@ class CortexClient:
         """Get Phi-3.5 GPU inference telemetry (ring buffer stats)."""
         return self._send({"cmd": "GET_GPU_STATS"})
 
+    def set_l1_tuning(self, skew_max: float = 3.0, obi_threshold: float = 0.0, interval_ms: int = 2000) -> dict:
+        """Set L1 GPU tuning parameters (called by L2 Oracle)."""
+        return self._send({
+            "cmd": "SET_L1_TUNING",
+            "skew_max_usd": skew_max,
+            "obi_threshold": obi_threshold,
+            "inference_interval_ms": interval_ms,
+        })
+
     def is_online(self) -> bool:
         """Quick health check."""
         r = self.ping()
