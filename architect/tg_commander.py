@@ -216,8 +216,8 @@ def unpause_bot(name):
         return f"❌ Unpause error: {e}"
 
 def get_status():
-    """Get status of all bots."""
-    lines = ["🏛️ *SNIPER ARMADA — Status*\n"]
+    """Get status of all bots + PnL summary."""
+    lines = ["🏛️ *SNIPER ARMADA v13.0*\n"]
     running = 0
     for name, info in BOTS.items():
         alive = is_running(name)
@@ -226,9 +226,49 @@ def get_status():
             running += 1
         icon = "🟢" if alive else "🔴"
         lines.append(f"{icon} {info['emoji']} *{name.upper()}* — {info['desc']}")
-        lines.append(f"   PID: `{pid}` · Core {info['cpu']} · :{info['port']}")
+        if alive:
+            lines.append(f"   PID: `{pid}` · Core {info['cpu']} · :{info['port']}")
 
     lines.insert(1, f"Online: *{running}/{len(BOTS)}*\n")
+
+    # ── PnL section ──
+    try:
+        pnl_path = os.path.join(PROJECT_ROOT, "shared")
+        if pnl_path not in sys.path:
+            sys.path.insert(0, pnl_path)
+        from pnl_engine import PnlDatabase, format_pnl_short
+
+        db = PnlDatabase()
+        total_1h = total_24h = total_7d = 0
+        total_fills_24h = 0
+        has_data = False
+
+        lines.append("\n💰 *PnL (FIFO)*")
+        for bname in ["hydra", "moonshot", "grid", "trigon"]:
+            w1 = db.get_realized_window(bname, 1)
+            w24 = db.get_realized_window(bname, 24)
+            w7 = db.get_realized_window(bname, 168)
+            if w24["fills"] == 0 and w7["fills"] == 0:
+                continue
+            has_data = True
+            emoji = {"hydra": "🐍", "moonshot": "🌙", "grid": "📐", "trigon": "🔺"}.get(bname, "🤖")
+            lines.append(f"{emoji} `{format_pnl_short(w1['realized'])}` 1h · `{format_pnl_short(w24['realized'])}` 24h · `{format_pnl_short(w7['realized'])}` 7d")
+            total_1h += w1["realized"]
+            total_24h += w24["realized"]
+            total_7d += w7["realized"]
+            total_fills_24h += w24["fills"]
+
+        if has_data:
+            lines.append(f"━━━━━━━━━━━━━━━━━━━")
+            lines.append(f"*Σ* `{format_pnl_short(total_1h)}` 1h · `{format_pnl_short(total_24h)}` 24h · `{format_pnl_short(total_7d)}` 7d")
+            lines.append(f"Fills 24h: `{total_fills_24h}`")
+        else:
+            lines.append("ℹ️ _Žádné fills_")
+
+        db.close()
+    except Exception:
+        lines.append("\n💰 _PnL: daemon offline_")
+
     return "\n".join(lines)
 
 # ── SLASH COMMANDS ──────────────────────────────────────────
@@ -236,27 +276,23 @@ def get_status():
 @bot.message_handler(commands=["help", "start"])
 def cmd_help(message):
     if not auth(message): return
-    bot.reply_to(message, """🏛️ *SNIPER ARMADA — Commander v2.0*
+    bot.reply_to(message, """🐺 *SNIPER ARMADA v13.0*
 
-🎮 *Ovládání botů:*
-`/hydra start` · `/hydra stop` · `/hydra restart`
-`/moonshot start` · `/grid pause` · `/trigon unpause`
+📊 `/status` — Stav + PnL všech botů
 
-📊 *Monitoring:*
-`/status` — Stav všech botů
-`/hydra status` — Detail jednoho botu
+🎮 *Ovládání:*
+`/hydra start` · `stop` · `restart` · `pause`
+`/moonshot start` · `stop` · `restart`
+`/grid start` · `stop` · `restart`
+`/trigon start` · `stop` · `restart`
 
-🧠 *AI Příkazy:*
-`/analyze` — Gemini analýza
-`/oracle` — AI strategický cyklus
+🧠 *AI:*
+`/analyze` — Gemini analýza trhu
+`/oracle` — L2 strategický cyklus
 
-💬 *Přirozená řeč:*
-_"Vypni grid"_ · _"Spusť moonshot"_
-_"Jak se daří?"_ · _"Restartuj trigon"_
+🚨 `/panic` — Zastavit VŠE
 
-⚠️ *Nouzové:*
-`/panic` — Zastaví VŠECHNY boty
-`/resume all` — Spustí všechny boty""")
+💬 Nebo piš česky: _"Jak se daří?"_""")
 
 @bot.message_handler(commands=["status"])
 def cmd_status(message):
