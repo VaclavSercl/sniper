@@ -154,7 +154,7 @@ def get_armada_status():
 
     return {
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "armada_version": "11.2",
+        "armada_version": "13.0",
         "bots": bots,
         "bots_total": len(BOTS),
         "bots_running": bots_running,

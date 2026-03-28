@@ -1,5 +1,5 @@
 [Unit]
-Description=Sniper Armada v12.0 — Multi-Bot HFT + PnL + Telegram C2
+Description=Sniper Armada v13.0 — Multi-Bot HFT + PnL + Telegram C2
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=0
@@ -8,12 +8,15 @@ StartLimitIntervalSec=0
 Type=simple
 User=wwwenda
 WorkingDirectory=/home/wwwenda/sniper
+ExecStartPre=/usr/bin/mkdir -p /dev/shm/beroun
 ExecStart=/home/wwwenda/sniper/deploy_armada.sh
 Restart=always
 RestartSec=10
 
 # Performance
 Nice=-10
+CPUSchedulingPolicy=fifo
+CPUSchedulingPriority=50
 LimitNOFILE=65535
 LimitMEMLOCK=infinity
 
@@ -23,6 +26,7 @@ EnvironmentFile=/home/wwwenda/sniper/.env
 # Logging
 StandardOutput=journal
 StandardError=journal
+SyslogIdentifier=sniper-armada
 
 [Install]
 WantedBy=multi-user.target

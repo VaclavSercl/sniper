@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🛡️ BEROUN L1 SHIELD v10.5 — Resurrection (Anti-Paralysis)
+🛡️ BEROUN L1 SHIELD v13.0 — Sovereign Intelligence
 ═══════════════════════════════════════════════════════════════
 Cross-Layer Intelligence: L1 reads orderbook, writes skew + freeze + confidence
   - OBI Micro-Skewing: shifts grid bias based on order book imbalance
@@ -51,8 +51,8 @@ OFF_BIDS = 80         # bids[25], each 24 bytes = 600 bytes total
 OFF_ASKS = 680        # asks[25], each 24 bytes = 600 bytes total
 OFF_MICRO = 1288      # micro_price
 OFF_OBI = 1384        # l2_imbalance
-OFF_NET_POS = 1400    # net_position
-OFF_REALIZED_PNL = 1408  # realized_pnl
+OFF_NET_POS = 1408    # net_position (after _pad_hot_cold)
+OFF_REALIZED_PNL = 1416  # realized_pnl
 OFF_TOXIC = 1568      # toxic_flow_hits
 OFF_SWEEP_FREEZE = 1576  # sweep_freeze_until
 OFF_L1_SKEW = 1584    # l1_skew_adjustment
@@ -437,7 +437,7 @@ class AdaptiveL1Brain:
 def main():
     global running
 
-    log.info("═══ L1 SHIELD v10.5 — RESURRECTION (Anti-Paralysis) STARTING ═══")
+    log.info("═══ L1 SHIELD v13.0 — SOVEREIGN INTELLIGENCE STARTING ═══")
     log.info(f"  mmap: {ENGINE_MMAP}")
     log.info(f"  Cycle: {CYCLE_MS}ms | Skew factor: {OBI_SKEW_FACTOR}")
     log.info(f"  Max skew: ${MAX_SKEW_USD} | Sweep freeze: {SWEEP_FREEZE_MS}ms")
@@ -457,7 +457,7 @@ def main():
     cycle = 0
     pnl_at_sweep = 0  # Track PnL at time of sweep for learning
 
-    log.info("═══ L1 SHIELD v10.5 ACTIVE ═══")
+    log.info("═══ L1 SHIELD v13.0 ACTIVE ═══")
 
     while running:
         try:
@@ -613,7 +613,7 @@ def main():
     write_i64(mm, OFF_L1_SKEW, 0)
     mm.close()
     os.close(fd)
-    log.info("═══ L1 SHIELD v10.5 STOPPED ═══")
+    log.info("═══ L1 SHIELD v13.0 STOPPED ═══")
 
 
 if __name__ == "__main__":

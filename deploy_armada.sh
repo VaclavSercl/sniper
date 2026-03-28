@@ -1,20 +1,34 @@
 #!/bin/bash
-# 🐺 SNIPER ARMADA v11.2 — Master Deployment Script
-# Manages ALL bots + Architect + Telegram Commander
+# 🐺 SNIPER ARMADA v13.0 — Master Deployment Script
+# Manages ALL bots + Architect + Telegram Commander + PnL Engine
 # Called by: systemd (sniper-armada.service) or manually
+#
+# Architecture:
+#   Core 0 → Hydra (BTC-USD Delta Lead)
+#   Core 1 → Moonshot (Multi-Symbol Flash Crash)
+#   Core 2 → Grid (Dynamic Multi-Level Grid)
+#   Core 3 → Trigon / OS / AI layer
+#
+# Usage:
+#   ./deploy_armada.sh          # Launch with existing binaries
+#   ./deploy_armada.sh --build  # Rebuild workspace first
+
+set -euo pipefail
 
 ARMADA_ROOT="$(cd "$(dirname "$0")" && pwd)"
 LOG_DIR="$ARMADA_ROOT/logs"
 BIN_DIR="$ARMADA_ROOT/target/release"
-mkdir -p "$LOG_DIR" /dev/shm/beroun
+SHM_DIR="/dev/shm/beroun"
+
+mkdir -p "$LOG_DIR" "$SHM_DIR"
 
 echo "🐺 ═══════════════════════════════════════════"
-echo "   SNIPER ARMADA v11.2 — DEPLOY"
-echo "   $(date)"
+echo "   SNIPER ARMADA v13.0 — DEPLOY"
+echo "   $(date '+%Y-%m-%d %H:%M:%S %Z')"
 echo "═══════════════════════════════════════════════"
 
 # ═══ BUILD (if needed) ═══
-if [ "$1" == "--build" ]; then
+if [ "${1:-}" == "--build" ]; then
     echo "📦 Building workspace..."
     cd "$ARMADA_ROOT" && cargo build --release --workspace
     [ $? -ne 0 ] && echo "❌ Build failed!" && exit 1
@@ -22,9 +36,12 @@ if [ "$1" == "--build" ]; then
 fi
 
 # ═══ KILL OLD INSTANCES ═══
-pkill -f tg_commander.py 2>/dev/null
-pkill -f tg_listener.py 2>/dev/null
-pkill -f sniper_architect.py 2>/dev/null
+echo ""
+echo "🧹 Cleaning old instances..."
+pkill -f tg_commander.py 2>/dev/null || true
+pkill -f tg_listener.py 2>/dev/null || true
+pkill -f sniper_architect.py 2>/dev/null || true
+pkill -f pnl_daemon.py 2>/dev/null || true
 sleep 2
 
 # ═══ LAUNCH HYDRA (Bot #1 — LIVE) ═══
@@ -58,6 +75,7 @@ echo "   ARMADA ONLINE"
 echo "   🐍 Hydra:     Core 0 — BTC-USD Delta Lead    :3000 (PID $HYDRA_PID)"
 echo "   🏛️ Architect:  Dashboard                      :3004"
 echo "   📱 Commander: Telegram C2                     (PID $COMMANDER_PID)"
+echo "   💰 PnL:       FIFO Engine                     (PID $PNL_PID)"
 echo ""
 echo "   🌙 Moonshot:  /moonshot start (via Telegram)"
 echo "   📐 Grid:      /grid start     (via Telegram)"

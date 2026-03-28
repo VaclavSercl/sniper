@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-🧠 SNIPER ORCHESTRATOR v10.4 — Neural Cross Oracle
+🧠 SNIPER ORCHESTRATOR v13.0 — Sovereign Oracle
 ═══════════════════════════════════════════════════════════════════
 The Sovereign Oracle: Connects L1 (tactical) with L2 (strategic).
 Runs every 5 minutes, analyzes both layers, decides and acts.
@@ -914,7 +914,7 @@ def check_shadow_recovery(mm, bot_state):
 
 # ── MAIN LOOP ───────────────────────────────────────────────
 def main():
-    log.info("═══ SNIPER v10.4 Neural Cross Oracle STARTING ═══")
+    log.info("═══ SNIPER v13.0 Sovereign Oracle STARTING ═══")
     log.info(f"  Cycle: {ORACLE_CYCLE_SEC}s | L1 bridge: {L1_STATE_JSON}")
     log.info(f"  Engine: {ENGINE_MMAP}")
     log.info(f"  Brain: {BRAIN_BIN}")
