@@ -274,6 +274,62 @@ def cmd_panic(message):
     msg = "🚨 *PANIC — Všechny boty zastaveny!*\n\n" + "\n".join(results) if results else "🚨 Žádný bot neběžel."
     bot.reply_to(message, msg)
 
+@bot.message_handler(commands=["pnl"])
+def cmd_pnl(message):
+    if not auth(message): return
+    log.info("PnL report requested")
+    try:
+        pnl_path = os.path.join(PROJECT_ROOT, "shared")
+        sys.path.insert(0, pnl_path)
+        from pnl_engine import PnlDatabase, format_pnl_short
+
+        db = PnlDatabase()
+        lines = ["💰 *TRADING PnL (FIFO, volatility-immune)*\n"]
+
+        total_1h = total_24h = total_7d = total_30d = 0
+        total_fees = 0
+
+        for bname in ["hydra", "moonshot", "grid", "trigon"]:
+            w1 = db.get_realized_window(bname, 1)
+            w24 = db.get_realized_window(bname, 24)
+            w7 = db.get_realized_window(bname, 168)
+            w30 = db.get_realized_window(bname, 720)
+
+            if w24["fills"] == 0 and w30["fills"] == 0:
+                continue
+
+            emoji = {"hydra": "🐍", "moonshot": "🌙", "grid": "📐", "trigon": "🔺"}.get(bname, "🤖")
+            lines.append(f"{emoji} *{bname.upper()}*")
+            lines.append(f"  1h:  `{format_pnl_short(w1['realized'])}` ({w1['fills']} fills)")
+            lines.append(f"  24h: `{format_pnl_short(w24['realized'])}` ({w24['fills']} fills)")
+            lines.append(f"  7d:  `{format_pnl_short(w7['realized'])}`")
+            lines.append(f"  30d: `{format_pnl_short(w30['realized'])}`")
+            lines.append(f"  Fees 24h: `${w24['fees']:.4f}`")
+            lines.append("")
+
+            total_1h += w1["realized"]
+            total_24h += w24["realized"]
+            total_7d += w7["realized"]
+            total_30d += w30["realized"]
+            total_fees += w24["fees"]
+
+        if len(lines) <= 1:
+            lines.append("ℹ️ Žádné fills v databázi. PnL daemon možná ještě neběží.")
+        else:
+            lines.append("═══════════════════")
+            lines.append(f"*TOTAL 1h:*  `{format_pnl_short(total_1h)}`")
+            lines.append(f"*TOTAL 24h:* `{format_pnl_short(total_24h)}`")
+            lines.append(f"*TOTAL 7d:*  `{format_pnl_short(total_7d)}`")
+            lines.append(f"*TOTAL 30d:* `{format_pnl_short(total_30d)}`")
+            lines.append(f"*Fees 24h:*  `${total_fees:.4f}`")
+
+        db.close()
+        bot.reply_to(message, "\n".join(lines))
+    except ImportError:
+        bot.reply_to(message, "❌ PnL engine not found. Run: `python3 architect/pnl_daemon.py`")
+    except Exception as e:
+        bot.reply_to(message, f"❌ PnL error: {e}")
+
 # ── BOT-SPECIFIC COMMANDS (/hydra start, /grid stop, etc.) ─
 @bot.message_handler(commands=list(BOTS.keys()))
 def cmd_bot(message):

@@ -47,6 +47,11 @@ echo "📱 Launching Telegram Commander..."
 python3 "$ARMADA_ROOT/architect/tg_commander.py" >> "$LOG_DIR/tg_commander.log" 2>&1 &
 COMMANDER_PID=$!
 
+# ═══ LAUNCH PNL DAEMON ═══
+echo "💰 Launching PnL Daemon (FIFO engine)..."
+python3 "$ARMADA_ROOT/architect/pnl_daemon.py" >> "$LOG_DIR/pnl_daemon.log" 2>&1 &
+PNL_PID=$!
+
 echo ""
 echo "🐺 ═══════════════════════════════════════════"
 echo "   ARMADA ONLINE"
