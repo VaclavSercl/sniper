@@ -417,7 +417,7 @@ fn build_oracle_report(
     } else { "❓" };
 
     let mut report = format!(
-        "{health} SOVEREIGN CORTEX v13.1 | #{cycle} {now}\n\
+        "{health} 🧠 L2 ORACLE #{cycle} | {now}\n\
          ━━━━━━━━━━━━━━━━━━━━━\n"
     );
 
