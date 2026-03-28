@@ -165,7 +165,17 @@ pub async fn run_l2_loop(memory: Arc<RwLock<ArmadaMemory>>, dry_run: bool) {
                         apply_decision(d, &mem, cycle);
                     }
 
-                    // 6. Build and send Telegram report
+                    // 6. Save AI reasoning to file for TG Commander
+                    if let Some(ref d) = decision {
+                        let reasoning = d.effective_reasoning();
+                        if !reasoning.is_empty() {
+                            let regime = d.effective_regime();
+                            let ai_text = format!("{}\n{}", regime, reasoning);
+                            let _ = std::fs::write("/dev/shm/beroun/l2_reasoning.txt", &ai_text);
+                        }
+                    }
+
+                    // 7. Build and send Telegram report
                     let report = build_oracle_report(&snapshots, &response, &decision, cycle);
                     if let Err(e) = telegram::send(&report).await {
                         eprintln!("  ⚠️ Telegram send failed: {e}");
@@ -355,6 +365,7 @@ RULES:
 - If F&G < 20: prefer DEFENSIVE posture (wider grids, lower exposure)
 - If toxic > 500: consider pausing or widening grid significantly
 - Always fill "global_reasoning" FIRST to establish logic BEFORE setting parameters
+- Write global_reasoning in CZECH language (cesky)
 - Respond ONLY in valid JSON. No markdown, no prose outside JSON.
 
 ═══ MACRO INTELLIGENCE ═══

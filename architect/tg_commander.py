@@ -336,6 +336,24 @@ def build_report(period="hourly"):
         log.error(f"PnL status error: {e}")
         lines.append(f"\n💰 PnL: {e}")
 
+    # ── AI Reasoning from Cortex L2 ──
+    try:
+        reasoning_path = "/dev/shm/beroun/l2_reasoning.txt"
+        if os.path.exists(reasoning_path):
+            with open(reasoning_path) as f:
+                content = f.read().strip()
+            if content:
+                parts = content.split("\n", 1)
+                regime = parts[0] if len(parts) > 0 else ""
+                reasoning = parts[1] if len(parts) > 1 else ""
+                if regime:
+                    regime_icon = {"BEARISH_SHOCK": "🌪️", "BULLISH_TREND": "📈", "CHOPPING_RANGE": "↔️"}.get(regime, "🎯")
+                    lines.append(f"\n{regime_icon} Rezim: {regime}")
+                if reasoning:
+                    lines.append(f"🧠 {reasoning}")
+    except Exception:
+        pass
+
     return "\n".join(lines)
 
 
