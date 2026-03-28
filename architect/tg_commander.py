@@ -479,17 +479,54 @@ def main():
     log.info(f"   Monitoring: {', '.join(BOTS.keys())}")
     log.info(f"   Auth chat_id: {AUTHORIZED_CHAT_ID}")
 
+    # Kill any competing tg_listener processes (they use the same token)
+    try:
+        subprocess.run(["pkill", "-f", "tg_listener"], capture_output=True)
+        log.info("Killed competing tg_listener processes")
+    except Exception:
+        pass
+
+    # Clear any existing webhook (prevents 409 conflicts)
+    import requests
+    try:
+        r = requests.get(f"https://api.telegram.org/bot{TOKEN}/deleteWebhook?drop_pending_updates=true", timeout=10)
+        log.info(f"Webhook cleared: {r.status_code}")
+    except Exception:
+        pass
+
+    # Wait for Telegram to release previous polling connection
+    time.sleep(5)
+
     # Start hourly report thread
     threading.Thread(target=hourly_report_loop, daemon=True).start()
 
-    # Start bot polling
+    # Start bot polling with robust retry
     log.info("Polling Telegram...")
     while True:
         try:
-            bot.infinity_polling(timeout=60, long_polling_timeout=60)
+            bot.remove_webhook()
+            time.sleep(1)
+            bot.polling(
+                timeout=60,
+                long_polling_timeout=60,
+                allowed_updates=["message"],
+                skip_pending=True,
+                non_stop=True,
+            )
+        except KeyboardInterrupt:
+            log.info("Shutting down...")
+            break
         except Exception as e:
-            log.error(f"Polling error: {e}")
-            time.sleep(10)
+            import traceback
+            err_str = str(e)
+            log.error(f"Polling crashed: {err_str}")
+            log.error(traceback.format_exc())
+            if "409" in err_str or "Conflict" in err_str:
+                log.warning("409 Conflict — waiting 60s for API cooldown...")
+                subprocess.run(["pkill", "-f", "tg_listener"], capture_output=True)
+                time.sleep(60)
+            else:
+                time.sleep(15)
 
 
 if __name__ == "__main__":
