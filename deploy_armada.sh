@@ -39,7 +39,6 @@ fi
 echo ""
 echo "🧹 Cleaning old instances..."
 pkill -f tg_commander.py 2>/dev/null || true
-pkill -f tg_listener.py 2>/dev/null || true
 pkill -f sniper_architect.py 2>/dev/null || true
 pkill -f pnl_daemon.py 2>/dev/null || true
 pkill -f sovereign-cortex 2>/dev/null || true
