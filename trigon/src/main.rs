@@ -188,8 +188,13 @@ async fn main() -> Result<()> {
     let engine = unsafe { &*(engine_mmap.as_ptr() as *const TrigonEngineState) };
     let risk = unsafe { &*(risk_mmap.as_ptr() as *const TrigonRiskState) };
     let fee_state = unsafe { &*(fee_mmap.as_ptr() as *const sniper_types::fee_types::GlobalFeeState) };
-    let l2cmd_mmap = init_mmap_ptr::<sniper_types::l2_command::L2CommandMatrix>(
-        sniper_types::l2_command::L2_COMMAND_PATH)?;
+    // L2CommandMatrix: manual init (bypass init_mmap_ptr which truncates to sizeof::<T>)
+    let l2cmd_mmap = {
+        let f = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false)
+            .open(sniper_types::l2_command::L2_COMMAND_PATH)?;
+        f.set_len(sniper_types::l2_command::L2_COMMAND_FILE_SIZE as u64)?;
+        unsafe { MmapMut::map_mut(&f)? }
+    };
     let l2cmd = unsafe { &*(l2cmd_mmap.as_ptr() as *const sniper_types::l2_command::L2CommandMatrix) };
 
     let key = std::env::var("BITFINEX_API_KEY").context("Missing BITFINEX_API_KEY")?;

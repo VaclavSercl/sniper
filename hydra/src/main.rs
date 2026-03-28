@@ -342,8 +342,13 @@ async fn async_main() -> Result<()> {
     let fee_mmap = init_mmap_ptr::<sniper_types::fee_types::GlobalFeeState>(
         sniper_types::fee_types::FEE_STATE_PATH)?;
     let fee_state = unsafe { &*(fee_mmap.as_ptr() as *const sniper_types::fee_types::GlobalFeeState) };
-    let l2cmd_mmap = init_mmap_ptr::<sniper_types::l2_command::L2CommandMatrix>(
-        sniper_types::l2_command::L2_COMMAND_PATH)?;
+    // L2CommandMatrix: manual init (bypass init_mmap_ptr which truncates to sizeof::<T>)
+    let l2cmd_mmap = {
+        let f = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false)
+            .open(sniper_types::l2_command::L2_COMMAND_PATH)?;
+        f.set_len(sniper_types::l2_command::L2_COMMAND_FILE_SIZE as u64)?;
+        unsafe { MmapMut::map_mut(&f)? }
+    };
     let l2cmd = unsafe { &*(l2cmd_mmap.as_ptr() as *const sniper_types::l2_command::L2CommandMatrix) };
 
     let engine_ptr: *mut EngineState = engine_mmap.as_mut_ptr() as *mut EngineState;
