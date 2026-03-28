@@ -120,16 +120,13 @@ impl Default for TrigonRiskState {
 // Pre-defined Triangle Configurations
 // ═══════════════════════════════════════════════════════════
 
-/// Well-known Bitfinex triangles with high liquidity
+/// Bitfinex triangles — BTC + Fiat only (no altcoins)
+/// Format: (leg_A, leg_B, leg_C)
 pub const KNOWN_TRIANGLES: &[(&str, &str, &str)] = &[
-    // USD → BTC → ETH → USD
-    ("tBTCUSD", "tETHBTC", "tETHUSD"),
-    // USD → BTC → LTC → USD
-    ("tBTCUSD", "tLTCBTC", "tLTCUSD"),
-    // USD → BTC → XRP → USD
-    ("tBTCUSD", "tXRPBTC", "tXRPUSD"),
-    // USD → BTC → SOL → USD
-    ("tBTCUSD", "tSOLBTC", "tSOLUSD"),
-    // USD → ETH → SOL → USD
-    ("tETHUSD", "tSOLETH", "tSOLUSD"),
+    // USD → BTC → EUR → UST  (fiat cross: EUR/USD via BTC bridge)
+    ("tBTCUSD", "tBTCEUR", "tEURUST"),
+    // USD → BTC → GBP → UST  (fiat cross: GBP/USD via BTC bridge)
+    ("tBTCUSD", "tBTCGBP", "tGBPUST"),
+    // USD → BTC → UST → USD  (stablecoin peg deviation capture)
+    ("tBTCUSD", "tBTCUST", "tUSTUSD"),
 ];
