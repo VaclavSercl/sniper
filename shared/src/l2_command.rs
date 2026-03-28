@@ -1,13 +1,10 @@
 // ═══════════════════════════════════════════════════════════
-// L2 Command Matrix v2 — Issue #18 Quick Wins
-// "Thin L1, Fat L2" + SPSC Ring Buffer + False Sharing Prevention
+// L2 Command Matrix v3 — Issue #18 Quick Wins (Complete Phase 1)
+// "Thin L1, Fat L2" + SPSC Ring Buffer + CAS Single Bullet
 //
 // TWO independent data highways:
-//   Cache Line 1: L2 → L1 (General commands soldiers)
-//   Cache Line 2+: L1 → L2 (Soldiers report telemetry)
-//
-// Written by: L2 Oracle (Python) ← config, Rust L1 ← telemetry
-// Read by: L1 bots + L2 Oracle (bidirectional)
+//   Cache Line 1 (64B): L2 → L1 (General commands soldiers)
+//   Cache Line 2+ (576B): L1 → L2 (Soldiers report telemetry)
 //
 // mmap path: /dev/shm/beroun/l2_command.bin
 // ═══════════════════════════════════════════════════════════
@@ -26,41 +23,46 @@ pub const LATENCY_RING_MASK: usize = LATENCY_RING_SIZE - 1;
 pub const MIN_AMEND_THRESHOLD_BPS: i64 = 3;
 
 // ═══════════════════════════════════════════════════════════
-// CACHE LINE 1: General commands (L2 → L1)
+// CACHE LINE 1: General commands (L2 → L1) — EXACTLY 64 BYTES
 // Written by L2 Oracle (Python), read by L1 (Rust)
-// align(64) guarantees own cache line — no false sharing
+// 7 fields × 8B = 56B + 8B pad = 64B = 1 x86-64 cache line
 // ═══════════════════════════════════════════════════════════
 
 #[repr(C, align(64))]
 pub struct L2CommandMatrix {
     /// SeqLock: L2 sets to ODD before write, EVEN after write
-    /// L1 reads before+after — discard if changed or odd
-    pub config_version: AtomicU64,           // offset 0
+    pub config_version: AtomicU64,           // offset 0   (8B)
 
     // ═══ HYDRA: Asymmetric Quote Fading ═══
     /// BID fade: push bids deeper by N bps (positive = defensive vs falling knife)
-    pub bid_fade_bps: AtomicI64,             // offset 8
+    pub bid_fade_bps: AtomicI64,             // offset 8   (8B)
     /// ASK fade: push asks deeper by N bps (positive = defensive vs pump)
-    pub ask_fade_bps: AtomicI64,             // offset 16
+    pub ask_fade_bps: AtomicI64,             // offset 16  (8B)
 
     // ═══ TRIGON: Latency-Aware Profit Padding ═══
-    /// L2-computed padding added to min_profit (from p95 calculation)
-    pub latency_padding_bps: AtomicI64,      // offset 24
+    /// L2-computed padding added to min_profit (from p95 Tick-to-Trade)
+    pub latency_padding_bps: AtomicI64,      // offset 24  (8B)
     /// Kill switch: 1 = stop all arbitrage, 0 = OK
-    pub latency_killswitch: AtomicI64,       // offset 32
+    pub latency_killswitch: AtomicI64,       // offset 32  (8B)
 
-    // Padding to fill 64 bytes (5 × 8B = 40B, need 24B pad)
-    _pad_control: [u8; 24],                  // offset 40-63
+    // ═══ 🌙 MOONSHOT: Pre-computed Trigger + CAS Armed ═══
+    /// Absolute trigger price × PRICE_SCALE (L2 pre-computes: ema_price - 3.5σ)
+    /// L1 just does: if current_price < moonshot_trigger_price → check fire
+    pub moonshot_trigger_price: AtomicI64,   // offset 40  (8B)
+    /// CAS armed flag: 1 = loaded (awaiting crash), 0 = safe/fired
+    /// L1 uses compare_exchange(1→0) to guarantee Single Bullet Pattern
+    pub moonshot_armed: AtomicI64,           // offset 48  (8B)
+
+    // Padding: 7 × 8B = 56B → 8B pad to fill cache line
+    _pad_control: [u8; 8],                   // offset 56  (8B)
 }
 
 // ═══════════════════════════════════════════════════════════
 // CACHE LINE 2+: Soldier telemetry (L1 → L2)
-// Written by L1 (Rust), read by L2 (Python)
 // Separate struct = separate cache line = ZERO false sharing
 // ═══════════════════════════════════════════════════════════
 
 /// Lock-Free SPSC Ring Buffer for Tick-to-Trade latency measurement
-/// L1 writes latencies, L2 reads and computes p95
 #[repr(C, align(64))]
 pub struct L1TelemetryRing {
     /// Ring buffer write head (L1 increments with Release ordering)
@@ -70,7 +72,6 @@ pub struct L1TelemetryRing {
     _pad_head: [u8; 56],                     // offset 8-63
 
     /// 64 most recent Tick-to-Trade latencies in microseconds
-    /// L1 writes with Relaxed, L2 reads after observing head advance
     pub latency_ring_us: [AtomicU64; LATENCY_RING_SIZE], // offset 64+
 }
 
@@ -86,14 +87,15 @@ impl Default for L2CommandMatrix {
             ask_fade_bps: AtomicI64::new(0),
             latency_padding_bps: AtomicI64::new(0),
             latency_killswitch: AtomicI64::new(0),
-            _pad_control: [0u8; 24],
+            moonshot_trigger_price: AtomicI64::new(0),
+            moonshot_armed: AtomicI64::new(0),
+            _pad_control: [0u8; 8],
         }
     }
 }
 
 impl Default for L1TelemetryRing {
     fn default() -> Self {
-        // Safety: All AtomicU64 zeroed = valid (latency 0µs, head 0)
         unsafe { std::mem::zeroed() }
     }
 }
@@ -103,42 +105,31 @@ impl Default for L1TelemetryRing {
 // ═══════════════════════════════════════════════════════════
 
 /// SeqLock read: returns (version, is_consistent)
-/// L1 must call before AND after reading fields
 #[inline(always)]
 pub fn l2cmd_version_check(cmd: &L2CommandMatrix) -> (u64, bool) {
     let v = cmd.config_version.load(Ordering::Acquire);
-    (v, v % 2 == 0) // even = consistent, odd = L2 mid-write
+    (v, v % 2 == 0)
 }
 
 /// Record Tick-to-Trade latency into ring buffer (O(1), lock-free)
-/// Called by Trigon L1 on each Order ACK/Fill callback
 #[inline(always)]
 pub fn record_latency(ring: &L1TelemetryRing, send_ts: std::time::Instant) {
     let latency_us = send_ts.elapsed().as_micros() as u64;
-
-    // Lock-free O(1) write: bitwise AND is 1 CPU cycle (vs modulo ~15 cycles)
     let head = ring.latency_head.load(Ordering::Relaxed);
     let idx = head & LATENCY_RING_MASK;
-
     ring.latency_ring_us[idx].store(latency_us, Ordering::Relaxed);
-
-    // Release ordering: guarantees Python sees data before head advance
     ring.latency_head.store(head.wrapping_add(1), Ordering::Release);
 }
 
-/// Check if arbitrage should fire (O(1), no allocation)
-/// Returns true if latency conditions allow execution
+/// Check if arbitrage should fire (O(1))
 #[inline(always)]
 pub fn can_execute_arb(cmd: &L2CommandMatrix, gross_profit_bps: i64, base_fee_bps: i64) -> bool {
-    if cmd.latency_killswitch.load(Ordering::Acquire) == 1 {
-        return false;
-    }
+    if cmd.latency_killswitch.load(Ordering::Acquire) == 1 { return false; }
     let padding = cmd.latency_padding_bps.load(Ordering::Relaxed);
     gross_profit_bps >= (base_fee_bps + padding)
 }
 
 /// Check if Hydra should amend order (hysteresis prevents API rate limit burn)
-/// Returns true only if accumulated fade exceeds threshold
 #[inline(always)]
 pub fn should_amend(current_price: i64, target_price: i64, fair_price: i64) -> bool {
     if fair_price == 0 { return false; }
@@ -146,6 +137,52 @@ pub fn should_amend(current_price: i64, target_price: i64, fair_price: i64) -> b
     diff_bps >= MIN_AMEND_THRESHOLD_BPS
 }
 
-/// Total mmap file size: L2CommandMatrix (64B) + L1TelemetryRing (64 + 64*8 = 576B) = 640B
+/// 🌙 Moonshot Tripwire: O(1) check + CAS Single Bullet
+///
+/// Returns Some(trigger_price) if we should fire, None otherwise.
+/// Uses hardware Compare-And-Swap to guarantee exactly ONE execution
+/// across all threads/ticks, even during 100k ticks/sec flash crash.
+///
+/// Caller must check SeqLock BEFORE calling this (for trigger_price consistency).
+#[inline(always)]
+pub fn moonshot_check_and_disarm(
+    cmd: &L2CommandMatrix,
+    current_price_scaled: i64,
+    recent_volume_scaled: i64,
+    avg_volume_scaled: i64,
+) -> Option<i64> {
+    // 1. O(1): Is weapon armed? (L2 detected macro capitulation)
+    //    Branch predictor skips this 99.999% of the time
+    if cmd.moonshot_armed.load(Ordering::Relaxed) != 1 {
+        return None;
+    }
+
+    // 2. O(1): Price tripwire — just an integer comparison
+    let trigger = cmd.moonshot_trigger_price.load(Ordering::Relaxed);
+    if trigger == 0 || current_price_scaled > trigger {
+        return None;
+    }
+
+    // 3. 🛡️ Anti-spoofing: volume must be abnormal (5× above average)
+    //    Filters out empty-book HFT spoofing from real liquidation cascades
+    if avg_volume_scaled > 0 && recent_volume_scaled < (avg_volume_scaled * 5) {
+        return None;
+    }
+
+    // 4. 🚨 ATOMIC DISARM: Compare-And-Swap (1 → 0)
+    //    Hardware guarantees exactly ONE thread wins this race.
+    //    All other ticks see "already fired" and return None.
+    match cmd.moonshot_armed.compare_exchange(
+        1,                  // expect: armed
+        0,                  // set: disarmed (fired)
+        Ordering::Acquire,  // success: full barrier
+        Ordering::Relaxed,  // failure: someone else won
+    ) {
+        Ok(_) => Some(trigger),  // 🔥 WE FIRED — caller executes IOC buy
+        Err(_) => None,          // Another tick beat us, no-op
+    }
+}
+
+/// Total mmap file size
 pub const L2_COMMAND_FILE_SIZE: usize =
     std::mem::size_of::<L2CommandMatrix>() + std::mem::size_of::<L1TelemetryRing>();

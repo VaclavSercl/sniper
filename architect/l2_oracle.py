@@ -43,6 +43,11 @@ class L2Oracle:
         self.prev_toxic = 0
         self.prev_decision = None
 
+        # 🌙 Moonshot EMA Volatility Engine (O(1) memory)
+        self.ema_price = None
+        self.ema_var = 0.0
+        self.ema_alpha = 0.05  # ~20 period smoothing
+
     def run_cycle(self):
         """Execute one L2 Oracle cycle. Called every 5 min."""
         self.cycle += 1
@@ -443,13 +448,59 @@ PARAMETER CONSTRAINTS:
             _st.pack_into('<q', mm, 24, lat_pad)
             _st.pack_into('<q', mm, 32, kill)
 
+            # ═══ 🌙 MOONSHOT: EMA Volatility → Trigger Price ═══
+            # L2 pre-computes: trigger = ema_price - max(3.5σ, 1.5%)
+            # L1 just does: if price < trigger → CAS fire
+            moonshot = decision.get("moonshot", {})
+            PRICE_SCALE = 100_000_000.0
+            Z_TARGET = 3.5
+
+            # Get current BTC price from bots snapshot
+            current_price = 0.0
+            try:
+                snap = self.cortex.get_snapshot()
+                if snap.get("ok"):
+                    for b in snap["data"].get("bots", []):
+                        if b.get("price", 0) > 0:
+                            current_price = b["price"]
+                            break
+            except Exception:
+                pass
+
+            trigger_price_scaled = 0
+            if current_price > 0:
+                import math
+                if self.ema_price is None:
+                    self.ema_price = current_price
+
+                # EMA variance (Welford online, O(1) memory)
+                delta = current_price - self.ema_price
+                self.ema_price += self.ema_alpha * delta
+                self.ema_var = (1 - self.ema_alpha) * (self.ema_var + self.ema_alpha * delta**2)
+                sigma = math.sqrt(self.ema_var)
+
+                # Trigger: anchor to slow EMA, NOT current price (prevents moving target)
+                min_drop = self.ema_price * 0.015  # 1.5% minimum absolute drop
+                effective_drop = max(Z_TARGET * sigma, min_drop)
+                trigger_float = self.ema_price - effective_drop
+                trigger_price_scaled = int(trigger_float * PRICE_SCALE)
+
+                log.info(f"  🌙 EMA=${self.ema_price:.0f} σ=${sigma:.1f} "
+                         f"trigger=${trigger_float:.0f} ({effective_drop/self.ema_price*100:.2f}% below EMA)")
+
+            _st.pack_into('<q', mm, 40, trigger_price_scaled)
+
+            # Armed flag: L2 sets based on Gemini decision (OI/volume/leverage flush)
+            armed = 1 if moonshot.get("armed") else 0
+            _st.pack_into('<q', mm, 48, armed)
+
             # Step 3: Write EVEN version (= "data consistent", L1 can read)
             _st.pack_into('<Q', mm, 0, next_ver + 1)
             mm.flush()
             mm.close()
 
             log.info(f"  📡 L2Cmd: ver={next_ver+1} bid_fade={bid_fade}bps ask_fade={ask_fade}bps "
-                     f"trig={'$'+str(trigger) if trigger else 'N/A'} lat_pad={lat_pad}bps")
+                     f"lat_pad={lat_pad}bps armed={armed} trig=${trigger_price_scaled / PRICE_SCALE:.0f}")
 
         except Exception as e:
             log.error(f"L2CommandMatrix write failed: {e}")

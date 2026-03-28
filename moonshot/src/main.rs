@@ -178,6 +178,15 @@ async fn main() -> Result<()> {
     let engine = unsafe { &*(engine_mmap.as_ptr() as *const MoonshotEngineState) };
     let risk = unsafe { &*(risk_mmap.as_ptr() as *const MoonshotRiskState) };
 
+    // L2 Command Matrix — CAS Moonshot tripwire + trigger price
+    let l2cmd_mmap = {
+        let f = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false)
+            .open(sniper_types::l2_command::L2_COMMAND_PATH)?;
+        f.set_len(sniper_types::l2_command::L2_COMMAND_FILE_SIZE as u64)?;
+        unsafe { MmapMut::map_mut(&f)? }
+    };
+    let l2cmd = unsafe { &*(l2cmd_mmap.as_ptr() as *const sniper_types::l2_command::L2CommandMatrix) };
+
     let key = std::env::var("BITFINEX_API_KEY").context("Missing BITFINEX_API_KEY")?;
     let sec = std::env::var("BITFINEX_API_SECRET").context("Missing BITFINEX_API_SECRET")?;
 
@@ -258,10 +267,48 @@ async fn main() -> Result<()> {
                         e.latency_ns.store(loop_start.elapsed().as_nanos() as u64, Ordering::Release);
 
                         // ═══ MOONSHOT LOGIC ═══
-                        // Check: authenticated, not paused, enough time since last order
                         let paused = risk.global_paused.load(Ordering::Acquire) != 0;
-                        let min_interval_ms = 50; // Minimum 50ms between orders per pair
+                        let min_interval_ms = 50;
 
+                        // ═══ v14.2 CAS TRIPWIRE (Issue #18) ═══
+                        // L2 pre-computes trigger_price (ema - 3.5σ) and arms weapon
+                        // L1: O(1) price comparison + CAS atomic disarm = Single Bullet
+                        if authed && !paused {
+                            let mid_price = (bid + ask) / 2;
+                            // Volume filter disabled here — L2 controls arming via leverage flush
+                            // Pass avg_vol=0 to bypass anti-spoofing (L2 is the gatekeeper)
+                            if let Some(trigger) = sniper_types::l2_command::moonshot_check_and_disarm(
+                                l2cmd, mid_price as i64, 1, 0  // avg=0 bypasses volume check
+                            ) {
+                                // 🚀 MOONSHOT FIRED! CAS guarantees single execution
+                                let order_usd = r.order_usd.load(Ordering::Acquire) as f64 / PRICE_SCALE;
+                                let mid_f64 = mid_price as f64 / PRICE_SCALE_I as f64;
+                                if order_usd > 0.0 && mid_f64 > 0.0 {
+                                    let coin_amount = (order_usd / mid_f64).max(0.00015);
+                                    if let Some(symbol) = idx_to_symbol.get(&idx) {
+                                        // IOC BUY at market — flash crash instant execution
+                                        order_msg.clear();
+                                        order_msg.push_str("[0,\"on\",null,{\"gid\":2001,\"symbol\":\"");
+                                        order_msg.push_str(symbol);
+                                        order_msg.push_str("\",\"amount\":");
+                                        order_msg.push_str(&format!("{:.5}", coin_amount));
+                                        order_msg.push_str(",\"price\":\"");
+                                        order_msg.push_str(&format!("{:.4}", mid_f64));
+                                        order_msg.push_str("\",\"type\":\"EXCHANGE IOC\"}]");
+
+                                        let _ = write.send(Message::Text(order_msg.clone().into())).await;
+                                        warn!(event = "moonshot_fired", symbol = %symbol,
+                                              trigger = trigger as f64 / PRICE_SCALE_I as f64,
+                                              price = mid_f64, amount = coin_amount);
+                                        notifier.send(format!("🚀 MOONSHOT FIRED! {} @ ${:.2} (trigger ${:.2})",
+                                            symbol, mid_f64, trigger as f64 / PRICE_SCALE_I as f64));
+                                        last_order_ts[idx] = Instant::now();
+                                    }
+                                }
+                            }
+                        }
+
+                        // ═══ GHOST ORDERS (existing passive logic) ═══
                         if authed && !paused && last_order_ts[idx].elapsed().as_millis() > min_interval_ms {
                             let mid_price = (bid + ask) / 2;
                             let mid_f64 = mid_price as f64 / PRICE_SCALE_I as f64;
@@ -271,18 +318,14 @@ async fn main() -> Result<()> {
                             let order_usd = r.order_usd.load(Ordering::Acquire) as f64 / PRICE_SCALE;
 
                             if drop_pct > 0.0 && order_usd > 0.0 && mid_f64 > 0.0 {
-                                // Ghost BUY: placed drop_pct below market
                                 let buy_p = mid_f64 * (1.0 - (drop_pct / 100.0));
-                                // SELL: at take-profit above buy
                                 let sell_p = buy_p * (1.0 + (tp_pct / 100.0));
                                 let coin_amount = (order_usd / buy_p).max(0.00015);
 
-                                // Anti-Cross Guard: BUY must not cross ASK
                                 let ask_f64 = ask as f64 / PRICE_SCALE_I as f64;
                                 if buy_p >= ask_f64 { continue; }
 
                                 if let Some(symbol) = idx_to_symbol.get(&idx) {
-                                    // Cancel existing + place new (atomic multi-order)
                                     order_msg.clear();
                                     order_msg.push_str("[0,\"ox_multi\",null,[[\"oc_multi\",{\"symbol\":\"");
                                     order_msg.push_str(symbol);
@@ -301,8 +344,6 @@ async fn main() -> Result<()> {
                                     order_msg.push_str("\",\"type\":\"EXCHANGE LIMIT\"}]]]");
 
                                     let _ = write.send(Message::Text(order_msg.clone().into())).await;
-
-                                    // Update state
                                     e.buy_order_price.store((buy_p * PRICE_SCALE_I as f64) as u64, Ordering::Release);
                                     last_order_ts[idx] = Instant::now();
                                 }
