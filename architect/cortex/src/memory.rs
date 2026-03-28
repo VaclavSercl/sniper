@@ -46,6 +46,9 @@ pub struct BotSnapshot {
     pub pnl_30d: f64,
     pub fills_24h_fifo: u32,
     pub closed_trades_24h: u32,
+    // Wallet (from Bitfinex WebSocket wu/ws events)
+    pub wallet_btc: f64,
+    pub wallet_usd: f64,
 }
 
 /// Central memory manager — opens mmap handles for all bots.
@@ -238,6 +241,8 @@ impl ArmadaMemory {
             pnl_30d: 0.0,
             fills_24h_fifo: 0,
             closed_trades_24h: 0,
+            wallet_btc: e.wallet_btc.load(Ordering::Relaxed) as f64 / PRICE_SCALE,
+            wallet_usd: e.wallet_usd.load(Ordering::Relaxed) as f64 / PRICE_SCALE,
         }
     }
 }

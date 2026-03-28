@@ -192,8 +192,16 @@ async fn handle_request(
                     "pnl_30d": s.pnl_30d,
                     "fills_24h": s.fills_24h_fifo,
                     "closed_trades_24h": s.closed_trades_24h,
+                    // Wallet
+                    "wallet_btc": s.wallet_btc,
+                    "wallet_usd": s.wallet_usd,
                 })
             }).collect();
+
+            // Aggregate wallet from Hydra (primary bot with WS connection)
+            let hydra = &snapshots[0];
+            let btc_price = if hydra.micro_price > 100.0 { hydra.micro_price } else { 0.0 };
+            let wallet_total_usd = hydra.wallet_usd + hydra.wallet_btc * btc_price;
 
             let gpu_alive = std::process::Command::new("curl")
                 .args(["-s", "--max-time", "1", "http://localhost:1234/v1/models"])
@@ -206,6 +214,12 @@ async fn handle_request(
                 "gpu_status": if gpu_alive { "ONLINE" } else { "OFFLINE" },
                 "uptime_s": uptime,
                 "timestamp_ms": epoch_ms(),
+                "wallet": {
+                    "usd": hydra.wallet_usd,
+                    "btc": hydra.wallet_btc,
+                    "btc_price": btc_price,
+                    "total_usd": wallet_total_usd,
+                },
             }))
         }
 

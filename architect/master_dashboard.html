@@ -117,6 +117,26 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
     <div class="summary-card"><div class="label">Last Update</div><div class="value blue" id="s-time" style="font-size:0.85em">—</div></div>
 </div>
 
+<!-- Wallet Overview -->
+<div class="summary" id="wallet-row" style="padding-top:0">
+    <div class="summary-card" style="border-left:2px solid var(--yellow)">
+        <div class="label">💰 Portfolio Value</div>
+        <div class="value yellow" id="w-total" style="font-size:1.6em">—</div>
+    </div>
+    <div class="summary-card">
+        <div class="label">₿ BTC Balance</div>
+        <div class="value orange" id="w-btc">—</div>
+    </div>
+    <div class="summary-card">
+        <div class="label">💵 USD Balance</div>
+        <div class="value green" id="w-usd">—</div>
+    </div>
+    <div class="summary-card">
+        <div class="label">BTC/USD Price</div>
+        <div class="value" id="w-price" style="color:var(--text-muted)">—</div>
+    </div>
+</div>
+
 <div class="bot-grid" id="bot-grid"></div>
 
 <div class="panels">
@@ -269,6 +289,14 @@ function update(state) {
     toxicEl.textContent = (gpu.toxic_rate_pct||0).toFixed(1) + '%';
     toxicEl.className = 'value ' + ((gpu.toxic_rate_pct||0) > 15 ? 'red' : 'green');
     document.getElementById('s-time').textContent = new Date().toLocaleTimeString('cs-CZ');
+
+    // Wallet
+    const w = snap.wallet || {};
+    const wTotal = w.total_usd || 0;
+    document.getElementById('w-total').textContent = wTotal > 0 ? '$' + wTotal.toFixed(2) : '—';
+    document.getElementById('w-btc').textContent = (w.btc || 0) > 0 ? (w.btc).toFixed(6) + ' ₿' : '—';
+    document.getElementById('w-usd').textContent = (w.usd || 0) > 0 ? '$' + (w.usd).toFixed(2) : '—';
+    document.getElementById('w-price').textContent = (w.btc_price || 0) > 0 ? '$' + (w.btc_price).toFixed(0) : '—';
 
     // PnL history for sparkline
     if (totalPnl !== 0 || pnlHistory.length > 0) {
