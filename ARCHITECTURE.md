@@ -1,10 +1,10 @@
-# 🏗️ SNIPER ARMADA v14.0 — Architecture Document
+# 🏗️ SNIPER ARMADA v15.0 — Architecture Document
 
 ## System Overview: "Separated Hemispheres"
 
 ```
                    ┌─────────────────────────────────────────────┐
-                   │          📱 TELEGRAM COMMANDER v14.0        │
+                   │          📱 TELEGRAM COMMANDER v15.0        │
                    │  /hydra /moonshot /grid /gpu /pnl /panic    │
                    │  Natural Language via Gemini AI              │
                    └──────────────┬──────────────────────────────┘
@@ -13,9 +13,9 @@
 │                    CONTROL PLANE (Python Commander)                      │
 │                                                                          │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                  │
-│  │ 📱 Telegram   │  │ 🧠 L2 Oracle  │  │ 🎛️ Dashboard  │                  │
+│  │ 📱 Telegram   │  │ 🧠 L2 Oracle  │  │ 🏛️ Dashboard  │                  │
 │  │ Commander     │  │ Gemini 5min  │  │ SSE :3004    │                  │
-│  │ 901 LOC       │  │ 430 LOC      │  │ 141 LOC      │                  │
+│  │ rpt hourly    │  │ silent tune  │  │ 141 LOC      │                  │
 │  └──────────────┘  └──────────────┘  └──────────────┘                  │
 │                          │                                               │
 │                    UDS Bridge                                            │
@@ -72,8 +72,8 @@
 | **trigon-core** | Rust | 363 | Triangular Arbitrage | :3003 | Core 3 |
 | **sovereign-cortex** | Rust | 2,448 | L1 + GPU + Macro + Sentinel + UDS | — | Core 3 |
 | **shared (sniper_types)** | Rust | 929 | Type definitions + math + logging | — | — |
-| **tg_commander** | Python | 901 | Telegram C2 (Slash + NL + Dashboard) | — | Core 3 |
-| **l2_oracle** | Python | 430 | Strategic Oracle (Gemini + GPU feedback) | — | Core 3 |
+| **tg_commander** | Python | ~900 | Telegram C2 (Slash + NL + Dashboard) | — | Core 3 |
+| **l2_oracle** | Python | ~1100 | Strategic Oracle (Gemini, reports hourly) | — | Core 3 |
 | **cortex_client** | Python | 184 | UDS client library | — | — |
 | **dashboard_server** | Python | 141 | Master Dashboard SSE server | :3004 | Core 3 |
 | **pnl_daemon** | Python | 466 | FIFO PnL Engine + mmap writer | — | Core 3 |
@@ -104,11 +104,13 @@ L1 Loop (50ms) → mpsc channel → GPU Thread
                     ┌────────────────┼────────────────┐
                     ▼                ▼                ▼
               GET_GPU_STATS    /gpu Telegram    L2 Oracle Feed
-              (UDS command)    (on-demand)      (every 5 min)
+              (UDS command)    (on-demand)      (every 5 min, silent)
                                                      │
                                               SET_L1_TUNING
                                               skew_max, obi_thr
                                               inference_interval
+                                                     │
+                                              TG Report (hourly only)
 ```
 
 ## IPC Map
@@ -158,6 +160,7 @@ L1 Loop (50ms) → mpsc channel → GPU Thread
 
 | Version | Codename | Key Feature |
 |---------|----------|-------------|
+| v15.0 | Sovereign HFT | Consolidated AI reporting (hourly/daily/weekly/monthly), lmstudio.service dep, unified watchdog |
 | v14.0 | Separated Hemispheres | Cortex/Commander split, GPU telemetry, L2 feedback loop, Master Dashboard SSE |
 | v13.0 | Sovereign Intelligence | Zero-Debt Audit, unified standard |
 | v12.0 | Armada PnL | FIFO PnL Engine + Telegram Commander v2.0 |
