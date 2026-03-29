@@ -185,10 +185,8 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
         <div class="gauge-card" id="gc-gpu-temp"><div class="gauge-svg" id="g-gpu-temp"></div><div class="gauge-label">GPU Temp</div><div class="gauge-detail" id="gd-gpu-temp">—</div></div>
         <div class="gauge-card" id="gc-vram"><div class="gauge-svg" id="g-vram"></div><div class="gauge-label">VRAM</div><div class="gauge-detail" id="gd-vram">—</div></div>
         <div class="gauge-card" id="gc-gpu-util"><div class="gauge-svg" id="g-gpu-util"></div><div class="gauge-label">GPU Util</div><div class="gauge-detail" id="gd-gpu-util">—</div></div>
-        <div class="gauge-card" id="gc-disk" style="grid-column:span 2">
-            <div class="gauge-label" style="margin-bottom:8px">💾 STORAGE</div>
-            <div class="disk-dual" id="disk-bars"></div>
-        </div>
+        <div class="gauge-card" id="gc-disk-root"><div class="gauge-svg" id="g-disk-root"></div><div class="gauge-label">SSD /</div><div class="gauge-detail" id="gd-disk-root">—</div></div>
+        <div class="gauge-card" id="gc-disk-data"><div class="gauge-svg" id="g-disk-data"></div><div class="gauge-label">HDD /data</div><div class="gauge-detail" id="gd-disk-data">—</div></div>
     </div>
     <div class="health-info" id="health-info">
         <div class="hi">Uptime: <span class="hi-val" id="hi-uptime">—</span></div>
@@ -402,22 +400,11 @@ function renderSystem(sys) {
     makeGauge('g-gpu-util', sys.gpu_util || 0);
     document.getElementById('gd-gpu-util').textContent = 'Inference';
 
-    // Disk — combined Storage tile
-    const diskEl = document.getElementById('disk-bars');
-    if (diskEl) {
-        function diskBar(label, pct, free) {
-            const color = pct < 70 ? '#22c55e' : pct < 85 ? '#fbbf24' : '#ef4444';
-            return `<div class="disk-row">
-                <span class="dl">${label}</span>
-                <div class="disk-bar"><div class="disk-bar-fill" style="width:${pct}%;background:${color}"></div></div>
-                <span class="dv" style="color:${color}">${pct}%</span>
-                <span class="dl" style="color:var(--text-dim)">${free}GB</span>
-            </div>`;
-        }
-        diskEl.innerHTML =
-            diskBar('SSD', sys.disk_root_pct||0, sys.disk_root_avail_gb||0) +
-            diskBar('HDD', sys.disk_data_pct||0, sys.disk_data_avail_gb||0);
-    }
+    makeGauge('g-disk-root', sys.disk_root_pct || 0);
+    document.getElementById('gd-disk-root').textContent = (sys.disk_root_avail_gb||0) + ' GB free';
+
+    makeGauge('g-disk-data', sys.disk_data_pct || 0);
+    document.getElementById('gd-disk-data').textContent = (sys.disk_data_avail_gb||0) + ' GB free';
 
     document.getElementById('hi-uptime').textContent = sys.uptime || '?';
     document.getElementById('hi-load').textContent = (sys.load_1m||0) + ' / ' + (sys.load_5m||0) + ' / ' + (sys.load_15m||0);
