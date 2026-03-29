@@ -200,6 +200,7 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
     let mut last_inference = Instant::now() - Duration::from_secs(10);
     let mut last_eval = Instant::now();
     let mut inference_count: u64 = 0;
+    let mut consecutive_failures: u64 = 0;
 
     // Telemetry ring buffer (thread-local, zero I/O)
     let mut ring = vec![DecisionRecord::default(); RING_SIZE];
@@ -310,9 +311,27 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
                 if let Ok(mut stats) = GPU_STATS.lock() {
                     stats.total_inferences = inference_count;
                 }
+
+                // Reset failure counter on success
+                consecutive_failures = 0;
             }
             Err(e) => {
                 eprintln!("  ⚠️ [GPU] Inference failed: {e}");
+                consecutive_failures += 1;
+
+                // Alert after 30 consecutive failures (~2.5 min of dead GPU)
+                if consecutive_failures == 30 {
+                    eprintln!("  🚨 [GPU] 30 consecutive failures — sending Sentinel alert");
+                    let alert_msg = format!(
+                        "{{\"cmd\":\"ALERT\",\"level\":\"WARNING\",\"msg\":\"🤖 SENTINEL: GPU INFERENCE DOWN | {} consecutive failures | Last error: {}\"}}\n",
+                        consecutive_failures,
+                        e.to_string().replace('"', "'").chars().take(100).collect::<String>()
+                    );
+                    if let Ok(mut stream) = std::os::unix::net::UnixStream::connect("/tmp/commander_events.sock") {
+                        use std::io::Write;
+                        let _ = stream.write_all(alert_msg.as_bytes());
+                    }
+                }
             }
         }
 
@@ -462,7 +481,7 @@ fn call_lms(user_prompt: &str) -> anyhow::Result<GpuDecision> {
     let json_body = serde_json::to_string(&body)?;
 
     let agent = ureq::Agent::config_builder()
-        .timeout_global(Some(std::time::Duration::from_millis(2000)))
+        .timeout_global(Some(std::time::Duration::from_millis(5000)))
         .build()
         .new_agent();
 
