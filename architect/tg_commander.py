@@ -831,51 +831,7 @@ Give a brief strategic analysis in Czech (5 sentences max):
 
 
 # ── SCHEDULED REPORTS ──────────────────────────────────────
-def scheduled_reports_loop():
-    """Send hourly, daily, weekly, monthly reports automatically."""
-    last_hour = -1
-    last_day = -1
-    last_week = -1
-    last_month = -1
-
-    while True:
-        time.sleep(60)  # Check every minute
-        try:
-            now = datetime.now(timezone(timedelta(hours=1)))  # CET
-            hour = now.hour
-            day = now.day
-            weekday = now.weekday()  # 0=Mon
-
-            # ── HOURLY (every hour, on the hour) ──
-            if hour != last_hour:
-                last_hour = hour
-                report = build_report("hourly")
-                bot.send_message(AUTHORIZED_CHAT_ID, f"🐺 {report}")
-                log.info(f"Hourly report sent ({hour}:00)")
-
-            # ── DAILY (every day at 00:00) ──
-            if hour == 0 and day != last_day:
-                last_day = day
-                report = build_report("daily")
-                bot.send_message(AUTHORIZED_CHAT_ID, f"🐺 {report}")
-                log.info("Daily report sent")
-
-            # ── WEEKLY (Monday at 00:00) ──
-            if hour == 0 and weekday == 0 and last_week != now.isocalendar()[1]:
-                last_week = now.isocalendar()[1]
-                report = build_report("weekly")
-                bot.send_message(AUTHORIZED_CHAT_ID, f"🐺 {report}")
-                log.info("Weekly report sent")
-
-            # ── MONTHLY (1st of month at 00:00) ──
-            if hour == 0 and day == 1 and last_month != now.month:
-                last_month = now.month
-                report = build_report("monthly")
-                bot.send_message(AUTHORIZED_CHAT_ID, f"🐺 {report}")
-                log.info("Monthly report sent")
-
-        except Exception as e:
-            log.error(f"Scheduled report error: {e}")
+# (scheduled_reports_loop removed — reporting now handled by L2 Oracle)
 
 
 # ── MAIN ────────────────────────────────────────────────────
@@ -902,10 +858,7 @@ def main():
     # Wait for Telegram to release previous polling connection
     time.sleep(5)
 
-    # Start scheduled reports thread (hourly/daily/weekly/monthly)
-    threading.Thread(target=scheduled_reports_loop, daemon=True).start()
-
-    # Start L2 Strategic Oracle thread (5 min cycle via UDS)
+    # Start L2 Strategic Oracle thread (5 min cycle, reports hourly/daily/weekly/monthly)
     def l2_oracle_loop():
         def tg_send(msg):
             try:
@@ -915,10 +868,38 @@ def main():
 
         oracle = L2Oracle(cortex, tg_send)
         time.sleep(15)  # Let Cortex initialize
-        log.info("🌐 L2 Strategic Oracle: ONLINE (5 min cycle via UDS)")
+        log.info("🌐 L2 Strategic Oracle: ONLINE (5 min cycle, reports hourly)")
+
+        last_report_hour = -1
+        last_report_day = -1
+        last_report_week = -1
+        last_report_month = -1
+
         while True:
             try:
-                oracle.run_cycle()
+                # Determine report type based on time (CET)
+                now = datetime.now(timezone(timedelta(hours=1)))
+                report_type = None
+
+                if now.hour != last_report_hour:
+                    last_report_hour = now.hour
+                    report_type = "hourly"
+
+                    # At midnight, check for daily/weekly/monthly
+                    if now.hour == 0:
+                        if now.day != last_report_day:
+                            last_report_day = now.day
+                            report_type = "daily"
+
+                        if now.weekday() == 0 and last_report_week != now.isocalendar()[1]:
+                            last_report_week = now.isocalendar()[1]
+                            report_type = "weekly"
+
+                        if now.day == 1 and last_report_month != now.month:
+                            last_report_month = now.month
+                            report_type = "monthly"
+
+                oracle.run_cycle(report_type=report_type)
             except Exception as e:
                 log.error(f"L2 Oracle error: {e}")
             time.sleep(300)  # 5 minutes

@@ -51,8 +51,10 @@ class L2Oracle:
         self.ema_var = 0.0
         self.ema_alpha = 0.05  # ~20 period smoothing
 
-    def run_cycle(self):
-        """Execute one L2 Oracle cycle. Called every 5 min."""
+    def run_cycle(self, report_type=None):
+        """Execute one L2 Oracle cycle. Called every 5 min.
+        report_type: None=silent, 'hourly'/'daily'/'weekly'/'monthly'=send TG report.
+        """
         self.cycle += 1
 
         # ── HEALTH HEARTBEAT: update last_healthy_ts every cycle ──
@@ -128,12 +130,13 @@ class L2Oracle:
                 except Exception:
                     pass
 
-        # 6. Send Telegram report
-        report = self._build_report(bots, decision)
-        try:
-            self.send_telegram(report)
-        except Exception as e:
-            log.error(f"Telegram send failed: {e}")
+        # 6. Send Telegram report (only on scheduled intervals)
+        if report_type:
+            report = self._build_report(bots, decision, report_type)
+            try:
+                self.send_telegram(report)
+            except Exception as e:
+                log.error(f"Telegram send failed: {e}")
 
         # 7. Update feedback history
         hydra = next((b for b in bots if b["name"] == "hydra"), None)
@@ -834,9 +837,17 @@ PARAMETER CONSTRAINTS:
         except Exception as e:
             log.error(f"Trigon mmap write failed: {e}")
 
-    def _build_report(self, bots, decision):
+    def _build_report(self, bots, decision, report_type="hourly"):
         """Build Telegram report from snapshot + decision."""
         now = datetime.now(timezone(timedelta(hours=1))).strftime("%H:%M")
+
+        TITLES = {
+            "hourly":  "⏰ HODINOVÝ REPORT",
+            "daily":   "📅 DENNÍ REPORT",
+            "weekly":  "📊 TÝDENNÍ REPORT",
+            "monthly": "📈 MĚSÍČNÍ REPORT",
+        }
+        title = TITLES.get(report_type, "⏰ REPORT")
 
         # Health indicator
         hydra = next((b for b in bots if b["name"] == "hydra"), None)
@@ -851,7 +862,7 @@ PARAMETER CONSTRAINTS:
         else:
             health = "❓"
 
-        lines = [f"{health} 🧠 L2 ORACLE #{self.cycle} | {now}", "━━━━━━━━━━━━━━━━━━━━━"]
+        lines = [f"{health} 🧠 {title} | {now}", "━━━━━━━━━━━━━━━━━━━━━"]
 
         total_1h = total_24h = total_7d = 0.0
         total_fills = 0
