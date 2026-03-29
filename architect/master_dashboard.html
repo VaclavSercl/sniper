@@ -91,6 +91,29 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
 /* Color helpers */
 .green { color:var(--green); } .red { color:var(--red); } .blue { color:var(--blue); }
 .cyan { color:var(--cyan); } .purple { color:var(--purple); } .yellow { color:var(--yellow); }
+
+/* Server Health Gauges */
+.health-section { padding:12px 24px 12px; }
+.health-section .panel-title { font-size:0.8em; font-weight:700; margin-bottom:12px; display:flex; align-items:center; gap:6px; }
+.health-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:12px; }
+.gauge-card { background:var(--bg-card); border:1px solid var(--border); border-radius:var(--radius); padding:14px 10px; text-align:center; transition:border-color 0.3s; }
+.gauge-card.warn { border-color:rgba(251,191,36,0.3); }
+.gauge-card.crit { border-color:rgba(239,68,68,0.3); }
+.gauge-svg { width:80px; height:80px; margin:0 auto; }
+.gauge-track { fill:none; stroke:rgba(255,255,255,0.05); stroke-width:8; }
+.gauge-fill { fill:none; stroke-width:8; stroke-linecap:round; transition:stroke-dashoffset 0.8s ease, stroke 0.5s; }
+.gauge-text { font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:700; fill:var(--text); }
+.gauge-label { font-size:0.6em; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.3px; margin-top:6px; font-weight:600; }
+.gauge-detail { font-size:0.7em; color:var(--text-dim); font-family:'JetBrains Mono',monospace; margin-top:2px; }
+.disk-dual { display:flex; flex-direction:column; gap:8px; padding:4px 0; }
+.disk-row { display:flex; align-items:center; gap:6px; }
+.disk-row .dl { font-size:0.65em; color:var(--text-muted); min-width:30px; font-family:'JetBrains Mono',monospace; }
+.disk-bar { flex:1; height:8px; background:rgba(255,255,255,0.05); border-radius:4px; overflow:hidden; }
+.disk-bar-fill { height:100%; border-radius:4px; transition:width 0.8s ease, background 0.5s; }
+.disk-row .dv { font-size:0.65em; min-width:36px; text-align:right; font-family:'JetBrains Mono',monospace; font-weight:600; }
+.health-info { display:flex; gap:16px; justify-content:center; margin-top:12px; flex-wrap:wrap; }
+.health-info .hi { font-size:0.7em; color:var(--text-muted); font-family:'JetBrains Mono',monospace; }
+.health-info .hi-val { color:var(--text); font-weight:600; }
 </style>
 </head>
 <body>
@@ -98,7 +121,7 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
 <div class="header">
     <div class="header-left">
         <div class="logo">🏛️ SNIPER ARMADA</div>
-        <span class="version">v14.0</span>
+        <span class="version">v15.0</span>
     </div>
     <div class="health-bar" id="health-bar">
         <div class="health-dot"><div class="dot off" id="h-cortex"></div>CORTEX</div>
@@ -153,8 +176,28 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
     </div>
 </div>
 
+<!-- Server Health Panel -->
+<div class="health-section">
+    <div class="panel-title"><span class="accent">🖥️</span> SERVER HEALTH</div>
+    <div class="health-grid" id="health-grid">
+        <div class="gauge-card" id="gc-cpu"><div class="gauge-svg" id="g-cpu"></div><div class="gauge-label">CPU</div><div class="gauge-detail" id="gd-cpu">—</div></div>
+        <div class="gauge-card" id="gc-ram"><div class="gauge-svg" id="g-ram"></div><div class="gauge-label">RAM</div><div class="gauge-detail" id="gd-ram">—</div></div>
+        <div class="gauge-card" id="gc-gpu-temp"><div class="gauge-svg" id="g-gpu-temp"></div><div class="gauge-label">GPU Temp</div><div class="gauge-detail" id="gd-gpu-temp">—</div></div>
+        <div class="gauge-card" id="gc-vram"><div class="gauge-svg" id="g-vram"></div><div class="gauge-label">VRAM</div><div class="gauge-detail" id="gd-vram">—</div></div>
+        <div class="gauge-card" id="gc-gpu-util"><div class="gauge-svg" id="g-gpu-util"></div><div class="gauge-label">GPU Util</div><div class="gauge-detail" id="gd-gpu-util">—</div></div>
+        <div class="gauge-card" id="gc-disk" style="grid-column:span 2">
+            <div class="gauge-label" style="margin-bottom:8px">💾 STORAGE</div>
+            <div class="disk-dual" id="disk-bars"></div>
+        </div>
+    </div>
+    <div class="health-info" id="health-info">
+        <div class="hi">Uptime: <span class="hi-val" id="hi-uptime">—</span></div>
+        <div class="hi">Load: <span class="hi-val" id="hi-load">—</span></div>
+    </div>
+</div>
+
 <div class="footer">
-    Sniper Armada v14.0 · Sovereign Cortex · SSE Real-time · Port 3004
+    Sniper Armada v15.0 · Sovereign Cortex · SSE Real-time · Port 3004
 </div>
 
 <script>
@@ -307,6 +350,77 @@ function update(state) {
     renderBots(bots);
     renderGpu(gpu);
     renderL2(l2, gpu);
+    renderSystem(state.system || {});
+}
+
+function makeGauge(containerId, pct, unit, tempMode) {
+    const r = 32, cx = 40, cy = 40, sw = 8;
+    const circ = 2 * Math.PI * r;
+    const startAngle = 0.75; // start at bottom-left
+    const arcLen = circ * 0.75; // 270 degrees
+    const offset = arcLen * (1 - Math.min(pct, 100) / 100);
+    let color;
+    if (tempMode) {
+        // GPU temp: green < 65, yellow 65-80, red > 80
+        color = pct < 65 ? '#22c55e' : pct < 80 ? '#fbbf24' : '#ef4444';
+    } else {
+        color = pct < 70 ? '#22c55e' : pct < 85 ? '#fbbf24' : '#ef4444';
+    }
+    const display = tempMode ? pct + '°C' : pct.toFixed(0) + (unit || '%');
+    const el = document.getElementById(containerId);
+    if (!el) return;
+    el.innerHTML = `<svg viewBox="0 0 80 80">
+        <circle cx="${cx}" cy="${cy}" r="${r}" class="gauge-track"
+            stroke-dasharray="${arcLen} ${circ}" stroke-dashoffset="0"
+            transform="rotate(135 ${cx} ${cy})"/>
+        <circle cx="${cx}" cy="${cy}" r="${r}" class="gauge-fill"
+            stroke="${color}" stroke-dasharray="${arcLen} ${circ}"
+            stroke-dashoffset="${offset}" transform="rotate(135 ${cx} ${cy})"/>
+        <text x="${cx}" y="${cy+5}" text-anchor="middle" class="gauge-text" style="fill:${color}">${display}</text>
+    </svg>`;
+    // Card border color
+    const card = el.closest('.gauge-card');
+    if (card) {
+        card.className = 'gauge-card' + (pct >= 95 ? ' crit' : pct >= 85 ? ' warn' : '');
+    }
+}
+
+function renderSystem(sys) {
+    if (!sys || Object.keys(sys).length === 0) return;
+    makeGauge('g-cpu', sys.cpu_pct || 0);
+    document.getElementById('gd-cpu').textContent = 'Load ' + (sys.load_1m || 0);
+
+    makeGauge('g-ram', sys.ram_pct || 0);
+    document.getElementById('gd-ram').textContent = (sys.ram_used_gb||0) + ' / ' + (sys.ram_total_gb||0) + ' GB';
+
+    makeGauge('g-gpu-temp', sys.gpu_temp || 0, '°C', true);
+    document.getElementById('gd-gpu-temp').textContent = 'GTX 1060';
+
+    makeGauge('g-vram', sys.gpu_vram_pct || 0);
+    document.getElementById('gd-vram').textContent = (sys.gpu_vram_used||0) + ' / ' + (sys.gpu_vram_total||0) + ' MB';
+
+    makeGauge('g-gpu-util', sys.gpu_util || 0);
+    document.getElementById('gd-gpu-util').textContent = 'Inference';
+
+    // Disk — combined Storage tile
+    const diskEl = document.getElementById('disk-bars');
+    if (diskEl) {
+        function diskBar(label, pct, free) {
+            const color = pct < 70 ? '#22c55e' : pct < 85 ? '#fbbf24' : '#ef4444';
+            return `<div class="disk-row">
+                <span class="dl">${label}</span>
+                <div class="disk-bar"><div class="disk-bar-fill" style="width:${pct}%;background:${color}"></div></div>
+                <span class="dv" style="color:${color}">${pct}%</span>
+                <span class="dl" style="color:var(--text-dim)">${free}GB</span>
+            </div>`;
+        }
+        diskEl.innerHTML =
+            diskBar('SSD', sys.disk_root_pct||0, sys.disk_root_avail_gb||0) +
+            diskBar('HDD', sys.disk_data_pct||0, sys.disk_data_avail_gb||0);
+    }
+
+    document.getElementById('hi-uptime').textContent = sys.uptime || '?';
+    document.getElementById('hi-load').textContent = (sys.load_1m||0) + ' / ' + (sys.load_5m||0) + ' / ' + (sys.load_15m||0);
 }
 
 // SSE Connection

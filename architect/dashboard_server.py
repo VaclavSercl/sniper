@@ -12,6 +12,8 @@ import time
 import socket
 import threading
 import logging
+import subprocess
+import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 log = logging.getLogger("dashboard_sse")
@@ -58,7 +60,117 @@ def _build_dashboard_state():
         state["l2"] = {"regime": "UNKNOWN", "reasoning": ""}
 
     state["timestamp_ms"] = int(time.time() * 1000)
+
+    # 4. System health metrics (cached 2s)
+    state["system"] = _get_system_health()
+
     return state
+
+
+# ── System Health Collector (cached) ──
+_health_cache = {}
+_health_cache_ts = 0
+_HEALTH_TTL = 2.0  # seconds
+_prev_cpu_idle = 0
+_prev_cpu_total = 0
+
+
+def _get_system_health():
+    global _health_cache, _health_cache_ts
+    now = time.time()
+    if now - _health_cache_ts < _HEALTH_TTL:
+        return _health_cache
+
+    result = {}
+
+    # CPU usage from /proc/stat
+    global _prev_cpu_idle, _prev_cpu_total
+    try:
+        with open('/proc/stat') as f:
+            line = f.readline()
+        parts = line.split()
+        idle = int(parts[4])
+        total = sum(int(p) for p in parts[1:])
+        d_idle = idle - _prev_cpu_idle
+        d_total = total - _prev_cpu_total
+        _prev_cpu_idle = idle
+        _prev_cpu_total = total
+        if d_total > 0:
+            result['cpu_pct'] = round(100.0 * (1.0 - d_idle / d_total), 1)
+        else:
+            result['cpu_pct'] = 0.0
+    except Exception:
+        result['cpu_pct'] = 0.0
+
+    # RAM from /proc/meminfo
+    try:
+        mem = {}
+        with open('/proc/meminfo') as f:
+            for line in f:
+                k, v = line.split(':')[:2]
+                mem[k.strip()] = int(v.strip().split()[0])
+        total_kb = mem.get('MemTotal', 1)
+        avail_kb = mem.get('MemAvailable', 0)
+        used_kb = total_kb - avail_kb
+        result['ram_pct'] = round(100.0 * used_kb / total_kb, 1)
+        result['ram_used_gb'] = round(used_kb / 1048576, 1)
+        result['ram_total_gb'] = round(total_kb / 1048576, 1)
+    except Exception:
+        result['ram_pct'] = 0.0
+
+    # GPU from nvidia-smi
+    try:
+        out = subprocess.run(
+            ['nvidia-smi', '--query-gpu=temperature.gpu,memory.used,memory.total,utilization.gpu',
+             '--format=csv,noheader,nounits'],
+            capture_output=True, text=True, timeout=3
+        )
+        if out.returncode == 0:
+            parts = out.stdout.strip().split(',')
+            if len(parts) >= 4:
+                result['gpu_temp'] = int(parts[0].strip())
+                result['gpu_vram_used'] = int(parts[1].strip())
+                result['gpu_vram_total'] = int(parts[2].strip())
+                result['gpu_util'] = int(parts[3].strip())
+                result['gpu_vram_pct'] = round(100.0 * result['gpu_vram_used'] / max(result['gpu_vram_total'], 1), 1)
+    except Exception:
+        pass
+
+    # Disk usage (both mounts)
+    try:
+        for mount, label in [('/', 'disk_root'), ('/data', 'disk_data')]:
+            out = subprocess.run(['df', mount, '--output=pcent,avail,size'],
+                                 capture_output=True, text=True, timeout=3)
+            for line in out.stdout.strip().split('\n')[1:]:
+                parts = line.split()
+                result[f'{label}_pct'] = int(parts[0].rstrip('%'))
+                result[f'{label}_avail_gb'] = round(int(parts[1]) / 1048576, 1)
+                result[f'{label}_total_gb'] = round(int(parts[2]) / 1048576, 1)
+    except Exception:
+        pass
+
+    # Load average
+    try:
+        load1, load5, load15 = os.getloadavg()
+        result['load_1m'] = round(load1, 2)
+        result['load_5m'] = round(load5, 2)
+        result['load_15m'] = round(load15, 2)
+    except Exception:
+        pass
+
+    # Uptime
+    try:
+        with open('/proc/uptime') as f:
+            uptime_s = float(f.read().split()[0])
+        hours = int(uptime_s // 3600)
+        mins = int((uptime_s % 3600) // 60)
+        result['uptime'] = f"{hours}h {mins}m"
+    except Exception:
+        result['uptime'] = '?'
+
+    _health_cache = result
+    _health_cache_ts = now
+    return result
 
 
 class DashboardHandler(BaseHTTPRequestHandler):

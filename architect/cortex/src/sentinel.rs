@@ -40,6 +40,8 @@ const POSITION_DRIFT_BTC: f64 = 0.01;  // Max inventory before alert
 const SPREAD_EXPLOSION_MULT: f64 = 3.0;// Spread > 3x grid step
 const SENTINEL_INTERVAL_SECS: u64 = 5; // Check every 5 seconds
 const COOLDOWN_SECS: u64 = 900;        // 15 min anti-spam per alert type
+const SUSTAINED_THRESHOLD: u64 = 60;   // 60 × 5s = 5 min sustained before alert
+const CRITICAL_PCT: f64 = 95.0;        // Resource critical threshold
 
 // ── History for delta detection ──
 struct SentinelHistory {
@@ -48,6 +50,14 @@ struct SentinelHistory {
     prev_fills: u64,
     zero_fill_cycles: u64,
     last_alerts: HashMap<String, Instant>,
+    // Sustained resource monitoring
+    cpu_high_cycles: u64,
+    ram_high_cycles: u64,
+    gpu_temp_high_cycles: u64,
+    vram_high_cycles: u64,
+    disk_high_cycles: u64,
+    prev_cpu_idle: u64,
+    prev_cpu_total: u64,
 }
 
 impl SentinelHistory {
@@ -58,6 +68,13 @@ impl SentinelHistory {
             prev_fills: 0,
             zero_fill_cycles: 0,
             last_alerts: HashMap::new(),
+            cpu_high_cycles: 0,
+            ram_high_cycles: 0,
+            gpu_temp_high_cycles: 0,
+            vram_high_cycles: 0,
+            disk_high_cycles: 0,
+            prev_cpu_idle: 0,
+            prev_cpu_total: 0,
         }
     }
 
@@ -306,6 +323,52 @@ async fn check_system_resources(history: &mut SentinelHistory) {
             );
             push_alert("FATAL", &msg).await;
         }
+
+        // Sustained GPU temp tracking (> 85°C for 5 min)
+        if temp > 85 {
+            history.gpu_temp_high_cycles += 1;
+            if history.gpu_temp_high_cycles == SUSTAINED_THRESHOLD && history.should_alert("gpu_temp_sustained") {
+                let msg = format!(
+                    "🔥 SENTINEL: GPU TEPLOTA SUSTAINED\n\
+                     {temp}°C po dobu 5+ minut!\n\
+                     Riziko throttlingu a degradace!"
+                );
+                push_alert("FATAL", &msg).await;
+            }
+        } else {
+            history.gpu_temp_high_cycles = 0;
+        }
+
+        // Sustained VRAM > 95%
+        if pct > 95 {
+            history.vram_high_cycles += 1;
+            if history.vram_high_cycles == SUSTAINED_THRESHOLD && history.should_alert("vram_sustained") {
+                let msg = format!(
+                    "💾 SENTINEL: VRAM > 95% SUSTAINED\n\
+                     {mem_used}/{mem_total} MB po dobu 5+ minut"
+                );
+                push_alert("FATAL", &msg).await;
+            }
+        } else {
+            history.vram_high_cycles = 0;
+        }
+    }
+
+    // ── CPU Usage (from /proc/stat) ──
+    if let Some(cpu_pct) = cpu_usage_pct(history) {
+        if cpu_pct > CRITICAL_PCT {
+            history.cpu_high_cycles += 1;
+            if history.cpu_high_cycles == SUSTAINED_THRESHOLD && history.should_alert("cpu_sustained") {
+                let msg = format!(
+                    "🔥 SENTINEL: CPU > 95% SUSTAINED\n\
+                     CPU pouziti: {cpu_pct:.0}% po dobu 5+ minut\n\
+                     Mozny bottleneck exekuce!"
+                );
+                push_alert("WARNING", &msg).await;
+            }
+        } else {
+            history.cpu_high_cycles = 0;
+        }
     }
 
     // ── Disk Usage ──
@@ -317,6 +380,21 @@ async fn check_system_resources(history: &mut SentinelHistory) {
             );
             push_alert("WARNING", &msg).await;
         }
+
+        // Sustained disk > 95%
+        if pct > 95 {
+            history.disk_high_cycles += 1;
+            if history.disk_high_cycles == SUSTAINED_THRESHOLD && history.should_alert("disk_sustained") {
+                let msg = format!(
+                    "💾 SENTINEL: DISK > 95% SUSTAINED\n\
+                     {pct}% po dobu 5+ minut\n\
+                     Urgentne uvolnit misto!"
+                );
+                push_alert("FATAL", &msg).await;
+            }
+        } else {
+            history.disk_high_cycles = 0;
+        }
     }
 
     // ── RAM Usage ──
@@ -327,6 +405,21 @@ async fn check_system_resources(history: &mut SentinelHistory) {
                  Pouziti: {pct}% > 90%"
             );
             push_alert("WARNING", &msg).await;
+        }
+
+        // Sustained RAM > 95%
+        if pct > 95 {
+            history.ram_high_cycles += 1;
+            if history.ram_high_cycles == SUSTAINED_THRESHOLD && history.should_alert("ram_sustained") {
+                let msg = format!(
+                    "💾 SENTINEL: RAM > 95% SUSTAINED\n\
+                     {pct}% po dobu 5+ minut\n\
+                     Mozny OOM killer!"
+                );
+                push_alert("FATAL", &msg).await;
+            }
+        } else {
+            history.ram_high_cycles = 0;
         }
     }
 
@@ -398,6 +491,27 @@ fn ram_usage_pct() -> Option<u64> {
     }
     if total > 0 {
         Some(((total - available) * 100) / total)
+    } else {
+        None
+    }
+}
+
+fn cpu_usage_pct(history: &mut SentinelHistory) -> Option<f64> {
+    let content = std::fs::read_to_string("/proc/stat").ok()?;
+    let first_line = content.lines().next()?;
+    let parts: Vec<u64> = first_line.split_whitespace()
+        .skip(1)  // skip "cpu"
+        .filter_map(|s| s.parse().ok())
+        .collect();
+    if parts.len() < 4 { return None; }
+    let idle = parts[3];
+    let total: u64 = parts.iter().sum();
+    let d_idle = idle.saturating_sub(history.prev_cpu_idle);
+    let d_total = total.saturating_sub(history.prev_cpu_total);
+    history.prev_cpu_idle = idle;
+    history.prev_cpu_total = total;
+    if d_total > 0 {
+        Some(100.0 * (1.0 - d_idle as f64 / d_total as f64))
     } else {
         None
     }
