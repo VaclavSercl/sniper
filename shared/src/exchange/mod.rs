@@ -10,6 +10,7 @@
 pub mod types;
 pub mod bitfinex;
 pub mod binance;
+pub mod cross_types;
 
 pub use types::*;
 
