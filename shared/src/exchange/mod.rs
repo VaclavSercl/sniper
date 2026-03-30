@@ -9,6 +9,7 @@
 
 pub mod types;
 pub mod bitfinex;
+pub mod binance;
 
 pub use types::*;
 
