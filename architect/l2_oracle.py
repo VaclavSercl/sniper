@@ -34,6 +34,15 @@ GEMINI_TIMEOUT = 60  # seconds
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'state', 'armada_state.json')
 PROJECT_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 
+import sys
+if os.path.join(PROJECT_ROOT, "shared") not in sys.path:
+    sys.path.insert(0, os.path.join(PROJECT_ROOT, "shared"))
+
+try:
+    from pnl_engine import PnlDatabase
+    HAS_PNL_DB = True
+except ImportError:
+    HAS_PNL_DB = False
 
 class L2Oracle:
     """Strategic Oracle — the 'frontal lobe' of the Armada."""
@@ -52,6 +61,8 @@ class L2Oracle:
         self.ema_price = None
         self.ema_var = 0.0
         self.ema_alpha = 0.05  # ~20 period smoothing
+
+        self.pnl_db = PnlDatabase() if HAS_PNL_DB else None
 
     def run_cycle(self, report_type=None):
         """Execute one L2 Oracle cycle. Called every 5 min.
@@ -199,14 +210,22 @@ class L2Oracle:
         else:
             feedback = "\n═══ PREVIOUS CYCLE FEEDBACK ═══\nFirst cycle — no prior data available.\n"
 
+        # Read historical PnL
+        all_pnl = self.pnl_db.get_all_bots_pnl() if hasattr(self, 'pnl_db') and self.pnl_db else {}
+
         # Bot states
         bot_states = ""
         for b in bots:
             status = "ONLINE" if b.get("online") else "OFFLINE"
+            p_1h = all_pnl.get(b['name'], {}).get('1h', {}).get('realized', 0)
+            p_24h = all_pnl.get(b['name'], {}).get('24h', {}).get('realized', 0)
+            p_7d = all_pnl.get(b['name'], {}).get('7d', {}).get('realized', 0)
+            
             bot_states += (
                 f"\n[{b['emoji']} {b['name'].upper()}] {status}\n"
                 f"Price=${b['price']:.0f} Spread=${b.get('spread', 0):.2f} "
-                f"Pos={b['position']:.6f}BTC PnL=${b['pnl']:.4f}\n"
+                f"Pos={b['position']:.6f}BTC SessionPnL=${b['pnl']:.4f}\n"
+                f"Historical PnL: 1h=${p_1h:.4f} | 24h=${p_24h:.4f} | 7d=${p_7d:.4f}\n"
                 f"Grid=${b['grid_step']:.2f}({b.get('grid_levels', 0)}L) "
                 f"MaxPos={b.get('max_position', 0):.4f} Fills={b['fills']} Toxic={b['toxic']}\n"
             )
@@ -307,6 +326,10 @@ RULES:
   * Rule 1: If expected inactive period is LONG (Deep BEARISH_SHOCK) or SERVER LOAD/RAM is HIGH (>80%), use "STOP".
   * Rule 2: If expected inactive period is SHORT (Flash VOLATILITY) and SERVER LOAD is OK, use "START" + pause_trading:true.
   * Rule 3: For TRENDING markets, "START" + pause_trading:false to actively trade.
+- PERFORMANCE GOVERNANCE (7d PnL check):
+  * If a bot has consistently negative 7d PnL (e.g., < -$0.50), you MUST intervene.
+  * Intervention 1 (Bleeding): Expand grid_spacing, shrink max_position, increase defensive parameters.
+  * Intervention 2 (Severe Loss): If the strategy fundamentally fails the macro environment, set os_action="STOP" to forcibly archive it.
 
 ═══ MACRO INTELLIGENCE ═══
 Fear & Greed Index: {fg} ({fg_text})
