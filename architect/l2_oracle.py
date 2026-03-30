@@ -288,6 +288,37 @@ class L2Oracle:
         except Exception:
             server_section = "\n═══ SERVER RESOURCE LOAD ═══\nUnavailable\n"
 
+        # Latency Ring Analytics (Phase 4.1)
+        latency_section = ""
+        try:
+            import mmap as mmap_mod, struct as _st
+            L2_CMD_PATH = "/dev/shm/beroun/l2_command.bin"
+            # CL6 offset = CL1(64) + CL2(64) + CL3(64) + CL4(64) + CL5(64) = 320
+            RING_OFFSET = 320
+            RING_SIZE = 64
+            fd = os.open(L2_CMD_PATH, os.O_RDONLY)
+            mm = mmap_mod.mmap(fd, 0, prot=mmap_mod.PROT_READ)
+            os.close(fd)
+            # Read head pointer (usize = u64 on x86_64)
+            head = _st.unpack_from('<Q', mm, RING_OFFSET)[0]
+            # Ring data starts at RING_OFFSET + 64 (head + 56B padding = 1 cache line)
+            ring_data_offset = RING_OFFSET + 64
+            samples = []
+            for i in range(RING_SIZE):
+                val = _st.unpack_from('<Q', mm, ring_data_offset + i * 8)[0]
+                if val > 0:
+                    samples.append(val)
+            mm.close()
+            if samples:
+                samples.sort()
+                n = len(samples)
+                p50 = samples[int(n * 0.50)]
+                p95 = samples[min(int(n * 0.95), n - 1)]
+                p99 = samples[min(int(n * 0.99), n - 1)]
+                latency_section = f"\n═══ LATENCY ANALYTICS (Phase 4) ═══\nTick-to-Trade: P50={p50}μs P95={p95}μs P99={p99}μs ({n} samples)\n"
+        except Exception:
+            pass
+
         # Brain Context (permanent memory)
         brain_section = ""
         try:
@@ -337,7 +368,7 @@ News Sentiment: {bias:+.4f} ({bias_label})
 Cycle: #{self.cycle} (every 5 min)
 {fee_info}{feedback}
 ═══ PHI-3.5 GPU INTELLIGENCE ═══{self._format_gpu_section(gpu_data)}
-═══ ARMADA STATE ═══{bot_states}{portfolio_section}{server_section}{brain_section}
+═══ ARMADA STATE ═══{bot_states}{portfolio_section}{server_section}{latency_section}{brain_section}
 ═══ RESPOND WITH THIS JSON ═══
 {{"global_reasoning": "Analyze macro + cross-bot correlations + fees + GPU telemetry here FIRST...",
   "global_regime": "BEARISH_SHOCK|BULLISH_TREND|CHOPPING_RANGE",

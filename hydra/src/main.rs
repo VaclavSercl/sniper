@@ -355,6 +355,16 @@ async fn async_main() -> Result<()> {
             .add(std::mem::size_of::<sniper_types::l2_command::L2GlobalRiskMatrix>())
             as *const sniper_types::l2_command::L2PortfolioTelemetry)
     };
+    // CL6+: Latency Ring Buffer (Hydra writes tick-to-trade latency here)
+    let l1ring = unsafe {
+        &*(l2cmd_mmap.as_ptr()
+            .add(std::mem::size_of::<sniper_types::l2_command::L2CommandMatrix>())
+            .add(std::mem::size_of::<sniper_types::l2_command::L2ASMatrix>())
+            .add(std::mem::size_of::<sniper_types::l2_command::L2GridWarpMatrix>())
+            .add(std::mem::size_of::<sniper_types::l2_command::L2GlobalRiskMatrix>())
+            .add(std::mem::size_of::<sniper_types::l2_command::L2PortfolioTelemetry>())
+            as *const sniper_types::l2_command::L1TelemetryRing)
+    };
 
     let engine_ptr: *mut EngineState = engine_mmap.as_mut_ptr() as *mut EngineState;
     let risk = unsafe { &*(risk_mmap.as_ptr() as *const RiskState) };
@@ -1361,6 +1371,8 @@ async fn async_main() -> Result<()> {
                                                             eng.last_sell_price.store(sell_i, Ordering::SeqCst);
                                                             let t2t_us = now.elapsed().as_micros() as u64;
                                                             eng.t2t_micros.store(t2t_us, Ordering::SeqCst);
+                                                            // Phase 4.1: Record tick-to-trade latency in ring buffer
+                                                            sniper_types::l2_command::record_latency(l1ring, now);
                                                             eng.micro_price.store(micro_i as u64, Ordering::SeqCst);
                                                             eng.current_skew.store(inv_skew, Ordering::SeqCst);
                                                             eng.l2_imbalance.store((obi * sniper_types::PRICE_SCALE) as i64, Ordering::SeqCst);
