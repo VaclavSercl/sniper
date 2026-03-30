@@ -14,6 +14,7 @@
 // ═══════════════════════════════════════════════════════════
 
 use std::sync::atomic::{AtomicI64, AtomicU64, AtomicUsize, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub const L2_COMMAND_PATH: &str = "/dev/shm/beroun/l2_command.bin";
 pub const LATENCY_RING_SIZE: usize = 64;
@@ -56,7 +57,7 @@ pub struct L2GridWarpMatrix {
     _pad_cl3: [u8; 16],
 }
 
-// ═══ CL4: Global Risk & Aegis Hedger (Phase 3) ═══
+// ═══ CL4: Global Risk & Aegis Hedger (Phase 3) + Cross-Bot Signals ═══
 #[repr(C, align(64))]
 pub struct L2GlobalRiskMatrix {
     /// Independent SeqLock for macro risk
@@ -69,7 +70,11 @@ pub struct L2GlobalRiskMatrix {
     pub aegis_urgency_flag: AtomicI64,
     /// 1 = portfolio hedged via perps, Grid stops buying
     pub portfolio_is_hedged: AtomicI64,
-    _pad_cl4: [u8; 24],
+    /// Cross-bot: epoch ms when flash crash detected by Moonshot (0 = clear)
+    pub flash_crash_epoch_ms: AtomicU64,
+    /// Cross-bot: magnitude of drop in bps (e.g., -300 = -3%)
+    pub flash_crash_drop_bps: AtomicI64,
+    _pad_cl4: [u8; 8],
 }
 
 // ═══ CL5: Portfolio Telemetry (L1 → L2, Phase 3) ═══
@@ -143,7 +148,9 @@ impl Default for L2GlobalRiskMatrix {
             aegis_target_delta: AtomicI64::new(0),
             aegis_urgency_flag: AtomicI64::new(0),
             portfolio_is_hedged: AtomicI64::new(0),
-            _pad_cl4: [0u8; 24],
+            flash_crash_epoch_ms: AtomicU64::new(0),
+            flash_crash_drop_bps: AtomicI64::new(0),
+            _pad_cl4: [0u8; 8],
         }
     }
 }
@@ -285,6 +292,44 @@ pub fn should_grid_place_bid(risk: &L2GlobalRiskMatrix) -> bool {
 pub fn vpin_shift_bps(risk: &L2GlobalRiskMatrix) -> i64 {
     let toxicity = risk.global_vpin_toxicity.load(Ordering::Relaxed);
     (toxicity * 30) / BTC_SCALE
+}
+
+// ═══════════════════════════════════════════════════════════
+// Phase 3.3: Cross-Bot Flash Crash Signal Helpers
+// ═══════════════════════════════════════════════════════════
+
+/// Flash crash signal TTL — auto-expires after 30 seconds (stale protection)
+pub const FLASH_CRASH_TTL_MS: u64 = 30_000;
+
+/// Check if a cross-bot flash crash signal is currently active and not stale.
+/// Called by Hydra every tick — zero-cost when no crash (single atomic load).
+#[inline(always)]
+pub fn is_flash_crash_active(risk: &L2GlobalRiskMatrix) -> bool {
+    let ts = risk.flash_crash_epoch_ms.load(Ordering::Acquire);
+    if ts == 0 { return false; }
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+    now_ms.saturating_sub(ts) < FLASH_CRASH_TTL_MS
+}
+
+/// Write a flash crash signal (called by Moonshot when wick detected).
+#[inline(always)]
+pub fn signal_flash_crash(risk: &L2GlobalRiskMatrix, drop_bps: i64) {
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+    risk.flash_crash_drop_bps.store(drop_bps, Ordering::Relaxed);
+    risk.flash_crash_epoch_ms.store(now_ms, Ordering::Release);
+}
+
+/// Clear the flash crash signal (called by Moonshot after recovery / TTL).
+#[inline(always)]
+pub fn clear_flash_crash(risk: &L2GlobalRiskMatrix) {
+    risk.flash_crash_epoch_ms.store(0, Ordering::Release);
+    risk.flash_crash_drop_bps.store(0, Ordering::Relaxed);
 }
 
 /// Total mmap: CL1-5(320B) + Ring(576B) = 896B

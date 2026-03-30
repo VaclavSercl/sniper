@@ -186,6 +186,8 @@ async fn main() -> Result<()> {
         unsafe { MmapMut::map_mut(&f)? }
     };
     let l2cmd = unsafe { &*(l2cmd_mmap.as_ptr() as *const sniper_types::l2_command::L2CommandMatrix) };
+    // CL4 = Global Risk Matrix at offset 192 (3 × 64B cache lines)
+    let l2_risk = unsafe { &*(l2cmd_mmap.as_ptr().add(192) as *const sniper_types::l2_command::L2GlobalRiskMatrix) };
 
     let key = std::env::var("BITFINEX_API_KEY").context("Missing BITFINEX_API_KEY")?;
     let sec = std::env::var("BITFINEX_API_SECRET").context("Missing BITFINEX_API_SECRET")?;
@@ -314,6 +316,13 @@ async fn main() -> Result<()> {
                                               price = mid_f64, amount = coin_amount);
                                         notifier.send(format!("🚀 MOONSHOT FIRED! {} @ ${:.2} (trigger ${:.2})",
                                             symbol, mid_f64, trigger as f64 / PRICE_SCALE_I as f64));
+
+                                        // ═══ CROSS-BOT SIGNAL: Alert Hydra via shared mmap CL4 ═══
+                                        let drop_bps = ((mid_f64 - (trigger as f64 / PRICE_SCALE_I as f64)) / mid_f64 * 10_000.0) as i64;
+                                        sniper_types::l2_command::signal_flash_crash(l2_risk, drop_bps);
+                                        warn!(event = "cross_bot_signal", drop_bps = drop_bps,
+                                              "🚨 Flash crash signal → Hydra EMERGENCY EXIT");
+
                                         last_order_ts[idx] = Instant::now();
                                     }
                                 }

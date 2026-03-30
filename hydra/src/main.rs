@@ -1144,6 +1144,22 @@ async fn async_main() -> Result<()> {
                                                         let vpin_bps = sniper_types::l2_command::vpin_shift_bps(l2risk);
                                                         let vpin_delta = vpin_bps * (micro_i / 10_000);
 
+                                                        // ═══ Phase 3.3: Cross-Bot Flash Crash Emergency ═══
+                                                        if sniper_types::l2_command::is_flash_crash_active(l2risk) {
+                                                            let drop = l2risk.flash_crash_drop_bps.load(Ordering::Relaxed);
+                                                            tracing::warn!(event = "cross_bot_emergency",
+                                                                drop_bps = drop,
+                                                                "🚨 Moonshot flash crash signal — cancelling ALL orders");
+                                                            notifier.alert(format!(
+                                                                "🚨 CROSS-BOT EMERGENCY: Flash crash {}bps detected by Moonshot — cancelling all Hydra orders!",
+                                                                drop));
+                                                            // Cancel all orders immediately
+                                                            let _ = order_tx.send(
+                                                                r#"[0,"oc_multi",null,{"all":1}]"#.to_string()
+                                                            );
+                                                            continue; // Skip quoting entirely this tick
+                                                        }
+
                                                         // Layer: A-S + VPIN + grid + bias + delta
                                                         let mut buy_i = (as_bid + vpin_delta - grid + final_bias_with_l1 + delta_shift).max(0);
                                                         let mut sell_i = (as_sell + vpin_delta + grid + final_bias_with_l1 + delta_shift).max(0);
