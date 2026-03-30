@@ -8,10 +8,6 @@ name = "trigon-core"
 path = "src/main.rs"
 
 [[bin]]
-name = "trigon-dashboard"
-path = "src/dashboard.rs"
-
-[[bin]]
 name = "trigon-config"
 path = "src/config_cli.rs"
 
@@ -44,3 +40,4 @@ rusqlite = { version = "0.33", features = ["bundled"] }
 anyhow = "1.0"
 clap = { version = "4.5", features = ["derive"] }
 tokio-tungstenite = { version = "0.26.1", features = ["native-tls"] }
+fs2 = "0.4.3"

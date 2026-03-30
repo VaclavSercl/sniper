@@ -1076,6 +1076,16 @@ PARAMETER CONSTRAINTS:
             return
         bin_path = os.path.join(PROJECT_ROOT, "target", "release", binary)
         log_path = os.path.join(PROJECT_ROOT, "logs", f"{binary}.log")
+        
+        # Guard: check if already running via pgrep
+        try:
+            r = subprocess.run(["pgrep", "-f", binary], capture_output=True, text=True)
+            if r.returncode == 0 and int(r.stdout.strip().split("\n")[0]) > 0:
+                log.info(f"  ✅ {bot_name} ({binary}) is already running, skipping start.")
+                return
+        except Exception:
+            pass
+
         try:
             subprocess.Popen(
                 ["taskset", "-c", cpu, bin_path],

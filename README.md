@@ -1,4 +1,4 @@
-# 🐺 SNIPER ARMADA v15.0 — Sovereign HFT
+# 🐺 SNIPER ARMADA v15.1 — Sovereign HFT
 
 **Autonomous high-frequency trading platform** for Bitfinex with AI-driven decision-making, cross-exchange intelligence, and zero-latency IPC via mmap + UDS.
 
@@ -214,6 +214,7 @@ sudo systemctl enable --now sniper-armada
 
 | Version | Codename | Key Feature |
 |---------|----------|-------------|
+| v15.1 | System Hardening | Instance locks, dead code removal, duplicate process guards |
 | v15.0 | Sovereign HFT | Consolidated AI reporting (hourly/daily/weekly/monthly), lmstudio.service dependency, unified watchdog |
 | v14.0 | Separated Hemispheres | Cortex/Commander split, GPU telemetry, L2 feedback loop, Master Dashboard |
 | v13.0 | Sovereign Intelligence | Zero-Debt Audit + unified standard |

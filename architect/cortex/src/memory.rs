@@ -11,6 +11,7 @@ use std::path::Path;
 use std::sync::atomic::Ordering;
 
 /// Snapshot of a single bot's state — safe to serialize/format for prompts.
+#[allow(dead_code)]
 pub struct BotSnapshot {
     pub name: &'static str,
     pub emoji: &'static str,
@@ -125,11 +126,6 @@ impl ArmadaMemory {
     /// Type-safe reference to Hydra RiskState (zero-copy).
     pub fn hydra_risk(&self) -> &RiskState {
         unsafe { &*(self.hydra_risk.as_ptr() as *const RiskState) }
-    }
-
-    /// Mutable reference to Hydra RiskState (for L2 writes).
-    pub fn hydra_risk_mut(&mut self) -> &mut RiskState {
-        unsafe { &mut *(self.hydra_risk.as_mut_ptr() as *mut RiskState) }
     }
 
     /// Get RiskState for any bot by name. Returns None if bot's mmap is offline.
@@ -300,42 +296,4 @@ fn read_u32(data: &[u8], offset: usize) -> u32 {
     u32::from_le_bytes(data[offset..offset+4].try_into().unwrap_or([0;4]))
 }
 
-/// Format a bot snapshot as a text block for the Gemini prompt.
-pub fn format_snapshot_for_prompt(s: &BotSnapshot) -> String {
-    format!(
-        "═══ {emoji} {name} ═══\n\
-         Status: {status}\n\
-         Price: ${price:.2} (spread: ${spread:.2})\n\
-         Position: {pos:.6} BTC | PnL: ${pnl:.4}\n\
-         Grid: ${grid:.2} ({levels} levels) | MaxPos: {maxpos:.6} BTC\n\
-         Capital: ${cap:.2} | DLL: -${dll:.2} | Paused: {paused}\n\
-         Fills: {fills} | Toxic: {toxic} | T2T: {t2t}µs\n\
-         L1 Conf: {conf:.0}% | FP: {fp:.0}% | Success: {sr:.0}%\n\
-         Regime: {regime} | Intent: {intent}\n\
-         F&G: {fg} | Macro Bias: {bias:+.4} | Shadow: {shadow}",
-        emoji = s.emoji,
-        name = s.name.to_uppercase(),
-        status = if s.online { "🟢 ONLINE" } else { "🔴 OFFLINE" },
-        price = s.micro_price,
-        spread = s.spread,
-        pos = s.net_position,
-        pnl = s.realized_pnl,
-        grid = s.grid_step,
-        levels = s.grid_levels,
-        maxpos = s.max_position,
-        cap = s.authorized_capital,
-        dll = s.daily_loss_limit,
-        paused = if s.paused { "YES ⏸️" } else { "NO ▶️" },
-        fills = s.session_fills,
-        toxic = s.toxic_hits,
-        t2t = s.t2t_micros,
-        conf = s.l1_confidence * 100.0,
-        fp = s.l1_fp_rate * 100.0,
-        sr = s.l1_success_rate * 100.0,
-        regime = s.l2_regime,
-        intent = s.ai_intent,
-        fg = s.fear_greed,
-        bias = s.macro_bias,
-        shadow = if s.shadow_mode { "YES 🌑" } else { "NO" },
-    )
-}
+

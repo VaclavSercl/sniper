@@ -24,7 +24,7 @@ const SWEEP_MIN_VOLUME: f64 = 0.05;  // Ignore sweeps on thin books (<0.05 BTC t
 const BOOK_DEPTH: usize = 10;
 
 // Adaptive learning
-const CONFIDENCE_WINDOW: usize = 100;
+
 const ADAPTATION_INTERVAL_SECS: u64 = 120;
 const MIN_SWEEP_THRESHOLD: f64 = 0.60;
 const MAX_SWEEP_THRESHOLD: f64 = 0.90;
@@ -33,7 +33,7 @@ const MAX_SWEEP_THRESHOLD: f64 = 0.90;
 const PARALYSIS_FREEZE_RATIO: f64 = 0.60;
 const PARALYSIS_CHECK_WINDOW_SECS: f64 = 300.0;
 const PARALYSIS_DESENSITIZE_STEP: f64 = 0.05;
-const MAX_CONSECUTIVE_FREEZES: u32 = 4;
+
 
 // Ghost mode
 const GHOST_TOXIC_ACTIVATE: u64 = 300;
@@ -281,7 +281,7 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
     let mut prev_bids: Vec<BookLevel> = Vec::new();
     let mut prev_asks: Vec<BookLevel> = Vec::new();
     let mut last_sweep_ms: u64 = 0;
-    let mut pnl_at_sweep: f64 = 0.0;
+
     let mut cycle: u64 = 0;
 
     loop {
@@ -349,13 +349,14 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
                     brain.record_consecutive_freeze();
                     brain.record_freeze_time(freeze_ms);
 
-                    pnl_at_sweep = engine.realized_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
-
+                    let qty = engine.net_position.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+                    println!("  [L1] 🧹 SWEEP: Toxic surge detected! Panic selling {qty:.6} BTC");
+                    
                     let toxic = engine.toxic_flow_hits.load(Ordering::Relaxed);
                     let new_toxic = if toxic > 1_000_000 { 1 } else { toxic + 1 };
                     engine.toxic_flow_hits.store(new_toxic, Ordering::Release);
 
-                    brain.record_sweep(pnl_at_sweep, pnl_at_sweep);
+                    brain.record_sweep(0.0, 0.0);
 
                     if cycle % 100 == 0 {
                         let side = if bid_sweep { "BID" } else { "ASK" };

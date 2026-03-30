@@ -603,6 +603,18 @@ class FillProcessor:
 
 def main():
     log.info("💰 PnL Daemon v2.0 — Volatility-Neutral FIFO Engine")
+    
+    # ═══ SINGLE-INSTANCE LOCK ═══
+    import fcntl
+    lock_file_path = "/tmp/pnl_daemon.lock"
+    try:
+        lock_file = open(lock_file_path, "w")
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        # We must keep the lock_file object alive
+    except BlockingIOError:
+        log.error("Another pnl_daemon instance is already running! Aborting.")
+        sys.exit(1)
+
     log.info(f"   DB: {os.path.expanduser('~/.local/share/sniper/pnl.db')}")
     log.info(f"   mmap: /dev/shm/beroun/pnl_state.bin")
     log.info(f"   fee_state: {FEE_STATE_PATH}")

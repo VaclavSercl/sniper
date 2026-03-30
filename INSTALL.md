@@ -1,4 +1,4 @@
-# 🐺 SNIPER ARMADA v12.0 — Installation Guide
+# 🐺 SNIPER ARMADA v15.1 — Installation Guide
 
 ## Requirements
 
@@ -91,9 +91,6 @@ journalctl -u sniper-armada --since "1 min ago" | grep -c panic  # 0
 | Port | Service | Description |
 |------|---------|-------------|
 | 3000 | Hydra Dashboard | BTC-USD Market Making |
-| 3001 | Moonshot Dashboard | Multi-Symbol Flash Crash |
-| 3002 | Grid Dashboard | Dynamic Multi-Level Grid |
-| 3003 | Trigon Dashboard | Triangular Arbitrage |
 | 3004 | Architect Dashboard | Master Control Panel |
 
 ## mmap Paths

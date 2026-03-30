@@ -8,10 +8,6 @@ name = "moonshot-core"
 path = "src/main.rs"
 
 [[bin]]
-name = "moonshot-dashboard"
-path = "src/dashboard.rs"
-
-[[bin]]
 name = "moonshot-config"
 path = "src/config_cli.rs"
 

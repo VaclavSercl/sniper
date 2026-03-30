@@ -223,6 +223,18 @@ async fn main() -> Result<()> {
     let sec = std::env::var("BITFINEX_API_SECRET").context("Missing BITFINEX_API_SECRET")?;
 
     info!(event = "system_start", version = VERSION, bot = "grid", strategy = "multi_level_grid");
+
+    // ═══ SINGLE-INSTANCE LOCK ═══
+    use fs2::FileExt;
+    let lock_file = std::fs::File::create("/tmp/grid-core.lock")
+        .context("Failed to create grid lock file")?;
+    if lock_file.try_lock_exclusive().is_err() {
+        tracing::error!(event = "dual_instance_blocked",
+            msg = "Another grid-core is already running! Aborting.");
+        std::process::exit(1);
+    }
+    let _lock_guard = lock_file;
+
     notifier.send(format!("📐 Grid v{} (Dynamic Multi-Level) ONLINE", VERSION));
 
     loop {

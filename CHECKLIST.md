@@ -1,4 +1,4 @@
-# 🐺 SNIPER ARMADA v12.0 — Change Checklist
+# 🐺 SNIPER ARMADA v15.1 — Change Checklist
 
 When adding a **new feature/field**, update ALL of these:
 
@@ -6,15 +6,13 @@ When adding a **new feature/field**, update ALL of these:
 - [ ] `shared/src/types.rs` — struct definition (field + type)
 - [ ] `shared/src/types.rs` — Default impl (initial value)
 - [ ] `hydra/src/main.rs` — Read/write logic in fire loop
-- [ ] `hydra/scripts/l1_shield.py` — OFF_* offset constant
-- [ ] `hydra/scripts/sniper_orchestrator.py` — offset if L2 tunes it
 - [ ] `hydra/src/dashboard.rs` — Display in SSE if visible
 - [ ] `ARCHITECTURE.md` — if architectural change
 
 ## New mmap Field (Other Bots)
 - [ ] `shared/src/{moonshot,grid,trigon}_types.rs` — struct
 - [ ] `{bot}/src/main.rs` — Read/write in engine loop
-- [ ] `{bot}/src/dashboard.rs` — SSE display
+
 - [ ] `{bot}/src/brain.rs` — SQLite snapshot
 
 ## New Telegram Command
@@ -39,9 +37,8 @@ When adding a **new feature/field**, update ALL of these:
 ## New Bot
 - [ ] Create `bot/` directory with standard template
 - [ ] `Cargo.toml` (workspace root) — add to members
-- [ ] `bot/Cargo.toml` — 4 binaries
-- [ ] `bot/src/{main, dashboard, brain, config_cli}.rs`
-- [ ] `bot/dashboard.html`
+- [ ] `bot/Cargo.toml` — binaries
+- [ ] `bot/src/{main, brain, config_cli}.rs`
 - [ ] `bot/bot-start.sh`
 - [ ] `shared/src/{bot}_types.rs` + register in `lib.rs`
 - [ ] `architect/tg_commander.py` — BOTS dict entry

@@ -53,8 +53,6 @@ impl AsyncNotifier {
             let mut report_interval = tokio::time::interval(Duration::from_secs(3600));
             let mut buys: u32 = 0;
             let mut sells: u32 = 0;
-            let mut volume: f64 = 0.0;
-            let mut last_price: f64 = 0.0;
 
             loop {
                 tokio::select! {
@@ -62,7 +60,7 @@ impl AsyncNotifier {
                         // v15.1: Telegram hourly report removed — L2 Oracle handles all reporting.
                         // Only reset trade counters and export JSON snapshot for Oracle.
                         if buys + sells > 0 {
-                            buys = 0; sells = 0; volume = 0.0;
+                            buys = 0; sells = 0;
                         }
                         // v7.1: Hourly state.json snapshot for Oracle
                         tokio::task::spawn_blocking(|| {
@@ -92,8 +90,6 @@ impl AsyncNotifier {
                             },
                             BotEvent::Trade { amount, price } => {
                                 if amount > 0.0 { buys += 1; } else { sells += 1; }
-                                volume += amount.abs();
-                                last_price = price;
                                 info!(event = "trade_aggregated", amount = amount, price = price, buys = buys, sells = sells);
                             }
                         }

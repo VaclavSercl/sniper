@@ -1,4 +1,4 @@
-# 🏗️ SNIPER ARMADA v15.0 — Architecture Document
+# 🏗️ SNIPER ARMADA v15.1 — Architecture Document
 
 ## System Overview: "Separated Hemispheres"
 

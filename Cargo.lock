@@ -2567,6 +2567,7 @@ dependencies = [
  "chrono",
  "clap",
  "dotenvy",
+ "fs2",
  "futures-util",
  "hex",
  "hmac",

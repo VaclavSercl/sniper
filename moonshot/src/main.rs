@@ -191,6 +191,18 @@ async fn main() -> Result<()> {
     let sec = std::env::var("BITFINEX_API_SECRET").context("Missing BITFINEX_API_SECRET")?;
 
     info!(event = "system_start", version = VERSION, bot = "moonshot", strategy = "flash_crash_multi_symbol");
+
+    // ═══ SINGLE-INSTANCE LOCK ═══
+    use fs2::FileExt;
+    let lock_file = std::fs::File::create("/tmp/moonshot-core.lock")
+        .context("Failed to create moonshot lock file")?;
+    if lock_file.try_lock_exclusive().is_err() {
+        tracing::error!(event = "dual_instance_blocked",
+            msg = "Another moonshot-core is already running! Aborting.");
+        std::process::exit(1);
+    }
+    let _lock_guard = lock_file;
+
     notifier.send(format!("🌙 Moonshot v{} (Multi-Symbol AI) ONLINE", VERSION));
 
     // ═══ MAIN RECONNECT LOOP ═══

@@ -8,10 +8,6 @@ name = "grid-core"
 path = "src/main.rs"
 
 [[bin]]
-name = "grid-dashboard"
-path = "src/dashboard.rs"
-
-[[bin]]
 name = "grid-config"
 path = "src/config_cli.rs"
 

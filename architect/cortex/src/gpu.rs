@@ -44,6 +44,7 @@ ACTION: HOLD      | WHEN: neutral, conflicting, or momentum reversal in OBI prev
 <example>{\"action\":\"HOLD\",\"confidence_pct\":65,\"reason\":\"OBI neutral depth stable\"}</example>";
 
 /// Snapshot sent from L1 to GPU thread.
+#[allow(dead_code)]
 #[derive(Clone)]
 pub struct L1GpuRequest {
     pub price: f64,
@@ -79,6 +80,7 @@ const EVAL_WINDOW_MS: u64 = 60_000; // Evaluate 60s after decision
 const EVAL_INTERVAL_MS: u64 = 60_000; // Run evaluator every 60s
 
 /// One record of a GPU decision + pre/post market snapshot.
+#[allow(dead_code)]
 #[derive(Clone, Copy, Default)]
 struct DecisionRecord {
     timestamp_ms: u64,
@@ -463,10 +465,7 @@ fn epoch_ms() -> u64 {
 }
 
 fn round2(v: f64) -> f64 { (v * 100.0).round() / 100.0 }
-fn round3(v: f64) -> f64 { (v * 1000.0).round() / 1000.0 }
 fn round4(v: f64) -> f64 { (v * 10000.0).round() / 10000.0 }
-fn round6(v: f64) -> f64 { (v * 1000000.0).round() / 1000000.0 }
-
 fn call_lms(user_prompt: &str) -> anyhow::Result<GpuDecision> {
     let body = serde_json::json!({
         "model": LMS_MODEL,
