@@ -2081,7 +2081,10 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 name = "sniper-shared"
 version = "11.1.0"
 dependencies = [
+ "hex",
+ "hmac",
  "memmap2",
+ "sha2",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
