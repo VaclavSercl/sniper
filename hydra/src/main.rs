@@ -59,15 +59,9 @@ impl AsyncNotifier {
             loop {
                 tokio::select! {
                     _ = report_interval.tick() => {
+                        // v15.1: Telegram hourly report removed — L2 Oracle handles all reporting.
+                        // Only reset trade counters and export JSON snapshot for Oracle.
                         if buys + sells > 0 {
-                            let msg = format!(
-                                "📊 *Hodinový Report*\n📈 Obchodů: `{}` ({} nákup / {} prodej)\n💰 Objem: `{:.5}` BTC\n💲 Posl. cena: `${:.2}`",
-                                buys + sells, buys, sells, volume, last_price
-                            );
-                            if !token.is_empty() && !chat_id.is_empty() {
-                                let url = format!("https://api.telegram.org/bot{}/sendMessage", token);
-                                let _ = client.post(&url).json(&json!({"chat_id": &chat_id, "text": format!("🐺 {}", msg), "parse_mode": "Markdown"})).send().await;
-                            }
                             buys = 0; sells = 0; volume = 0.0;
                         }
                         // v7.1: Hourly state.json snapshot for Oracle

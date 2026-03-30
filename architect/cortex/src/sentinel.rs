@@ -35,7 +35,6 @@ async fn push_alert(level: &str, msg: &str) {
 // ── Thresholds ──
 const MMAP_STALE_SECS: u64 = 5;       // Bot heartbeat timeout
 const PNL_CRASH_THRESHOLD: f64 = -5.0; // Emergency PnL drop per check
-const TOXIC_SPIKE_LIMIT: u64 = 1000;   // Toxic fill threshold
 const POSITION_DRIFT_BTC: f64 = 0.01;  // Max inventory before alert
 const SPREAD_EXPLOSION_MULT: f64 = 3.0;// Spread > 3x grid step
 const SENTINEL_INTERVAL_SECS: u64 = 5; // Check every 5 seconds
@@ -50,6 +49,9 @@ struct SentinelHistory {
     prev_fills: u64,
     zero_fill_cycles: u64,
     last_alerts: HashMap<String, Instant>,
+    // Per-bot delta tracking for toxic rate
+    prev_toxic_per_bot: HashMap<String, u64>,
+    prev_fills_per_bot: HashMap<String, u64>,
     // Sustained resource monitoring
     cpu_high_cycles: u64,
     ram_high_cycles: u64,
@@ -68,6 +70,8 @@ impl SentinelHistory {
             prev_fills: 0,
             zero_fill_cycles: 0,
             last_alerts: HashMap::new(),
+            prev_toxic_per_bot: HashMap::new(),
+            prev_fills_per_bot: HashMap::new(),
             cpu_high_cycles: 0,
             ram_high_cycles: 0,
             gpu_temp_high_cycles: 0,
@@ -118,8 +122,8 @@ pub async fn send_boot_alert() {
 
 pub async fn run_sentinel(memory: Arc<RwLock<ArmadaMemory>>) {
     println!("🛡️ [SENTINEL] Online — checking every {}s", SENTINEL_INTERVAL_SECS);
-    println!("   Thresholds: mmap={}s pnl=${} toxic={} pos={}BTC spread={}x",
-        MMAP_STALE_SECS, PNL_CRASH_THRESHOLD, TOXIC_SPIKE_LIMIT,
+    println!("   Thresholds: mmap={}s pnl=${} toxic_rate=60% pos={}BTC spread={}x",
+        MMAP_STALE_SECS, PNL_CRASH_THRESHOLD,
         POSITION_DRIFT_BTC, SPREAD_EXPLOSION_MULT);
 
     let mut history = SentinelHistory::new();
@@ -187,17 +191,35 @@ pub async fn run_sentinel(memory: Arc<RwLock<ArmadaMemory>>) {
                 }
             }
 
-            // ── LAYER 3c: Toxic Spike ──
-            if snap.toxic_hits > TOXIC_SPIKE_LIMIT {
-                if history.should_alert(&format!("{}_toxic", snap.name)) {
-                    let msg = format!(
-                        "☠️ SENTINEL: {} {} TOXIC SPIKE\n\
-                         Toxic fills: {} > limit {}\n\
-                         Zvaz PAUSE!",
-                        snap.emoji, snap.name.to_uppercase(),
-                        snap.toxic_hits, TOXIC_SPIKE_LIMIT
-                    );
-                    alerts.push(msg);
+            // ── LAYER 3c: Toxic Rate Alert (delta-based) ──
+            // Track toxic RATE (delta) not absolute counter.
+            // Alert when >60% of new fills in this interval are toxic.
+            // Skip on first_run to avoid false alarm from cumulative counters.
+            if !first_run {
+                let prev_toxic_for_bot = *history.prev_toxic_per_bot
+                    .get(snap.name).unwrap_or(&0);
+                let toxic_delta = snap.toxic_hits.saturating_sub(prev_toxic_for_bot);
+                let prev_fills_for_bot = *history.prev_fills_per_bot
+                    .get(snap.name).unwrap_or(&0);
+                let fills_delta = snap.session_fills.saturating_sub(prev_fills_for_bot);
+
+                // Only alert if meaningful activity (>20 new fills) AND high toxic rate (>60%)
+                if fills_delta > 20 && toxic_delta > 0 {
+                    let toxic_rate = toxic_delta as f64 / fills_delta as f64;
+                    if toxic_rate > 0.60 {
+                        if history.should_alert(&format!("{}_toxic", snap.name)) {
+                            let msg = format!(
+                                "☠️ SENTINEL: {} {} TOXIC RATE HIGH\n\
+                                 Toxic: {} / {} fills ({:.0}%) za posledni interval\n\
+                                 Celkem toxic: {} | Rate > 60%",
+                                snap.emoji, snap.name.to_uppercase(),
+                                toxic_delta, fills_delta,
+                                toxic_rate * 100.0,
+                                snap.toxic_hits
+                            );
+                            alerts.push(msg);
+                        }
+                    }
                 }
             }
         }
@@ -249,11 +271,20 @@ pub async fn run_sentinel(memory: Arc<RwLock<ArmadaMemory>>) {
             history.prev_pnl = total_pnl;
             history.prev_fills = total_fills;
             history.prev_toxic = snapshots.iter().map(|s| s.toxic_hits).sum();
+            // Per-bot tracking for delta-based toxic rate
+            for snap in &snapshots {
+                history.prev_toxic_per_bot.insert(snap.name.to_string(), snap.toxic_hits);
+                history.prev_fills_per_bot.insert(snap.name.to_string(), snap.session_fills);
+            }
         } else {
             // Initialize history on first run
             history.prev_pnl = snapshots.iter().map(|s| s.realized_pnl).sum();
             history.prev_fills = snapshots.iter().map(|s| s.session_fills).sum();
             history.prev_toxic = snapshots.iter().map(|s| s.toxic_hits).sum();
+            for snap in &snapshots {
+                history.prev_toxic_per_bot.insert(snap.name.to_string(), snap.toxic_hits);
+                history.prev_fills_per_bot.insert(snap.name.to_string(), snap.session_fills);
+            }
             first_run = false;
         }
 
