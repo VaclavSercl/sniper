@@ -25,8 +25,6 @@ use tokio::sync::mpsc;
 use futures_util::{StreamExt, SinkExt};
 use serde_json::json;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
-use hmac::{Hmac, Mac};
-use sha2::Sha384;
 use dotenvy::dotenv;
 use tracing::{info, warn, Level};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
@@ -35,11 +33,9 @@ use anyhow::{Context, Result};
 
 use sniper_types::moonshot_types::*;
 use sniper_types::{PRICE_SCALE, PRICE_SCALE_I};
+use sniper_types::exchange::bitfinex;
 
-const BITFINEX_WS_URL: &str = "wss://api.bitfinex.com/ws/2";
 const VERSION: &str = "1.0.0";
-
-type HmacSha384 = Hmac<Sha384>;
 
 // ═══════════════════════════════════════════════════════════
 // Async Notifier — keeps hot path clean of I/O
@@ -106,59 +102,8 @@ fn init_mmap_ptr<T: Default>(path: &str) -> Result<MmapMut> {
     Ok(mmap)
 }
 
-// ═══════════════════════════════════════════════════════════
-// HMAC Auth
-// ═══════════════════════════════════════════════════════════
-async fn get_sig(sec: &str, payload: &str) -> String {
-    let mut mac = HmacSha384::new_from_slice(sec.as_bytes()).expect("HMAC error");
-    mac.update(payload.as_bytes());
-    hex::encode(mac.finalize().into_bytes())
-}
-
-// ═══════════════════════════════════════════════════════════
-// ULTRA-FAST TICKER PARSER (Zero-allocation)
-// Bitfinex ticker: [CHAN_ID, [BID, BID_SIZE, ASK, ASK_SIZE, ..., LAST_PRICE, ...]]
-// ═══════════════════════════════════════════════════════════
-fn fast_parse_ticker(data: &[u8]) -> Option<(i64, i64, i64)> {
-    if data.len() < 10 || data[0] != b'[' { return None; }
-
-    // Parse channel ID
-    let mut i = 1;
-    while i < data.len() && data[i] != b',' { i += 1; }
-    if i >= data.len() { return None; }
-    let chan_id = std::str::from_utf8(&data[1..i]).ok()?.parse::<i64>().ok()?;
-
-    // Check for heartbeat "hb"
-    if i + 2 < data.len() && data[i+1] == b'"' && data[i+2] == b'h' { return None; }
-
-    // Find nested array start '['
-    while i < data.len() && data[i] != b'[' { i += 1; }
-    if i >= data.len() { return None; }
-    i += 1; // skip '['
-
-    // Parse BID (field 0)
-    let start = i;
-    while i < data.len() && data[i] != b',' { i += 1; }
-    if i >= data.len() || start >= i { return None; }
-    let bid_str = std::str::from_utf8(&data[start..i]).ok()?;
-    let bid = (bid_str.parse::<f64>().ok()? * PRICE_SCALE_I as f64) as i64;
-    i += 1; // skip ','
-    if i >= data.len() { return None; }
-
-    // Skip BID_SIZE (field 1)
-    while i < data.len() && data[i] != b',' { i += 1; }
-    i += 1;
-    if i >= data.len() { return None; }
-
-    // Parse ASK (field 2)
-    let start = i;
-    while i < data.len() && data[i] != b',' && data[i] != b']' { i += 1; }
-    if start >= i { return None; }
-    let ask_str = std::str::from_utf8(&data[start..i]).ok()?;
-    let ask = (ask_str.parse::<f64>().ok()? * PRICE_SCALE_I as f64) as i64;
-
-    Some((chan_id, bid, ask))
-}
+// Auth + ticker parser → shared exchange module (Phase 5.2)
+// See: sniper_types::exchange::{hmac_sha384_hex, fast_parse_ticker, bitfinex_auth_message}
 
 // ═══════════════════════════════════════════════════════════
 // MAIN
@@ -209,7 +154,7 @@ async fn main() -> Result<()> {
 
     // ═══ MAIN RECONNECT LOOP ═══
     loop {
-        let ws_result = connect_async(BITFINEX_WS_URL).await;
+        let ws_result = connect_async(bitfinex::WS_URL).await;
         let (ws, _) = match ws_result {
             Ok(v) => v,
             Err(e) => {
@@ -221,19 +166,9 @@ async fn main() -> Result<()> {
 
         let (mut write, mut read) = ws.split();
 
-        // ═══ AUTH ═══
-        let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis().to_string();
-        let auth_payload = format!("AUTH{}", nonce);
-        let sig = get_sig(&sec, &auth_payload).await;
-        let auth_msg = json!({
-            "event": "auth",
-            "apiKey": key,
-            "authSig": sig,
-            "authPayload": auth_payload,
-            "authNonce": nonce,
-            "dms": 4
-        });
-        write.send(Message::Text(auth_msg.to_string().into())).await?;
+        // ═══ AUTH (shared exchange module) ═══
+        let auth_msg = sniper_types::exchange::bitfinex_auth_message(&key, &sec);
+        write.send(Message::Text(auth_msg.into())).await?;
 
         // ═══ MULTI-SYMBOL SUBSCRIPTION ═══
         let mut chan_to_idx: HashMap<i64, usize> = HashMap::new();
@@ -269,7 +204,7 @@ async fn main() -> Result<()> {
                 let bytes = text.as_bytes();
 
                 // ═══ FAST PATH: Ticker ═══
-                if let Some((chan, bid, ask)) = fast_parse_ticker(bytes) {
+                if let Some((chan, bid, ask)) = sniper_types::exchange::fast_parse_ticker(bytes) {
                     if let Some(&idx) = chan_to_idx.get(&chan) {
                         let e = &engine.pairs[idx];
                         let r = &risk.pairs[idx];

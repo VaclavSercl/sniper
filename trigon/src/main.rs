@@ -24,8 +24,6 @@ use tokio::sync::mpsc;
 use futures_util::{StreamExt, SinkExt};
 use serde_json::json;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
-use hmac::{Hmac, Mac};
-use sha2::Sha384;
 use dotenvy::dotenv;
 use tracing::{info, warn, Level};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
@@ -35,11 +33,9 @@ use anyhow::{Context, Result};
 use sniper_types::trigon_types::*;
 use sniper_types::moonshot_types::{str_to_symbol_hash, symbol_hash_to_str};
 use sniper_types::PRICE_SCALE_I;
+use sniper_types::exchange::bitfinex;
 
-const BITFINEX_WS_URL: &str = "wss://api.bitfinex.com/ws/2";
 const VERSION: &str = "1.0.0";
-
-type HmacSha384 = Hmac<Sha384>;
 
 // ═══════════════════════════════════════════════════════════
 // Async Notifier
@@ -99,11 +95,7 @@ fn init_mmap_ptr<T: Default>(path: &str) -> Result<MmapMut> {
     Ok(mmap)
 }
 
-async fn get_sig(sec: &str, payload: &str) -> String {
-    let mut mac = HmacSha384::new_from_slice(sec.as_bytes()).expect("HMAC error");
-    mac.update(payload.as_bytes());
-    hex::encode(mac.finalize().into_bytes())
-}
+// Auth → shared exchange module (Phase 5.2)
 
 // ═══════════════════════════════════════════════════════════
 // Triangle Calculator
@@ -137,37 +129,7 @@ fn calculate_triangle(
     (rate, profit_bps)
 }
 
-// ═══════════════════════════════════════════════════════════
-// Fast Ticker Parser (same proven pattern from Moonshot/Grid)
-// ═══════════════════════════════════════════════════════════
-fn fast_parse_ticker(data: &[u8]) -> Option<(i64, i64, i64)> {
-    if data.len() < 10 || data[0] != b'[' { return None; }
-    let mut i = 1;
-    while i < data.len() && data[i] != b',' { i += 1; }
-    if i >= data.len() { return None; }
-    let chan_id = std::str::from_utf8(&data[1..i]).ok()?.parse::<i64>().ok()?;
-    if i + 2 < data.len() && data[i+1] == b'"' && data[i+2] == b'h' { return None; }
-    while i < data.len() && data[i] != b'[' { i += 1; }
-    if i >= data.len() { return None; }
-    i += 1;
-    // BID
-    let start = i;
-    while i < data.len() && data[i] != b',' { i += 1; }
-    if i >= data.len() || start >= i { return None; }
-    let bid = (std::str::from_utf8(&data[start..i]).ok()?.parse::<f64>().ok()? * PRICE_SCALE_I as f64) as i64;
-    i += 1;
-    if i >= data.len() { return None; }
-    // Skip BID_SIZE
-    while i < data.len() && data[i] != b',' { i += 1; }
-    i += 1;
-    if i >= data.len() { return None; }
-    // ASK
-    let start = i;
-    while i < data.len() && data[i] != b',' && data[i] != b']' { i += 1; }
-    if start >= i { return None; }
-    let ask = (std::str::from_utf8(&data[start..i]).ok()?.parse::<f64>().ok()? * PRICE_SCALE_I as f64) as i64;
-    Some((chan_id, bid, ask))
-}
+// Ticker parser → shared exchange module (Phase 5.2)
 
 // ═══════════════════════════════════════════════════════════
 // MAIN
@@ -217,7 +179,7 @@ async fn main() -> Result<()> {
 
     // ═══ MAIN RECONNECT LOOP ═══
     loop {
-        let ws_result = connect_async(BITFINEX_WS_URL).await;
+        let ws_result = connect_async(bitfinex::WS_URL).await;
         let (ws, _) = match ws_result {
             Ok(v) => v,
             Err(e) => { warn!(event = "ws_fail", error = %e); tokio::time::sleep(Duration::from_secs(60)).await; continue; }
@@ -225,11 +187,9 @@ async fn main() -> Result<()> {
 
         let (mut write, mut read) = ws.split();
 
-        // Auth
-        let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis().to_string();
-        let auth_payload = format!("AUTH{}", nonce);
-        let sig = get_sig(&sec, &auth_payload).await;
-        write.send(Message::Text(json!({"event":"auth","apiKey":key,"authSig":sig,"authPayload":auth_payload,"authNonce":nonce,"dms":4}).to_string().into())).await?;
+        // Auth (shared exchange module)
+        let auth_msg = sniper_types::exchange::bitfinex_auth_message(&key, &sec);
+        write.send(Message::Text(auth_msg.into())).await?;
 
         // Collect all unique symbols from configured triangles
         let mut chan_to_symbol: HashMap<i64, u64> = HashMap::new();
@@ -285,7 +245,7 @@ async fn main() -> Result<()> {
                 let bytes = text.as_bytes();
 
                 // Fast path: ticker update
-                if let Some((chan, bid, ask)) = fast_parse_ticker(bytes) {
+                if let Some((chan, bid, ask)) = sniper_types::exchange::fast_parse_ticker(bytes) {
                     if let Some(&sym_hash) = chan_to_symbol.get(&chan) {
                         let bid_f = bid as f64 / PRICE_SCALE_I as f64;
                         let ask_f = ask as f64 / PRICE_SCALE_I as f64;

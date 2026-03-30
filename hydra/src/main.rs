@@ -3,8 +3,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH, Duration};
 use serde_json::json;
-use hmac::{Hmac, Mac};
-use sha2::Sha384;
+
 use dotenvy::dotenv;
 use tracing::{info, Level, error};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
@@ -29,7 +28,7 @@ where
     }
 }
 
-type HmacSha384 = Hmac<Sha384>;
+
 
 // Background Notifier Task — BotEvent-based aggregation
 pub enum BotEvent {
@@ -110,11 +109,8 @@ fn init_mmap_ptr<T: Default>(path: &str) -> Result<MmapMut> {
     Ok(mmap)
 }
 
-async fn get_sig(sec: &str, payload: &str) -> String {
-    let mut mac = HmacSha384::new_from_slice(sec.as_bytes()).expect("HMAC error");
-    mac.update(payload.as_bytes());
-    hex::encode(mac.finalize().into_bytes())
-}
+// Auth → shared exchange module (Phase 5.2)
+// Hydra uses fastwebsockets (not tokio-tungstenite), so only get_sig is replaced.
 
 use std::sync::atomic::fence;
 use simd_json::prelude::*;
@@ -529,7 +525,7 @@ async fn async_main() -> Result<()> {
                 Err(_) => { let _ = err_tx_exec.send("writer_time_error"); return; }
             };
             let auth_payload = format!("AUTH{}", nonce);
-            let sig = get_sig(&sec_c, &auth_payload).await;
+            let sig = sniper_types::exchange::hmac_sha384_hex(&sec_c, &auth_payload);
             let _ = exec_ws.write_frame(fastwebsockets::Frame::text(Payload::Owned(json!({"event":"conf","flags":131072}).to_string().into_bytes()))).await;
             let auth_msg = json!({"event":"auth","apiKey":key_c,"authSig":sig,"authPayload":auth_payload,"authNonce":nonce,"dms":4});
             if exec_ws.write_frame(fastwebsockets::Frame::text(Payload::Owned(auth_msg.to_string().into_bytes()))).await.is_err() {
