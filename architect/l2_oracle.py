@@ -19,7 +19,7 @@ import time
 import os
 from datetime import datetime, timezone, timedelta
 
-from orchestration import start_bot
+from orchestration import start_bot, stop_bot
 
 log = logging.getLogger("l2_oracle")
 
@@ -254,6 +254,21 @@ class L2Oracle:
         except Exception:
             portfolio_section = "\n═══ PORTFOLIO EXPOSURE ═══\nUnavailable (mmap not ready)\n"
 
+        # Server Load Context
+        try:
+            cmd1 = os.getloadavg()  # (1m, 5m, 15m)
+            cpu_load = f"{cmd1[0]:.2f}, {cmd1[1]:.2f}, {cmd1[2]:.2f}"
+            
+            with open('/proc/meminfo', 'r') as f:
+                lines = f.readlines()
+            mem_total = int(lines[0].split()[1])
+            mem_avail = int(lines[2].split()[1])
+            ram_pct = 100.0 * (1.0 - (mem_avail / mem_total))
+            
+            server_section = f"\n═══ SERVER RESOURCE LOAD ═══\nCPU Load Avg (1m, 5m, 15m): {cpu_load}\nRAM Usage: {ram_pct:.1f}%\n"
+        except Exception:
+            server_section = "\n═══ SERVER RESOURCE LOAD ═══\nUnavailable\n"
+
         # Brain Context (permanent memory)
         brain_section = ""
         try:
@@ -285,7 +300,13 @@ RULES:
 - If GPU toxic_rate > 20%: reduce skew_max_usd and increase obi_threshold
 - ANTI-OSCILLATION: Do NOT radically change parameters just because PnL dropped slightly in the last cycle. Tolerate short-term drawdowns (up to -$1.00 per 5min). Adapt ONLY if HMM Regime structurally shifts, VPIN drops below -0.7, or the loss exceeds the tolerance threshold.
 - GAUSSIAN WARP: If volatility or VPIN toxicity is high, increase grid_warp_factor to prevent grid exhaustion instead of widening base step.
-- AEGIS SHIELD: If VPIN < -0.7 AND net spot exposure > 0.5 BTC, you MUST set aegis_target_delta to hedge. Check Portfolio Exposure section.
+- REGIME SWITCHING & RESOURCE MANAGEMENT:
+  * Dynamic Action Choice: You dictate 'os_action' (START/STOP) and 'pause_trading' for bots. 
+  * 'STOP' mathematically frees server RAM and CPU but takes ~3 seconds to reboot the bot later.
+  * 'START' + 'pause_trading:true' (Scanner mode) keeps the bot alive reading WS. Fast 0ms entry, but uses CPU/RAM.
+  * Rule 1: If expected inactive period is LONG (Deep BEARISH_SHOCK) or SERVER LOAD/RAM is HIGH (>80%), use "STOP".
+  * Rule 2: If expected inactive period is SHORT (Flash VOLATILITY) and SERVER LOAD is OK, use "START" + pause_trading:true.
+  * Rule 3: For TRENDING markets, "START" + pause_trading:false to actively trade.
 
 ═══ MACRO INTELLIGENCE ═══
 Fear & Greed Index: {fg} ({fg_text})
@@ -293,7 +314,7 @@ News Sentiment: {bias:+.4f} ({bias_label})
 Cycle: #{self.cycle} (every 5 min)
 {fee_info}{feedback}
 ═══ PHI-3.5 GPU INTELLIGENCE ═══{self._format_gpu_section(gpu_data)}
-═══ ARMADA STATE ═══{bot_states}{portfolio_section}{brain_section}
+═══ ARMADA STATE ═══{bot_states}{portfolio_section}{server_section}{brain_section}
 ═══ RESPOND WITH THIS JSON ═══
 {{"global_reasoning": "Analyze macro + cross-bot correlations + fees + GPU telemetry here FIRST...",
   "global_regime": "BEARISH_SHOCK|BULLISH_TREND|CHOPPING_RANGE",
@@ -311,6 +332,7 @@ Cycle: #{self.cycle} (every 5 min)
     }}
   }},
   \"moonshot\": {{
+    \"os_action\": \"START|STOP|IGNORE\",
     \"pause_trading\": boolean,
     \"order_usd\": float,
     \"trigger_price\": float_or_null,
@@ -319,6 +341,7 @@ Cycle: #{self.cycle} (every 5 min)
     \"tp_pct_override\": float_or_null
   }},
   \"grid\": {{
+    \"os_action\": \"START|STOP|IGNORE\",
     \"pause_trading\": boolean,
     \"grid_spacing\": float_or_null,
     \"order_qty\": float_or_null,
@@ -328,6 +351,7 @@ Cycle: #{self.cycle} (every 5 min)
     }}
   }},
   \"trigon\": {{
+    \"os_action\": \"START|STOP|IGNORE\",
     \"pause_trading\": boolean,
     \"min_profit_bps\": float,
     \"max_order_usd\": float,
@@ -737,6 +761,13 @@ PARAMETER CONSTRAINTS:
             MAX_PAIRS = 20
             GLOBAL_OFF = MAX_PAIRS * PAIR_SIZE
             SCALE = 100_000_000.0
+            # OS level action
+            os_action = cfg.get("os_action")
+            if os_action == "STOP":
+                stop_bot("moonshot")
+                return
+            elif os_action == "START":
+                start_bot("moonshot")
 
             fd = os.open(MOONSHOT_RISK_PATH, os.O_RDWR)
             import mmap
@@ -787,6 +818,14 @@ PARAMETER CONSTRAINTS:
         """Apply AI decisions to Grid via Cortex UDS."""
         if not cfg:
             return
+            
+        os_action = cfg.get("os_action")
+        if os_action == "STOP":
+            stop_bot("grid")
+            return
+        elif os_action == "START":
+            start_bot("grid")
+            
         if cfg.get("pause_trading") is True:
             self.cortex.pause("grid")
             log.info("  ⏸️ Grid PAUSED")
@@ -803,6 +842,14 @@ PARAMETER CONSTRAINTS:
         """Apply AI decisions to Trigon risk mmap."""
         if not cfg:
             return
+            
+        os_action = cfg.get("os_action")
+        if os_action == "STOP":
+            stop_bot("trigon")
+            return
+        elif os_action == "START":
+            start_bot("trigon")
+            
         try:
             import struct as _st
             TRIGON_RISK_PATH = "/dev/shm/beroun/trigon_risk.bin"
