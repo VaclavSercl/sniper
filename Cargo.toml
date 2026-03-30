@@ -5,7 +5,7 @@ members = [
     "moonshot",
     "grid",
     "trigon",
-    "mdf",
+
     "architect/cortex",
 ]
 resolver = "3"

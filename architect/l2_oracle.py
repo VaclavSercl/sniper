@@ -19,6 +19,8 @@ import time
 import os
 from datetime import datetime, timezone, timedelta
 
+from orchestration import start_bot
+
 log = logging.getLogger("l2_oracle")
 
 # Safety clamps (must match Cortex UDS server)
@@ -1033,14 +1035,14 @@ PARAMETER CONSTRAINTS:
         for bot, mode in bot_states.items():
             if mode == "LIVE":
                 log.info(f"  🟢 Starting {bot} → LIVE")
-                self._start_trading_bot(bot)
+                start_bot(bot)
                 time.sleep(10)
                 self._unpause_bot(bot)
                 self._save_bot_state(bot, "LIVE")
                 restored.append(f"🟢 {bot.upper()} → LIVE")
             elif mode == "PAUSED":
                 log.info(f"  🟡 Starting {bot} → PAUSED (Scanner)")
-                self._start_trading_bot(bot)
+                start_bot(bot)
                 time.sleep(5)
                 self._pause_bot(bot)
                 self._save_bot_state(bot, "PAUSED")
@@ -1061,41 +1063,6 @@ PARAMETER CONSTRAINTS:
             pass
 
         log.info("🧠 ═══ SOVEREIGN RECOVERY COMPLETE ═══")
-
-    def _start_trading_bot(self, bot_name):
-        """Start a trading bot process."""
-        bin_map = {
-            "hydra": ("hydra-core", "0"),
-            "moonshot": ("moonshot-core", "1"),
-            "grid": ("grid-core", "2"),
-            "trigon": ("trigon-core", "3"),
-        }
-        binary, cpu = bin_map.get(bot_name, (None, None))
-        if not binary:
-            log.error(f"Unknown bot: {bot_name}")
-            return
-        bin_path = os.path.join(PROJECT_ROOT, "target", "release", binary)
-        log_path = os.path.join(PROJECT_ROOT, "logs", f"{binary}.log")
-        
-        # Guard: check if already running via pgrep
-        try:
-            r = subprocess.run(["pgrep", "-f", binary], capture_output=True, text=True)
-            if r.returncode == 0 and int(r.stdout.strip().split("\n")[0]) > 0:
-                log.info(f"  ✅ {bot_name} ({binary}) is already running, skipping start.")
-                return
-        except Exception:
-            pass
-
-        try:
-            subprocess.Popen(
-                ["taskset", "-c", cpu, bin_path],
-                stdout=open(log_path, "a"),
-                stderr=subprocess.STDOUT,
-                cwd=PROJECT_ROOT,
-            )
-            log.info(f"  ✅ {bot_name} process started")
-        except Exception as e:
-            log.error(f"  ❌ Failed to start {bot_name}: {e}")
 
     def _pause_bot(self, bot_name):
         """Pause bot via Cortex UDS (Scanner mode)."""

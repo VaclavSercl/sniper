@@ -44,9 +44,6 @@ struct AsyncNotifier {
 impl AsyncNotifier {
     fn new() -> Self {
         let (tx, mut rx) = mpsc::unbounded_channel::<BotEvent>();
-        let token = std::env::var("TELEGRAM_BOT_TOKEN").unwrap_or_default();
-        let chat_id = std::env::var("TELEGRAM_CHAT_ID").unwrap_or_default();
-        let client = reqwest::Client::builder().timeout(Duration::from_secs(10)).build().unwrap();
         let alerts_log = std::env::current_dir().unwrap_or_default().join("logs/alerts.log").to_string_lossy().to_string();
 
         tokio::spawn(async move {
@@ -83,10 +80,6 @@ impl AsyncNotifier {
                                         let _ = writeln!(f, "[{:?}] {}", SystemTime::now(), log_msg);
                                     }
                                 });
-                                if !token.is_empty() && !chat_id.is_empty() {
-                                    let url = format!("https://api.telegram.org/bot{}/sendMessage", token);
-                                    let _ = client.post(&url).json(&json!({"chat_id": &chat_id, "text": format!("🐺 {}", msg), "parse_mode": "Markdown"})).send().await;
-                                }
                             },
                             BotEvent::Trade { amount, price } => {
                                 if amount > 0.0 { buys += 1; } else { sells += 1; }
