@@ -14,6 +14,20 @@ use std::path::Path;
 use std::sync::atomic::Ordering;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+pub enum BotRisk<'a> {
+    Hydra(&'a RiskState),
+    Moonshot(&'a MoonshotRiskState),
+    Grid(&'a GridRiskState),
+    Trigon(&'a TrigonRiskState),
+}
+
+pub enum BotEngine<'a> {
+    Hydra(&'a EngineState),
+    Moonshot(&'a MoonshotEngineState),
+    Grid(&'a GridEngineState),
+    Trigon(&'a TrigonEngineState),
+}
+
 /// Snapshot of a single bot's state — safe to serialize/format for prompts.
 #[allow(dead_code)]
 pub struct BotSnapshot {
@@ -133,29 +147,29 @@ impl ArmadaMemory {
     }
 
     /// Get RiskState for any bot by name. Returns None if bot's mmap is offline.
-    pub fn risk_for_bot(&self, name: &str) -> Option<&RiskState> {
+    pub fn risk_for_bot(&self, name: &str) -> Option<BotRisk> {
         match name {
-            "hydra" => Some(self.hydra_risk()),
+            "hydra" => Some(BotRisk::Hydra(self.hydra_risk())),
             "moonshot" => self.moonshot_risk.as_ref()
-                .map(|m| unsafe { &*(m.as_ptr() as *const RiskState) }),
+                .map(|m| BotRisk::Moonshot(unsafe { &*(m.as_ptr() as *const MoonshotRiskState) })),
             "grid" => self.grid_risk.as_ref()
-                .map(|m| unsafe { &*(m.as_ptr() as *const RiskState) }),
+                .map(|m| BotRisk::Grid(unsafe { &*(m.as_ptr() as *const GridRiskState) })),
             "trigon" => self.trigon_risk.as_ref()
-                .map(|m| unsafe { &*(m.as_ptr() as *const RiskState) }),
+                .map(|m| BotRisk::Trigon(unsafe { &*(m.as_ptr() as *const TrigonRiskState) })),
             _ => None,
         }
     }
 
     /// Get EngineState for any bot by name. Returns None if bot's mmap is offline.
-    pub fn engine_for_bot(&self, name: &str) -> Option<&EngineState> {
+    pub fn engine_for_bot(&self, name: &str) -> Option<BotEngine> {
         match name {
-            "hydra" => Some(self.hydra_engine()),
+            "hydra" => Some(BotEngine::Hydra(self.hydra_engine())),
             "moonshot" => self.moonshot_engine.as_ref()
-                .map(|m| unsafe { &*(m.as_ptr() as *const EngineState) }),
+                .map(|m| BotEngine::Moonshot(unsafe { &*(m.as_ptr() as *const MoonshotEngineState) })),
             "grid" => self.grid_engine.as_ref()
-                .map(|m| unsafe { &*(m.as_ptr() as *const EngineState) }),
+                .map(|m| BotEngine::Grid(unsafe { &*(m.as_ptr() as *const GridEngineState) })),
             "trigon" => self.trigon_engine.as_ref()
-                .map(|m| unsafe { &*(m.as_ptr() as *const EngineState) }),
+                .map(|m| BotEngine::Trigon(unsafe { &*(m.as_ptr() as *const TrigonEngineState) })),
             _ => None,
         }
     }

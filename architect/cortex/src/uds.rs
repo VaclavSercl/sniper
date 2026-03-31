@@ -18,7 +18,7 @@
 //   UNPAUSE         → unpause a bot
 // ═══════════════════════════════════════════════════════════
 
-use crate::memory::{ArmadaMemory, enrich_with_pnl};
+use crate::memory::{ArmadaMemory, enrich_with_pnl, BotEngine, BotRisk};
 use serde::{Deserialize, Serialize};
 use sniper_types::PRICE_SCALE;
 use std::sync::Arc;
@@ -235,10 +235,18 @@ async fn handle_request<'a>(
             let Some(risk) = mem.risk_for_bot(bot_name) else {
                 return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));
             };
-            let prev_raw = risk.grid_step.load(Ordering::SeqCst);
-            let prev = prev_raw as f64 / PRICE_SCALE;
             let scaled = (clamped * PRICE_SCALE) as u64;
-            risk.grid_step.store(scaled, Ordering::SeqCst);
+            let prev = match risk {
+                BotRisk::Hydra(r) => {
+                    let p = r.grid_step.swap(scaled, Ordering::SeqCst);
+                    p as f64 / PRICE_SCALE
+                }
+                BotRisk::Grid(r) => {
+                    let p = r.grid_spacing.swap(scaled as u64, Ordering::SeqCst);
+                    p as f64 / PRICE_SCALE
+                }
+                _ => return UdsResponse::err("Setting grid step is unsupported for this bot mode"),
+            };
             println!("  🔌 [UDS] SET_GRID [{bot_name}]: ${prev:.2} → ${clamped:.2}");
             UdsResponse::ok_with_prev(prev)
         }
@@ -253,10 +261,15 @@ async fn handle_request<'a>(
             let Some(risk) = mem.risk_for_bot(bot_name) else {
                 return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));
             };
-            let prev_raw = risk.max_inv_delta.load(Ordering::SeqCst);
-            let prev = prev_raw as f64 / PRICE_SCALE;
             let scaled = (clamped * PRICE_SCALE) as u64;
-            risk.max_inv_delta.store(scaled, Ordering::SeqCst);
+            let prev = match risk {
+                BotRisk::Hydra(r) => {
+                    let p = r.max_inv_delta.swap(scaled, Ordering::SeqCst);
+                    p as f64 / PRICE_SCALE
+                }
+                // Fallback for safety - we primarily only want to adjust Hydra's max pos via L2 AI right now
+                _ => return UdsResponse::err("Setting max position is restricted to Hydra for safety"),
+            };
             println!("  🔌 [UDS] SET_MAXPOS [{bot_name}]: {prev:.6} → {clamped:.6} BTC");
             UdsResponse::ok_with_prev(prev)
         }
@@ -276,11 +289,13 @@ async fn handle_request<'a>(
             let Some(engine) = mem.engine_for_bot(bot_name) else {
                 return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));
             };
-            engine.l2_regime_id.store(regime_id, Ordering::Release);
             let now = epoch_ms();
-            engine.l2_last_action_ms.store(now, Ordering::Release);
-            engine.ai_heartbeat_ms.store(now, Ordering::Release);
-            engine.ai_registry_version.fetch_add(1, Ordering::Release);
+            if let BotEngine::Hydra(h) = engine {
+                h.l2_regime_id.store(regime_id, Ordering::Release);
+                h.l2_last_action_ms.store(now, Ordering::Release);
+                h.ai_heartbeat_ms.store(now, Ordering::Release);
+                h.ai_registry_version.fetch_add(1, Ordering::Release);
+            }
             println!("  🔌 [UDS] SET_REGIME [{bot_name}]: {regime} (id={regime_id})");
             UdsResponse::ok()
         }
@@ -291,7 +306,12 @@ async fn handle_request<'a>(
             let Some(risk) = mem.risk_for_bot(bot_name) else {
                 return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));
             };
-            risk.paused.store(1, Ordering::SeqCst);
+            match risk {
+                BotRisk::Hydra(r) => r.paused.store(1, Ordering::SeqCst),
+                BotRisk::Moonshot(r) => r.global_paused.store(1, Ordering::SeqCst),
+                BotRisk::Grid(r) => r.global_paused.store(1, Ordering::SeqCst),
+                BotRisk::Trigon(r) => r.global_paused.store(1, Ordering::SeqCst),
+            }
             println!("  🔌 [UDS] PAUSE: {bot_name} paused");
             UdsResponse::ok()
         }
@@ -302,7 +322,12 @@ async fn handle_request<'a>(
             let Some(risk) = mem.risk_for_bot(bot_name) else {
                 return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));
             };
-            risk.paused.store(0, Ordering::SeqCst);
+            match risk {
+                BotRisk::Hydra(r) => r.paused.store(0, Ordering::SeqCst),
+                BotRisk::Moonshot(r) => r.global_paused.store(0, Ordering::SeqCst),
+                BotRisk::Grid(r) => r.global_paused.store(0, Ordering::SeqCst),
+                BotRisk::Trigon(r) => r.global_paused.store(0, Ordering::SeqCst),
+            }
             println!("  🔌 [UDS] UNPAUSE: {bot_name} unpaused");
             UdsResponse::ok()
         }
