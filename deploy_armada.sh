@@ -104,8 +104,14 @@ fi
 echo ""
 echo "🧠 Starting infrastructure (trading bots stay OFFLINE)..."
 
+# 0. Pre-create mmap files (Cortex requires them on startup)
+echo "  [T+0s]  Pre-creating mmap files..."
+for mfile in engine_state.bin risk_state.bin l2_command.bin cross_exchange.bin pnl_state.bin fee_state.bin state.json; do
+    [ ! -f "/dev/shm/beroun/$mfile" ] && dd if=/dev/zero of="/dev/shm/beroun/$mfile" bs=4096 count=1 2>/dev/null
+done
+
 # 1. Cortex (Sentinel + GPU + UDS server)
-echo "  [T+0s]  Starting Cortex..."
+echo "  [T+1s]  Starting Cortex..."
 taskset -c 3 "$BIN_DIR/sovereign-cortex" >> "$LOG_DIR/sovereign-cortex.log" 2>&1 &
 CORTEX_PID=$!
 sleep 10
