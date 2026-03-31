@@ -49,3 +49,4 @@ tracing-appender = "0.2"
 tokio-tungstenite = { version = "0.26.1", features = ["native-tls"] }
 native-tls = "0.2.18"
 tokio-native-tls = "0.3.1"
+smallvec = "1.15.1"

@@ -24,6 +24,10 @@ fn main() {
     out.push_str(&format!("TRIGON_PAUSED_OFFSET = {}\n", std::mem::offset_of!(TrigonRiskState, global_paused)));
 
     // Write to architect folder
+    out.push_str("\n# ML Shield Offsets (engine_state.bin)\n");
+    out.push_str(&format!("OFF_L1_SKEW = {}\n", std::mem::offset_of!(sniper_types::EngineState, l1_skew_adjustment)));
+    out.push_str(&format!("OFF_L1_CONF = {}\n", std::mem::offset_of!(sniper_types::EngineState, l1_confidence_score)));
+
     let out_path = std::env::current_dir()
         .unwrap_or_default()
         .join("../architect/l2_rust_offsets.py");

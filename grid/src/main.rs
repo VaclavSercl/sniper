@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
-use tracing::{info, warn, error};
+use tracing::info;
 use serde_json::json;
 
 use sniper_types::grid_types::*;
@@ -87,7 +87,7 @@ impl SovereignEngine for GridEngine {
         info!(event = "authenticated", bot = "grid");
     }
 
-    fn on_market_message(&mut self, payload: &[u8], out_buf: &mut bytes::BytesMut) {
+    fn on_market_message(&mut self, payload: &mut [u8], out_buf: &mut bytes::BytesMut) {
         let loop_start = Instant::now();
         if let Some((chan, bid, ask)) = sniper_types::exchange::fast_parse_ticker(payload) {
             if Some(chan) == self.ticker_chan {
@@ -164,7 +164,7 @@ impl SovereignEngine for GridEngine {
                         }
                         e_mut.active_sell_levels.store(sells.len() as u32, Ordering::Release);
 
-                        let symbol = b"tBTCUSD";
+                        let _symbol = b"tBTCUSD";
                         out_buf.extend_from_slice(b"[0,\"ox_multi\",null,[[\"oc_multi\",{\"symbol\":\"tBTCUSD\"}]");
 
                         for price in &buys {

@@ -67,7 +67,7 @@ impl SovereignEngine for MoonshotEngine {
         info!(event = "authenticated", bot = "moonshot");
     }
 
-    fn on_market_message(&mut self, payload: &[u8], out_buf: &mut bytes::BytesMut) {
+    fn on_market_message(&mut self, payload: &mut [u8], out_buf: &mut bytes::BytesMut) {
         let loop_start = Instant::now();
         if let Some((chan, bid, ask)) = sniper_types::exchange::fast_parse_ticker(payload) {
             if let Some(&idx) = self.chan_to_idx.get(&chan) {

@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result};
 use clap::Parser;
-use tracing::{info, warn, error};
+use tracing::info;
 
 use sniper_types::exchange::cross_types::*;
 use sniper_types::exchange::types::*;
@@ -181,7 +181,7 @@ impl SovereignEngine for NexusEngine {
         info!(event = "authenticated", bot = "nexus");
     }
 
-    fn on_market_message(&mut self, _payload: &[u8], _out_buf: &mut bytes::BytesMut) {
+    fn on_market_message(&mut self, _payload: &mut [u8], _out_buf: &mut bytes::BytesMut) {
         // Ignored, data comes from mmap
     }
 

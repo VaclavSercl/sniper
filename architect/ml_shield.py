@@ -29,7 +29,7 @@ import time
 import signal
 import logging
 import numpy as np
-from collections import deque
+from l2_rust_offsets import OFF_L1_SKEW, OFF_L1_CONF
 
 logging.basicConfig(
     level=logging.INFO,
@@ -66,12 +66,7 @@ OFF_ORDER_USD  = 1392    # u64
 OFF_NET_POS    = 1408    # i64
 OFF_REAL_PNL   = 1416    # i64
 
-# L1 Shield write targets
-OFF_L1_SKEW    = 1640    # i64 (l1_skew_adjustment) - byte offset for the field
-OFF_L1_CONF    = 1648    # u64 (l1_confidence_score)
-
-# GPU temperature monitoring
-GPU_TEMP_MAX = 83  # °C — throttle above this
+# Read targets are now imported from l2_rust_offsets
 
 # Inference cycle
 CYCLE_MS = 50       # 20 Hz inference
@@ -86,10 +81,11 @@ class FeatureExtractor:
 
     def __init__(self, window_size=200):
         self.window = window_size
-        self.obi_history = deque(maxlen=window_size)
-        self.spread_history = deque(maxlen=window_size)
-        self.mid_history = deque(maxlen=window_size)
-        self.vpin_history = deque(maxlen=window_size)
+        self.obi_history = np.zeros(window_size, dtype=np.float64)
+        self.spread_history = np.zeros(window_size, dtype=np.float64)
+        self.mid_history = np.zeros(window_size, dtype=np.float64)
+        self.vpin_history = np.zeros(window_size, dtype=np.float64)
+        self.ptr = 0
         self.tick_count = 0
 
     def read_orderbook(self, mm):
@@ -160,34 +156,39 @@ class FeatureExtractor:
         read_obi = struct.unpack_from('<q', mm, OFF_OBI)[0] / PRICE_SCALE
         vpin = abs(read_obi) if abs(read_obi) < 1.0 else 0.5
 
-        # Store history
-        self.obi_history.append(obi)
-        self.spread_history.append(spread_bps)
-        self.mid_history.append(mid)
-        self.vpin_history.append(vpin)
+        # Store history linearly in ring buffer
+        self.obi_history[self.ptr] = obi
+        self.spread_history[self.ptr] = spread_bps
+        self.mid_history[self.ptr] = mid
+        self.vpin_history[self.ptr] = vpin
+        
         self.tick_count += 1
+        current_ptr = self.ptr
+        self.ptr = (self.ptr + 1) % self.window
 
         if self.tick_count < 20:
             return None  # Need minimum history
 
         # 5. OBI momentum (EMA derivative)
-        obi_arr = np.array(list(self.obi_history))
-        obi_ema_fast = self._ema(obi_arr, 5)
-        obi_ema_slow = self._ema(obi_arr, 20)
+        obi_ema_fast = self._ema(self.obi_history, 5)
+        obi_ema_slow = self._ema(self.obi_history, 20)
         obi_momentum = obi_ema_fast - obi_ema_slow
 
         # 6. Price momentum (normalized returns)
-        mid_arr = np.array(list(self.mid_history))
-        if len(mid_arr) >= 10:
-            ret_5 = (mid_arr[-1] - mid_arr[-5]) / mid_arr[-5] * 10000 if mid_arr[-5] > 0 else 0
-            ret_20 = (mid_arr[-1] - mid_arr[-min(20, len(mid_arr))]) / mid_arr[-min(20, len(mid_arr))] * 10000 if mid_arr[-min(20, len(mid_arr))] > 0 else 0
+        mid_now = self.mid_history[current_ptr]
+        if self.tick_count >= 10:
+            mid_5 = self.mid_history[(current_ptr - 5) % self.window]
+            ret_5 = (mid_now - mid_5) / mid_5 * 10000 if mid_5 > 0 else 0
+            lag_20 = min(20, self.tick_count - 1)
+            mid_20 = self.mid_history[(current_ptr - lag_20) % self.window]
+            ret_20 = (mid_now - mid_20) / mid_20 * 10000 if mid_20 > 0 else 0
         else:
             ret_5 = ret_20 = 0.0
 
         # 7. Spread regime (z-score of current spread)
-        spread_arr = np.array(list(self.spread_history))
-        spread_mean = np.mean(spread_arr)
-        spread_std = np.std(spread_arr)
+        valid_spread = self.spread_history if self.tick_count >= self.window else self.spread_history[:self.ptr]
+        spread_mean = np.mean(valid_spread)
+        spread_std = np.std(valid_spread)
         spread_z = (spread_bps - spread_mean) / spread_std if spread_std > 0.001 else 0
 
         # 8. Book depth asymmetry (deep levels)
@@ -212,12 +213,14 @@ class FeatureExtractor:
 
         return features
 
-    @staticmethod
-    def _ema(arr, span):
-        """Compute EMA of last element."""
+    def _ema(self, arr, span):
+        """Compute EMA of last element via ring buffer."""
         alpha = 2.0 / (span + 1)
-        ema = arr[0]
-        for val in arr[1:]:
+        count = min(self.tick_count, self.window)
+        start_idx = self.ptr if self.tick_count >= self.window else 0
+        ema = arr[start_idx]
+        for i in range(1, count):
+            val = arr[(start_idx + i) % self.window]
             ema = alpha * val + (1 - alpha) * ema
         return ema
 
@@ -261,15 +264,39 @@ class OnlineLinearModel:
         self.hit_rate = 0.5
         self.total_predictions = 0
 
+        # Intermediate Buffers for zero-allocation normalization
+        self._diff = np.zeros(n_features, dtype=np.float64)
+        self._diff2 = np.zeros(n_features, dtype=np.float64)
+        self._std = np.zeros(n_features, dtype=np.float64)
+        self._res = np.zeros(n_features, dtype=np.float64)
+
     def normalize(self, features):
-        """Online normalization using running statistics."""
+        """Online normalization using in-place operations."""
         self.n_samples += 1
         alpha = max(0.001, 1.0 / self.n_samples)
-        self.running_mean = (1 - alpha) * self.running_mean + alpha * features
-        diff = features - self.running_mean
-        self.running_var = (1 - alpha) * self.running_var + alpha * (diff ** 2)
-        std = np.sqrt(self.running_var + 1e-8)
-        return (features - self.running_mean) / std
+        
+        # self.running_mean += alpha * (features - self.running_mean)
+        np.subtract(features, self.running_mean, out=self._diff)
+        np.multiply(self._diff, alpha, out=self._diff2)
+        np.add(self.running_mean, self._diff2, out=self.running_mean)
+        
+        # self.running_var = (1 - alpha) * self.running_var + alpha * diff2^2
+        np.subtract(features, self.running_mean, out=self._diff2)
+        np.square(self._diff2, out=self._diff2)
+        np.multiply(self.running_var, 1 - alpha, out=self.running_var)
+        np.multiply(self._diff2, alpha, out=self._diff2)
+        np.add(self.running_var, self._diff2, out=self.running_var)
+        
+        # std = sqrt(self.running_var + 1e-8)
+        np.add(self.running_var, 1e-8, out=self._std)
+        np.sqrt(self._std, out=self._std)
+        
+        # res = (features - self.running_mean) / std
+        np.subtract(features, self.running_mean, out=self._res)
+        np.divide(self._res, self._std, out=self._res)
+        
+        # Return a copy to avoid overwriting during sequential operations
+        return self._res.copy()
 
     def predict(self, features):
         """Predict direction bias from normalized features."""
@@ -333,21 +360,7 @@ class OnlineLinearModel:
         return conf
 
 
-# ═══════════════════════════════════════════════════════════
-# Thermal Throttling
-# ═══════════════════════════════════════════════════════════
-
-def get_gpu_temp():
-    """Read GPU temperature from nvidia-smi."""
-    try:
-        import subprocess
-        result = subprocess.run(
-            ['nvidia-smi', '--query-gpu=temperature.gpu', '--format=csv,noheader'],
-            capture_output=True, text=True, timeout=2
-        )
-        return int(result.stdout.strip())
-    except Exception:
-        return 0
+# Throttling code removed (No longer needed to check nvidia-smi)
 
 # ═══════════════════════════════════════════════════════════
 # Main Inference Loop
@@ -386,37 +399,11 @@ def run_inference():
     file_size = mm.size()
     log.info(f"   mmap size: {file_size} bytes")
 
-    # Calculate l1_skew_adjustment offset by counting fields
-    # We need to find the exact byte offset — this comes from
-    # carefully matching the Rust struct layout
-    # From the Rust struct, counting 8 bytes per AtomicU64/AtomicI64:
-    # latency(8) + pad(56) = 64
-    # best_bid(8) + best_ask(8) + bids(600) + asks(600) = 1216
-    # t2t(8) + micro(8) + skew(8) = 24
-    # buy_ids(40) + sell_ids(40) = 80
-    # obi(8) + order_usd(8) = 16
-    # pad(8) = 8
-    # Total HOT: 64 + 1216 + 24 + 80 + 16 + 8 = 1408
-    # COLD starts at 1408:
-    # net_pos(8) + pnl(8) + btc(8) + usd(8) + checksum(4) + pad(4) = 40
-    # last_buy(8) + last_sell(8) = 16
-    # avg_entry(8) = 8
-    # ai_bias(8) + ai_hb(8) + ai_alpha(8) = 24
-    # buy_fill(8) + sell_fill(8) = 16
-    # monthly_vol(8) = 8
-    # session_buy_vol(8) + session_sell_vol(8) + session_buy_usd(8) + session_sell_usd(8) = 32
-    # session_fill(8) + session_pnl(8) = 16
-    # toxic(8) + sweep_freeze(8) = 16
-    # l1_skew_adjustment(8) → offset = 1408 + 40 + 16 + 8 + 24 + 16 + 8 + 32 + 16 + 16 = 1584
-    # analytics_cp(8) → 1592
-    # l1_confidence_score(8) → 1600
-
-    OFF_L1_SKEW_CALC = 1584
-    OFF_L1_CONF_CALC = 1600
+    log.info(f"   Using l1_skew offset: {OFF_L1_SKEW}, l1_conf offset: {OFF_L1_CONF}")
 
     # Verify: read current values to see if they're sensible
-    current_skew = struct.unpack_from('<q', mm, OFF_L1_SKEW_CALC)[0]
-    current_conf = struct.unpack_from('<Q', mm, OFF_L1_CONF_CALC)[0]
+    current_skew = struct.unpack_from('<q', mm, OFF_L1_SKEW)[0]
+    current_conf = struct.unpack_from('<Q', mm, OFF_L1_CONF)[0]
     log.info(f"   Current l1_skew: {current_skew}, l1_conf: {current_conf}")
 
     extractor = FeatureExtractor(window_size=200)
@@ -424,9 +411,6 @@ def run_inference():
 
     prev_mid = 0.0
     cycle_count = 0
-    last_temp_check = 0
-    gpu_temp = 0
-    throttled = False
     last_log_time = time.time()
 
     log.info("✅ ML Shield online — entering inference loop")
@@ -449,49 +433,32 @@ def run_inference():
 
                 prev_mid = current_mid
 
-                # Predict direction bias
-                if not throttled:
-                    prediction = model.predict(features)
-                    confidence = model.get_confidence()
+                prediction = model.predict(features)
+                confidence = model.get_confidence()
 
-                    # Scale prediction to mmap format
-                    # l1_skew_adjustment: × PRICE_SCALE
-                    skew_scaled = int(prediction * PRICE_SCALE)
-                    # l1_confidence_score: 0..10000
-                    conf_scaled = int(confidence * 10000)
+                # Scale prediction to mmap format
+                # l1_skew_adjustment: × PRICE_SCALE
+                skew_scaled = int(prediction * PRICE_SCALE)
+                # l1_confidence_score: 0..10000
+                conf_scaled = int(confidence * 10000)
 
-                    # Write to mmap
-                    struct.pack_into('<q', mm, OFF_L1_SKEW_CALC, skew_scaled)
-                    struct.pack_into('<Q', mm, OFF_L1_CONF_CALC, conf_scaled)
+                # Write to mmap
+                struct.pack_into('<q', mm, OFF_L1_SKEW, skew_scaled)
+                struct.pack_into('<Q', mm, OFF_L1_CONF, conf_scaled)
 
-                cycle_count += 1
-
-            # Thermal check every 30s
-            now = time.time()
-            if now - last_temp_check > 30:
-                gpu_temp = get_gpu_temp()
-                last_temp_check = now
-                if gpu_temp > GPU_TEMP_MAX:
-                    if not throttled:
-                        log.warning(f"🌡️ GPU {gpu_temp}°C > {GPU_TEMP_MAX}°C — THROTTLING")
-                        throttled = True
-                elif throttled:
-                    log.info(f"🌡️ GPU {gpu_temp}°C — throttle released")
-                    throttled = False
+            cycle_count += 1
 
             # Status log every 60s
             if now - last_log_time > 60:
                 hr = model.hit_rate * 100
                 tp = model.total_predictions
                 w_mag = np.linalg.norm(model.w_fast)
-                skew_val = struct.unpack_from('<q', mm, OFF_L1_SKEW_CALC)[0] / PRICE_SCALE
+                skew_val = struct.unpack_from('<q', mm, OFF_L1_SKEW)[0] / PRICE_SCALE
                 log.info(
                     f"📊 Cycle {cycle_count} | "
                     f"HitRate={hr:.1f}% | "
                     f"Pred={skew_val:.4f} | "
-                    f"|W|={w_mag:.3f} | "
-                    f"GPU={gpu_temp}°C | "
-                    f"Throttled={throttled}"
+                    f"|W|={w_mag:.3f}"
                 )
                 last_log_time = now
 

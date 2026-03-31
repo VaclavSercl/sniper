@@ -6,7 +6,7 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use std::collections::HashMap;
 
 use anyhow::Result;
-use tracing::{info, warn, error};
+use tracing::info;
 use serde_json::json;
 
 use sniper_types::trigon_types::*;
@@ -109,7 +109,7 @@ impl SovereignEngine for TrigonEngine {
         info!(event = "authenticated", bot = "trigon");
     }
 
-    fn on_market_message(&mut self, payload: &[u8], out_buf: &mut bytes::BytesMut) {
+    fn on_market_message(&mut self, payload: &mut [u8], out_buf: &mut bytes::BytesMut) {
         let loop_start = Instant::now();
         if let Some((chan, bid, ask)) = sniper_types::exchange::fast_parse_ticker(payload) {
             let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;

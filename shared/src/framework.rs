@@ -1,11 +1,8 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
 use std::time::Duration;
 use anyhow::{Context, Result};
 use tracing::{info, warn, error};
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use futures_util::{StreamExt, SinkExt};
-use serde_json::json;
 use dotenvy::dotenv;
 
 use crate::exchange::bitfinex;
@@ -22,13 +19,16 @@ pub trait SovereignEngine {
     fn on_auth(&mut self);
     
     /// Rychlá smyčka pro čistý socket stream z burzy (např. Ticker, Book)
-    fn on_market_message(&mut self, payload: &[u8], out_buf: &mut bytes::BytesMut);
+    fn on_market_message(&mut self, payload: &mut [u8], out_buf: &mut bytes::BytesMut);
     
     /// Pomalá smyčka pro systémové JSON události (info, conf, err)
     fn on_system_event(&mut self, value: &serde_json::Value, out_buf: &mut bytes::BytesMut);
     
     /// Autonomní HFT scan-smyčka, spuštěna na každém průchodu tokio event loopu
     fn on_loop(&mut self, out_buf: &mut bytes::BytesMut);
+    
+    /// Spuštěno před ukončením programu (SIGINT/SIGTERM) pro clean-up
+    fn on_shutdown(&mut self, _out_buf: &mut bytes::BytesMut) {}
 }
 
 /// Sjednocený Sovereign WebSocket Runner
@@ -107,23 +107,150 @@ impl<E: SovereignEngine> SovereignRunner<E> {
                         }
                     } else if bytes.first() == Some(&b'[') {
                         // Market Data Array (Fast-path)
-                        self.engine.on_market_message(bytes, &mut out_buf);
+                        let mut mut_bytes = bytes.to_vec();
+                        self.engine.on_market_message(&mut mut_bytes, &mut out_buf);
                     }
                 }
                 
                 self.engine.on_loop(&mut out_buf);
-
+                
                 if !out_buf.is_empty() {
-                    let s = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
-                    if let Err(e) = write.send(Message::Text(s.into())).await {
-                        error!("WS write payload err: {}", e);
-                        break;
-                    }
+                    let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
+                    let _ = write.send(Message::Text(text.into())).await;
                 }
             }
+            warn!("Sovereign WS read loop ended for {}", self.name);
+        }
+    }
+}
 
-            warn!("Sovereign WebSocket disconnected. Reconnecting in 5s...");
-            tokio::time::sleep(Duration::from_secs(5)).await;
+/// Sjednocený Sovereign WebSocket Runner s Dual-WS architekturou (MDATA + EXEC)
+pub struct SovereignDualRunner<E: SovereignEngine> {
+    pub engine: E,
+    pub name: String,
+}
+
+impl<E: SovereignEngine> SovereignDualRunner<E> {
+    pub fn new(engine: E, name: &str) -> Self {
+        Self { engine, name: name.to_string() }
+    }
+
+    pub async fn run(&mut self) -> Result<()> {
+        dotenv().ok();
+        
+        let key = std::env::var("BITFINEX_API_KEY").context("BITFINEX_API_KEY")?;
+        let sec = std::env::var("BITFINEX_API_SECRET").context("BITFINEX_API_SECRET")?;
+
+        self.engine.on_start()?;
+        
+        let mut out_buf = bytes::BytesMut::with_capacity(4096);
+
+        loop {
+            info!("Connecting Dual Sovereign WebSockets for {}", self.name);
+            let ws_mdata_res = connect_async(bitfinex::WS_URL).await;
+            let (ws_mdata, _) = match ws_mdata_res {
+                Ok(v) => v, Err(e) => { warn!(event = "ws_mdata_fail", error = %e); tokio::time::sleep(Duration::from_secs(5)).await; continue; }
+            };
+            
+            let ws_exec_res = connect_async(bitfinex::WS_URL).await;
+            let (ws_exec, _) = match ws_exec_res {
+                Ok(v) => v, Err(e) => { warn!(event = "ws_exec_fail", error = %e); tokio::time::sleep(Duration::from_secs(5)).await; continue; }
+            };
+
+            let (mut mdata_write, mut mdata_read) = ws_mdata.split();
+            let (mut exec_write, mut exec_read) = ws_exec.split();
+
+            // Setup MDATA
+            // (No auth on mdata, just pure speed)
+            let subs = self.engine.subscriptions();
+            for sub in subs {
+                let _ = mdata_write.send(Message::Text(sub.into())).await;
+            }
+
+            // Setup EXEC
+            let _ = exec_write.send(Message::Text(r#"{"event":"conf","flags":131072}"#.into())).await;
+            let auth_msg = crate::exchange::bitfinex_auth_message(&key, &sec);
+            if let Err(e) = exec_write.send(Message::Text(auth_msg.into())).await {
+                error!("Auth send failed: {}", e);
+                continue;
+            }
+
+            let mut authed = false;
+
+            // Dual polling loop
+            loop {
+                tokio::select! {
+                    msg = mdata_read.next() => {
+                        let msg = match msg {
+                            Some(Ok(m)) => m,
+                            _ => { warn!("MDATA WS disconnect"); break; }
+                        };
+                        out_buf.clear();
+                        if let Message::Text(text) = msg {
+                            let mut bytes = text.as_bytes().to_vec();
+                            if bytes.first() == Some(&b'{') {
+                                let v: serde_json::Value = serde_json::from_slice(&bytes).unwrap_or_default();
+                                self.engine.on_system_event(&v, &mut out_buf);
+                            } else if bytes.first() == Some(&b'[') {
+                                self.engine.on_market_message(&mut bytes, &mut out_buf);
+                            }
+                        }
+                        if !out_buf.is_empty() {
+                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
+                            let _ = exec_write.send(Message::Text(text.into())).await;
+                        }
+                    }
+                    msg = exec_read.next() => {
+                        let msg = match msg {
+                            Some(Ok(m)) => m,
+                            _ => { warn!("EXEC WS disconnect"); break; }
+                        };
+                        out_buf.clear();
+                        if let Message::Text(text) = msg {
+                            let bytes = text.as_bytes();
+                            if bytes.first() == Some(&b'{') { 
+                                let v: serde_json::Value = serde_json::from_slice(bytes).unwrap_or_default();
+                                if v["event"] == "auth" {
+                                    if v["status"] == "OK" {
+                                        authed = true;
+                                        self.engine.on_auth();
+                                    } else {
+                                        error!(event = "auth_failed", status = %v["status"], msg = %v["msg"]);
+                                    }
+                                } else {
+                                    self.engine.on_system_event(&v, &mut out_buf);
+                                }
+                            } else if bytes.first() == Some(&b'[') {
+                                let mut mut_bytes = bytes.to_vec();
+                                self.engine.on_market_message(&mut mut_bytes, &mut out_buf);
+                            }
+                        }
+                        if !out_buf.is_empty() {
+                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
+                            let _ = exec_write.send(Message::Text(text.into())).await;
+                        }
+                    }
+                    _ = tokio::time::sleep(Duration::from_millis(1)) => {
+                        // Background loop iteration
+                        out_buf.clear();
+                        self.engine.on_loop(&mut out_buf);
+                        if !out_buf.is_empty() {
+                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
+                            let _ = exec_write.send(Message::Text(text.into())).await;
+                        }
+                    }
+                    _ = tokio::signal::ctrl_c() => {
+                        info!("Received Ctrl-C, initiating shutdown for {}", self.name);
+                        out_buf.clear();
+                        self.engine.on_shutdown(&mut out_buf);
+                        if !out_buf.is_empty() {
+                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
+                            let _ = exec_write.send(Message::Text(text.into())).await;
+                        }
+                        return Ok(());
+                    }
+                }
+            } // end dual stream loop
         }
     }
 }
