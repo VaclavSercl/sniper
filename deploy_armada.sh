@@ -19,6 +19,11 @@
 
 set -euo pipefail
 
+# ═══ IMMEDIATE BOOT LOCK ═══
+# Must be FIRST action — watchdog.sh cron checks this to prevent race conditions.
+# Without this at the top, cron can fire between systemd stop/start and spawn duplicates.
+echo "$(date +%s)" > /tmp/sniper_boot.lock
+
 ARMADA_ROOT="$(cd "$(dirname "$0")" && pwd)"
 LOG_DIR="$ARMADA_ROOT/logs"
 BIN_DIR="$ARMADA_ROOT/target/release"
