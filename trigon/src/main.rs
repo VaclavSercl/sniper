@@ -25,7 +25,7 @@ use futures_util::{StreamExt, SinkExt};
 use serde_json::json;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use dotenvy::dotenv;
-use tracing::{info, warn, Level};
+use tracing::{info, warn, error, Level};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use memmap2::MmapMut;
 use anyhow::{Context, Result};
@@ -393,9 +393,14 @@ async fn main() -> Result<()> {
                 // Slow path: events
                 if bytes.first() == Some(&b'{') {
                     let v: serde_json::Value = serde_json::from_slice(bytes).unwrap_or_default();
-                    if v["event"] == "auth" && v["status"] == "OK" {
-                        authed = true;
-                        info!(event = "authenticated", bot = "trigon");
+                    if v["event"] == "auth" {
+                        if v["status"] == "OK" {
+                            authed = true;
+                            info!(event = "authenticated", bot = "trigon");
+                        } else {
+                            error!(event = "auth_failed", bot = "trigon", status = %v["status"], msg = %v["msg"]);
+                            notifier.send(format!("❌ AUTH FAILED: {}", v["msg"]));
+                        }
                     }
                     if v["event"] == "subscribed" && v["channel"] == "ticker" {
                         if let (Some(cid), Some(sym)) = (v["chanId"].as_i64(), v["symbol"].as_str()) {

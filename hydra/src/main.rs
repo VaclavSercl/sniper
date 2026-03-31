@@ -686,9 +686,15 @@ async fn async_main() -> Result<()> {
                                                         }
                                                     }
                                     }
-                                } else if let BorrowedValue::Object(obj) = v
-                                    && obj.get("event") == Some(&BorrowedValue::from("auth")) && obj.get("status") == Some(&BorrowedValue::from("OK")) {
-                                        info!(event = "exec_auth_ok");
+                                } else if let BorrowedValue::Object(ref obj) = v
+                                    && obj.get("event") == Some(&BorrowedValue::from("auth")) {
+                                        if obj.get("status") == Some(&BorrowedValue::from("OK")) {
+                                            info!(event = "exec_auth_ok");
+                                        } else {
+                                            let msg = obj.get("msg").and_then(|m| m.as_str()).unwrap_or("unknown");
+                                            error!(event = "auth_failed", bot = "hydra", msg = msg);
+                                            exec_notifier.alert(format!("❌ AUTH FAILED: {}", msg));
+                                        }
                                     }
                             },
                             OpCode::Ping => { let _ = exec_ws.write_frame(fastwebsockets::Frame::pong(frame.payload)).await; }

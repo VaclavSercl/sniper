@@ -592,10 +592,14 @@ async fn main() -> Result<()> {
                             let bytes = text.as_bytes();
                             if bytes.first() == Some(&b'{') {
                                 if let Ok(v) = serde_json::from_slice::<serde_json::Value>(bytes) {
-                                    if v["event"] == "auth" && v["status"] == "OK" {
-                                        authed = true;
-                                        info!(event = "authenticated", bot = "nexus");
-                                        notifier.alert("✅ Bitfinex authenticated".to_string());
+                                    if v["event"] == "auth" {
+                                        if v["status"] == "OK" {
+                                            authed = true;
+                                            info!(event = "authenticated", bot = "nexus");
+                                        } else {
+                                            error!(event = "auth_failed", bot = "nexus", status = %v["status"], msg = %v["msg"]);
+                                            notifier.alert(format!("❌ AUTH FAILED: {}", v["msg"]));
+                                        }
                                     }
                                 }
                             }
