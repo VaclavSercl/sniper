@@ -39,6 +39,8 @@ async fn main() -> anyhow::Result<()> {
 
     // Load .env from project root (sniper/)
     load_dotenv();
+    
+    rustls::crypto::ring::default_provider().install_default().ok();
 
     println!("🧠 ══════════════════════════════════════════");
     println!("🧠  SOVEREIGN CORTEX v14.0");

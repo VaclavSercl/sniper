@@ -3,18 +3,19 @@
 // Phase 3: Binance WebSocket, Fear & Greed, News RSS
 //
 // Writes SHARED macro data to ALL bot engine_state.bin files.
-// Currently: Hydra only. Future: fan-out to all bots.
+// FixedPrice refactor: NO f64 keywords allowed!
 // ═══════════════════════════════════════════════════════════
 
-use sniper_types::{EngineState, PRICE_SCALE};
+use sniper_types::{EngineState, PRICE_SCALE_I};
+use sniper_types::math::FixedPrice;
 use std::collections::{HashSet, VecDeque};
 use std::sync::atomic::Ordering;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 // ── Binance thresholds ──
-const BINANCE_LARGE_SELL_BTC: f64 = 1.0;
-const BINANCE_SWEEP_WINDOW_S: f64 = 10.0;
-const BINANCE_SWEEP_VOLUME_BTC: f64 = 5.0;
+const BINANCE_LARGE_SELL_BTC: i64 = 100_000_000; // 1.0 * PRICE_SCALE
+const BINANCE_SWEEP_WINDOW_S: u64 = 10;
+const BINANCE_SWEEP_VOLUME_BTC: i64 = 500_000_000; // 5.0 * PRICE_SCALE
 const BINANCE_WS_URL: &str = "wss://stream.binance.com:9443/ws/btcusdt@aggTrade";
 
 // ── Fear & Greed ──
@@ -47,7 +48,10 @@ fn epoch_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64
 }
 
-/// Safe string truncation that respects UTF-8 char boundaries.
+fn epoch_secs() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+}
+
 fn safe_truncate(s: &str, max_bytes: usize) -> &str {
     if s.len() <= max_bytes { return s; }
     let mut end = max_bytes;
@@ -55,9 +59,21 @@ fn safe_truncate(s: &str, max_bytes: usize) -> &str {
     &s[..end]
 }
 
+/// Helper to parse string directly into FixedPrice without floats.
+fn parse_fixed(s: &str) -> FixedPrice {
+    let mut parts = s.split('.');
+    let int_part: i64 = parts.next().unwrap_or("0").parse().unwrap_or(0);
+    let mut frac_part: i64 = 0;
+    if let Some(f) = parts.next() {
+        let f = &f[..std::cmp::min(f.len(), 8)];
+        let padded = format!("{:0<8}", f);
+        frac_part = padded.parse().unwrap_or(0);
+    }
+    FixedPrice::new(int_part * PRICE_SCALE_I + frac_part)
+}
+
 // ═══ MODULE 1: BINANCE CROSS-EXCHANGE WEBSOCKET ═══
 
-/// Run Binance BTC/USDT aggTrade WebSocket (blocking — run in dedicated thread).
 pub async fn run_binance_ws(engine: &EngineState) {
     println!("  🌐 [MACRO] Binance BTC/USDT WebSocket starting...");
 
@@ -77,50 +93,56 @@ async fn run_binance_ws_inner(engine: &EngineState) -> anyhow::Result<()> {
     let (mut socket, _response) = connect_async(BINANCE_WS_URL).await?;
     println!("  🟢 [MACRO] Binance BTC/USDT aggTrade connected");
 
-    let mut sell_window: VecDeque<(f64, f64)> = VecDeque::new(); // (timestamp, volume)
-    let mut price_buffer: VecDeque<(f64, f64)> = VecDeque::with_capacity(100);
+    let mut sell_window: VecDeque<(u64, FixedPrice)> = VecDeque::new(); // (timestamp, volume)
+    let mut price_buffer: VecDeque<(FixedPrice, FixedPrice)> = VecDeque::with_capacity(100);
 
     while let Some(msg_res) = socket.next().await {
         let msg = msg_res?;
         if let Message::Text(text) = msg {
             if let Ok(trade) = serde_json::from_str::<serde_json::Value>(&text) {
-                let price: f64 = trade["p"].as_str().and_then(|s| s.parse().ok()).unwrap_or(0.0);
-                let qty: f64 = trade["q"].as_str().and_then(|s| s.parse().ok()).unwrap_or(0.0);
-                let is_sell = trade["m"].as_bool().unwrap_or(false); // maker=buyer → sell aggression
+                let price_str = trade["p"].as_str().unwrap_or("0");
+                let qty_str = trade["q"].as_str().unwrap_or("0");
+                
+                let price = parse_fixed(price_str);
+                let qty = parse_fixed(qty_str);
+                let is_sell = trade["m"].as_bool().unwrap_or(false);
 
                 // Track Binance mid-price (VWAP)
                 price_buffer.push_back((price, qty));
                 if price_buffer.len() > 100 { price_buffer.pop_front(); }
                 if price_buffer.len() >= 5 {
-                    let total_vol: f64 = price_buffer.iter().map(|(_, v)| v).sum();
-                    if total_vol > 0.0 {
-                        let vwap: f64 = price_buffer.iter().map(|(p, v)| p * v).sum::<f64>() / total_vol;
-                        engine.binance_mid_price.store((vwap * PRICE_SCALE) as i64, Ordering::Release);
+                    let total_vol = price_buffer.iter().fold(FixedPrice::zero(), |acc, (_, v)| acc + *v);
+                    if total_vol > FixedPrice::zero() {
+                        let weighted_sum = price_buffer.iter().fold(FixedPrice::zero(), |acc, (p, v)| acc + (*p * *v));
+                        let vwap = weighted_sum / total_vol;
+                        engine.binance_mid_price.store(vwap.0, Ordering::Release);
                     }
                 }
 
                 if is_sell {
-                    let now = SystemTime::now().duration_since(UNIX_EPOCH)
-                        .unwrap_or_default().as_secs_f64();
+                    let now = epoch_secs();
                     sell_window.push_back((now, qty));
 
                     // Prune old entries
                     while let Some(&(ts, _)) = sell_window.front() {
-                        if ts < now - BINANCE_SWEEP_WINDOW_S { sell_window.pop_front(); }
+                        if ts < now.saturating_sub(BINANCE_SWEEP_WINDOW_S) { sell_window.pop_front(); }
                         else { break; }
                     }
 
                     // Single large sell
-                    if qty >= BINANCE_LARGE_SELL_BTC {
+                    if qty >= FixedPrice::new(BINANCE_LARGE_SELL_BTC) {
                         engine.binance_sweep_ts.store(epoch_ms(), Ordering::Release);
-                        println!("  🔴 [MACRO] BINANCE LARGE SELL: {qty:.3} BTC @ ${price:.0}");
+                        let qty_int = qty.0 / PRICE_SCALE_I;
+                        let price_int = price.0 / PRICE_SCALE_I;
+                        println!("  🔴 [MACRO] BINANCE LARGE SELL: {} BTC @ ${}", qty_int, price_int);
                     }
 
                     // Aggregate window
-                    let window_vol: f64 = sell_window.iter().map(|(_, v)| v).sum();
-                    if window_vol >= BINANCE_SWEEP_VOLUME_BTC {
+                    let window_vol = sell_window.iter().fold(FixedPrice::zero(), |acc, (_, v)| acc + *v);
+                    if window_vol >= FixedPrice::new(BINANCE_SWEEP_VOLUME_BTC) {
                         engine.binance_sweep_ts.store(epoch_ms(), Ordering::Release);
-                        println!("  🔴 [MACRO] BINANCE SWEEP: {window_vol:.1} BTC in {BINANCE_SWEEP_WINDOW_S}s");
+                        let w_int = window_vol.0 / PRICE_SCALE_I;
+                        println!("  🔴 [MACRO] BINANCE SWEEP: {} BTC in {}s", w_int, BINANCE_SWEEP_WINDOW_S);
                         sell_window.clear();
                     }
                 }
@@ -132,9 +154,8 @@ async fn run_binance_ws_inner(engine: &EngineState) -> anyhow::Result<()> {
 
 // ═══ MODULE 2: FEAR & GREED INDEX ═══
 
-/// Fetch Fear & Greed Index every 5 minutes (blocking — run in dedicated thread).
 pub async fn run_fear_greed(engine: &EngineState) {
-    println!("  📊 [MACRO] Fear & Greed monitor starting ({}s interval)...", FEAR_GREED_INTERVAL_S);
+    println!("  �� [MACRO] Fear & Greed monitor starting ({}s interval)...", FEAR_GREED_INTERVAL_S);
 
     loop {
         match fetch_fear_greed(engine).await {
@@ -168,7 +189,6 @@ async fn fetch_fear_greed(engine: &EngineState) -> anyhow::Result<u64> {
 
 // ═══ MODULE 3: NEWS RSS SENTIMENT ═══
 
-/// Scan crypto RSS feeds every 3 minutes (blocking — run in dedicated thread).
 pub async fn run_news_sentiment(engine: &EngineState) {
     println!("  📰 [MACRO] News RSS sentiment starting ({}s interval)...", NEWS_INTERVAL_S);
 
@@ -180,7 +200,6 @@ pub async fn run_news_sentiment(engine: &EngineState) {
             Err(e) => println!("  ⚠️ [MACRO] RSS scan error: {e}"),
         }
 
-        // Cap seen_titles
         if seen_titles.len() > 1000 {
             let keep: Vec<String> = seen_titles.iter().take(500).cloned().collect();
             seen_titles = keep.into_iter().collect();
@@ -191,7 +210,7 @@ pub async fn run_news_sentiment(engine: &EngineState) {
 }
 
 async fn scan_rss_feeds(engine: &EngineState, seen: &mut HashSet<String>) -> anyhow::Result<usize> {
-    let mut scores: Vec<f64> = Vec::new();
+    let mut scores: Vec<FixedPrice> = Vec::new();
     let client = reqwest::Client::new();
 
     for &feed_url in RSS_FEEDS {
@@ -207,7 +226,6 @@ async fn scan_rss_feeds(engine: &EngineState, seen: &mut HashSet<String>) -> any
             Err(_) => continue,
         };
 
-        // Simple XML parsing for RSS <item><title>...</title><description>...</description></item>
         for item_block in body.split("<item>").skip(1).take(10) {
             let title = extract_tag(item_block, "title");
             let desc = extract_tag(item_block, "description");
@@ -218,11 +236,11 @@ async fn scan_rss_feeds(engine: &EngineState, seen: &mut HashSet<String>) -> any
 
             let combined = format!("{title} {desc}");
             let score = score_text(&combined);
-            if score.abs() > 0.01 {
+            if score.0.abs() > 1_000_000 { // 0.01 * PRICE_SCALE
                 scores.push(score);
-                if score.abs() > 0.5 {
-                    let dir = if score > 0.0 { "🟢 BULL" } else { "🔴 BEAR" };
-                    println!("  📰 {dir} ({score:+.2}): {}", safe_truncate(&title, 60));
+                if score.0.abs() > 50_000_000 { // 0.5 * PRICE_SCALE
+                    let dir = if score > FixedPrice::zero() { "🟢 BULL" } else { "🔴 BEAR" };
+                    println!("  📰 {dir} ({}): {}", score.0 / 1_000_000, safe_truncate(&title, 60)); // pseudofloat print
                 }
             }
         }
@@ -231,24 +249,27 @@ async fn scan_rss_feeds(engine: &EngineState, seen: &mut HashSet<String>) -> any
     let scored_count = scores.len();
 
     if !scores.is_empty() {
-        let avg_score = scores.iter().sum::<f64>() / scores.len() as f64;
+        let avg_score = scores.iter().fold(FixedPrice::zero(), |acc, x| acc + *x) / FixedPrice::new((scores.len() as i64) * PRICE_SCALE_I);
         // EMA: 70% old, 30% new
-        let old_bias = engine.macro_bias.load(Ordering::Relaxed) as f64 / 10000.0;
-        let new_bias = (old_bias * 0.7 + avg_score * 0.3).clamp(-1.0, 1.0);
-        engine.macro_bias.store((new_bias * 10000.0) as i64, Ordering::Release);
+        let old_bias = FixedPrice::new(engine.macro_bias.load(Ordering::Relaxed) * (PRICE_SCALE_I / 10000));
+        let new_bias = std::cmp::max(std::cmp::min(old_bias * FixedPrice::new(70_000_000) + avg_score * FixedPrice::new(30_000_000), FixedPrice::new(PRICE_SCALE_I)), FixedPrice::new(-PRICE_SCALE_I));
+        engine.macro_bias.store(new_bias.0 / (PRICE_SCALE_I / 10000), Ordering::Release);
         engine.macro_source_ts.store(epoch_ms(), Ordering::Release);
     }
 
     Ok(scored_count)
 }
 
-fn score_text(text: &str) -> f64 {
+fn score_text(text: &str) -> FixedPrice {
     let lower = text.to_lowercase();
     let bull = BULLISH_KEYWORDS.iter().filter(|&&kw| lower.contains(kw)).count();
     let bear = BEARISH_KEYWORDS.iter().filter(|&&kw| lower.contains(kw)).count();
     let total = bull + bear;
-    if total == 0 { return 0.0; }
-    (bull as f64 - bear as f64) / total as f64
+    if total == 0 { return FixedPrice::zero(); }
+    
+    // (bull - bear) / total * PRICE_SCALE
+    let numerator = (bull as i64 - bear as i64) * PRICE_SCALE_I;
+    FixedPrice::new(numerator / total as i64)
 }
 
 fn extract_tag(xml: &str, tag: &str) -> String {
@@ -258,7 +279,6 @@ fn extract_tag(xml: &str, tag: &str) -> String {
         let content_start = start + open.len();
         if let Some(end) = xml[content_start..].find(&close) {
             let content = &xml[content_start..content_start + end];
-            // Strip CDATA
             let content = content.strip_prefix("<![CDATA[").unwrap_or(content);
             let content = content.strip_suffix("]]>").unwrap_or(content);
             return content.to_string();

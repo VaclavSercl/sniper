@@ -2452,6 +2452,7 @@ dependencies = [
  "futures-util",
  "memmap2",
  "reqwest 0.13.2",
+ "rustls",
  "serde",
  "serde_json",
  "sniper-shared",

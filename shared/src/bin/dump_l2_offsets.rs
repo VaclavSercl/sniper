@@ -30,7 +30,7 @@ fn main() {
 
     let out_path = std::env::current_dir()
         .unwrap_or_default()
-        .join("../architect/l2_rust_offsets.py");
+        .join("architect/l2_rust_offsets.py");
     std::fs::write(&out_path, out).expect("Failed to write python offsets");
     println!("Successfully dumped L2 offsets to: {:?}", out_path);
 }
