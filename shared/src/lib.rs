@@ -17,5 +17,7 @@ pub mod notifier;
 pub mod mmap_utils;
 #[cfg(feature = "runtime")]
 pub mod lock;
+#[cfg(feature = "runtime")]
+pub mod framework;
 
 pub use types::*;
