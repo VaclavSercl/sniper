@@ -60,6 +60,11 @@ except ImportError:
 class L2Oracle:
     """Strategic Oracle — the 'frontal lobe' of the Armada."""
 
+    # ═══ PAPER TRIAL CONSTANTS ═══
+    PAPER_TRIAL_DURATION_MIN = 66  # Phase 4: bot runs in PAPER for 66 minutes
+    PAPER_TRIAL_MIN_FILLS = 5     # Minimum fills needed to evaluate
+    PAPER_TRIAL_MAX_TOXIC_PCT = 40.0  # Max toxic fill % to pass
+
     def __init__(self, cortex_client, telegram_send_fn):
         self.cortex = cortex_client
         self.send_telegram = telegram_send_fn
@@ -77,6 +82,12 @@ class L2Oracle:
 
         self.pnl_db = PnlDatabase() if HAS_PNL_DB else None
 
+        # ═══ PAPER TRIAL ENGINE (SBP Phase 4-6) ═══
+        # Tracks bots in paper trial. After 66 min, AI evaluates and promotes.
+        # Key: bot_name → {"start_ts": datetime, "initial_fills": int, "pre_crash_mode": str}
+        self._paper_trials = {}
+        self._paper_trial_evaluated = set()  # Bots already evaluated (no re-eval)
+
     def run_cycle(self, report_type=None):
         """Execute one L2 Oracle cycle. Called every 5 min.
         report_type: None=silent, 'hourly'/'daily'/'weekly'/'monthly'=send TG report.
@@ -91,6 +102,9 @@ class L2Oracle:
             self._sovereign_recovery()
             self.recovery_done = True
             return  # Skip normal cycle — recovery IS the first cycle
+
+        # ── PAPER TRIAL CHECK: Phase 4-6 evaluation after 66 min ──
+        self._check_paper_trials()
 
         log.info(f"═══ L2 ORACLE CYCLE #{self.cycle} ═══")
 
@@ -1292,25 +1306,26 @@ PARAMETER CONSTRAINTS:
         except Exception:
             pass
 
-        # Progressively restore bots
+        # Progressively restore bots — ALL go through PAPER TRIAL first
         restored = []
+        fills_snapshot = self._get_total_fills()
+        
         for bot, mode in bot_states.items():
             if mode == "LIVE":
-                # LIVE = start + unpause (bot trades with real money)
-                log.info(f"  🟢 Starting {bot} → LIVE")
+                # WAS LIVE → Start in PAPER TRIAL (Phase 4)
+                # After 66 min of safe paper operation, AI evaluates → promote if OK
+                log.info(f"  🧪 Starting {bot} → PAPER TRIAL (was LIVE, 66 min gate)")
                 start_bot(bot)
                 time.sleep(10)
-                self._unpause_bot(bot)
-                self._save_bot_state(bot, "LIVE")
-                restored.append(f"🟢 {bot.upper()} → LIVE")
+                self._pause_bot(bot)  # Safety: paused=1 during trial
+                self._save_bot_state(bot, "PAPER")
+                self._start_paper_trial(bot, "LIVE", fills_snapshot)
+                restored.append(f"🧪 {bot.upper()} → PAPER TRIAL (66 min)")
             elif mode == "PAPER":
                 # PAPER = start bot but keep paused=1 in mmap
-                # Rust binaries have NO paper mode. paused=0 means LIVE trading.
-                # Bot runs for monitoring/scanning but does NOT place orders.
                 log.info(f"  🟠 Starting {bot} → PAPER")
                 start_bot(bot)
                 time.sleep(5)
-                # Explicitly ensure paused stays ON (SBP already set it, but be safe)
                 self._pause_bot(bot)
                 self._save_bot_state(bot, "PAPER")
                 restored.append(f"🟠 {bot.upper()} → PAPER")
@@ -1337,6 +1352,242 @@ PARAMETER CONSTRAINTS:
             pass
 
         log.info("🧠 ═══ SOVEREIGN RECOVERY COMPLETE ═══")
+
+    # ═══════════════════════════════════════════════════════════
+    # 🧪 PAPER TRIAL ENGINE — SBP Phase 4, 5, 6
+    # ═══════════════════════════════════════════════════════════
+
+    def _get_total_fills(self):
+        """Get total fill count from pnl.db for trial snapshot."""
+        try:
+            import sqlite3
+            conn = sqlite3.connect(os.path.expanduser("~/.local/share/sniper/pnl.db"))
+            count = conn.execute("SELECT COUNT(*) FROM fills").fetchone()[0]
+            conn.close()
+            return count
+        except Exception:
+            return 0
+
+    def _start_paper_trial(self, bot_name, pre_crash_mode, fills_snapshot):
+        """Phase 4: Register bot for 66-minute paper trial.
+        
+        Bot runs in PAPER mode (paused=1 in mmap) for 66 minutes.
+        L2 Oracle monitors during normal cycles. After 66 min,
+        Phase 5 (AI Evaluation) triggers automatically.
+        """
+        self._paper_trials[bot_name] = {
+            "start_ts": datetime.now(timezone.utc),
+            "initial_fills": fills_snapshot,
+            "pre_crash_mode": pre_crash_mode,
+        }
+        log.info(f"🧪 [TRIAL] {bot_name}: Paper Trial STARTED (66 min gate, fills baseline={fills_snapshot})")
+
+    def _check_paper_trials(self):
+        """Called every L2 cycle (5 min). Check if any paper trial has reached 66 minutes.
+        
+        If yes → trigger Phase 5 (AI Evaluation).
+        """
+        if not self._paper_trials:
+            return
+
+        now = datetime.now(timezone.utc)
+        ready = []
+        
+        for bot_name, trial in self._paper_trials.items():
+            if bot_name in self._paper_trial_evaluated:
+                continue
+            elapsed_min = (now - trial["start_ts"]).total_seconds() / 60
+            
+            if elapsed_min >= self.PAPER_TRIAL_DURATION_MIN:
+                log.info(f"🧪 [TRIAL] {bot_name}: 66 min elapsed → Phase 5 (AI Evaluation)")
+                ready.append(bot_name)
+            else:
+                remaining = self.PAPER_TRIAL_DURATION_MIN - elapsed_min
+                log.info(f"🧪 [TRIAL] {bot_name}: {elapsed_min:.0f}/{self.PAPER_TRIAL_DURATION_MIN} min ({remaining:.0f} min remaining)")
+
+        for bot_name in ready:
+            self._evaluate_paper_trial(bot_name)
+
+    def _evaluate_paper_trial(self, bot_name):
+        """Phase 5: AI evaluates paper trial results.
+        
+        Collects metrics from the trial period:
+        - Fill count delta
+        - PnL during trial
+        - Toxic fill rate
+        - Market volatility
+        
+        Sends to Gemini for decision: PROMOTE (→ LIVE) or KEEP_PAPER.
+        """
+        trial = self._paper_trials.get(bot_name)
+        if not trial:
+            return
+        
+        self._paper_trial_evaluated.add(bot_name)
+        log.info(f"🧪 [TRIAL] Phase 5: Evaluating {bot_name} paper trial...")
+
+        # Collect trial metrics
+        current_fills = self._get_total_fills()
+        trial_fills = current_fills - trial["initial_fills"]
+        elapsed_min = (datetime.now(timezone.utc) - trial["start_ts"]).total_seconds() / 60
+
+        # Get bot snapshot from Cortex
+        snap_resp = self.cortex.get_snapshot()
+        bot_data = {}
+        if snap_resp.get("ok"):
+            for b in snap_resp["data"].get("bots", []):
+                if b["name"] == bot_name:
+                    bot_data = b
+                    break
+
+        pnl = bot_data.get("pnl", 0.0)
+        toxic = bot_data.get("toxic", 0)
+        fills = bot_data.get("fills", 0)
+        price = bot_data.get("price", 0.0)
+        toxic_pct = (toxic / max(fills, 1)) * 100.0
+
+        # Get market volatility from market_data.db
+        vol_info = self._get_trial_volatility()
+
+        # Build Gemini evaluation prompt
+        prompt = f"""═══ SBP PHASE 5: PAPER TRIAL EVALUATION ═══
+Bot: {bot_name.upper()}
+Pre-crash mode: {trial['pre_crash_mode']}
+Trial duration: {elapsed_min:.0f} minutes (target: {self.PAPER_TRIAL_DURATION_MIN} min)
+
+Trial Metrics:
+  Fills during trial: {trial_fills}
+  Current PnL: ${pnl:.4f}
+  Toxic fills: {toxic} ({toxic_pct:.1f}%)
+  BTC Price: ${price:.2f}
+
+Market Conditions:
+{vol_info}
+
+RULES:
+1. If trial_fills < {self.PAPER_TRIAL_MIN_FILLS} → KEEP_PAPER (insufficient data)
+2. If toxic_pct > {self.PAPER_TRIAL_MAX_TOXIC_PCT}% → KEEP_PAPER (too dangerous)
+3. If market volatility is extreme → KEEP_PAPER (wait for calm)
+4. If trial looks healthy → PROMOTE (bot can go LIVE)
+
+Respond with EXACTLY one JSON object:
+{{"decision": "PROMOTE" or "KEEP_PAPER", "reasoning": "brief explanation"}}
+"""
+        
+        log.info(f"  🤖 Calling Gemini for {bot_name} trial evaluation...")
+        
+        try:
+            result = subprocess.run(
+                ["gemini", "-p", prompt],
+                capture_output=True, text=True, timeout=GEMINI_TIMEOUT,
+            )
+            if result.returncode != 0:
+                log.error(f"  Gemini failed for trial eval: {result.stderr[:200]}")
+                self._trial_fallback(bot_name, "Gemini error")
+                return
+            raw = result.stdout.strip()
+            log.info(f"  ✅ Gemini trial response ({len(raw)} bytes)")
+        except subprocess.TimeoutExpired:
+            log.error("  Gemini timeout for trial eval")
+            self._trial_fallback(bot_name, "Gemini timeout")
+            return
+        except Exception as e:
+            log.error(f"  Gemini error for trial eval: {e}")
+            self._trial_fallback(bot_name, str(e))
+            return
+
+        # Parse Gemini decision
+        decision = self._parse_decision(raw)
+        if not decision:
+            self._trial_fallback(bot_name, "Invalid Gemini response")
+            return
+
+        ai_decision = decision.get("decision", "KEEP_PAPER").upper()
+        reasoning = decision.get("reasoning", "No reasoning provided")
+
+        # Phase 6: Execute decision
+        if ai_decision == "PROMOTE":
+            self._promote_to_live(bot_name, reasoning)
+        else:
+            self._keep_paper(bot_name, reasoning)
+
+    def _promote_to_live(self, bot_name, reasoning):
+        """Phase 6: AI approved → Promote bot from PAPER to LIVE."""
+        log.info(f"🟢 [TRIAL] Phase 6: {bot_name} PROMOTED → LIVE")
+        log.info(f"  AI reasoning: {reasoning}")
+        
+        self._unpause_bot(bot_name)
+        self._save_bot_state(bot_name, "LIVE")
+        
+        msg = (
+            f"🟢 *SBP Phase 6: {bot_name.upper()} PROMOTED → LIVE*\n"
+            f"🧪 Paper Trial: ✅ PASSED\n"
+            f"🤖 AI: {reasoning}\n"
+            f"⏱ Trial duration: {self.PAPER_TRIAL_DURATION_MIN} min"
+        )
+        try:
+            self.send_telegram(msg)
+        except Exception:
+            pass
+
+    def _keep_paper(self, bot_name, reasoning):
+        """Phase 6: AI rejected → Keep bot in PAPER mode."""
+        log.info(f"🟠 [TRIAL] Phase 6: {bot_name} KEPT in PAPER")
+        log.info(f"  AI reasoning: {reasoning}")
+        
+        # Keep paused — no change needed, already in PAPER
+        msg = (
+            f"🟠 *SBP Phase 6: {bot_name.upper()} KEPT in PAPER*\n"
+            f"🧪 Paper Trial: ❌ NOT PASSED\n"
+            f"🤖 AI: {reasoning}\n"
+            f"ℹ️ Use `/live {bot_name}` to manually promote"
+        )
+        try:
+            self.send_telegram(msg)
+        except Exception:
+            pass
+
+    def _trial_fallback(self, bot_name, error):
+        """Fallback if Gemini is unavailable during trial evaluation → keep PAPER (safe)."""
+        log.warning(f"🟠 [TRIAL] {bot_name}: Gemini unavailable ({error}), keeping PAPER (safe default)")
+        self._keep_paper(bot_name, f"Fallback: {error} — keeping PAPER for safety")
+
+    def _get_trial_volatility(self):
+        """Get last 66 min market volatility for trial evaluation."""
+        try:
+            import sqlite3
+            db = os.path.expanduser("~/.local/share/sniper/market_data.db")
+            if not os.path.exists(db):
+                return "  Volatility data: UNAVAILABLE (no market_data.db)"
+            
+            conn = sqlite3.connect(db)
+            ts_66m = int((time.time() - self.PAPER_TRIAL_DURATION_MIN * 60) * 1000)
+            
+            rows = conn.execute(
+                "SELECT close FROM candles_1s WHERE symbol='tBTCUSD' AND ts > ? ORDER BY ts",
+                (ts_66m,)
+            ).fetchall()
+            conn.close()
+            
+            if len(rows) < 60:
+                return "  Volatility data: INSUFFICIENT (<60 candles)"
+            
+            prices = [r[0] for r in rows]
+            import statistics
+            mean_p = statistics.mean(prices)
+            std_p = statistics.stdev(prices)
+            min_p = min(prices)
+            max_p = max(prices)
+            range_pct = ((max_p - min_p) / mean_p) * 100
+            
+            return (
+                f"  BTC 66-min StdDev: ${std_p:.2f}\n"
+                f"  BTC 66-min Range: ${min_p:.0f} – ${max_p:.0f} ({range_pct:.2f}%)\n"
+                f"  Candle count: {len(rows)}\n"
+                f"  Extreme: {'YES' if std_p > 500 else 'NO'}"
+            )
+        except Exception as e:
+            return f"  Volatility data: ERROR ({e})"
 
     def _pause_bot(self, bot_name):
         """Pause bot via Cortex UDS (Scanner mode)."""
