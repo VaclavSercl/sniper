@@ -29,7 +29,7 @@ PNL_MMAP_PATH = "/dev/shm/beroun/pnl_state.bin"
 
 BOT_INDEX = {
     "hydra": 0, "moonshot": 1, "grid": 2, "trigon": 3,
-    "bot4": 4, "bot5": 5, "bot6": 6, "bot7": 7,
+    "nexus": 4, "bot5": 5, "bot6": 6, "bot7": 7,
 }
 
 # Cross-pair symbols (profit in BTC, needs USD conversion)

@@ -1055,9 +1055,9 @@ PARAMETER CONSTRAINTS:
         total_1h = total_24h = total_7d = 0.0
         total_fills = 0
 
-        # Ensure ALL 4 bots appear in report (even if Cortex doesn't report them)
-        ALL_BOTS = ["hydra", "moonshot", "grid", "trigon"]
-        BOT_EMOJIS = {"hydra": "🐍", "moonshot": "🌙", "grid": "📐", "trigon": "🔺"}
+        # Ensure ALL 5 bots appear in report (even if Cortex doesn't report them)
+        ALL_BOTS = ["hydra", "moonshot", "grid", "trigon", "nexus"]
+        BOT_EMOJIS = {"hydra": "🐍", "moonshot": "🌙", "grid": "📐", "trigon": "🔺", "nexus": "🪐"}
         reported = {b["name"] for b in bots}
         for name in ALL_BOTS:
             if name not in reported:
