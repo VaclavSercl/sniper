@@ -15,6 +15,10 @@
     "mode": "PAUSED",
     "since": "2026-03-30T12:31:55.767929"
   },
-  "last_healthy_ts": "2026-03-31T09:46:01.494656",
+  "nexus": {
+    "mode": "PAPER",
+    "since": "2026-03-31T10:09:00.000000"
+  },
+  "last_healthy_ts": "2026-03-31T10:09:05.103911",
   "shutdown_reason": "initial"
 }

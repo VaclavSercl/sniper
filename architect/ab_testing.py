@@ -244,7 +244,7 @@ class ABController:
             return
 
         try:
-            pnl_path = os.path.join(PROJECT_ROOT, 'state', 'pnl.db')
+            pnl_path = os.path.expanduser('~/.local/share/sniper/pnl.db')
             if not os.path.exists(pnl_path):
                 return
 
@@ -512,7 +512,7 @@ class ABAnalyzer:
 
 def analyze_historical(ml_deploy_date="2026-03-30"):
     """Compare PnL before (no ML) and after (with ML) deployment."""
-    pnl_path = os.path.join(PROJECT_ROOT, 'state', 'pnl.db')
+    pnl_path = os.path.expanduser('~/.local/share/sniper/pnl.db')
     if not os.path.exists(pnl_path):
         return "❌ pnl.db not found"
 
