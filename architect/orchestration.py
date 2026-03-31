@@ -61,19 +61,23 @@ BOTS = {
 }
 
 def is_running(name: str) -> bool:
-    """Check if bot core process is running."""
+    """Check if bot core process is running (exact binary match)."""
     try:
-        r = subprocess.run(["pgrep", "-f", f"{name}-core"], capture_output=True, text=True)
-        return r.returncode == 0 and int(r.stdout.strip().split("\n")[0]) > 0
+        binary_path = BOTS[name]["core"]
+        r = subprocess.run(["pgrep", "-f", binary_path], capture_output=True, text=True)
+        pids = [p for p in r.stdout.strip().split("\n") if p.strip()]
+        return r.returncode == 0 and len(pids) > 0
     except Exception:
         return False
 
 def get_pid(name: str) -> str:
-    """Get PID of running bot core."""
+    """Get PID of running bot core (exact binary match)."""
     try:
-        r = subprocess.run(["pgrep", "-f", f"{name}-core"], capture_output=True, text=True)
+        binary_path = BOTS[name]["core"]
+        r = subprocess.run(["pgrep", "-f", binary_path], capture_output=True, text=True)
         if r.returncode == 0:
-            return r.stdout.strip().split("\n")[0]
+            pids = [p for p in r.stdout.strip().split("\n") if p.strip()]
+            return pids[0] if pids else None
     except Exception:
         pass
     return None
