@@ -20,6 +20,20 @@ LOG_DIR="$ARMADA_ROOT/logs"
 
 mkdir -p "$LOCK_DIR" "$LOG_DIR"
 
+# ═══ BOOT GUARD ═══
+# If deploy_armada.sh started less than 90s ago, skip this cycle
+# to avoid duplicate process spawning during boot sequence.
+DEPLOY_PID=$(pgrep -f "deploy_armada.sh" 2>/dev/null | head -1)
+if [ -n "$DEPLOY_PID" ]; then
+    DEPLOY_START=$(stat -c %Y /proc/$DEPLOY_PID 2>/dev/null || echo 0)
+    NOW=$(date +%s)
+    DEPLOY_AGE=$(( NOW - DEPLOY_START ))
+    if [ "$DEPLOY_AGE" -lt 90 ]; then
+        echo "[$(date '+%H:%M:%S')] ⏳ Boot guard: deploy_armada running for ${DEPLOY_AGE}s (<90s), skipping watchdog cycle"
+        exit 0
+    fi
+fi
+
 # Load .env
 if [ -f "$ARMADA_ROOT/.env" ]; then
     set -a; source "$ARMADA_ROOT/.env"; set +a
@@ -44,6 +58,20 @@ tg_alert() {
 }
 
 is_alive() { pgrep -f "$1" > /dev/null 2>&1; }
+count_procs() { pgrep -f "$1" 2>/dev/null | wc -l; }
+
+# Kill duplicates helper
+kill_dupes() {
+    local pattern="$1"
+    local count=$(count_procs "$pattern")
+    if [ "$count" -gt 1 ]; then
+        echo "[$(date '+%H:%M:%S')] ⚠️ $pattern has $count instances, killing extras"
+        # Keep the oldest PID, kill the rest
+        local oldest=$(pgrep -f "$pattern" 2>/dev/null | head -1)
+        pgrep -f "$pattern" 2>/dev/null | tail -n +2 | xargs -r kill -9 2>/dev/null
+        tg_alert "dupe_${pattern}" "⚠️ WATCHDOG: Duplikát $pattern ($count×) → vyčištěn"
+    fi
+}
 
 ALERTS=0
 
@@ -93,6 +121,11 @@ if ! is_alive "nexus-core"; then
         ALERTS=$((ALERTS + 1))
     fi
 fi
+
+# ═══ DUPLICATE CLEANUP ═══
+for proc in tg_commander pnl_daemon price_bridge market_recorder sovereign-cortex watchdog.sh; do
+    kill_dupes "$proc"
+done
 
 # ═══ LOG ═══
 if [ "$ALERTS" -gt 0 ]; then
