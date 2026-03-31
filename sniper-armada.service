@@ -1,5 +1,5 @@
 [Unit]
-Description=Sniper Armada v15.0 — Sovereign HFT + AI + Telegram C2
+Description=Sniper Armada v19.0 — Sovereign HFT + AI + Telegram C2
 After=network-online.target lmstudio.service
 Wants=network-online.target
 Requires=lmstudio.service
