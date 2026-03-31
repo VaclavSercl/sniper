@@ -105,6 +105,9 @@ def _build_dashboard_state():
             _latency_history.popleft()
     state["latency_history"] = list(_latency_history)
 
+    # 8. Nexus state (Phase N6)
+    state["nexus"] = _get_nexus_state()
+
     return state
 
 
@@ -280,6 +283,55 @@ OFF_L1_CONF = 1600      # u64 l1_confidence_score
 OFF_L1_TOXIC = 1568     # u64 toxic_flow_hits
 OFF_L1_UPTIME = 1648    # u64 l1_uptime_pct
 OFF_AI_BIAS = 1464      # i64 current_ai_bias
+
+def _get_nexus_state():
+    """Get Nexus bot status for dashboard."""
+    result = {
+        "online": False, "paper": True,
+        "total_signals": 0, "total_trades": 0, "leg_risks": 0,
+        "daily_pnl": 0.0, "best_spread_bps": 0.0,
+        "last_signal_age_s": 0,
+        "bfx_fee_bps": 10, "bnb_fee_bps": 10,
+        "min_profit_bps": 5, "cooldown_ms": 5000,
+    }
+
+    # Check if nexus-core process is running
+    try:
+        import subprocess as _sp
+        r = _sp.run(["pgrep", "-f", "nexus-core"], capture_output=True, text=True)
+        result["online"] = r.returncode == 0
+    except Exception:
+        pass
+
+    # Read live fees from fee_state.bin
+    try:
+        FEE_PATH = "/dev/shm/beroun/fee_state.bin"
+        if os.path.exists(FEE_PATH):
+            with open(FEE_PATH, 'rb') as f:
+                data = f.read(64)
+            if len(data) >= 32:
+                maker = struct.unpack_from('<Q', data, 0)[0]
+                taker = struct.unpack_from('<Q', data, 8)[0]
+                # deriv_maker/taker used for Binance fees
+                bnb_maker = struct.unpack_from('<Q', data, 16)[0]
+                bnb_taker = struct.unpack_from('<Q', data, 24)[0]
+                result["bfx_fee_bps"] = taker / 100.0  # bps×100 → bps
+                result["bnb_fee_bps"] = bnb_taker / 100.0 if bnb_taker > 0 else 10
+    except Exception:
+        pass
+
+    # Read alerts.log for signal/trade count
+    try:
+        alerts_log = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "nexus", "logs", "alerts.log")
+        trades_log = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "nexus", "logs", "trades.log")
+        if os.path.exists(trades_log):
+            with open(trades_log, 'r') as f:
+                lines = f.readlines()
+            result["total_trades"] = len(lines)
+    except Exception:
+        pass
+
+    return result
 
 def _get_ml_shield_state():
     """Read ML Shield inference state from engine mmap."""
