@@ -184,6 +184,115 @@ class SpreadMonitor:
 
 
 # ═══════════════════════════════════════════════════════════
+# mmap Writer — writes cross_exchange.bin
+# ═══════════════════════════════════════════════════════════
+
+# Layout matching cross_types.rs:
+#   ExchangeBBA: 64 bytes (align 64)
+#   CrossPairState: 256 bytes (align 64) = 2×EBB + derived fields
+#   CrossExchangeState: 16×CrossPairState + global metadata = ~4224 bytes
+
+EXCHANGE_BBA_SIZE = 64
+CROSS_PAIR_SIZE = 256
+MAX_CROSS_PAIRS = 16
+GLOBAL_META_OFFSET = MAX_CROSS_PAIRS * CROSS_PAIR_SIZE  # 4096
+TOTAL_MMAP_SIZE = GLOBAL_META_OFFSET + 128  # 4224
+
+class CrossExchangeMmapWriter:
+    """Writes cross-exchange state to mmap file matching Rust layout."""
+
+    def __init__(self):
+        self.mm = None
+        self._init_mmap()
+
+    def _init_mmap(self):
+        """Create or open the mmap file."""
+        os.makedirs(os.path.dirname(CROSS_EXCHANGE_PATH), exist_ok=True)
+
+        if not os.path.exists(CROSS_EXCHANGE_PATH):
+            with open(CROSS_EXCHANGE_PATH, 'wb') as f:
+                f.write(b'\x00' * TOTAL_MMAP_SIZE)
+            log.info(f"✅ Created {CROSS_EXCHANGE_PATH} ({TOTAL_MMAP_SIZE} bytes)")
+
+        f = open(CROSS_EXCHANGE_PATH, 'r+b')
+        self.mm = mmap.mmap(f.fileno(), TOTAL_MMAP_SIZE)
+
+        # Write defaults: emergency_pause=1, max_exposure=$500, daily_loss=$50
+        # Global metadata at offset GLOBAL_META_OFFSET
+        gm = GLOBAL_META_OFFSET
+        struct.pack_into('<I', self.mm, gm + 0, len(CROSS_PAIRS))  # active_pairs
+        struct.pack_into('<I', self.mm, gm + 16, 1)  # bitfinex_alive = 1
+        struct.pack_into('<I', self.mm, gm + 20, 1)  # binance_alive = 1
+        # Risk limits
+        struct.pack_into('<q', self.mm, gm + 24, 500_00000000)  # max_exposure_bfx
+        struct.pack_into('<q', self.mm, gm + 32, 500_00000000)  # max_exposure_bnb
+        struct.pack_into('<I', self.mm, gm + 48, 1)  # emergency_pause = 1 (safe start)
+        struct.pack_into('<q', self.mm, gm + 56, 50_00000000)  # daily_loss_limit $50
+        self.mm.flush()
+        log.info("  ✅ mmap initialized with safe defaults")
+
+    def write_pair(self, pair_idx: int, bfx_bid: float, bfx_ask: float,
+                   bfx_bid_vol: float, bfx_ask_vol: float,
+                   bnb_bid: float, bnb_ask: float,
+                   bnb_bid_vol: float, bnb_ask_vol: float,
+                   spread_result: dict, ts_ms: int):
+        """Write one pair's BBA + spread data to mmap."""
+        if not self.mm or pair_idx >= MAX_CROSS_PAIRS:
+            return
+
+        base = pair_idx * CROSS_PAIR_SIZE
+        PS = PRICE_SCALE
+
+        # ExchangeBBA[0] = Bitfinex (offset base + 0)
+        struct.pack_into('<q', self.mm, base + 0, int(bfx_bid * PS))
+        struct.pack_into('<q', self.mm, base + 8, int(bfx_ask * PS))
+        struct.pack_into('<q', self.mm, base + 16, int(bfx_bid_vol * PS))
+        struct.pack_into('<q', self.mm, base + 24, int(bfx_ask_vol * PS))
+        struct.pack_into('<Q', self.mm, base + 32, ts_ms)
+        struct.pack_into('<I', self.mm, base + 40, 0)  # exchange_id=0 (Bitfinex)
+        struct.pack_into('<I', self.mm, base + 44, 1)  # connected=1
+
+        # ExchangeBBA[1] = Binance (offset base + 64)
+        bnb_off = base + EXCHANGE_BBA_SIZE
+        struct.pack_into('<q', self.mm, bnb_off + 0, int(bnb_bid * PS))
+        struct.pack_into('<q', self.mm, bnb_off + 8, int(bnb_ask * PS))
+        struct.pack_into('<q', self.mm, bnb_off + 16, int(bnb_bid_vol * PS))
+        struct.pack_into('<q', self.mm, bnb_off + 24, int(bnb_ask_vol * PS))
+        struct.pack_into('<Q', self.mm, bnb_off + 32, ts_ms)
+        struct.pack_into('<I', self.mm, bnb_off + 40, 1)  # exchange_id=1 (Binance)
+        struct.pack_into('<I', self.mm, bnb_off + 44, 1)  # connected=1
+
+        # Derived arb metrics (offset base + 128)
+        arb_off = base + 2 * EXCHANGE_BBA_SIZE
+        if spread_result:
+            struct.pack_into('<q', self.mm, arb_off + 0, spread_result.get('spread_a', 0))
+            struct.pack_into('<q', self.mm, arb_off + 8, spread_result.get('spread_b', 0))
+            struct.pack_into('<q', self.mm, arb_off + 16, spread_result.get('best_bps', 0))
+            struct.pack_into('<I', self.mm, arb_off + 24, spread_result.get('best_dir', 0))
+            if spread_result.get('is_arb'):
+                # Increment arb_signals atomically (read + write)
+                old = struct.unpack_from('<Q', self.mm, arb_off + 32)[0]
+                struct.pack_into('<Q', self.mm, arb_off + 32, old + 1)
+                struct.pack_into('<Q', self.mm, arb_off + 40, ts_ms)  # last_arb_signal_ms
+
+        # Pair identity
+        struct.pack_into('<I', self.mm, arb_off + 64, pair_idx)  # pair_idx
+        struct.pack_into('<I', self.mm, arb_off + 68, 1)  # enabled=1
+
+    def write_heartbeat(self):
+        """Update global heartbeat timestamp."""
+        if not self.mm:
+            return
+        gm = GLOBAL_META_OFFSET
+        struct.pack_into('<Q', self.mm, gm + 8, int(time.time() * 1000))  # heartbeat_ms
+        self.mm.flush()
+
+    def close(self):
+        if self.mm:
+            self.mm.close()
+
+
+# ═══════════════════════════════════════════════════════════
 # Main Bridge Loop
 # ═══════════════════════════════════════════════════════════
 
@@ -199,14 +308,16 @@ async def run_bridge():
     binance_cache = BinancePriceCache()
     bfx_reader = BitfinexPriceReader()
     spread_monitor = SpreadMonitor()
+    mmap_writer = CrossExchangeMmapWriter()
 
     # Build combined stream URL for all pairs
     symbols = [pair[0].lower() for pair in CROSS_PAIRS]
     streams = "/".join(f"{s}@bookTicker" for s in symbols)
     url = f"{BINANCE_WS_URL}?streams={streams}"
 
-    log.info(f"🌐 Cross-Exchange Price Bridge v1.0 starting")
+    log.info(f"🌐 Cross-Exchange Price Bridge v2.0 starting")
     log.info(f"   Tracking {len(CROSS_PAIRS)} cross-exchange pairs")
+    log.info(f"   Writing to {CROSS_EXCHANGE_PATH}")
     log.info(f"   Binance WS: {len(symbols)} symbols")
 
     reconnect_delay = 5
@@ -245,7 +356,7 @@ async def run_bridge():
                     if tick_count % 100 == 0:
                         bfx_reader.read_from_ticker_cache()
 
-                        for bnb_sym, bfx_sym in CROSS_PAIRS:
+                        for pair_idx, (bnb_sym, bfx_sym) in enumerate(CROSS_PAIRS):
                             bnb = binance_cache.get(bnb_sym)
                             bfx = bfx_reader.get(bfx_sym)
 
@@ -255,6 +366,16 @@ async def run_bridge():
                                     bfx[0], bfx[1],  # bfx bid, ask
                                     bnb[0], bnb[1],  # bnb bid, ask
                                 )
+                                # Write to mmap
+                                now_ms = int(time.time() * 1000)
+                                mmap_writer.write_pair(
+                                    pair_idx,
+                                    bfx[0], bfx[1], 0.0, 0.0,  # bfx BBA (vol from bfx reader TBD)
+                                    bnb[0], bnb[1], bnb[2], bnb[3],  # bnb BBA + vol
+                                    result, now_ms,
+                                )
+
+                        mmap_writer.write_heartbeat()
 
                     # Periodic status log
                     if tick_count % 5000 == 0:
