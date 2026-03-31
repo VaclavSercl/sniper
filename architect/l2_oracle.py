@@ -154,7 +154,7 @@ class L2OracleAsync:
         try:
             # 2. Optimalizace: Async Process (žádný GIL lock)
             process = await asyncio.create_subprocess_exec(
-                "gemini", "-m", "gemini-3.1-pro-preview", "--output-format=json", "-p", prompt,
+                "gemini", "-m", "gemini-2.5-pro", "--output-format=json", "-p", prompt,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
@@ -1521,7 +1521,7 @@ Respond with EXACTLY one JSON object:
         
         try:
             result = subprocess.run(
-                ["gemini", "-m", "gemini-3.1-pro-preview", "-p", prompt],
+                ["gemini", "-m", "gemini-2.5-pro", "-p", prompt],
                 capture_output=True, text=True, timeout=GEMINI_TIMEOUT,
             )
             if result.returncode != 0:
