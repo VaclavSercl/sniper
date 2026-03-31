@@ -1297,7 +1297,7 @@ PARAMETER CONSTRAINTS:
             "*Pre-crash state:*",
         ]
         for bot, mode in bot_states.items():
-            emoji = {"LIVE": "🟢", "PAUSED": "🟡", "OFFLINE": "🔴"}.get(mode, "❓")
+            emoji = {"LIVE": "🟢", "PAPER": "🟠", "PAUSED": "🟡", "OFFLINE": "🔴"}.get(mode, "❓")
             lines.append(f"  {emoji} {bot.upper()}: {mode}")
         lines.append("\n🔄 *Obnovuji...*")
 
