@@ -25,7 +25,7 @@ from datetime import datetime, timezone, timedelta
 import telebot
 from telebot import apihelper
 from orchestration import BOTS, get_pid, is_running, start_bot, stop_bot, save_bot_state
-from cortex_client import CortexClient, read_cortex_state
+from cortex_client import CortexClient, start_event_listener
 from l2_oracle import L2OracleAsync
 
 # ── CONFIG ──────────────────────────────────────────────────
@@ -616,7 +616,7 @@ def cmd_spread(message):
             lines = ["📈 *CROSS-EXCHANGE SPREADS*", "━━━━━━━━━━━━━━━━━━━"]
 
             BBA_SIZE = 64
-            PAIR_SIZE = 192
+            PAIR_SIZE = 256
 
             for i in range(10):
                 off = i * PAIR_SIZE
@@ -1365,7 +1365,7 @@ def main():
                         with open(cross_path, 'rb') as f:
                             mm = _mmap.mmap(f.fileno(), 0, access=_mmap.ACCESS_READ)
                             BBA_SIZE = 64
-                            PAIR_SIZE = 448
+                            PAIR_SIZE = 256
                             PAIR_NAMES_S = ["BTC", "ETH", "XRP", "SOL", "DOGE", "ADA", "AVAX", "LTC", "LINK", "DOT"]
 
                             for i in range(10):

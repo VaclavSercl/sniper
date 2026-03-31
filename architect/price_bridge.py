@@ -111,9 +111,9 @@ class BitfinexPriceReader:
         try:
             with open(hydra_path, 'rb') as f:
                 mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
-                # Hydra engine_state layout: best_bid at offset 0, best_ask at offset 8
-                best_bid = struct.unpack_from('<q', mm, 0)[0]
-                best_ask = struct.unpack_from('<q', mm, 8)[0]
+                # Hydra engine_state layout: best_bid at offset 64, best_ask at offset 72
+                best_bid = struct.unpack_from('<Q', mm, 64)[0]
+                best_ask = struct.unpack_from('<Q', mm, 72)[0]
                 ts = int(time.time() * 1000)
                 if best_bid > 0 and best_ask > 0:
                     self.prices["tBTCUST"] = (

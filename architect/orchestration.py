@@ -215,3 +215,29 @@ def stop_bot(name: str) -> str:
         msg = f"{info['emoji']} {name.upper()} force-killed ✅"
         log.warning(msg)
         return msg
+
+def save_bot_state(name: str, mode: str):
+    """Save bot state (LIVE, PAPER, PAUSED, OFFLINE) to armada_state.json"""
+    import json
+    state_file = os.path.join(PROJECT_ROOT, "state", "armada_state.json")
+    state = {}
+    if os.path.exists(state_file):
+        try:
+            with open(state_file, "r") as f:
+                state = json.load(f)
+        except Exception:
+            pass
+    
+    if name not in state:
+        state[name] = {}
+    elif isinstance(state[name], str):
+        state[name] = {"mode": state[name]}
+        
+    state[name]["mode"] = mode.upper()
+    
+    import datetime
+    state["last_healthy_ts"] = datetime.datetime.now().isoformat()
+    
+    os.makedirs(os.path.dirname(state_file), exist_ok=True)
+    with open(state_file, "w") as f:
+        json.dump(state, f, indent=2)

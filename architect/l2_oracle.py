@@ -154,7 +154,7 @@ class L2OracleAsync:
         try:
             # 2. Optimalizace: Async Process (žádný GIL lock)
             process = await asyncio.create_subprocess_exec(
-                "gemini", "-m", "gemini-3.1-pro-preview", "--format=json", "-p", prompt,
+                "gemini", "-m", "gemini-3.1-pro-preview", "--output-format=json", "-p", prompt,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )

@@ -193,15 +193,15 @@ def _get_latency_percentiles():
                 values.append(v)
 
         if not values:
-                return result
+            return result
 
-            values.sort()
-            n = len(values)
-            result["samples"] = n
-            result["mean"] = round(sum(values) / n, 1)
-            result["p50"] = values[n // 2]
-            result["p95"] = values[min(int(n * 0.95), n - 1)]
-            result["p99"] = values[min(int(n * 0.99), n - 1)]
+        values.sort()
+        n = len(values)
+        result["samples"] = n
+        result["mean"] = round(sum(values) / n, 1)
+        result["p50"] = values[n // 2]
+        result["p95"] = values[min(int(n * 0.95), n - 1)]
+        result["p99"] = values[min(int(n * 0.99), n - 1)]
 
     except Exception as e:
         log.debug(f"Latency ring read: {e}")
@@ -233,74 +233,74 @@ def _get_cross_exchange_state():
 
         # Simplified: read raw pair data
         BBA_SIZE = 64
-        PAIR_SIZE = 448  # 2×BBA(128) + metrics block aligned to 64B boundaries
+        PAIR_SIZE = 256  # 2×BBA(128) + metrics block (64) + identity (64) = 256 bytes
 
-            pairs = []
-            for i in range(10):  # Max 10 pairs
-                pair_off = i * PAIR_SIZE
-                if pair_off + PAIR_SIZE > mm.size():
-                    break
+        pairs = []
+        for i in range(10):  # Max 10 pairs
+            pair_off = i * PAIR_SIZE
+            if pair_off + PAIR_SIZE > mm.size():
+                break
 
-                # Bitfinex BBA
-                bfx_bid = struct.unpack_from('<q', mm, pair_off + 0)[0]
-                bfx_ask = struct.unpack_from('<q', mm, pair_off + 8)[0]
-                bfx_ts = struct.unpack_from('<Q', mm, pair_off + 32)[0]
-                bfx_conn = struct.unpack_from('<I', mm, pair_off + 44)[0]
+            # Bitfinex BBA
+            bfx_bid = struct.unpack_from('<q', mm, pair_off + 0)[0]
+            bfx_ask = struct.unpack_from('<q', mm, pair_off + 8)[0]
+            bfx_ts = struct.unpack_from('<Q', mm, pair_off + 32)[0]
+            bfx_conn = struct.unpack_from('<I', mm, pair_off + 44)[0]
 
-                # Binance BBA
-                bnb_off = pair_off + BBA_SIZE
-                bnb_bid = struct.unpack_from('<q', mm, bnb_off + 0)[0]
-                bnb_ask = struct.unpack_from('<q', mm, bnb_off + 8)[0]
-                bnb_ts = struct.unpack_from('<Q', mm, bnb_off + 32)[0]
-                bnb_conn = struct.unpack_from('<I', mm, bnb_off + 44)[0]
+            # Binance BBA
+            bnb_off = pair_off + BBA_SIZE
+            bnb_bid = struct.unpack_from('<q', mm, bnb_off + 0)[0]
+            bnb_ask = struct.unpack_from('<q', mm, bnb_off + 8)[0]
+            bnb_ts = struct.unpack_from('<Q', mm, bnb_off + 32)[0]
+            bnb_conn = struct.unpack_from('<I', mm, bnb_off + 44)[0]
 
-                # Spread metrics (after both BBAs = pair_off + 128)
-                metrics_off = pair_off + 2 * BBA_SIZE
-                spread_bfx_bnb = struct.unpack_from('<q', mm, metrics_off + 0)[0]
-                spread_bnb_bfx = struct.unpack_from('<q', mm, metrics_off + 8)[0]
-                best_spread_bps = struct.unpack_from('<q', mm, metrics_off + 16)[0]
-                best_dir = struct.unpack_from('<I', mm, metrics_off + 24)[0]
-                arb_signals = struct.unpack_from('<Q', mm, metrics_off + 32)[0]
+            # Spread metrics (after both BBAs = pair_off + 128)
+            metrics_off = pair_off + 2 * BBA_SIZE
+            spread_bfx_bnb = struct.unpack_from('<q', mm, metrics_off + 0)[0]
+            spread_bnb_bfx = struct.unpack_from('<q', mm, metrics_off + 8)[0]
+            best_spread_bps = struct.unpack_from('<q', mm, metrics_off + 16)[0]
+            best_dir = struct.unpack_from('<I', mm, metrics_off + 24)[0]
+            arb_signals = struct.unpack_from('<Q', mm, metrics_off + 32)[0]
 
-                # Pair identity
-                ident_off = metrics_off + 48
-                enabled = struct.unpack_from('<I', mm, ident_off + 28)[0] if ident_off + 32 <= mm.size() else 0
+            # Pair identity
+            ident_off = metrics_off + 48
+            enabled = struct.unpack_from('<I', mm, ident_off + 28)[0] if ident_off + 32 <= mm.size() else 0
 
-                name = PAIR_NAMES[i] if i < len(PAIR_NAMES) else f"P{i}"
+            name = PAIR_NAMES[i] if i < len(PAIR_NAMES) else f"P{i}"
 
-                if bnb_bid > 0 or bfx_bid > 0:
-                    pairs.append({
-                        "name": name,
-                        "bfx_bid": round(bfx_bid / PRICE_SCALE, 2),
-                        "bfx_ask": round(bfx_ask / PRICE_SCALE, 2),
-                        "bnb_bid": round(bnb_bid / PRICE_SCALE, 2),
-                        "bnb_ask": round(bnb_ask / PRICE_SCALE, 2),
-                        "spread_bps": round(best_spread_bps / 100, 2),
-                        "direction": "BFX→BNB" if best_dir == 0 else "BNB→BFX",
-                        "arb_signals": arb_signals,
-                        "bfx_alive": bfx_conn == 1,
-                        "bnb_alive": bnb_conn == 1,
-                    })
+            if bnb_bid > 0 or bfx_bid > 0:
+                pairs.append({
+                    "name": name,
+                    "bfx_bid": round(bfx_bid / PRICE_SCALE, 2),
+                    "bfx_ask": round(bfx_ask / PRICE_SCALE, 2),
+                    "bnb_bid": round(bnb_bid / PRICE_SCALE, 2),
+                    "bnb_ask": round(bnb_ask / PRICE_SCALE, 2),
+                    "spread_bps": round(best_spread_bps / 100, 2),
+                    "direction": "BFX→BNB" if best_dir == 0 else "BNB→BFX",
+                    "arb_signals": arb_signals,
+                    "bfx_alive": bfx_conn == 1,
+                    "bnb_alive": bnb_conn == 1,
+                })
 
-            # Global metadata (after pairs array)
-            global_off = 16 * PAIR_SIZE
-            if global_off + 64 <= mm.size():
-                active = struct.unpack_from('<I', mm, global_off)[0]
-                heartbeat = struct.unpack_from('<Q', mm, global_off + 4)[0]
-                bfx_alive = struct.unpack_from('<I', mm, global_off + 12)[0]
-                bnb_alive = struct.unpack_from('<I', mm, global_off + 16)[0]
-                emergency = struct.unpack_from('<I', mm, global_off + 52)[0]
-                daily_pnl = struct.unpack_from('<q', mm, global_off + 56)[0]
+        # Global metadata (after pairs array)
+        global_off = 16 * PAIR_SIZE
+        if global_off + 80 <= mm.size():
+            active = struct.unpack_from('<I', mm, global_off)[0]
+            heartbeat = struct.unpack_from('<Q', mm, global_off + 8)[0]
+            bfx_alive = struct.unpack_from('<I', mm, global_off + 16)[0]
+            bnb_alive = struct.unpack_from('<I', mm, global_off + 20)[0]
+            emergency = struct.unpack_from('<I', mm, global_off + 48)[0]
+            daily_pnl = struct.unpack_from('<q', mm, global_off + 56)[0]
 
-                result["active_pairs"] = active
-                result["bitfinex"] = bfx_alive == 1
-                result["binance"] = bnb_alive == 1
-                result["emergency_pause"] = emergency == 1
-                result["daily_pnl"] = round(daily_pnl / PRICE_SCALE, 4)
-                age_ms = int(time.time() * 1000) - heartbeat if heartbeat > 0 else 99999
-                result["alive"] = age_ms < 30000
+            result["active_pairs"] = active
+            result["bitfinex"] = bfx_alive == 1
+            result["binance"] = bnb_alive == 1
+            result["emergency_pause"] = emergency == 1
+            result["daily_pnl"] = round(daily_pnl / PRICE_SCALE, 4)
+            age_ms = int(time.time() * 1000) - heartbeat if heartbeat > 0 else 99999
+            result["alive"] = age_ms < 30000
 
-            result["pairs"] = pairs
+        result["pairs"] = pairs
 
     except Exception as e:
         log.debug(f"Cross-exchange read: {e}")
@@ -390,16 +390,16 @@ def _get_ml_shield_state():
         mm = _mmap_engine
 
         if mm.size() > OFF_L1_CONF + 8:
-                skew_raw = struct.unpack_from('<q', mm, OFF_L1_SKEW)[0]
-                conf_raw = struct.unpack_from('<Q', mm, OFF_L1_CONF)[0]
-                toxic_hits = struct.unpack_from('<Q', mm, OFF_L1_TOXIC)[0]
-                ai_bias = struct.unpack_from('<q', mm, OFF_AI_BIAS)[0]
+            skew_raw = struct.unpack_from('<q', mm, OFF_L1_SKEW)[0]
+            conf_raw = struct.unpack_from('<Q', mm, OFF_L1_CONF)[0]
+            toxic_hits = struct.unpack_from('<Q', mm, OFF_L1_TOXIC)[0]
+            ai_bias = struct.unpack_from('<q', mm, OFF_AI_BIAS)[0]
 
-                result["skew"] = round(skew_raw / PRICE_SCALE, 6)
-                result["confidence"] = round(conf_raw / 10000, 4)
-                result["toxic_hits"] = toxic_hits
-                result["ai_bias"] = round(ai_bias / PRICE_SCALE, 6)
-                result["online"] = abs(skew_raw) > 0 or conf_raw > 0
+            result["skew"] = round(skew_raw / PRICE_SCALE, 6)
+            result["confidence"] = round(conf_raw / 10000, 4)
+            result["toxic_hits"] = toxic_hits
+            result["ai_bias"] = round(ai_bias / PRICE_SCALE, 6)
+            result["online"] = abs(skew_raw) > 0 or conf_raw > 0
 
     except Exception as e:
         log.debug(f"ML Shield read: {e}")
@@ -533,7 +533,7 @@ async def sse_endpoint():
 async def api_state():
     return _build_dashboard_state()
 
-@app.get("/")
+@app.get("/", response_class=HTMLResponse)
 @app.get("/dashboard", response_class=HTMLResponse)
 async def serve_master_dashboard():
     html_path = os.path.join(os.path.dirname(__file__), "master_dashboard.html")
