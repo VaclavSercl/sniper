@@ -123,7 +123,8 @@ if ! is_alive "nexus-core"; then
 fi
 
 # ═══ DUPLICATE CLEANUP ═══
-for proc in tg_commander pnl_daemon price_bridge market_recorder sovereign-cortex watchdog.sh; do
+# Note: watchdog.sh is NOT checked — cron creates new bash instances each minute, pgrep sees them all
+for proc in tg_commander pnl_daemon price_bridge market_recorder sovereign-cortex; do
     kill_dupes "$proc"
 done
 

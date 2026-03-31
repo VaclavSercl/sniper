@@ -209,7 +209,8 @@ class CrossExchangeMmapWriter:
         """Create or open the mmap file."""
         os.makedirs(os.path.dirname(CROSS_EXCHANGE_PATH), exist_ok=True)
 
-        if not os.path.exists(CROSS_EXCHANGE_PATH):
+        # Create or resize mmap file (deploy_armada pre-creates with 4096B, we need TOTAL_MMAP_SIZE)
+        if not os.path.exists(CROSS_EXCHANGE_PATH) or os.path.getsize(CROSS_EXCHANGE_PATH) < TOTAL_MMAP_SIZE:
             with open(CROSS_EXCHANGE_PATH, 'wb') as f:
                 f.write(b'\x00' * TOTAL_MMAP_SIZE)
             log.info(f"✅ Created {CROSS_EXCHANGE_PATH} ({TOTAL_MMAP_SIZE} bytes)")

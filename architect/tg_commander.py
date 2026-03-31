@@ -90,6 +90,13 @@ from orchestration import BOTS, is_running, get_pid, start_bot, stop_bot
 
 # ── SECURITY ────────────────────────────────────────────────
 
+def auth(message) -> bool:
+    """Verify message comes from authorized chat. Returns False + warning if unauthorized."""
+    if message.chat.id != AUTHORIZED_CHAT_ID:
+        log.warning(f"⛔ Unauthorized access from chat_id={message.chat.id}")
+        return False
+    return True
+
 def restart_bot(name):
     """Restart a bot."""
     stop_msg = stop_bot(name)
