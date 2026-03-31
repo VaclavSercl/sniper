@@ -1,5 +1,5 @@
 #!/bin/bash
-# 🐺 SNIPER ARMADA v15.0 — Sovereign Boot Script
+# 🐺 SNIPER ARMADA v19.0 — Sovereign Boot Script
 # Called by: systemd (sniper-armada.service) or manually
 #
 # Architecture v15: ALL components start OFFLINE after reboot.
@@ -68,6 +68,8 @@ pkill -f hydra-core 2>/dev/null || true
 pkill -f moonshot-core 2>/dev/null || true
 pkill -f grid-core 2>/dev/null || true
 pkill -f trigon-core 2>/dev/null || true
+pkill -f nexus-core 2>/dev/null || true
+pkill -f price_bridge.py 2>/dev/null || true
 fuser -k 3004/tcp 2>/dev/null || true
 sleep 3
 
@@ -79,10 +81,10 @@ if [ -f "$STATE_FILE" ]; then
 import json
 with open('$STATE_FILE') as f:
     d = json.load(f)
-for bot in ['hydra','moonshot','grid','trigon']:
+for bot in ['hydra','moonshot','grid','trigon','nexus']:
     info = d.get(bot, {})
     mode = info.get('mode', 'UNKNOWN') if isinstance(info, dict) else info
-    emoji = {'LIVE':'🟢','PAUSED':'🟡','OFFLINE':'🔴'}.get(mode,'❓')
+    emoji = {'LIVE':'🟢','PAUSED':'🟡','PAPER':'🟠','OFFLINE':'🔴'}.get(mode,'❓')
     print(f'  {emoji} {bot.upper():10s} → {mode}')
 last = d.get('last_healthy_ts', '?')
 print(f'  Last healthy: {last}')
@@ -113,25 +115,33 @@ taskset -c 3 "$BIN_DIR/hydra-dashboard" >> "$LOG_DIR/hydra-dashboard.log" 2>&1 &
 DASHBOARD_PID=$!
 sleep 5
 
-# 4. Commander (includes L2 Oracle as daemon thread)
-echo "  [T+20s] Starting Commander + L2 Oracle..."
+# 4. Price Bridge (cross_exchange.bin for Nexus)
+echo "  [T+20s] Starting Price Bridge..."
+python3 "$ARMADA_ROOT/architect/price_bridge.py" >> "$LOG_DIR/price_bridge.log" 2>&1 &
+BRIDGE_PID=$!
+sleep 3
+
+# 5. Commander (includes L2 Oracle as daemon thread)
+echo "  [T+23s] Starting Commander + L2 Oracle..."
 python3 "$ARMADA_ROOT/architect/tg_commander.py" >> "$LOG_DIR/tg_commander.log" 2>&1 &
 COMMANDER_PID=$!
 
 echo ""
-echo "🐺 ═══════════════════════════════════════════"
-echo "   INFRASTRUCTURE ONLINE"
+echo "🐺 ═════════════════════════════════════════════"
+echo "   INFRASTRUCTURE ONLINE (v19.0)"
 echo "   🧠 Cortex:    PID $CORTEX_PID"
 echo "   💰 PnL:       PID $PNL_PID"
 echo "   📊 Dashboard: PID $DASHBOARD_PID"
+echo "   🌐 Bridge:    PID $BRIDGE_PID"
 echo "   📱 Commander: PID $COMMANDER_PID"
 echo ""
 echo "   🤖 L2 Oracle will read pre-crash state in ~15s"
 echo "   🐍 Trading bots: ALL OFFLINE (Oracle decides)"
 echo "═══════════════════════════════════════════════"
 
-tg_alert "🐺 *SOVEREIGN BOOT v15.0*
+tg_alert "🐺 *SOVEREIGN BOOT v19.0*
 🧠 Infrastructure ONLINE
+🌐 Price Bridge: ON
 🐍 Trading bots: ALL OFFLINE
 🤖 L2 Oracle deciding in ~15s...
 $(date '+%H:%M:%S')"

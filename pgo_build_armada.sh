@@ -35,14 +35,14 @@ echo "🛑 Step 0/4: Stopping live armada..."
 sudo systemctl stop "$ARMADA_SERVICE" 2>/dev/null || true
 sleep 3
 # Kill any remaining bot processes (including those restored by L2 Oracle)
-pkill -9 -f "hydra-core|moonshot-core|grid-core|trigon-core|sovereign-cortex|l2_oracle|tg_commander|pnl_daemon" 2>/dev/null || true
+pkill -9 -f "hydra-core|moonshot-core|grid-core|trigon-core|nexus-core|sovereign-cortex|l2_oracle|tg_commander|pnl_daemon|price_bridge" 2>/dev/null || true
 sleep 2
 # Remove lock files so instrumented binaries can start
-rm -f /tmp/hydra-core.lock /tmp/moonshot-core.lock /tmp/grid-core.lock /tmp/trigon-core.lock 2>/dev/null || true
+rm -f /tmp/hydra-core.lock /tmp/moonshot-core.lock /tmp/grid-core.lock /tmp/trigon-core.lock /tmp/nexus-core.lock 2>/dev/null || true
 # Verify nothing is running
-if pgrep -f "hydra-core|moonshot-core|grid-core|trigon-core" > /dev/null 2>&1; then
+if pgrep -f "hydra-core|moonshot-core|grid-core|trigon-core|nexus-core" > /dev/null 2>&1; then
     echo "⚠️  Some processes still alive, force-killing..."
-    pkill -9 -f "hydra-core|moonshot-core|grid-core|trigon-core" 2>/dev/null || true
+    pkill -9 -f "hydra-core|moonshot-core|grid-core|trigon-core|nexus-core" 2>/dev/null || true
     sleep 2
 fi
 echo "✅ Armada fully stopped"
@@ -81,14 +81,18 @@ LLVM_PROFILE_FILE="${PROFILE_DIR}/trigon-%p.profraw" \
     ./target/release/trigon-core &
 TRIGON_PID=$!
 
-echo "   PIDs: hydra=$HYDRA_PID moonshot=$MOONSHOT_PID grid=$GRID_PID trigon=$TRIGON_PID"
+LLVM_PROFILE_FILE="${PROFILE_DIR}/nexus-%p.profraw" \
+    ./target/release/nexus-core --paper &
+NEXUS_PID=$!
+
+echo "   PIDs: hydra=$HYDRA_PID moonshot=$MOONSHOT_PID grid=$GRID_PID trigon=$TRIGON_PID nexus=$NEXUS_PID"
 
 # Let them run for 60 seconds processing real market data
 sleep 60
 
 echo "   Stopping instrumented bots..."
-kill $HYDRA_PID $MOONSHOT_PID $GRID_PID $TRIGON_PID 2>/dev/null || true
-wait $HYDRA_PID $MOONSHOT_PID $GRID_PID $TRIGON_PID 2>/dev/null || true
+kill $HYDRA_PID $MOONSHOT_PID $GRID_PID $TRIGON_PID $NEXUS_PID 2>/dev/null || true
+wait $HYDRA_PID $MOONSHOT_PID $GRID_PID $TRIGON_PID $NEXUS_PID 2>/dev/null || true
 sleep 2
 
 echo ""
@@ -123,7 +127,7 @@ echo ""
 
 # Compare binary sizes
 echo "📦 Optimized binaries:"
-for bin in hydra-core moonshot-core grid-core trigon-core sovereign-cortex; do
+for bin in hydra-core moonshot-core grid-core trigon-core nexus-core sovereign-cortex; do
     FINAL="${PROJECT}/target/release/${bin}"
     if [ -f "$FINAL" ]; then
         echo "   $bin: $(ls -lh $FINAL | awk '{print $5}')"

@@ -72,6 +72,22 @@ if ! is_alive "pnl_daemon"; then
     ALERTS=$((ALERTS + 1))
 fi
 
+if ! is_alive "price_bridge"; then
+    tg_alert "bridge_down" "⚠️ WATCHDOG: Price Bridge spadl → restartuji"
+    cd "$ARMADA_ROOT" && python3 architect/price_bridge.py >> "$LOG_DIR/price_bridge.log" 2>&1 &
+    ALERTS=$((ALERTS + 1))
+fi
+
+# Nexus: only alert, don't restart (L2 Oracle manages trading bots)
+if ! is_alive "nexus-core"; then
+    # Only alert if nexus is supposed to be running (check armada_state)
+    NEXUS_MODE=$(python3 -c "import json; print(json.load(open('$ARMADA_ROOT/state/armada_state.json')).get('nexus',{}).get('mode','OFFLINE'))" 2>/dev/null || echo "OFFLINE")
+    if [ "$NEXUS_MODE" != "OFFLINE" ] && [ "$NEXUS_MODE" != "PAUSED" ]; then
+        tg_alert "nexus_down" "🚨 WATCHDOG: Nexus-core CRASHED! (was $NEXUS_MODE)"
+        ALERTS=$((ALERTS + 1))
+    fi
+fi
+
 # ═══ LOG ═══
 if [ "$ALERTS" -gt 0 ]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ $ALERTS alerts"
