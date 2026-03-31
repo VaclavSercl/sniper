@@ -29,7 +29,6 @@ mod uds;
 
 use memory::ArmadaMemory;
 use std::sync::Arc;
-use tokio::sync::RwLock;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -53,11 +52,11 @@ async fn main() -> anyhow::Result<()> {
     println!();
 
     // 1. Initialize shared memory (mmap)
-    let memory = Arc::new(RwLock::new(ArmadaMemory::new()?));
+    let memory = Arc::new(ArmadaMemory::new()?);
 
     // 2. Print initial snapshot
     {
-        let mem = memory.read().await;
+        let mem = &*memory;
         let snap = mem.snapshot_hydra();
         println!("📸 Initial Hydra snapshot:");
         println!("  Price:    ${:.2}", snap.micro_price);
@@ -72,7 +71,7 @@ async fn main() -> anyhow::Result<()> {
 
     // 3. Launch GPU inference (spawns thread which natively handles retries)
     let gpu_tx = if !no_gpu {
-        let mem = memory.read().await;
+        let mem = &*memory;
         let engine_ptr = mem.hydra_engine() as *const sniper_types::EngineState;
         let engine_ref: &'static sniper_types::EngineState = unsafe { &*engine_ptr };
 
@@ -86,7 +85,7 @@ async fn main() -> anyhow::Result<()> {
 
     // 4. Launch L1 Tactical Shield (dedicated OS thread — 50ms cycle)
     {
-        let mem = memory.read().await;
+        let mem = &*memory;
         let engine_ptr = mem.hydra_engine() as *const sniper_types::EngineState;
         let engine_ref: &'static sniper_types::EngineState = unsafe { &*engine_ptr };
         std::thread::Builder::new()
@@ -99,7 +98,7 @@ async fn main() -> anyhow::Result<()> {
 
     // 5. Launch Macro Intelligence (3 dedicated OS threads)
     if !no_macro {
-        let mem = memory.read().await;
+        let mem = &*memory;
         let engine_ptr = mem.hydra_engine() as *const sniper_types::EngineState;
         let engine_ref: &'static sniper_types::EngineState = unsafe { &*engine_ptr };
 

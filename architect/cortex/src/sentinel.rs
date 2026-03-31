@@ -15,7 +15,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::io::AsyncWriteExt;
 use tokio::net::UnixStream;
-use tokio::sync::RwLock;
 use tokio::time;
 
 const EVENT_SOCKET: &str = "/tmp/commander_events.sock";
@@ -120,7 +119,7 @@ pub async fn send_boot_alert() {
 // LAYERS 1-3: Main Sentinel Loop
 // ═══════════════════════════════════════════════════════════
 
-pub async fn run_sentinel(memory: Arc<RwLock<ArmadaMemory>>) {
+pub async fn run_sentinel(memory: Arc<ArmadaMemory>) {
     println!("🛡️ [SENTINEL] Online — checking every {}s", SENTINEL_INTERVAL_SECS);
     println!("   Thresholds: mmap={}s pnl=${} toxic_rate=60% pos={}BTC spread={}x",
         MMAP_STALE_SECS, PNL_CRASH_THRESHOLD,
@@ -134,7 +133,7 @@ pub async fn run_sentinel(memory: Arc<RwLock<ArmadaMemory>>) {
         time::sleep(Duration::from_secs(SENTINEL_INTERVAL_SECS)).await;
 
         let snapshots = {
-            let mem = memory.read().await;
+            let mem = &*memory;
             mem.snapshot_all()
         };
 
@@ -457,14 +456,11 @@ async fn check_system_resources(history: &mut SentinelHistory) {
     // ── LM Studio ──
     check_lm_studio(history).await;
 
-    // ── Network (Bitfinex) ──
-    let net_ok = tokio::task::spawn_blocking(|| {
-        std::process::Command::new("ping")
-            .args(["-c1", "-W2", "api.bitfinex.com"])
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
-    }).await.unwrap_or(false);
+    // ── Network (Bitfinex) — async TCP connect, no fork ──
+    let net_ok = tokio::time::timeout(
+        Duration::from_secs(2),
+        tokio::net::TcpStream::connect("api.bitfinex.com:443"),
+    ).await.map(|r| r.is_ok()).unwrap_or(false);
 
     if !net_ok && history.should_alert("network_down") {
         let msg = "🌐 SENTINEL: NETWORK DOWN\n\

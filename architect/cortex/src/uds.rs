@@ -27,7 +27,6 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use bytes::BytesMut;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixListener;
-use tokio::sync::RwLock;
 
 const SOCKET_PATH: &str = "/tmp/cortex.sock";
 
@@ -87,7 +86,7 @@ impl UdsResponse {
 // Main UDS loop
 // ═══════════════════════════════════════════════════════════
 
-pub async fn run_uds_server(memory: Arc<RwLock<ArmadaMemory>>) {
+pub async fn run_uds_server(memory: Arc<ArmadaMemory>) {
     // Remove stale socket
     let _ = std::fs::remove_file(SOCKET_PATH);
 
@@ -149,7 +148,7 @@ pub async fn run_uds_server(memory: Arc<RwLock<ArmadaMemory>>) {
 
 async fn handle_request<'a>(
     req: UdsRequest<'a>,
-    memory: &Arc<RwLock<ArmadaMemory>>,
+    memory: &Arc<ArmadaMemory>,
     uptime: u64,
 ) -> UdsResponse {
     match req.cmd.to_uppercase().as_str() {
@@ -162,7 +161,7 @@ async fn handle_request<'a>(
         }
 
         "GET_SNAPSHOT" => {
-            let mem = memory.read().await;
+            let mem = &**memory;
             let mut snapshots = mem.snapshot_all();
             enrich_with_pnl(&mut snapshots);
 
@@ -232,7 +231,7 @@ async fn handle_request<'a>(
             };
             let clamped = value.clamp(GRID_FLOOR, GRID_CEIL);
             let bot_name = req.bot.unwrap_or("hydra");
-            let mem = memory.read().await;
+            let mem = &**memory;
             let Some(risk) = mem.risk_for_bot(bot_name) else {
                 return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));
             };
@@ -258,7 +257,7 @@ async fn handle_request<'a>(
             };
             let clamped = value.clamp(MAX_POS_FLOOR, MAX_POS_CEIL);
             let bot_name = req.bot.unwrap_or("hydra");
-            let mem = memory.read().await;
+            let mem = &**memory;
             let Some(risk) = mem.risk_for_bot(bot_name) else {
                 return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));
             };
@@ -286,7 +285,7 @@ async fn handle_request<'a>(
                 _ => 0,
             };
             let bot_name = req.bot.unwrap_or("hydra");
-            let mem = memory.read().await;
+            let mem = &**memory;
             let Some(engine) = mem.engine_for_bot(bot_name) else {
                 return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));
             };
@@ -303,7 +302,7 @@ async fn handle_request<'a>(
 
         "PAUSE" => {
             let bot_name = req.bot.unwrap_or("hydra");
-            let mem = memory.read().await;
+            let mem = &**memory;
             let Some(risk) = mem.risk_for_bot(bot_name) else {
                 return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));
             };
@@ -319,7 +318,7 @@ async fn handle_request<'a>(
 
         "UNPAUSE" => {
             let bot_name = req.bot.unwrap_or("hydra");
-            let mem = memory.read().await;
+            let mem = &**memory;
             let Some(risk) = mem.risk_for_bot(bot_name) else {
                 return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));
             };

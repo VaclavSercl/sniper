@@ -23,10 +23,27 @@ fn main() {
     out.push_str(&format!("GRID_PAUSED_OFFSET = {}\n", std::mem::offset_of!(GridRiskState, global_paused)));
     out.push_str(&format!("TRIGON_PAUSED_OFFSET = {}\n", std::mem::offset_of!(TrigonRiskState, global_paused)));
 
-    // Write to architect folder
-    out.push_str("\n# ML Shield Offsets (engine_state.bin)\n");
+    // Write to architect folder — ML Shield Offsets (engine_state.bin)
+    out.push_str("\n# EngineState Offsets (engine_state.bin)\n");
     out.push_str(&format!("OFF_L1_SKEW = {}\n", std::mem::offset_of!(sniper_types::EngineState, l1_skew_adjustment)));
     out.push_str(&format!("OFF_L1_CONF = {}\n", std::mem::offset_of!(sniper_types::EngineState, l1_confidence_score)));
+    out.push_str(&format!("OFF_L1_TOXIC = {}\n", std::mem::offset_of!(sniper_types::EngineState, toxic_flow_hits)));
+    out.push_str(&format!("OFF_L1_UPTIME = {}\n", std::mem::offset_of!(sniper_types::EngineState, l1_uptime_pct)));
+    out.push_str(&format!("OFF_AI_HEARTBEAT = {}\n", std::mem::offset_of!(sniper_types::EngineState, ai_heartbeat_ms)));
+    out.push_str(&format!("OFF_SWEEP_FREEZE = {}\n", std::mem::offset_of!(sniper_types::EngineState, sweep_freeze_until)));
+    out.push_str(&format!("OFF_REALIZED_PNL = {}\n", std::mem::offset_of!(sniper_types::EngineState, realized_pnl)));
+    out.push_str(&format!("OFF_NET_POSITION = {}\n", std::mem::offset_of!(sniper_types::EngineState, net_position)));
+    out.push_str(&format!("OFF_SESSION_FILLS = {}\n", std::mem::offset_of!(sniper_types::EngineState, session_fill_count)));
+    out.push_str(&format!("OFF_MICRO_PRICE = {}\n", std::mem::offset_of!(sniper_types::EngineState, micro_price)));
+    out.push_str(&format!("OFF_BEST_BID = {}\n", std::mem::offset_of!(sniper_types::EngineState, best_bid)));
+    out.push_str(&format!("OFF_BEST_ASK = {}\n", std::mem::offset_of!(sniper_types::EngineState, best_ask)));
+    out.push_str(&format!("OFF_T2T_MICROS = {}\n", std::mem::offset_of!(sniper_types::EngineState, t2t_micros)));
+    out.push_str(&format!("OFF_BINANCE_MID = {}\n", std::mem::offset_of!(sniper_types::EngineState, binance_mid_price)));
+    out.push_str(&format!("OFF_FEAR_GREED = {}\n", std::mem::offset_of!(sniper_types::EngineState, macro_fear_greed)));
+    out.push_str(&format!("OFF_MACRO_BIAS = {}\n", std::mem::offset_of!(sniper_types::EngineState, macro_bias)));
+    out.push_str(&format!("OFF_WALLET_USD = {}\n", std::mem::offset_of!(sniper_types::EngineState, wallet_usd)));
+    out.push_str(&format!("OFF_WALLET_BTC = {}\n", std::mem::offset_of!(sniper_types::EngineState, wallet_btc)));
+    out.push_str(&format!("ENGINE_STATE_SIZE = {}\n", size_of::<sniper_types::EngineState>()));
 
     let out_path = std::env::current_dir()
         .unwrap_or_default()

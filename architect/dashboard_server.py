@@ -317,12 +317,16 @@ _ml_cache = {}
 _ml_cache_ts = 0
 _ML_TTL = 1.0
 
-# Byte offsets in EngineState (from types.rs analysis)
-OFF_L1_SKEW = 1584      # i64 l1_skew_adjustment
-OFF_L1_CONF = 1600      # u64 l1_confidence_score
-OFF_L1_TOXIC = 1568     # u64 toxic_flow_hits
-OFF_L1_UPTIME = 1648    # u64 l1_uptime_pct
-OFF_AI_BIAS = 1464      # i64 current_ai_bias
+# Byte offsets in EngineState — AUTO-IMPORTED from Rust struct layout
+# Regenerated on every: ./deploy_armada.sh --build
+try:
+    from l2_rust_offsets import OFF_L1_SKEW, OFF_L1_CONF, OFF_L1_TOXIC, OFF_L1_UPTIME
+except ImportError:
+    # Fallback: hardcoded values (stale risk — run deploy --build to fix)
+    OFF_L1_SKEW = 1584
+    OFF_L1_CONF = 1600
+    OFF_L1_TOXIC = 1568
+    OFF_L1_UPTIME = 1648
 
 def _get_nexus_state():
     """Get Nexus bot status for dashboard."""

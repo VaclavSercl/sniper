@@ -28,7 +28,6 @@ struct MoonshotEngine {
     idx_to_symbol: HashMap<usize, String>,
     last_order_ts: Vec<Instant>,
     
-    itoa_buf: itoa::Buffer,
     ryu1: ryu::Buffer,
     ryu2: ryu::Buffer,
 }
@@ -197,7 +196,6 @@ async fn main() -> Result<()> {
         chan_to_idx: HashMap::new(),
         idx_to_symbol: HashMap::new(),
         last_order_ts: vec![Instant::now(); MOONSHOT_MAX_PAIRS],
-        itoa_buf: itoa::Buffer::new(),
         ryu1: ryu::Buffer::new(),
         ryu2: ryu::Buffer::new(),
     };
