@@ -1,11 +1,16 @@
 [package]
 name = "sniper-shared"
-version = "11.1.0"
+version = "12.0.0"
 edition = "2024"
 
 [lib]
 name = "sniper_types"
 path = "src/lib.rs"
+
+[features]
+default = []
+# Enable runtime utilities: AsyncNotifier, init_mmap_ptr, ensure_single_instance
+runtime = ["dep:tokio", "dep:reqwest", "dep:serde_json", "dep:fs2", "dep:anyhow", "dep:dotenvy"]
 
 [dependencies]
 memmap2 = "0.9.5"
@@ -16,3 +21,16 @@ tracing-appender = "0.2"
 hmac = "0.12.1"
 sha2 = "0.10.8"
 hex = "0.4.3"
+
+# Runtime utilities (optional — activated by 'runtime' feature)
+tokio = { version = "1.50.0", features = ["sync", "rt"], optional = true }
+reqwest = { version = "0.12.12", features = ["json"], optional = true }
+serde_json = { version = "1.0.149", optional = true }
+fs2 = { version = "0.4.3", optional = true }
+anyhow = { version = "1.0", optional = true }
+dotenvy = { version = "0.15.7", optional = true }
+
+[[bin]]
+name = "dump_l2_offsets"
+path = "src/bin/dump_l2_offsets.rs"
+required-features = ["runtime"]

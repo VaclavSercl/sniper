@@ -19,15 +19,12 @@
 //   - /dev/shm/beroun/l2_command.bin (read: latency padding/killswitch)
 
 use std::time::{SystemTime, UNIX_EPOCH, Duration};
-use std::fs::OpenOptions;
 use std::io::Write;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use tokio::sync::mpsc;
 use futures_util::StreamExt;
 use futures_util::sink::SinkExt;
-use serde_json::json;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use dotenvy::dotenv;
 use tracing::{info, warn, error, Level};
@@ -83,103 +80,11 @@ struct Args {
     #[arg(long, default_value_t = 500)]
     scan_interval_ms: u64,
 }
-
-// ═══════════════════════════════════════════════════════════
-// BotEvent Notifier (from Hydra — best pattern)
-// ═══════════════════════════════════════════════════════════
-enum BotEvent {
-    Alert(String),
-    Trade { pair: String, direction: String, gross_bps: f64, net_bps: f64, size_usd: f64 },
-    Signal { pair: String, direction: String, gross_bps: f64 },
-}
-
-struct AsyncNotifier {
-    tx: mpsc::UnboundedSender<BotEvent>,
-}
-
-impl AsyncNotifier {
-    fn new() -> Self {
-        let (tx, mut rx) = mpsc::unbounded_channel::<BotEvent>();
-        let token = std::env::var("TELEGRAM_BOT_TOKEN").unwrap_or_default();
-        let chat_id = std::env::var("TELEGRAM_CHAT_ID").unwrap_or_default();
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .build()
-            .unwrap_or_default();
-
-        let exe_dir = std::env::current_exe()
-            .ok().and_then(|p| p.parent().map(|d| d.to_path_buf()))
-            .unwrap_or_else(|| std::path::PathBuf::from("."));
-        let log_dir = exe_dir.join("../../nexus/logs");
-        let _ = std::fs::create_dir_all(&log_dir);
-        let alerts_log = log_dir.join("alerts.log");
-        let trades_log = log_dir.join("trades.log");
-
-        tokio::spawn(async move {
-            let mut signals_count: u64 = 0;
-            let mut trades_count: u64 = 0;
-            let mut pnl_bps_total: f64 = 0.0;
-
-            while let Some(event) = rx.recv().await {
-                match event {
-                    BotEvent::Alert(msg) => {
-                        info!(event = "nexus_alert", message = %msg);
-                        if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&alerts_log) {
-                            let _ = writeln!(f, "[{:?}] {}", SystemTime::now(), msg);
-                        }
-                        if !token.is_empty() && !chat_id.is_empty() {
-                            let url = format!("https://api.telegram.org/bot{}/sendMessage", token);
-                            let _ = client.post(&url)
-                                .json(&json!({"chat_id": &chat_id, "text": format!("🪐 *NEXUS*\n`{}`", msg), "parse_mode": "Markdown"}))
-                                .send().await;
-                        }
-                    }
-                    BotEvent::Trade { pair, direction, gross_bps, net_bps, size_usd } => {
-                        trades_count += 1;
-                        pnl_bps_total += net_bps;
-                        let msg = format!(
-                            "💰 TRADE #{} {} {} | gross={:.1}bps net={:.1}bps | ${:.2} | Σ{:.1}bps",
-                            trades_count, pair, direction, gross_bps, net_bps, size_usd, pnl_bps_total
-                        );
-                        info!(event = "nexus_trade", %pair, %direction, gross_bps, net_bps, size_usd);
-                        if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&trades_log) {
-                            let _ = writeln!(f, "[{:?}] {}", SystemTime::now(), msg);
-                        }
-                        if !token.is_empty() && !chat_id.is_empty() {
-                            let url = format!("https://api.telegram.org/bot{}/sendMessage", token);
-                            let _ = client.post(&url)
-                                .json(&json!({"chat_id": &chat_id, "text": format!("🪐 *NEXUS*\n`{}`", msg), "parse_mode": "Markdown"}))
-                                .send().await;
-                        }
-                    }
-                    BotEvent::Signal { pair, direction, gross_bps } => {
-                        signals_count += 1;
-                        info!(event = "nexus_signal", %pair, %direction, gross_bps, total_signals = signals_count);
-                    }
-                }
-            }
-        });
-        Self { tx }
-    }
-
-    fn alert(&self, msg: String) { let _ = self.tx.send(BotEvent::Alert(msg)); }
-    fn trade(&self, pair: String, direction: String, gross_bps: f64, net_bps: f64, size_usd: f64) {
-        let _ = self.tx.send(BotEvent::Trade { pair, direction, gross_bps, net_bps, size_usd });
-    }
-    fn signal(&self, pair: String, direction: String, gross_bps: f64) {
-        let _ = self.tx.send(BotEvent::Signal { pair, direction, gross_bps });
-    }
-}
-
-// ═══════════════════════════════════════════════════════════
-// mmap init (from Trigon — canonical pattern)
-// ═══════════════════════════════════════════════════════════
-fn open_mmap_readonly(path: &str) -> Result<MmapMut> {
-    let file = OpenOptions::new().read(true).write(true).create(false).open(path)
-        .with_context(|| format!("Cannot open mmap: {}", path))?;
-    let mmap = unsafe { MmapMut::map_mut(&file)? };
-    Ok(mmap)
-}
+// ═════════════════════════════════════════════════════════════
+// Shared modules (v12.0 — unified from shared crate)
+// ═════════════════════════════════════════════════════════════
+use sniper_types::notifier::AsyncNotifier;
+use sniper_types::mmap_utils::open_mmap_readonly;
 
 // ═══════════════════════════════════════════════════════════
 // Pair name table (matches price_bridge.py CROSS_EXCHANGE_PAIRS)
@@ -331,18 +236,10 @@ async fn main() -> Result<()> {
         .with(EnvFilter::from_default_env().add_directive(Level::INFO.into()))
         .init();
 
-    let notifier = Arc::new(AsyncNotifier::new());
+    let notifier = Arc::new(AsyncNotifier::new("nexus", "🪐"));
 
-    // ═══ SINGLE-INSTANCE LOCK (from Trigon) ═══
-    use fs2::FileExt;
-    let lock_file = std::fs::File::create("/tmp/nexus-core.lock")
-        .context("Failed to create nexus lock file")?;
-    if lock_file.try_lock_exclusive().is_err() {
-        error!(event = "dual_instance_blocked",
-            msg = "Another nexus-core is already running! Aborting.");
-        std::process::exit(1);
-    }
-    let _lock_guard = lock_file;
+    // ═══ SINGLE-INSTANCE LOCK (v12.0 — shared module) ═══
+    let _lock_guard = sniper_types::lock::ensure_single_instance("nexus-core")?;
 
     // Write PID file (for Sentinel crash detection)
     std::fs::write("/tmp/nexus-core.pid", std::process::id().to_string())?;

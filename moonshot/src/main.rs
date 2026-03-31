@@ -15,20 +15,16 @@
 //   - /dev/shm/beroun/moonshot_risk.bin (written by L2, read by L0)
 
 use std::time::{SystemTime, UNIX_EPOCH, Instant, Duration};
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::collections::HashMap;
 
-use tokio::sync::mpsc;
 use futures_util::{StreamExt, SinkExt};
 use serde_json::json;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use dotenvy::dotenv;
 use tracing::{info, warn, error, Level};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
-use memmap2::MmapMut;
 use anyhow::{Context, Result};
 
 use sniper_types::moonshot_types::*;
@@ -38,69 +34,11 @@ use sniper_types::exchange::bitfinex;
 const VERSION: &str = "1.0.0";
 
 // ═══════════════════════════════════════════════════════════
-// Async Notifier — keeps hot path clean of I/O
+// Shared modules (v12.0 — unified from shared crate)
 // ═══════════════════════════════════════════════════════════
-struct AsyncNotifier {
-    tx: mpsc::UnboundedSender<String>,
-}
+use sniper_types::notifier::AsyncNotifier;
+use sniper_types::mmap_utils::init_mmap;
 
-impl AsyncNotifier {
-    fn new() -> Self {
-        let (tx, mut rx) = mpsc::unbounded_channel::<String>();
-        let token = std::env::var("TELEGRAM_BOT_TOKEN").unwrap_or_default();
-        let chat_id = std::env::var("TELEGRAM_CHAT_ID").unwrap_or_default();
-        let client = reqwest::Client::builder()
-            .timeout(Duration::from_secs(10))
-            .build()
-            .unwrap_or_default();
-
-        // Resolve alerts log path relative to binary
-        let exe_dir = std::env::current_exe()
-            .ok()
-            .and_then(|p| p.parent().map(|d| d.to_path_buf()))
-            .unwrap_or_else(|| std::path::PathBuf::from("."));
-        let log_dir = exe_dir.join("../../moonshot/logs");
-        let _ = std::fs::create_dir_all(&log_dir);
-        let alerts_log = log_dir.join("alerts.log");
-
-        tokio::spawn(async move {
-            while let Some(msg) = rx.recv().await {
-                info!(event = "async_alert", message = msg);
-                if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&alerts_log) {
-                    let _ = writeln!(file, "[{:?}] {}", SystemTime::now(), msg);
-                }
-                if token.is_empty() || chat_id.is_empty() { continue; }
-                let url = format!("https://api.telegram.org/bot{}/sendMessage", token);
-                let _ = client.post(url)
-                    .json(&json!({"chat_id": chat_id, "text": format!("🌙 *MOONSHOT*\n`{}`", msg), "parse_mode": "Markdown"}))
-                    .send().await;
-            }
-        });
-        Self { tx }
-    }
-
-    fn send(&self, msg: String) {
-        let _ = self.tx.send(msg);
-    }
-}
-
-// ═══════════════════════════════════════════════════════════
-// mmap Initialization
-// ═══════════════════════════════════════════════════════════
-fn init_mmap_ptr<T: Default>(path: &str) -> Result<MmapMut> {
-    let dir = std::path::Path::new(path).parent().unwrap_or_else(|| std::path::Path::new("/dev/shm/beroun"));
-    std::fs::create_dir_all(dir)?;
-    let file = OpenOptions::new().read(true).write(true).create(true).open(path)?;
-    file.set_len(std::mem::size_of::<T>() as u64)?;
-    let mut mmap = unsafe { MmapMut::map_mut(&file)? };
-    if mmap.iter().all(|&b| b == 0) {
-        let default_val = T::default();
-        let ptr = &default_val as *const T as *const u8;
-        let slice = unsafe { std::slice::from_raw_parts(ptr, std::mem::size_of::<T>()) };
-        mmap.copy_from_slice(slice);
-    }
-    Ok(mmap)
-}
 
 // Auth + ticker parser → shared exchange module (Phase 5.2)
 // See: sniper_types::exchange::{hmac_sha384_hex, fast_parse_ticker, bitfinex_auth_message}
@@ -116,39 +54,28 @@ async fn main() -> Result<()> {
         .with(EnvFilter::from_default_env().add_directive(Level::INFO.into()))
         .init();
 
-    let notifier = Arc::new(AsyncNotifier::new());
-    let engine_mmap = init_mmap_ptr::<MoonshotEngineState>(MOONSHOT_ENGINE_PATH)?;
-    let risk_mmap = init_mmap_ptr::<MoonshotRiskState>(MOONSHOT_RISK_PATH)?;
+    let notifier = Arc::new(AsyncNotifier::new("moonshot", "🌙"));
+    let engine_mmap = init_mmap::<MoonshotEngineState>(MOONSHOT_ENGINE_PATH)?;
+    let risk_mmap = init_mmap::<MoonshotRiskState>(MOONSHOT_RISK_PATH)?;
 
     let engine = unsafe { &*(engine_mmap.as_ptr() as *const MoonshotEngineState) };
     let risk = unsafe { &*(risk_mmap.as_ptr() as *const MoonshotRiskState) };
 
-    // L2 Command Matrix — CAS Moonshot tripwire + trigger price
-    let l2cmd_mmap = {
-        let f = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false)
-            .open(sniper_types::l2_command::L2_COMMAND_PATH)?;
-        f.set_len(sniper_types::l2_command::L2_COMMAND_FILE_SIZE as u64)?;
-        unsafe { MmapMut::map_mut(&f)? }
-    };
-    let l2cmd = unsafe { &*(l2cmd_mmap.as_ptr() as *const sniper_types::l2_command::L2CommandMatrix) };
-    // CL4 = Global Risk Matrix at offset 192 (3 × 64B cache lines)
-    let l2_risk = unsafe { &*(l2cmd_mmap.as_ptr().add(192) as *const sniper_types::l2_command::L2GlobalRiskMatrix) };
+    // L2 Shared State — Master Struct
+    let l2_shared_mmap = init_mmap::<sniper_types::l2_command::L2SharedState>(
+        sniper_types::l2_command::L2_COMMAND_PATH,
+    )?;
+    let l2_shared = unsafe { &*(l2_shared_mmap.as_ptr() as *const sniper_types::l2_command::L2SharedState) };
+    let l2cmd = &l2_shared.cmd;
+    let l2_risk = &l2_shared.global_risk;
 
     let key = std::env::var("BITFINEX_API_KEY").context("Missing BITFINEX_API_KEY")?;
     let sec = std::env::var("BITFINEX_API_SECRET").context("Missing BITFINEX_API_SECRET")?;
 
     info!(event = "system_start", version = VERSION, bot = "moonshot", strategy = "flash_crash_multi_symbol");
 
-    // ═══ SINGLE-INSTANCE LOCK ═══
-    use fs2::FileExt;
-    let lock_file = std::fs::File::create("/tmp/moonshot-core.lock")
-        .context("Failed to create moonshot lock file")?;
-    if lock_file.try_lock_exclusive().is_err() {
-        tracing::error!(event = "dual_instance_blocked",
-            msg = "Another moonshot-core is already running! Aborting.");
-        std::process::exit(1);
-    }
-    let _lock_guard = lock_file;
+    // ═══ SINGLE-INSTANCE LOCK (v12.0 — shared module) ═══
+    let _lock_guard = sniper_types::lock::ensure_single_instance("moonshot-core")?;
 
     notifier.send(format!("🌙 Moonshot v{} (Multi-Symbol AI) ONLINE", VERSION));
 

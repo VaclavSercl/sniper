@@ -1,13 +1,11 @@
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use tokio::sync::mpsc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH, Duration};
 use serde_json::json;
 
 use dotenvy::dotenv;
 use tracing::{info, Level, error};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
-use memmap2::MmapMut;
 use anyhow::{Context, Result};
 use std::collections::VecDeque;
 use fs2::FileExt;
@@ -30,84 +28,12 @@ where
 
 
 
-// Background Notifier Task — BotEvent-based aggregation
-pub enum BotEvent {
-    Alert(String),
-    Trade { amount: f64, price: f64 },
-}
+// ═════════════════════════════════════════════════════════════
+// Shared modules (v12.0 — unified from shared crate)
+// ═════════════════════════════════════════════════════════════
+use sniper_types::notifier::AsyncNotifier;
+use sniper_types::mmap_utils::init_mmap;
 
-struct AsyncNotifier {
-    tx: mpsc::UnboundedSender<BotEvent>,
-}
-
-impl AsyncNotifier {
-    fn new() -> Self {
-        let (tx, mut rx) = mpsc::unbounded_channel::<BotEvent>();
-        let alerts_log = std::env::current_dir().unwrap_or_default().join("logs/alerts.log").to_string_lossy().to_string();
-
-        tokio::spawn(async move {
-            let mut report_interval = tokio::time::interval(Duration::from_secs(3600));
-            let mut buys: u32 = 0;
-            let mut sells: u32 = 0;
-
-            loop {
-                tokio::select! {
-                    _ = report_interval.tick() => {
-                        // v15.1: Telegram hourly report removed — L2 Oracle handles all reporting.
-                        // Only reset trade counters and export JSON snapshot for Oracle.
-                        if buys + sells > 0 {
-                            buys = 0; sells = 0;
-                        }
-                        // v7.1: Hourly state.json snapshot for Oracle
-                        tokio::task::spawn_blocking(|| {
-                            let _ = std::process::Command::new(std::env::current_exe().unwrap_or_default().with_file_name("hydra-config"))
-                                .arg("export-json")
-                                .stdout(std::fs::File::create("/dev/shm/beroun/state.json").unwrap_or_else(|_| std::fs::File::create("/dev/null").unwrap_or_else(|_| std::fs::File::open("/dev/null").expect("cannot open /dev/null"))))
-                                .status(); // .status() waits for child — prevents zombie
-                        });
-                    }
-                    Some(event) = rx.recv() => {
-                        match event {
-                            BotEvent::Alert(msg) => {
-                                info!(event = "async_alert", message = %msg);
-                                let log_path = alerts_log.clone();
-                                let log_msg = msg.clone();
-                                tokio::task::spawn_blocking(move || {
-                                    use std::fs::OpenOptions;
-                                    use std::io::Write;
-                                    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(&log_path) {
-                                        let _ = writeln!(f, "[{:?}] {}", SystemTime::now(), log_msg);
-                                    }
-                                });
-                            },
-                            BotEvent::Trade { amount, price } => {
-                                if amount > 0.0 { buys += 1; } else { sells += 1; }
-                                info!(event = "trade_aggregated", amount = amount, price = price, buys = buys, sells = sells);
-                            }
-                        }
-                    }
-                }
-            }
-        });
-        Self { tx }
-    }
-
-    fn alert(&self, msg: String) { let _ = self.tx.send(BotEvent::Alert(msg)); }
-    fn trade(&self, amount: f64, price: f64) { let _ = self.tx.send(BotEvent::Trade { amount, price }); }
-}
-
-fn init_mmap_ptr<T: Default>(path: &str) -> Result<MmapMut> {
-    let file = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false).open(path)?;
-    file.set_len(std::mem::size_of::<T>() as u64)?;
-    let mut mmap = unsafe { MmapMut::map_mut(&file)? };
-    if mmap.iter().all(|&b| b == 0) {
-        let default_val = T::default();
-        let ptr = &default_val as *const T as *const u8;
-        let slice = unsafe { std::slice::from_raw_parts(ptr, std::mem::size_of::<T>()) };
-        mmap.copy_from_slice(slice);
-    }
-    Ok(mmap)
-}
 
 // Auth → shared exchange module (Phase 5.2)
 // Hydra uses fastwebsockets (not tokio-tungstenite), so only get_sig is replaced.
@@ -315,52 +241,37 @@ fn main() -> Result<()> {
 // ═══════════════════════════════════════════════════════════════════════
 
 async fn async_main() -> Result<()> {
-    let notifier = Arc::new(AsyncNotifier::new());
-    let mut engine_mmap = init_mmap_ptr::<EngineState>(&ENGINE_STATE_PATH)?;
-    let risk_mmap = init_mmap_ptr::<RiskState>(&RISK_STATE_PATH)?;
-    let fee_mmap = init_mmap_ptr::<sniper_types::fee_types::GlobalFeeState>(
+    let notifier = Arc::new(AsyncNotifier::new("hydra", "🐉"));
+    let mut engine_mmap = init_mmap::<EngineState>(&ENGINE_STATE_PATH)?;
+    let risk_mmap = init_mmap::<RiskState>(&RISK_STATE_PATH)?;
+    let fee_mmap = init_mmap::<sniper_types::fee_types::GlobalFeeState>(
         sniper_types::fee_types::FEE_STATE_PATH)?;
+
+    // v7.1: Hourly state.json snapshot for Oracle
+    tokio::spawn(async move {
+        let mut report_interval = tokio::time::interval(Duration::from_secs(3600));
+        loop {
+            report_interval.tick().await;
+            tokio::task::spawn_blocking(|| {
+                let _ = std::process::Command::new(std::env::current_exe().unwrap_or_default().with_file_name("hydra-config"))
+                    .arg("export-json")
+                    .stdout(std::fs::File::create("/dev/shm/beroun/state.json").unwrap_or_else(|_| std::fs::File::create("/dev/null").unwrap_or_else(|_| std::fs::File::open("/dev/null").expect("cannot open /dev/null"))))
+                    .status(); // .status() waits for child — prevents zombie
+            });
+        }
+    });
     let fee_state = unsafe { &*(fee_mmap.as_ptr() as *const sniper_types::fee_types::GlobalFeeState) };
-    // L2CommandMatrix: manual init (bypass init_mmap_ptr which truncates to sizeof::<T>)
-    let l2cmd_mmap = {
-        let f = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false)
-            .open(sniper_types::l2_command::L2_COMMAND_PATH)?;
-        f.set_len(sniper_types::l2_command::L2_COMMAND_FILE_SIZE as u64)?;
-        unsafe { MmapMut::map_mut(&f)? }
-    };
-    let l2cmd = unsafe { &*(l2cmd_mmap.as_ptr() as *const sniper_types::l2_command::L2CommandMatrix) };
-    // A-S Matrix lives at offset 64 (cache line 2)
-    let l2as = unsafe {
-        &*(l2cmd_mmap.as_ptr().add(std::mem::size_of::<sniper_types::l2_command::L2CommandMatrix>())
-           as *const sniper_types::l2_command::L2ASMatrix)
-    };
-    // CL4: Global Risk (VPIN + Aegis)
-    let l2risk = unsafe {
-        &*(l2cmd_mmap.as_ptr()
-            .add(std::mem::size_of::<sniper_types::l2_command::L2CommandMatrix>())
-            .add(std::mem::size_of::<sniper_types::l2_command::L2ASMatrix>())
-            .add(std::mem::size_of::<sniper_types::l2_command::L2GridWarpMatrix>())
-            as *const sniper_types::l2_command::L2GlobalRiskMatrix)
-    };
-    // CL5: Portfolio telemetry (Hydra reports inventory here)
-    let l2portfolio = unsafe {
-        &*(l2cmd_mmap.as_ptr()
-            .add(std::mem::size_of::<sniper_types::l2_command::L2CommandMatrix>())
-            .add(std::mem::size_of::<sniper_types::l2_command::L2ASMatrix>())
-            .add(std::mem::size_of::<sniper_types::l2_command::L2GridWarpMatrix>())
-            .add(std::mem::size_of::<sniper_types::l2_command::L2GlobalRiskMatrix>())
-            as *const sniper_types::l2_command::L2PortfolioTelemetry)
-    };
-    // CL6+: Latency Ring Buffer (Hydra writes tick-to-trade latency here)
-    let l1ring = unsafe {
-        &*(l2cmd_mmap.as_ptr()
-            .add(std::mem::size_of::<sniper_types::l2_command::L2CommandMatrix>())
-            .add(std::mem::size_of::<sniper_types::l2_command::L2ASMatrix>())
-            .add(std::mem::size_of::<sniper_types::l2_command::L2GridWarpMatrix>())
-            .add(std::mem::size_of::<sniper_types::l2_command::L2GlobalRiskMatrix>())
-            .add(std::mem::size_of::<sniper_types::l2_command::L2PortfolioTelemetry>())
-            as *const sniper_types::l2_command::L1TelemetryRing)
-    };
+    // L2 Shared State (v12.0)
+    let l2_mmap = init_mmap::<sniper_types::l2_command::L2SharedState>(
+        sniper_types::l2_command::L2_COMMAND_PATH,
+    )?;
+    let l2_shared = unsafe { &*(l2_mmap.as_ptr() as *const sniper_types::l2_command::L2SharedState) };
+    
+    let l2cmd = &l2_shared.cmd;
+    let l2as = &l2_shared.as_mat;
+    let l2risk = &l2_shared.global_risk;
+    let l2portfolio = &l2_shared.portfolio;
+    let l1ring = &l2_shared.latency_ring;
 
     let engine_ptr: *mut EngineState = engine_mmap.as_mut_ptr() as *mut EngineState;
     let risk = unsafe { &*(risk_mmap.as_ptr() as *const RiskState) };
@@ -628,7 +539,6 @@ async fn async_main() -> Result<()> {
                                                         engine.session_sell_volume.fetch_add((trade_amt.abs() * scale) as u64, Ordering::Relaxed);
                                                         engine.session_sell_usd.fetch_add(trade_vol_usd, Ordering::Relaxed);
                                                     }
-                                                    exec_notifier.trade(trade_amt, trade_price);
                                                 }
                                         if mt == "wu" || mt == "ws" {
                                             let wd: Vec<&BorrowedValue> = if mt == "wu" { vec![&arr[2]] }
@@ -1244,7 +1154,7 @@ async fn async_main() -> Result<()> {
                                                             } else { 0.0 };
 
                                                             // INVENTORY THROTTLING: asymmetric levels
-                                                            let (n_buy, n_sell) = if pos_ratio > 0.8 {
+                                                            let (n_buy, n_sell): (usize, usize) = if pos_ratio > 0.8 {
                                                                 (0, grid_levels)       // Hard cap long → sell only
                                                             } else if pos_ratio > 0.4 {
                                                                 (1, grid_levels)       // Soft cap → 1 buy
@@ -1303,8 +1213,8 @@ async fn async_main() -> Result<()> {
                                                             let ghost_trans = eng.ghost_transparency.load(Ordering::Relaxed) as f64 / 10000.0;
                                                             // n_public = how many levels are visible in orderbook
                                                             // At transparency=1.0 (100%): all public. At 0.1: only ~1 level public per side.
-                                                            let n_public_buy = ((n_buy as f64 * ghost_trans).ceil() as usize).max(1).min(n_buy.max(1));
-                                                            let n_public_sell = ((n_sell as f64 * ghost_trans).ceil() as usize).max(1).min(n_sell.max(1));
+                                                            let n_public_buy = ((n_buy as f64 * ghost_trans).ceil() as usize).max(1).min(n_buy.max(1_usize));
+                                                            let n_public_sell = ((n_sell as f64 * ghost_trans).ceil() as usize).max(1).min(n_sell.max(1_usize));
                                                             let ghost_mode = ghost_trans < 0.99;
 
                                                             // Clear old ghost prices

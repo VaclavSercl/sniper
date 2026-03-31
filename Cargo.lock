@@ -2107,12 +2107,18 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "sniper-shared"
-version = "11.1.0"
+version = "12.0.0"
 dependencies = [
+ "anyhow",
+ "dotenvy",
+ "fs2",
  "hex",
  "hmac",
  "memmap2",
+ "reqwest",
+ "serde_json",
  "sha2",
+ "tokio",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",

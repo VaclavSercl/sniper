@@ -95,6 +95,18 @@ pub struct L1TelemetryRing {
     pub latency_ring_us: [AtomicU64; LATENCY_RING_SIZE],
 }
 
+// ═══ MASTER STRUCT (v12.0) ═══
+/// unified mmap layout, eliminating manual pointer arithmetic.
+#[repr(C, align(64))]
+pub struct L2SharedState {
+    pub cmd: L2CommandMatrix,           // Offset 0 (CL1)
+    pub as_mat: L2ASMatrix,             // Offset 64 (CL2)
+    pub grid_warp: L2GridWarpMatrix,    // Offset 128 (CL3)
+    pub global_risk: L2GlobalRiskMatrix,// Offset 192 (CL4)
+    pub portfolio: L2PortfolioTelemetry,// Offset 256 (CL5)
+    pub latency_ring: L1TelemetryRing,  // Offset 320 (CL6+)
+}
+
 // ═══════════════════════════════════════════════════════════
 // Defaults
 // ═══════════════════════════════════════════════════════════
@@ -332,11 +344,18 @@ pub fn clear_flash_crash(risk: &L2GlobalRiskMatrix) {
     risk.flash_crash_drop_bps.store(0, Ordering::Relaxed);
 }
 
-/// Total mmap: CL1-5(320B) + Ring(576B) = 896B
-pub const L2_COMMAND_FILE_SIZE: usize =
-    std::mem::size_of::<L2CommandMatrix>()
-    + std::mem::size_of::<L2ASMatrix>()
-    + std::mem::size_of::<L2GridWarpMatrix>()
-    + std::mem::size_of::<L2GlobalRiskMatrix>()
-    + std::mem::size_of::<L2PortfolioTelemetry>()
-    + std::mem::size_of::<L1TelemetryRing>();
+impl Default for L2SharedState {
+    fn default() -> Self {
+        Self {
+            cmd: L2CommandMatrix::default(),
+            as_mat: L2ASMatrix::default(),
+            grid_warp: L2GridWarpMatrix::default(),
+            global_risk: L2GlobalRiskMatrix::default(),
+            portfolio: L2PortfolioTelemetry::default(),
+            latency_ring: L1TelemetryRing::default(),
+        }
+    }
+}
+
+/// Total mmap size is simply the size of the Master Struct (896B)
+pub const L2_COMMAND_FILE_SIZE: usize = std::mem::size_of::<L2SharedState>();

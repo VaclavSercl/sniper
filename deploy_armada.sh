@@ -59,6 +59,8 @@ echo "════════════════════════�
 if [ "${1:-}" == "--build" ]; then
     echo "📦 Building workspace..."
     cd "$ARMADA_ROOT" && cargo build --release --workspace
+    echo "🧱 Generating L2 Offsets for Oracle..."
+    cargo run --release --bin dump_l2_offsets --features runtime -p sniper-shared
     [ $? -ne 0 ] && echo "❌ Build failed!" && exit 1
     echo "✅ Build complete"
 fi

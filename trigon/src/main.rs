@@ -14,20 +14,16 @@
 //   - /dev/shm/beroun/trigon_risk.bin (written by L2, read by L0)
 
 use std::time::{SystemTime, UNIX_EPOCH, Instant, Duration};
-use std::fs::OpenOptions;
-use std::io::Write;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::collections::HashMap;
 
-use tokio::sync::mpsc;
 use futures_util::{StreamExt, SinkExt};
 use serde_json::json;
 use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use dotenvy::dotenv;
 use tracing::{info, warn, error, Level};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
-use memmap2::MmapMut;
 use anyhow::{Context, Result};
 
 use sniper_types::trigon_types::*;
@@ -35,65 +31,13 @@ use sniper_types::moonshot_types::{str_to_symbol_hash, symbol_hash_to_str};
 use sniper_types::PRICE_SCALE_I;
 use sniper_types::exchange::bitfinex;
 
+// ═════════════════════════════════════════════════════════════
+// Shared modules (v12.0 — unified from shared crate)
+// ═════════════════════════════════════════════════════════════
+use sniper_types::notifier::AsyncNotifier;
+use sniper_types::mmap_utils::init_mmap;
+
 const VERSION: &str = "1.0.0";
-
-// ═══════════════════════════════════════════════════════════
-// Async Notifier
-// ═══════════════════════════════════════════════════════════
-struct AsyncNotifier {
-    tx: mpsc::UnboundedSender<String>,
-}
-
-impl AsyncNotifier {
-    fn new() -> Self {
-        let (tx, mut rx) = mpsc::unbounded_channel::<String>();
-        let token = std::env::var("TELEGRAM_BOT_TOKEN").unwrap_or_default();
-        let chat_id = std::env::var("TELEGRAM_CHAT_ID").unwrap_or_default();
-        let client = reqwest::Client::builder().timeout(Duration::from_secs(10)).build().unwrap_or_default();
-
-        let exe_dir = std::env::current_exe()
-            .ok().and_then(|p| p.parent().map(|d| d.to_path_buf()))
-            .unwrap_or_else(|| std::path::PathBuf::from("."));
-        let log_dir = exe_dir.join("../../trigon/logs");
-        let _ = std::fs::create_dir_all(&log_dir);
-        let alerts_log = log_dir.join("alerts.log");
-
-        tokio::spawn(async move {
-            while let Some(msg) = rx.recv().await {
-                info!(event = "async_alert", message = msg);
-                if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&alerts_log) {
-                    let _ = writeln!(file, "[{:?}] {}", SystemTime::now(), msg);
-                }
-                if token.is_empty() || chat_id.is_empty() { continue; }
-                let url = format!("https://api.telegram.org/bot{}/sendMessage", token);
-                let _ = client.post(url)
-                    .json(&json!({"chat_id": chat_id, "text": format!("🔺 *TRIGON*\n`{}`", msg), "parse_mode": "Markdown"}))
-                    .send().await;
-            }
-        });
-        Self { tx }
-    }
-
-    fn send(&self, msg: String) { let _ = self.tx.send(msg); }
-}
-
-// ═══════════════════════════════════════════════════════════
-// mmap
-// ═══════════════════════════════════════════════════════════
-fn init_mmap_ptr<T: Default>(path: &str) -> Result<MmapMut> {
-    let dir = std::path::Path::new(path).parent().unwrap_or_else(|| std::path::Path::new("/dev/shm/beroun"));
-    std::fs::create_dir_all(dir)?;
-    let file = OpenOptions::new().read(true).write(true).create(true).open(path)?;
-    file.set_len(std::mem::size_of::<T>() as u64)?;
-    let mut mmap = unsafe { MmapMut::map_mut(&file)? };
-    if mmap.iter().all(|&b| b == 0) {
-        let default_val = T::default();
-        let ptr = &default_val as *const T as *const u8;
-        let slice = unsafe { std::slice::from_raw_parts(ptr, std::mem::size_of::<T>()) };
-        mmap.copy_from_slice(slice);
-    }
-    Ok(mmap)
-}
 
 // Auth → shared exchange module (Phase 5.2)
 
@@ -142,38 +86,28 @@ async fn main() -> Result<()> {
         .with(EnvFilter::from_default_env().add_directive(Level::INFO.into()))
         .init();
 
-    let notifier = Arc::new(AsyncNotifier::new());
-    let engine_mmap = init_mmap_ptr::<TrigonEngineState>(TRIGON_ENGINE_PATH)?;
-    let risk_mmap = init_mmap_ptr::<TrigonRiskState>(TRIGON_RISK_PATH)?;
-    let fee_mmap = init_mmap_ptr::<sniper_types::fee_types::GlobalFeeState>(
+    let notifier = Arc::new(AsyncNotifier::new("trigon", "🔺"));
+    let engine_mmap = init_mmap::<TrigonEngineState>(TRIGON_ENGINE_PATH)?;
+    let risk_mmap = init_mmap::<TrigonRiskState>(TRIGON_RISK_PATH)?;
+    let fee_mmap = init_mmap::<sniper_types::fee_types::GlobalFeeState>(
         sniper_types::fee_types::FEE_STATE_PATH)?;
     let engine = unsafe { &*(engine_mmap.as_ptr() as *const TrigonEngineState) };
     let risk = unsafe { &*(risk_mmap.as_ptr() as *const TrigonRiskState) };
     let fee_state = unsafe { &*(fee_mmap.as_ptr() as *const sniper_types::fee_types::GlobalFeeState) };
-    // L2CommandMatrix: manual init (bypass init_mmap_ptr which truncates to sizeof::<T>)
-    let l2cmd_mmap = {
-        let f = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false)
-            .open(sniper_types::l2_command::L2_COMMAND_PATH)?;
-        f.set_len(sniper_types::l2_command::L2_COMMAND_FILE_SIZE as u64)?;
-        unsafe { MmapMut::map_mut(&f)? }
-    };
-    let l2cmd = unsafe { &*(l2cmd_mmap.as_ptr() as *const sniper_types::l2_command::L2CommandMatrix) };
+    // L2 Shared State — Master Struct
+    let l2_shared_mmap = init_mmap::<sniper_types::l2_command::L2SharedState>(
+        sniper_types::l2_command::L2_COMMAND_PATH,
+    )?;
+    let l2_shared = unsafe { &*(l2_shared_mmap.as_ptr() as *const sniper_types::l2_command::L2SharedState) };
+    let l2cmd = &l2_shared.cmd;
 
     let key = std::env::var("BITFINEX_API_KEY").context("Missing BITFINEX_API_KEY")?;
     let sec = std::env::var("BITFINEX_API_SECRET").context("Missing BITFINEX_API_SECRET")?;
 
     info!(event = "system_start", version = VERSION, bot = "trigon", strategy = "triangular_arbitrage");
 
-    // ═══ SINGLE-INSTANCE LOCK ═══
-    use fs2::FileExt;
-    let lock_file = std::fs::File::create("/tmp/trigon-core.lock")
-        .context("Failed to create trigon lock file")?;
-    if lock_file.try_lock_exclusive().is_err() {
-        tracing::error!(event = "dual_instance_blocked",
-            msg = "Another trigon-core is already running! Aborting.");
-        std::process::exit(1);
-    }
-    let _lock_guard = lock_file;
+    // ═══ SINGLE-INSTANCE LOCK (v12.0 — shared module) ═══
+    let _lock_guard = sniper_types::lock::ensure_single_instance("trigon-core")?;
 
     notifier.send(format!("🔺 Trigon v{} (Triangular Arbitrage) ONLINE", VERSION));
 
