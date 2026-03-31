@@ -354,14 +354,16 @@ def get_status():
 @bot.message_handler(commands=["help", "start"])
 def cmd_help(message):
     if not auth(message): return
-    bot.reply_to(message, """🐺 *SNIPER ARMADA v18.0 — ML Intelligence*
+    bot.reply_to(message, """🐺 *SNIPER ARMADA v19.0 — NEXUS Fleet*
 
 📊 `/status` — Stav + PnL všech botů
-💰 `/pnl` — Detailní PnL report
+💰 `/pnl` — Detailní PnL report (5 botů)
+🏛️ `/fleet` — Fleet comparison (PnL, fills, win rate)
+💲 `/fees` — Aktuální poplatky na burzách
 📈 `/spread` — Cross-exchange spreads (Bitfinex↔Binance)
+🪐 `/nexus` — Cross-exchange arb status + spreads
 🧠 `/ml` — ML Shield inference metriky
 🧪 `/ab` — A/B test ML Shield (`/ab start` · `stop` · `history`)
-🪐 `/nexus` — Cross-exchange arb status + spreads
 
 🎮 *Ovládání:*
 `/hydra start` · `stop` · `restart` · `pause`
@@ -411,7 +413,7 @@ def cmd_pnl(message):
         total_1h = total_24h = total_7d = total_30d = 0
         total_fees = 0
 
-        for bname in ["hydra", "moonshot", "grid", "trigon"]:
+        for bname in ["hydra", "moonshot", "grid", "trigon", "nexus"]:
             w1 = db.get_realized_window(bname, 1)
             w24 = db.get_realized_window(bname, 24)
             w7 = db.get_realized_window(bname, 168)
@@ -420,7 +422,7 @@ def cmd_pnl(message):
             if w24["fills"] == 0 and w30["fills"] == 0:
                 continue
 
-            emoji = {"hydra": "🐍", "moonshot": "🌙", "grid": "📐", "trigon": "🔺"}.get(bname, "🤖")
+            emoji = {"hydra": "🐍", "moonshot": "🌙", "grid": "📐", "trigon": "🔺", "nexus": "🪐"}.get(bname, "🤖")
             lines.append(f"{emoji} *{bname.upper()}*")
             lines.append(f"  1h:  `{format_pnl_short(w1['realized'])}` ({w1['fills']} fills)")
             lines.append(f"  24h: `{format_pnl_short(w24['realized'])}` ({w24['fills']} fills)")
@@ -451,6 +453,139 @@ def cmd_pnl(message):
         bot.reply_to(message, "❌ PnL engine not found. Run: `python3 architect/pnl_daemon.py`")
     except Exception as e:
         bot.reply_to(message, f"❌ PnL error: {e}")
+
+# ── FLEET COMPARISON (/fleet) ─────────────────────────────────
+@bot.message_handler(commands=['fleet'])
+def cmd_fleet(message):
+    if not auth(message): return
+    try:
+        pnl_path = os.path.join(PROJECT_ROOT, "shared")
+        sys.path.insert(0, pnl_path)
+        from pnl_engine import PnlDatabase, format_pnl_short
+        from orchestration import is_running
+
+        db = PnlDatabase()
+        fleet = []
+        ALL_BOTS = [
+            ("hydra", "🐍"), ("moonshot", "🌙"), ("grid", "📐"),
+            ("trigon", "🔺"), ("nexus", "🪐"),
+        ]
+
+        for bname, emoji in ALL_BOTS:
+            w24 = db.get_realized_window(bname, 24)
+            w7 = db.get_realized_window(bname, 168)
+            online = is_running(bname)
+            status = "🟢" if online else "🔴"
+
+            # Win rate estimate from fills
+            fills_24 = w24.get("fills", 0)
+            pnl_24 = w24.get("realized", 0)
+            pnl_7d = w7.get("realized", 0)
+            fees_24 = w24.get("fees", 0)
+
+            # Health assessment
+            if pnl_7d > 1.0:
+                health = "✅ STRONG"
+            elif pnl_7d > 0:
+                health = "✅ OK"
+            elif pnl_7d > -0.5:
+                health = "⚠️ WEAK"
+            else:
+                health = "🔴 REVIEW"
+
+            fleet.append({
+                "name": bname, "emoji": emoji, "status": status,
+                "pnl_24": pnl_24, "pnl_7d": pnl_7d,
+                "fills": fills_24, "fees": fees_24, "health": health,
+            })
+
+        # Sort by 7d PnL (best first)
+        fleet.sort(key=lambda x: x["pnl_7d"], reverse=True)
+
+        lines = [
+            "🏛️ *ARMADA FLEET COMPARISON*",
+            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+            "",
+        ]
+
+        for i, b in enumerate(fleet):
+            rank = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"][i] if i < 5 else "  "
+            lines.append(
+                f"{rank} {b['status']} {b['emoji']} *{b['name'].upper()}*"
+            )
+            lines.append(
+                f"   24h: `{format_pnl_short(b['pnl_24'])}` ({b['fills']} fills) "
+                f"| 7d: `{format_pnl_short(b['pnl_7d'])}` {b['health']}"
+            )
+            lines.append("")
+
+        total_24 = sum(b["pnl_24"] for b in fleet)
+        total_7d = sum(b["pnl_7d"] for b in fleet)
+        total_fees = sum(b["fees"] for b in fleet)
+        online_count = sum(1 for b in fleet if b["status"] == "🟢")
+
+        lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        lines.append(f"*Fleet:* {online_count}/5 online")
+        lines.append(f"*Total 24h:* `{format_pnl_short(total_24)}`")
+        lines.append(f"*Total 7d:*  `{format_pnl_short(total_7d)}`")
+        lines.append(f"*Fees 24h:*  `${total_fees:.4f}`")
+
+        db.close()
+        bot.reply_to(message, "\n".join(lines))
+    except Exception as e:
+        bot.reply_to(message, f"❌ Fleet error: {e}")
+
+# ── EXCHANGE FEES (/fees) ─────────────────────────────────────
+@bot.message_handler(commands=['fees'])
+def cmd_fees(message):
+    if not auth(message): return
+    try:
+        import struct as _st
+        FEE_PATH = "/dev/shm/beroun/fee_state.bin"
+
+        if not os.path.exists(FEE_PATH):
+            bot.reply_to(message, "❌ fee\\_state.bin nenalezen.\nSpusť `python3 architect/fee_monitor.py`")
+            return
+
+        with open(FEE_PATH, 'rb') as f:
+            data = f.read(64)
+
+        maker = _st.unpack_from('<Q', data, 0)[0]
+        taker = _st.unpack_from('<Q', data, 8)[0]
+        bnb_maker = _st.unpack_from('<Q', data, 16)[0]
+        bnb_taker = _st.unpack_from('<Q', data, 24)[0]
+        last_ms = _st.unpack_from('<Q', data, 32)[0]
+        heartbeat = _st.unpack_from('<Q', data, 56)[0]
+
+        from datetime import datetime, timezone
+        last_str = datetime.fromtimestamp(last_ms / 1000, tz=timezone.utc).strftime('%H:%M UTC') if last_ms > 0 else "nikdy"
+        hb_str = datetime.fromtimestamp(heartbeat / 1000, tz=timezone.utc).strftime('%H:%M UTC') if heartbeat > 0 else "nikdy"
+
+        # Stale check (> 2 hours = stale)
+        age_s = (time.time() * 1000 - heartbeat) / 1000 if heartbeat > 0 else 99999
+        stale = "⚠️ STALE" if age_s > 7200 else "✅ FRESH"
+
+        lines = [
+            "💲 *EXCHANGE FEE STATE*",
+            "━━━━━━━━━━━━━━━━━━━━━━━",
+            "",
+            "🔵 *Bitfinex:*",
+            f"  Maker: `{maker/100:.1f}` bps ({maker/100000*100:.3f}%)",
+            f"  Taker: `{taker/100:.1f}` bps ({taker/100000*100:.3f}%)",
+            "",
+            "🟠 *Binance:*",
+            f"  Maker: `{bnb_maker/100:.1f}` bps ({bnb_maker/100000*100:.3f}%)",
+            f"  Taker: `{bnb_taker/100:.1f}` bps ({bnb_taker/100000*100:.3f}%)",
+            "",
+            f"📅 Last fetch: `{last_str}`",
+            f"💓 Heartbeat: `{hb_str}` {stale}",
+            "",
+            f"💡 Cross-arb fee: `{taker/100 + bnb_taker/100:.1f}` bps (BFX taker + BNB taker)",
+        ]
+
+        bot.reply_to(message, "\n".join(lines))
+    except Exception as e:
+        bot.reply_to(message, f"❌ Fee error: {e}")
 
 # ── CROSS-EXCHANGE SPREADS (/spread) ─────────────────────────
 @bot.message_handler(commands=['spread'])

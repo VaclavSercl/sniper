@@ -201,6 +201,14 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
     </div>
 </div>
 
+<!-- Fee State Panel (Phase F1) -->
+<div class="panels">
+    <div class="panel" id="fee-panel" style="grid-column:1/-1">
+        <div class="panel-title"><span class="accent">💲</span> EXCHANGE FEE STATE (Live from API)</div>
+        <div id="fee-content"><span style="color:var(--text-muted);font-size:0.8em">Waiting for fee data...</span></div>
+    </div>
+</div>
+
 <!-- Latency Percentiles Panel (Phase 7.2) -->
 <div class="panels">
     <div class="panel" id="latency-panel" style="grid-column:1/-1">
@@ -388,6 +396,7 @@ function update(state) {
     renderNexus(state.cross_exchange || {}, state.nexus || {});
     renderMlShield(state.ml_shield || {});
     renderRisk(state.cross_exchange || {});
+    renderFees(state.nexus || {});
     renderLatency(state.latency || {}, state.latency_history || []);
     renderSystem(state.system || {});
 
@@ -560,6 +569,39 @@ function renderRisk(cx) {
             <div class="bv yellow">$500</div></div>
         <div class="bm"><div class="bl">Daily Loss Limit</div>
             <div class="bv" style="color:var(--orange)">$50</div></div>
+    </div>`;
+    el.innerHTML = html;
+}
+
+function renderFees(nexus) {
+    const el = document.getElementById('fee-content');
+    if (!el) return;
+
+    const bfxMaker = nexus.bfx_fee_bps || 10;
+    const bfxTaker = nexus.bfx_fee_bps || 10;
+    const bnbMaker = nexus.bnb_fee_bps || 10;
+    const bnbTaker = nexus.bnb_fee_bps || 10;
+    const crossCost = bfxTaker + bnbTaker;
+
+    let html = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+        <div style="padding:10px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:var(--radius-sm)">
+            <div style="font-size:0.6em;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">🔵 Bitfinex</div>
+            <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:0.85em">
+                <span style="color:var(--text-muted)">Taker</span>
+                <span style="color:var(--blue);font-weight:600">${bfxTaker.toFixed(1)} bps</span>
+            </div>
+        </div>
+        <div style="padding:10px;background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:var(--radius-sm)">
+            <div style="font-size:0.6em;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">🟠 Binance</div>
+            <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:0.85em">
+                <span style="color:var(--text-muted)">Taker</span>
+                <span style="color:var(--orange);font-weight:600">${bnbTaker.toFixed(1)} bps</span>
+            </div>
+        </div>
+        <div style="padding:10px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.15);border-radius:var(--radius-sm)">
+            <div style="font-size:0.6em;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">🪐 Cross-Arb Cost</div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:1.1em;font-weight:700;color:${crossCost > 25 ? 'var(--red)' : 'var(--green)'}">${crossCost.toFixed(1)} bps</div>
+        </div>
     </div>`;
     el.innerHTML = html;
 }
