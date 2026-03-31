@@ -48,6 +48,14 @@ BOTS = {
         "emoji": "🔺",
         "desc": "Triangular Arbitrage",
     },
+    "nexus": {
+        "core": os.path.join(BIN_DIR, "nexus-core"),
+        "cpu": 3,
+        "port": 3004,
+        "emoji": "🪐",
+        "desc": "Cross-Exchange Arbitrage",
+        "args": ["--paper"],  # Start in paper mode by default
+    },
 }
 
 def is_running(name: str) -> bool:

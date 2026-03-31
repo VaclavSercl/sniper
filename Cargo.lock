@@ -1361,6 +1361,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "nexus"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "chrono",
+ "clap",
+ "dotenvy",
+ "fs2",
+ "futures-util",
+ "hex",
+ "hmac",
+ "itoa",
+ "memmap2",
+ "reqwest",
+ "rusqlite",
+ "ryu",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sniper-shared",
+ "tokio",
+ "tokio-tungstenite 0.26.2",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "ntapi"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

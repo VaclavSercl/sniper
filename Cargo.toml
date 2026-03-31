@@ -5,6 +5,7 @@ members = [
     "moonshot",
     "grid",
     "trigon",
+    "nexus",
 
     "architect/cortex",
 ]
