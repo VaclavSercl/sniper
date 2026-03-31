@@ -506,7 +506,17 @@ PARAMETER CONSTRAINTS:
         return None
 
     def _apply_decision(self, decision):
-        """Apply L2 decisions to ALL bots via UDS + mmap."""
+        """Apply L2 decisions to ALL bots via UDS + mmap.
+        
+        SAFETY: Bots in PAPER mode are NEVER unpaused by AI.
+        Only explicit human /unpause command can transition PAPER → LIVE.
+        """
+        # Read current bot modes for safety checks
+        try:
+            with open(os.path.join(PROJECT_ROOT, "state", "armada_state.json")) as f:
+                self._armada_state = json.load(f)
+        except Exception:
+            self._armada_state = {}
 
         # ═══ HYDRA ═══
         hydra = decision.get("hydra", {})
@@ -514,7 +524,10 @@ PARAMETER CONSTRAINTS:
             r = self.cortex.pause("hydra")
             log.info(f"  ⏸️ HYDRA PAUSED: {r}")
         elif hydra.get("pause_trading") is False:
-            self.cortex.unpause("hydra")
+            if self._is_paper("hydra"):
+                log.info(f"  🛡️ HYDRA unpause BLOCKED — PAPER mode (AI cannot override)")
+            else:
+                self.cortex.unpause("hydra")
 
         grid = hydra.get("recommended_grid_step") or hydra.get("grid_step")
         if grid is not None:
@@ -863,8 +876,11 @@ PARAMETER CONSTRAINTS:
                 _st.pack_into('<Q', mm, GLOBAL_OFF, 1)
                 log.info("  ⏸️ Moonshot PAUSED")
             elif cfg.get("pause_trading") is False:
-                _st.pack_into('<Q', mm, GLOBAL_OFF, 0)
-                log.info("  ▶️ Moonshot UNPAUSED")
+                if self._is_paper("moonshot"):
+                    log.info("  🛡️ Moonshot unpause BLOCKED — PAPER mode")
+                else:
+                    _st.pack_into('<Q', mm, GLOBAL_OFF, 0)
+                    log.info("  ▶️ Moonshot UNPAUSED")
 
             # Per-pair order_usd override (all pairs)
             order_usd = cfg.get("order_usd")
@@ -914,8 +930,11 @@ PARAMETER CONSTRAINTS:
             self.cortex.pause("grid")
             log.info("  ⏸️ Grid PAUSED")
         elif cfg.get("pause_trading") is False:
-            self.cortex.unpause("grid")
-            log.info("  ▶️ Grid UNPAUSED")
+            if self._is_paper("grid"):
+                log.info("  🛡️ Grid unpause BLOCKED — PAPER mode")
+            else:
+                self.cortex.unpause("grid")
+                log.info("  ▶️ Grid UNPAUSED")
 
         spacing = cfg.get("grid_spacing")
         if spacing is not None:
@@ -950,8 +969,11 @@ PARAMETER CONSTRAINTS:
                 _st.pack_into('<Q', mm, 0, 1)
                 log.info("  ⏸️ Trigon PAUSED")
             elif cfg.get("pause_trading") is False:
-                _st.pack_into('<Q', mm, 0, 0)
-                log.info("  ▶️ Trigon UNPAUSED")
+                if self._is_paper("trigon"):
+                    log.info("  🛡️ Trigon unpause BLOCKED — PAPER mode")
+                else:
+                    _st.pack_into('<Q', mm, 0, 0)
+                    log.info("  ▶️ Trigon UNPAUSED")
 
             # min_profit_bps at offset 8
             mpb = cfg.get("min_profit_bps")
@@ -1009,7 +1031,10 @@ PARAMETER CONSTRAINTS:
                 log.info("  ⏸️ Nexus PAUSED by AI (emergency_pause set)")
                 # Will be applied next time Nexus scans — it checks emergency_pause
             elif cfg.get("pause_trading") is False:
-                log.info("  ▶️ Nexus UNPAUSED by AI")
+                if self._is_paper("nexus"):
+                    log.info("  🛡️ Nexus unpause BLOCKED — PAPER mode")
+                else:
+                    log.info("  ▶️ Nexus UNPAUSED by AI")
 
             mpb = cfg.get("min_profit_bps")
             if mpb is not None:
@@ -1323,6 +1348,10 @@ PARAMETER CONSTRAINTS:
                 log.warning(f"  Pause failed for {bot_name}: {result}")
         except Exception as e:
             log.warning(f"  Pause error for {bot_name}: {e}")
+
+    def _is_paper(self, bot_name):
+        """Check if bot is in PAPER mode (AI cannot unpause PAPER bots)."""
+        return getattr(self, '_armada_state', {}).get(bot_name, {}).get("mode") == "PAPER"
 
     def _unpause_bot(self, bot_name):
         """Unpause bot via Cortex UDS (LIVE mode)."""
