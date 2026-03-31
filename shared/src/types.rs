@@ -1,8 +1,7 @@
-use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU64, AtomicI64, AtomicU32};
 
-pub static RISK_STATE_PATH: LazyLock<String> = LazyLock::new(|| "/dev/shm/beroun/risk_state.bin".to_string());
-pub static ENGINE_STATE_PATH: LazyLock<String> = LazyLock::new(|| "/dev/shm/beroun/engine_state.bin".to_string());
+pub const RISK_STATE_PATH: &str = "/dev/shm/beroun/risk_state.bin";
+pub const ENGINE_STATE_PATH: &str = "/dev/shm/beroun/engine_state.bin";
 
 pub const PRICE_SCALE: f64 = 100_000_000.0;
 pub const PRICE_SCALE_I: i64 = 100_000_000;
@@ -291,13 +290,13 @@ impl Default for RiskState {
         Self { 
             paused: AtomicU64::new(0),
             _pad_paused: [0; 56],
-            grid_step: AtomicU64::new((3.0 * PRICE_SCALE) as u64),
+            grid_step: AtomicU64::new(3 * PRICE_SCALE_I as u64),
             grid_size: AtomicU64::new(3),  // v9.0 Hydra: 3 levels per side
-            order_usd: AtomicU64::new((50.0 * PRICE_SCALE) as u64),
-            max_inv_delta: AtomicU64::new((0.005 * PRICE_SCALE) as u64),
+            order_usd: AtomicU64::new(50 * PRICE_SCALE_I as u64),
+            max_inv_delta: AtomicU64::new(PRICE_SCALE_I as u64 / 200),
             bias_offset: AtomicI64::new(0),
-            authorized_capital: AtomicU64::new((400.0 * PRICE_SCALE) as u64), // $400 default
-            daily_loss_limit: AtomicU64::new((20.0 * PRICE_SCALE) as u64),    // $20 default
+            authorized_capital: AtomicU64::new(400 * PRICE_SCALE_I as u64), // $400 default
+            daily_loss_limit: AtomicU64::new(20 * PRICE_SCALE_I as u64),    // $20 default
             _padding: [0; 8],
         }
     }
