@@ -163,6 +163,14 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
 
 <div class="bot-grid" id="bot-grid"></div>
 
+<!-- Fleet Leaderboard Panel (D1) -->
+<div class="panels" style="grid-template-columns: 1fr; margin-bottom: 12px; padding: 0 24px;">
+    <div class="panel" id="leaderboard-panel">
+        <div class="panel-title"><span class="accent">🏆</span> FLEET PNL LEADERBOARD</div>
+        <div id="leaderboard-content"></div>
+    </div>
+</div>
+
 <div class="panels">
     <!-- GPU Telemetry Panel -->
     <div class="panel" id="gpu-panel">
@@ -246,6 +254,8 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
 const ICONS = {hydra:'🐍', moonshot:'🌙', grid:'📐', trigon:'🔺', nexus:'🪐'};
 const PORTS = {hydra:3000, moonshot:3001, grid:3002, trigon:3003, nexus:3004};
 let pnlHistory = [];
+let feeHistory = [];
+let botHistory = {};
 const MAX_HISTORY = 100;
 
 function fmtPnl(v) {
@@ -255,8 +265,8 @@ function fmtPnl(v) {
 
 function pnlClass(v) { return v >= 0 ? 'green' : 'red'; }
 
-function renderSvgSparkline(data, w, h, color) {
-    if (data.length < 3) return '<svg viewBox="0 0 '+w+' '+h+'" style="aspect-ratio:'+w+'/'+h+'"><text x="50%" y="50%" text-anchor="middle" fill="#4b5563" font-size="10" font-family="Inter">Collecting...</text></svg>';
+function renderSvgSparkline(data, w, h, color, showLabel=true) {
+    if (data.length < 3) return `<svg viewBox="0 0 ${w} ${h}" style="width:${w}px;height:${h}px"><text x="50%" y="50%" text-anchor="middle" fill="#4b5563" font-size="10" font-family="Inter">...</text></svg>`;
     const min = Math.min(...data), max = Math.max(...data);
     const range = Math.max(max - min, 0.0001);
     const m = 4, pw = w - 2*m, ph = h - 2*m;
@@ -265,15 +275,34 @@ function renderSvgSparkline(data, w, h, color) {
         const y = m + ph - ((v-min)/range) * ph;
         return x.toFixed(1)+','+y.toFixed(1);
     }).join(' ');
-    return `<svg viewBox="0 0 ${w} ${h}" style="aspect-ratio:${w}/${h}" xmlns="http://www.w3.org/2000/svg">
-    <defs><linearGradient id="sg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${color}" stop-opacity="0.15"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
-    <polygon points="${m},${h} ${pts} ${m+pw},${h}" fill="url(#sg)"/>
+    
+    let textHtml = '';
+    if (showLabel) {
+        textHtml = `<text x="${w-4}" y="${m+10}" text-anchor="end" fill="${color}" font-size="9" font-family="JetBrains Mono">${fmtPnl(data[data.length-1])}</text>`;
+    }
+    
+    return `<svg viewBox="0 0 ${w} ${h}" style="width:${w}px;height:${h}px" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="sg-${color.replace('#','')}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${color}" stop-opacity="0.15"/><stop offset="100%" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>
+    <polygon points="${m},${h} ${pts} ${m+pw},${h}" fill="url(#sg-${color.replace('#','')})"/>
     <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
-    <text x="${w-4}" y="${m+10}" text-anchor="end" fill="${color}" font-size="9" font-family="JetBrains Mono">${fmtPnl(data[data.length-1])}</text></svg>`;
+    ${textHtml}</svg>`;
 }
 
 function renderBots(bots) {
-    if (!bots || !bots.length) { document.getElementById('bot-grid').innerHTML = ''; return; }
+    if (!bots || !bots.length) { 
+        document.getElementById('bot-grid').innerHTML = ''; 
+        document.getElementById('leaderboard-content').innerHTML = ''; 
+        return; 
+    }
+    
+    // Track per-bot history (D3)
+    bots.forEach(b => {
+        if (!botHistory[b.name]) botHistory[b.name] = [];
+        botHistory[b.name].push(b.pnl || 0);
+        if (botHistory[b.name].length > MAX_HISTORY) botHistory[b.name].shift();
+    });
+
+    // Render Grid
     document.getElementById('bot-grid').innerHTML = bots.map(b => {
         const icon = ICONS[b.name] || '🤖';
         const st = b.online ? (b.paused ? 'paused' : 'live') : 'offline';
@@ -281,6 +310,7 @@ function renderBots(bots) {
         const port = PORTS[b.name] || 3000;
         const host = location.hostname || 'localhost';
         const href = `http://${host}:${port}`;
+        const spark = renderSvgSparkline(botHistory[b.name], 80, 20, (b.pnl>=0?'#22c55e':'#ef4444'), false);
         return `<a href="${href}" target="_blank" style="text-decoration:none;color:inherit" title="Open ${b.name.toUpperCase()} dashboard on :${port}">
             <div class="bot-card">
             <div class="bot-header">
@@ -290,7 +320,7 @@ function renderBots(bots) {
             </div>
             <div class="bot-metrics">
                 <div class="bm"><div class="bl">Price</div><div class="bv blue">$${(b.price||0).toFixed(0)}</div></div>
-                <div class="bm"><div class="bl">PnL</div><div class="bv ${pnlClass(b.pnl)}">${fmtPnl(b.pnl)}</div></div>
+                <div class="bm"><div class="bl">PnL</div><div class="bv ${pnlClass(b.pnl)}" style="display:flex;justify-content:space-between">${fmtPnl(b.pnl)} <div style="display:inline-block">${spark}</div></div></div>
                 <div class="bm"><div class="bl">Position</div><div class="bv">${(b.position||0).toFixed(5)}</div></div>
                 <div class="bm"><div class="bl">Grid</div><div class="bv cyan">$${(b.grid_step||0).toFixed(2)}</div></div>
                 <div class="bm"><div class="bl">Fills</div><div class="bv">${b.fills||0}</div></div>
@@ -298,6 +328,31 @@ function renderBots(bots) {
             </div>
         </div></a>`;
     }).join('');
+
+    // Render Leaderboard (D1)
+    let sortedBots = [...bots].sort((a,b) => (b.pnl||0) - (a.pnl||0));
+    let lbHtml = `<table style="width:100%;border-collapse:collapse;font-family:'JetBrains Mono',monospace;font-size:0.8em">
+        <tr style="color:var(--text-muted);border-bottom:1px solid var(--border);text-align:right">
+            <th style="text-align:left;padding:8px">Bot</th>
+            <th style="padding:8px">Status</th>
+            <th style="padding:8px">Fills</th>
+            <th style="padding:8px">Toxic</th>
+            <th style="padding:8px">Net PnL</th>
+        </tr>`;
+    sortedBots.forEach((b, i) => {
+        const medal = i===0 ? '🥇' : i===1 ? '🥈' : i===2 ? '🥉' : '';
+        const icon = ICONS[b.name] || '🤖';
+        const stLabel = b.online ? (b.paused ? 'PAUSED' : 'LIVE') : 'OFF';
+        lbHtml += `<tr style="border-bottom:1px solid rgba(255,255,255,0.02)">
+            <td style="padding:8px;font-weight:700">${medal} ${icon} ${b.name.toUpperCase()}</td>
+            <td style="padding:8px;text-align:right;color:${b.online?'var(--green)':'var(--red)'}">${stLabel}</td>
+            <td style="padding:8px;text-align:right">${b.fills||0}</td>
+            <td style="padding:8px;text-align:right;color:${(b.toxic||0)>10?'var(--red)':'var(--green)'}">${b.toxic||0}</td>
+            <td style="padding:8px;text-align:right;color:${(b.pnl||0)>=0?'var(--green)':'var(--red)'};font-weight:700">${fmtPnl(b.pnl)}</td>
+        </tr>`;
+    });
+    lbHtml += `</table>`;
+    document.getElementById('leaderboard-content').innerHTML = lbHtml;
 }
 
 function renderGpu(gpu) {
@@ -583,7 +638,10 @@ function renderFees(nexus) {
     const bnbTaker = nexus.bnb_fee_bps || 10;
     const crossCost = bfxTaker + bnbTaker;
 
-    let html = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+    feeHistory.push(crossCost);
+    if (feeHistory.length > MAX_HISTORY) feeHistory.shift();
+
+    let html = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">
         <div style="padding:10px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:var(--radius-sm)">
             <div style="font-size:0.6em;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">🔵 Bitfinex</div>
             <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:0.85em">
@@ -601,6 +659,10 @@ function renderFees(nexus) {
         <div style="padding:10px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.15);border-radius:var(--radius-sm)">
             <div style="font-size:0.6em;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">🪐 Cross-Arb Cost</div>
             <div style="font-family:'JetBrains Mono',monospace;font-size:1.1em;font-weight:700;color:${crossCost > 25 ? 'var(--red)' : 'var(--green)'}">${crossCost.toFixed(1)} bps</div>
+        </div>
+        <div style="padding:10px;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:var(--radius-sm);">
+            <div style="font-size:0.6em;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">Trend</div>
+            ${renderSvgSparkline(feeHistory.map(f=>f-100), 120, 30, '#a855f7', false)}
         </div>
     </div>`;
     el.innerHTML = html;

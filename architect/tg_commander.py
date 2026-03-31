@@ -728,6 +728,42 @@ def cmd_ab(message):
     except Exception as e:
         bot.reply_to(message, f"❌ A/B error: {e}")
 
+# ── WALLET STATUS (/wallet) ───────────────────────────────────
+@bot.message_handler(commands=['wallet'])
+def cmd_wallet(message):
+    if not auth(message): return
+    try:
+        import mmap as _mmap
+        import struct as _st
+        ENGINE_PATH = "/dev/shm/beroun/engine_state.bin"
+        
+        if not os.path.exists(ENGINE_PATH):
+            bot.reply_to(message, "❌ Engine mmap neexistuje. (Zadny bot nebezi)")
+            return
+            
+        with open(ENGINE_PATH, 'rb') as f:
+            mm = _mmap.mmap(f.fileno(), 0, access=_mmap.ACCESS_READ)
+            # wallet btc (offs 1488) and usd (offs 1496) from hydra/src/dashboard.rs
+            # Or from `types.rs`, they are after `session_sell_volume` etc.
+            # actually let's just use Cortex UDS
+            mm.close()
+            
+        # Or better -> read from Cortex snapshot
+        c_st = read_cortex_state()
+        if c_st and "bots" in c_st:
+            for b in c_st["bots"]:
+                if b["name"] == "hydra":
+                    btc = b.get("wallet_btc", 0)
+                    usd = b.get("wallet_usd", 0)
+                    price = b.get("price", 0)
+                    tot = usd + (btc * price)
+                    reply = f"💼 *WALLET PORTFOLIO*\n━━━━━━━━━━━━━━━━━━━\nBTC: `{btc:.6f}`\nUSD: `${usd:,.2f}`\n\n*TOTAL:* `${tot:,.2f}`"
+                    bot.reply_to(message, reply)
+                    return
+        bot.reply_to(message, "ℹ️ Wallet data not found in cortex snapshot.")
+    except Exception as e:
+        bot.reply_to(message, f"❌ Wallet error: {e}")
+
 # ── NEXUS CONTROL (/nexus) ────────────────────────────────────
 @bot.message_handler(commands=['nexus'])
 def cmd_nexus(message):
@@ -739,8 +775,22 @@ def cmd_nexus(message):
         subcmd = parts[1].lower() if len(parts) > 1 else "status"
 
         # Bot control commands
-        if subcmd in ("start", "stop", "restart", "pause"):
+        if subcmd in ("start", "stop", "restart", "pause", "paper", "live"):
             from orchestration import start_bot, stop_bot, is_running
+            if subcmd == "paper":
+                save_bot_state("nexus", "PAPER")
+                stop_bot("nexus")
+                import time; time.sleep(2)
+                result = start_bot("nexus")
+                bot.reply_to(message, "🪐 NEXUS restarted in PAPER mode")
+                return
+            elif subcmd == "live":
+                save_bot_state("nexus", "LIVE")
+                stop_bot("nexus")
+                import time; time.sleep(2)
+                result = start_bot("nexus")
+                bot.reply_to(message, "🪐 NEXUS restarted in LIVE mode")
+                return
             if subcmd == "start":
                 result = start_bot("nexus")
             elif subcmd == "stop":
@@ -1210,9 +1260,18 @@ def main():
                             last_report_day = now.day
                             report_type = "daily"
 
-                        if now.weekday() == 0 and last_report_week != now.isocalendar()[1]:
+                        # T3: Weekly auto-report on Sunday
+                        if now.weekday() == 6 and last_report_week != now.isocalendar()[1]:
                             last_report_week = now.isocalendar()[1]
                             report_type = "weekly"
+                            # Send fleet push automatically
+                            try:
+                                # Mock a message to reuse cmd_fleet logic
+                                class MockMsg:
+                                    def __init__(self, t): self.text = t; self.chat = type('C', (), {'id': AUTHORIZED_CHAT_ID})()
+                                cmd_fleet(MockMsg("/fleet"))
+                            except Exception as e:
+                                log.error(f"Auto fleet push failed: {e}")
 
                         if now.day == 1 and last_report_month != now.month:
                             last_report_month = now.month
