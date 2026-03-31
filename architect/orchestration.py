@@ -5,6 +5,7 @@ Used by L2 Oracle and Telegram Commander.
 """
 
 import os
+import sys
 import subprocess
 import logging
 
@@ -90,6 +91,32 @@ def start_bot(name: str) -> str:
         return msg
 
     os.makedirs(LOG_DIR, exist_ok=True)
+    
+    # Run Safe Boot Protocol (SBP) Pre-flight & WFA
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from safe_boot import SafeBootPipeline
+        pipeline = SafeBootPipeline(name)
+        
+        # Phase 1 & 2
+        p1 = pipeline.run_phase1_preflight()
+        if not p1.get("ok"):
+            msg = f"❌ [SBP REJECTED] {name.upper()} failed Pre-flight: {p1.get('error')}"
+            log.error(msg)
+            return msg
+            
+        p2 = pipeline.run_phase2_wfa()
+        if not p2.get("ok"):
+            msg = f"❌ [SBP REJECTED] {name.upper()} failed Walk-Forward gate: {p2.get('error')}"
+            log.error(msg)
+            return msg
+            
+        # Phase 3 mode enforcement
+        pipeline.enforce_paper_state()
+            
+    except Exception as e:
+        log.error(f"⚠️ SBP evaluation crashed: {e}. Bot start aborted for safety.")
+        return f"❌ [SBP CRASHED] {name.upper()}: {e}"
     
     # Start core
     core_log = os.path.join(LOG_DIR, f"{name}-core.log")
