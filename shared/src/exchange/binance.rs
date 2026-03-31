@@ -272,3 +272,260 @@ pub fn bitfinex_to_binance(bitfinex_sym: &str) -> Option<&'static str> {
         .find(|(_, bf)| *bf == bitfinex_sym)
         .map(|(b, _)| *b)
 }
+
+// ═══════════════════════════════════════════════════════════
+// REST API Order Sender (HMAC-SHA256 Signed)
+// ═══════════════════════════════════════════════════════════
+//
+// Binance uses REST API (not WebSocket) for order management.
+// Every request must include:
+//   1. X-MBX-APIKEY header
+//   2. timestamp parameter (epoch ms)
+//   3. HMAC-SHA256 signature of the query string
+//
+// Rate limit: 1200 requests/minute (weight-based)
+// Order endpoint weight: 1 per order
+
+/// Binance order time-in-force
+#[derive(Debug, Clone, Copy)]
+pub enum BinanceTimeInForce {
+    /// Good Till Cancelled (stays until filled or cancelled)
+    Gtc,
+    /// Immediate Or Cancel (fill what you can, cancel rest)
+    Ioc,
+    /// Fill Or Kill (fill entirely or cancel entirely)
+    Fok,
+}
+
+impl BinanceTimeInForce {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Gtc => "GTC",
+            Self::Ioc => "IOC",
+            Self::Fok => "FOK",
+        }
+    }
+}
+
+/// Binance order type string
+#[derive(Debug, Clone, Copy)]
+pub enum BinanceOrderType {
+    Limit,
+    Market,
+    LimitMaker, // Post-only (rejected if would take)
+}
+
+impl BinanceOrderType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Limit => "LIMIT",
+            Self::Market => "MARKET",
+            Self::LimitMaker => "LIMIT_MAKER",
+        }
+    }
+}
+
+/// Convert universal OrderType → Binance types
+pub fn to_binance_order_type(ot: &OrderType) -> (BinanceOrderType, BinanceTimeInForce) {
+    match ot {
+        OrderType::Limit => (BinanceOrderType::Limit, BinanceTimeInForce::Gtc),
+        OrderType::LimitPostOnly => (BinanceOrderType::LimitMaker, BinanceTimeInForce::Gtc),
+        OrderType::Ioc => (BinanceOrderType::Limit, BinanceTimeInForce::Ioc),
+        OrderType::Market => (BinanceOrderType::Market, BinanceTimeInForce::Gtc),
+    }
+}
+
+/// Signed request components — caller sends these with their HTTP client.
+#[derive(Debug)]
+pub struct SignedRequest {
+    /// Full URL with query string and signature
+    pub url: String,
+    /// HTTP method
+    pub method: &'static str,
+    /// API Key header value (for X-MBX-APIKEY)
+    pub api_key: String,
+}
+
+impl Binance {
+    /// Build a signed query string: append timestamp + signature.
+    fn sign_query(&self, params: &str) -> Option<String> {
+        let creds = self.credentials.as_ref()?;
+        let ts = Self::timestamp_ms();
+        let full_params = if params.is_empty() {
+            format!("timestamp={}", ts)
+        } else {
+            format!("{}&timestamp={}", params, ts)
+        };
+        let sig = super::hmac_sha256_hex(&creds.api_secret, &full_params);
+        Some(format!("{}&signature={}", full_params, sig))
+    }
+
+    /// Build a signed request for any endpoint.
+    fn signed_request(&self, method: &'static str, endpoint: &str, params: &str) -> Option<SignedRequest> {
+        let creds = self.credentials.as_ref()?;
+        let signed_qs = self.sign_query(params)?;
+        Some(SignedRequest {
+            url: format!("{}{}{}{}", REST_URL, endpoint, "?", signed_qs),
+            method,
+            api_key: creds.api_key.clone(),
+        })
+    }
+
+    // ─── Order Endpoints ─────────────────────────────────
+
+    /// POST /api/v3/order — Place a new order.
+    ///
+    /// Returns a `SignedRequest` ready to be executed by an HTTP client.
+    /// The caller is responsible for sending the request and handling the response.
+    ///
+    /// # Example response (LIMIT):
+    /// ```json
+    /// {"symbol":"BTCUSDT","orderId":12345,"clientOrderId":"abc","status":"NEW",...}
+    /// ```
+    pub fn new_order(&self, req: &OrderRequest) -> Option<SignedRequest> {
+        let (ot, tif) = to_binance_order_type(&req.order_type);
+        let side = match req.side {
+            OrderSide::Buy => "BUY",
+            OrderSide::Sell => "SELL",
+        };
+        let price_f = req.price as f64 / crate::PRICE_SCALE;
+
+        let mut params = format!(
+            "symbol={}&side={}&type={}&quantity={:.8}",
+            req.symbol, side, ot.as_str(), req.amount.abs()
+        );
+
+        // LIMIT and LIMIT_MAKER need price; MARKET does not
+        match ot {
+            BinanceOrderType::Limit => {
+                params.push_str(&format!("&price={:.8}&timeInForce={}", price_f, tif.as_str()));
+            }
+            BinanceOrderType::LimitMaker => {
+                params.push_str(&format!("&price={:.8}", price_f));
+            }
+            BinanceOrderType::Market => {
+                // No price needed
+            }
+        }
+
+        // newOrderRespType=RESULT gives fill info immediately
+        params.push_str("&newOrderRespType=RESULT");
+
+        self.signed_request("POST", "/api/v3/order", &params)
+    }
+
+    /// DELETE /api/v3/order — Cancel an order by orderId.
+    pub fn cancel_order(&self, symbol: &str, order_id: u64) -> Option<SignedRequest> {
+        let params = format!("symbol={}&orderId={}", symbol, order_id);
+        self.signed_request("DELETE", "/api/v3/order", &params)
+    }
+
+    /// DELETE /api/v3/order — Cancel an order by clientOrderId.
+    pub fn cancel_order_by_client_id(&self, symbol: &str, client_order_id: &str) -> Option<SignedRequest> {
+        let params = format!("symbol={}&origClientOrderId={}", symbol, client_order_id);
+        self.signed_request("DELETE", "/api/v3/order", &params)
+    }
+
+    /// DELETE /api/v3/openOrders — Cancel ALL open orders for a symbol.
+    pub fn cancel_all_orders(&self, symbol: &str) -> Option<SignedRequest> {
+        let params = format!("symbol={}", symbol);
+        self.signed_request("DELETE", "/api/v3/openOrders", &params)
+    }
+
+    // ─── Account/Info Endpoints ──────────────────────────
+
+    /// GET /api/v3/account — Get account info (balances, permissions).
+    pub fn account_info(&self) -> Option<SignedRequest> {
+        self.signed_request("GET", "/api/v3/account", "")
+    }
+
+    /// GET /api/v3/openOrders — Get all open orders (optionally per symbol).
+    pub fn open_orders(&self, symbol: Option<&str>) -> Option<SignedRequest> {
+        let params = match symbol {
+            Some(s) => format!("symbol={}", s),
+            None => String::new(),
+        };
+        self.signed_request("GET", "/api/v3/openOrders", &params)
+    }
+
+    /// GET /api/v3/myTrades — Get recent trades for a symbol.
+    pub fn my_trades(&self, symbol: &str, limit: u32) -> Option<SignedRequest> {
+        let params = format!("symbol={}&limit={}", symbol, limit);
+        self.signed_request("GET", "/api/v3/myTrades", &params)
+    }
+
+    /// GET /api/v3/exchangeInfo — Get exchange info (no signature needed).
+    /// Returns filters, min quantities, tick sizes, etc.
+    pub fn exchange_info_url() -> String {
+        format!("{}/api/v3/exchangeInfo", REST_URL)
+    }
+
+    /// GET /api/v3/time — Get server time (no signature needed).
+    /// Use this to check clock sync.
+    pub fn server_time_url() -> String {
+        format!("{}/api/v3/time", REST_URL)
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Batch Order Conversion: Universal → Binance
+// ═══════════════════════════════════════════════════════════
+
+impl Binance {
+    /// Convert a universal `OrderRequest` to Binance format and return a signed request.
+    /// This is the main entry point for bots sending orders through the Exchange trait.
+    pub fn submit_order(&self, req: &OrderRequest) -> Option<SignedRequest> {
+        // Translate Bitfinex symbol to Binance if needed
+        let binance_sym = if req.symbol.starts_with('t') {
+            // Bitfinex format (tBTCUSD) → Binance (BTCUSDT)
+            bitfinex_to_binance(&req.symbol)
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| req.symbol.clone())
+        } else {
+            req.symbol.clone()
+        };
+
+        let translated_req = OrderRequest {
+            gid: req.gid,
+            symbol: binance_sym,
+            side: req.side,
+            price: req.price,
+            amount: req.amount,
+            order_type: req.order_type,
+            flags: req.flags,
+        };
+
+        self.new_order(&translated_req)
+    }
+
+    /// Submit a batch of orders. Since Binance doesn't support atomic batches
+    /// like Bitfinex's ox_multi, this returns a Vec of individual signed requests.
+    /// The caller should send them sequentially with rate limiting.
+    pub fn submit_batch(&self, batch: &BatchOrder) -> Vec<SignedRequest> {
+        let mut requests = Vec::new();
+
+        // Cancel phase
+        if let Some(ref symbol) = batch.cancel_symbol {
+            // Translate symbol if needed
+            let binance_sym = if symbol.starts_with('t') {
+                bitfinex_to_binance(symbol)
+                    .unwrap_or(symbol)
+            } else {
+                symbol
+            };
+            if let Some(req) = self.cancel_all_orders(binance_sym) {
+                requests.push(req);
+            }
+        }
+
+        // Place new orders
+        for order in &batch.orders {
+            if let Some(req) = self.submit_order(order) {
+                requests.push(req);
+            }
+        }
+
+        requests
+    }
+}
+
