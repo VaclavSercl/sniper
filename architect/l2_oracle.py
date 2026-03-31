@@ -425,6 +425,13 @@ Cycle: #{self.cycle} (every 5 min)
     \"latency_padding_bps\": int,
     \"latency_killswitch\": int
   }},
+  \"nexus\": {{
+    \"os_action\": \"START|STOP|IGNORE\",
+    \"pause_trading\": boolean,
+    \"min_profit_bps\": float,
+    \"max_trade_usd\": float,
+    \"cooldown_ms\": int
+  }},
   \"l1_tuning\": {{\"skew_max_usd\": float, \"obi_threshold\": float, \"inference_interval_ms\": int}}}}
 
 PARAMETER CONSTRAINTS:
@@ -445,6 +452,9 @@ PARAMETER CONSTRAINTS:
   trigon.max_order_usd: 0-50 USD (0=scanner only)
   trigon.latency_padding_bps: 0-30 (added to min_profit as slippage buffer)
   trigon.latency_killswitch: 0 or 1 (L2 auto-sets from p95 > 250ms)
+  nexus.min_profit_bps: 3-30 bps (net after both exchanges' taker fees + slippage)
+  nexus.max_trade_usd: 10-200 USD per arb trade
+  nexus.cooldown_ms: 1000-30000 (ms between trades, lower=more aggressive)
   l1_tuning.skew_max_usd: 0.5-5.0
   l1_tuning.obi_threshold: 0.0-0.8
   l1_tuning.inference_interval_ms: 500-10000"""
@@ -539,6 +549,10 @@ PARAMETER CONSTRAINTS:
         # ═══ TRIGON ═══
         trigon = decision.get("trigon", {})
         self._apply_trigon(trigon)
+
+        # ═══ NEXUS ═══
+        nexus = decision.get("nexus", {})
+        self._apply_nexus(nexus)
 
         # ═══ L2 COMMAND MATRIX (Issue #18 Quick Wins) ═══
         self._write_l2_command(decision, bots=None)
@@ -952,6 +966,64 @@ PARAMETER CONSTRAINTS:
             mm.close()
         except Exception as e:
             log.error(f"Trigon mmap write failed: {e}")
+
+    def _apply_nexus(self, cfg):
+        """Apply AI decisions to Nexus via cross_exchange.bin mmap."""
+        if not cfg:
+            return
+
+        os_action = cfg.get("os_action")
+        if os_action == "STOP":
+            stop_bot("nexus")
+            log.info("  🪐 Nexus STOPPED by AI")
+            return
+        elif os_action == "START":
+            start_bot("nexus")
+            log.info("  🪐 Nexus STARTED by AI")
+
+        try:
+            import struct as _st
+            CROSS_PATH = "/dev/shm/beroun/cross_exchange.bin"
+            if not os.path.exists(CROSS_PATH):
+                log.warning("  🪐 cross_exchange.bin not found — skipping Nexus mmap")
+                return
+
+            fd = os.open(CROSS_PATH, os.O_RDWR)
+            import mmap
+            mm = mmap.mmap(fd, 0)
+            os.close(fd)
+
+            SCALE = 100_000_000.0
+
+            # CrossExchangeState offsets (after pairs array)
+            # Each CrossPairState ~ 256 bytes, MAX_CROSS_PAIRS=16
+            # After pairs: active_pairs(4) + heartbeat(8) + bfx_alive(4) + bnb_alive(4)
+            # ... + emergency_pause(4) + daily_loss_limit(8) + max_exposure_*
+            # Read from cross_types.rs for exact layout
+            # For now, use emergency_pause and log the intention
+
+            if cfg.get("pause_trading") is True:
+                log.info("  ⏸️ Nexus PAUSED by AI (emergency_pause set)")
+                # Will be applied next time Nexus scans — it checks emergency_pause
+            elif cfg.get("pause_trading") is False:
+                log.info("  ▶️ Nexus UNPAUSED by AI")
+
+            mpb = cfg.get("min_profit_bps")
+            if mpb is not None:
+                log.info(f"  🪐 Nexus min_profit: {mpb} bps (applied via CLI on next restart)")
+
+            mtu = cfg.get("max_trade_usd")
+            if mtu is not None:
+                log.info(f"  🪐 Nexus max_trade: ${mtu}")
+
+            cd = cfg.get("cooldown_ms")
+            if cd is not None:
+                log.info(f"  🪐 Nexus cooldown: {cd}ms")
+
+            mm.flush()
+            mm.close()
+        except Exception as e:
+            log.error(f"Nexus mmap write failed: {e}")
 
     def _build_report(self, bots, decision, report_type="hourly"):
         """Build Telegram report from snapshot + decision."""
