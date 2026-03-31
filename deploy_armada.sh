@@ -103,8 +103,13 @@ taskset -c 3 "$BIN_DIR/sovereign-cortex" >> "$LOG_DIR/sovereign-cortex.log" 2>&1
 CORTEX_PID=$!
 sleep 10
 
-# 2. PnL Daemon
-echo "  [T+10s] Starting PnL Daemon..."
+# 2. Market Recorder & PnL Daemon
+echo "  [T+10s] Starting Market Recorder..."
+python3 "$ARMADA_ROOT/architect/market_recorder.py" >> "$LOG_DIR/market_recorder.log" 2>&1 &
+RECORDER_PID=$!
+sleep 2
+
+echo "  [T+12s] Starting PnL Daemon..."
 python3 "$ARMADA_ROOT/architect/pnl_daemon.py" >> "$LOG_DIR/pnl_daemon.log" 2>&1 &
 PNL_PID=$!
 sleep 5
@@ -130,6 +135,7 @@ echo ""
 echo "🐺 ═════════════════════════════════════════════"
 echo "   INFRASTRUCTURE ONLINE (v19.0)"
 echo "   🧠 Cortex:    PID $CORTEX_PID"
+echo "   📈 Recorder:  PID $RECORDER_PID"
 echo "   💰 PnL:       PID $PNL_PID"
 echo "   📊 Dashboard: PID $DASHBOARD_PID"
 echo "   🌐 Bridge:    PID $BRIDGE_PID"

@@ -1,0 +1,26 @@
+{
+  "binance": [
+    "btcusdt",
+    "ethusdt",
+    "xrpusdt",
+    "solusdt",
+    "dogeusdt",
+    "adausdt",
+    "avaxusdt",
+    "ltcusdt",
+    "linkusdt",
+    "dotusdt"
+  ],
+  "bitfinex": [
+    "tBTCUSD",
+    "tETHUSD",
+    "tXRPUSD",
+    "tSOLUSD",
+    "tDOGE:USD",
+    "tADAUSD",
+    "tAVAX:USD",
+    "tLTCUSD",
+    "tLINK:USD",
+    "tDOTUSD"
+  ]
+}

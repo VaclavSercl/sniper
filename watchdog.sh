@@ -72,6 +72,12 @@ if ! is_alive "pnl_daemon"; then
     ALERTS=$((ALERTS + 1))
 fi
 
+if ! is_alive "market_recorder"; then
+    tg_alert "recorder_down" "⚠️ WATCHDOG: Market Recorder spadl → restartuji"
+    cd "$ARMADA_ROOT" && python3 architect/market_recorder.py >> "$LOG_DIR/market_recorder.log" 2>&1 &
+    ALERTS=$((ALERTS + 1))
+fi
+
 if ! is_alive "price_bridge"; then
     tg_alert "bridge_down" "⚠️ WATCHDOG: Price Bridge spadl → restartuji"
     cd "$ARMADA_ROOT" && python3 architect/price_bridge.py >> "$LOG_DIR/price_bridge.log" 2>&1 &
