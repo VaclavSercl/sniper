@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sovereign L0 Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #0a0a0e;
+            --glass-bg: rgba(20, 20, 30, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --accent-green: #00ff88;
+            --accent-red: #ff3366;
+            --accent-blue: #00d4ff;
+            --text-main: #ffffff;
+            --text-dim: #888899;
+            --accent-color: var(--text-dim);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            background: radial-gradient(circle at 50% 10%, #1a1a2e 0%, #0a0a0e 100%);
+        }
+        
+        /* Ambient Animated Orbs */
+        .orb {
+            position: absolute; border-radius: 50%; filter: blur(80px); opacity: 0.15; z-index: 0;
+            animation: float 20s infinite ease-in-out alternate;
+        }
+        .orb-1 { width: 400px; height: 400px; background: var(--accent-blue); top: -100px; left: 10%; }
+        .orb-2 { width: 500px; height: 500px; background: var(--accent-green); bottom: -150px; right: 5%; animation-delay: -5s; }
+        
+        @keyframes float { 0% { transform: translate(0, 0); } 100% { transform: translate(30px, 50px); } }
+
+        .dashboard-container {
+            position: relative; z-index: 10;
+            width: 90%; max-width: 1200px;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.05);
+            display: grid;
+            grid-template-columns: 1fr 3fr;
+            gap: 40px;
+            animation: flyIn 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+
+        @keyframes flyIn {
+            from { opacity: 0; transform: translateY(40px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        /* Identity Side */
+        .bot-identity {
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            border-right: 1px solid var(--glass-border); padding-right: 30px;
+            position: relative;
+        }
+        .status-ring {
+            width: 160px; height: 160px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 4rem; position: relative;
+            background: rgba(0, 0, 0, 0.3);
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+            transition: all 0.5s ease;
+        }
+        .status-ring::before {
+            content: ''; position: absolute; inset: -4px; border-radius: 50%;
+            background: conic-gradient(transparent 0deg, var(--accent-color) 360deg);
+            animation: spin 3s linear infinite;
+            z-index: -1;
+            opacity: 0.8;
+            transition: all 0.5s ease;
+        }
+        .status-ring::after {
+            content: ''; position: absolute; inset: 2px; border-radius: 50%;
+            background: var(--bg-base); z-index: -1;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        .bot-name { font-size: 2.2rem; font-weight: 700; margin-top: 20px; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        .bot-status { margin-top: 5px; font-family: 'JetBrains Mono', monospace; font-size: 1rem; color: var(--accent-color); font-weight: 700; text-transform: uppercase; letter-spacing: 1px;}
+        .bot-role { font-size: 0.9rem; color: var(--text-dim); margin-top: 10px; text-align: center; }
+
+        /* Metrics Side */
+        .metrics-grid {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;
+        }
+        .metric-card {
+            background: rgba(0,0,0,0.2);
+            border: 1px solid rgba(255,255,255,0.03);
+            border-radius: 16px; padding: 25px;
+            transition: transform 0.2s, background 0.2s;
+            position: relative; overflow: hidden;
+        }
+        .metric-card:hover { transform: translateY(-3px); background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.08); }
+        .metric-label { font-size: 0.8rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; font-weight: 500; margin-bottom: 8px;}
+        .metric-value { font-family: 'JetBrains Mono', monospace; font-size: 2.2rem; font-weight: 700; transition: color 0.3s; }
+        
+        .value-green { color: var(--accent-green); text-shadow: 0 0 15px rgba(0,255,136,0.3); }
+        .value-red { color: var(--accent-red); text-shadow: 0 0 15px rgba(255,51,102,0.3); }
+        .value-blue { color: var(--accent-blue); text-shadow: 0 0 15px rgba(0,212,255,0.3); }
+
+        /* Realtime flash animation */
+        @keyframes flash { 0% { background: rgba(255,255,255,0.1); } 100% { background: rgba(0,0,0,0.2); } }
+        .flash { animation: flash 0.5s ease-out; }
+
+        .back-btn {
+            position: absolute; top: 30px; left: 30px;
+            color: var(--text-dim); text-decoration: none;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.9rem;
+            display: flex; align-items: center; gap: 8px; z-index: 20;
+            transition: color 0.2s;
+        }
+        .back-btn:hover { color: #fff; }
+
+        @media (max-width: 900px) {
+            .dashboard-container { grid-template-columns: 1fr; padding: 30px; margin-top: 50px; }
+            .bot-identity { border-right: none; border-bottom: 1px solid var(--glass-border); padding-right: 0; padding-bottom: 30px; }
+            .metrics-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+
+    <a href="/" class="back-btn">← RETURN TO ARMADA</a>
+
+    <div class="dashboard-container">
+        <div class="bot-identity">
+            <div class="status-ring" id="ring">
+                <span id="bot-icon">🤖</span>
+            </div>
+            <div class="bot-name" id="bot-name">LOADING</div>
+            <div class="bot-status" id="bot-status">WAITING FOR CORTEX</div>
+            <div class="bot-role" id="bot-role">Establishing Sovereign Uplink...</div>
+        </div>
+
+        <div class="metrics-grid">
+            <div class="metric-card" id="card-price">
+                <div class="metric-label">Current Price</div>
+                <div class="metric-value value-blue" id="val-price">$0.00</div>
+            </div>
+            <div class="metric-card" id="card-pnl">
+                <div class="metric-label">Net PnL</div>
+                <div class="metric-value" id="val-pnl">$0.0000</div>
+            </div>
+            <div class="metric-card" id="card-pos">
+                <div class="metric-label">Open Position</div>
+                <div class="metric-value" id="val-pos">0.00000</div>
+            </div>
+            <div class="metric-card" id="card-grid">
+                <div class="metric-label">Dynamic Grid Step</div>
+                <div class="metric-value value-blue" id="val-grid">$0.00</div>
+            </div>
+            <div class="metric-card" id="card-fills">
+                <div class="metric-label">Total Fills</div>
+                <div class="metric-value" id="val-fills">0</div>
+            </div>
+            <div class="metric-card" id="card-toxic">
+                <div class="metric-label">Toxic Flow Hits</div>
+                <div class="metric-value" id="val-toxic">0</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const params = new URLSearchParams(window.location.search);
+        const targetBot = params.get('name') || 'moonshot'; // Fallback
+        
+        const ICONS = { hydra:'🐍', moonshot:'🌙', grid:'📐', trigon:'🔺', nexus:'🪐' };
+        const ROLES = {
+            hydra: 'BTC-USD Delta Lead',
+            moonshot: 'Multi-Symbol Flash Crash',
+            grid: 'Dynamic Multi-Level',
+            trigon: 'Triangular Arbitrage',
+            nexus: 'Cross-Exchange Arbitrage'
+        };
+
+        document.getElementById('bot-icon').textContent = ICONS[targetBot] || '🤖';
+        document.getElementById('bot-name').textContent = targetBot;
+        document.getElementById('bot-role').textContent = ROLES[targetBot] || 'Sovereign Combat Unit';
+        document.title = `${targetBot.toUpperCase()} — Sovereign Dash`;
+
+        const root = document.documentElement;
+        let prevCache = {};
+
+        function updateValue(id, value, newClass = null) {
+            const el = document.getElementById(id);
+            if (prevCache[id] !== value) {
+                el.textContent = value;
+                if (newClass !== null) el.className = `metric-value ${newClass}`;
+                
+                const card = el.closest('.metric-card');
+                card.classList.remove('flash');
+                void card.offsetWidth; // force reflow
+                card.classList.add('flash');
+                
+                prevCache[id] = value;
+            }
+        }
+
+        const source = new EventSource('/events');
+        source.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            const bots = data.snapshot?.bots || [];
+            if (targetBot === 'nexus') {
+                // Nexus handling from separate pipeline if needed, but here we read standard struct
+                if (data.nexus && data.nexus.online) bots.push({name: 'nexus', online: true, pnl: data.nexus.total_pnl, fills: data.nexus.arb_signals});
+            }
+            
+            const botData = bots.find(b => b.name === targetBot);
+
+            if (!botData) {
+                document.getElementById('bot-status').textContent = 'OFFLINE';
+                root.style.setProperty('--accent-color', 'var(--text-dim)');
+                return;
+            }
+
+            const statusText = botData.online ? (botData.paused ? 'PAUSED' : 'LIVE (COMBAT)') : 'OFFLINE';
+            let colorHex = 'var(--text-dim)';
+            if (botData.online) colorHex = botData.paused ? 'var(--accent-red)' : 'var(--accent-green)';
+            
+            document.getElementById('bot-status').textContent = statusText;
+            root.style.setProperty('--accent-color', colorHex);
+
+            updateValue('val-price', `$${(botData.price||0).toFixed(0)}`, 'value-blue');
+            
+            const pnl = botData.pnl || 0;
+            const pnlClass = pnl >= 0 ? 'value-green' : 'value-red';
+            const sign = pnl >= 0 ? '+' : '';
+            updateValue('val-pnl', `${sign}$${pnl.toFixed(4)}`, pnlClass);
+
+            updateValue('val-pos', (botData.position||0).toFixed(5), '');
+            updateValue('val-grid', `$${(botData.grid_step||0).toFixed(2)}`, 'value-blue');
+            updateValue('val-fills', botData.fills||0, '');
+            
+            const toxic = botData.toxic||0;
+            updateValue('val-toxic', toxic, toxic > 10 ? 'value-red' : (toxic === 0 ? 'value-green' : ''));
+        };
+
+        source.onerror = () => {
+            document.getElementById('bot-status').textContent = 'CONNECTION LOST';
+            root.style.setProperty('--accent-color', 'var(--text-dim)');
+        };
+    </script>
+</body>
+</html>

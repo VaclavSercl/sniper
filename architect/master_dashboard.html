@@ -311,10 +311,10 @@ function renderBots(bots) {
         const stLabel = b.online ? (b.paused ? 'PAUSED' : 'LIVE') : 'OFF';
         const port = PORTS[b.name] || 3000;
         const host = location.hostname || 'localhost';
-        const href = b.name === 'hydra' ? `http://${host}:${port}` : '#';
-        const target = b.name === 'hydra' ? '_blank' : '_self';
+        const href = b.name === 'hydra' ? `http://${host}:${port}` : `/bot?name=${b.name}`;
+        const target = '_blank';
         const spark = renderSvgSparkline(botHistory[b.name], 80, 20, (b.pnl>=0?'#22c55e':'#ef4444'), false);
-        return `<a href="${href}" target="${target}" style="text-decoration:none;color:inherit" title="${b.name === 'hydra' ? `Open HYDRA dashboard on :${port}` : 'Bot details integrated in Master Dashboard'}">
+        return `<a href="${href}" target="_blank" style="text-decoration:none;color:inherit" title="Open ${b.name.toUpperCase()} dedicated dashboard">
             <div class="bot-card">
             <div class="bot-header">
                 <span class="bot-icon">${icon}</span>

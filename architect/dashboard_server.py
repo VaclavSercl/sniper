@@ -494,7 +494,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if self.path == "/events":
             self._handle_sse()
         elif self.path == "/" or self.path == "/dashboard":
-            self._serve_html()
+            self._serve_html("master_dashboard.html")
+        elif self.path.startswith("/bot"):
+            self._serve_html("bot_dashboard.html")
         elif self.path == "/api/state":
             self._handle_api()
         else:
@@ -530,10 +532,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _serve_html(self):
-        """Serve the master dashboard HTML."""
+    def _serve_html(self, filename="master_dashboard.html"):
+        """Serve HTML files."""
         import os
-        html_path = os.path.join(os.path.dirname(__file__), "master_dashboard.html")
+        html_path = os.path.join(os.path.dirname(__file__), filename)
         try:
             with open(html_path, "r") as f:
                 body = f.read().encode()
@@ -543,7 +545,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         except FileNotFoundError:
-            self.send_error(404, "master_dashboard.html not found")
+            self.send_error(404, f"{filename} not found")
 
 
 def start_dashboard_server(cortex_client):
@@ -552,7 +554,8 @@ def start_dashboard_server(cortex_client):
     _cortex = cortex_client
 
     def _run():
-        class ReusableServer(HTTPServer):
+        from http.server import ThreadingHTTPServer
+        class ReusableServer(ThreadingHTTPServer):
             allow_reuse_address = True
             allow_reuse_port = True
         server = ReusableServer(("0.0.0.0", DASHBOARD_PORT), DashboardHandler)
