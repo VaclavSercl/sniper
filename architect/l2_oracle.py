@@ -104,6 +104,9 @@ class L2Oracle:
         data = snap_resp["data"]
         bots = data.get("bots", [])
 
+        # 1.5. H3: Sovereign Strategy Audit (Auto-Tune)
+        self._audit_strategies(bots)
+
         # 1b. Get GPU telemetry (Phi-3.5 performance)
         gpu_resp = self.cortex.get_gpu_stats()
         gpu_data = gpu_resp.get("data", {}) if gpu_resp.get("ok") else {}
@@ -1310,6 +1313,78 @@ PARAMETER CONSTRAINTS:
                 log.warning(f"  Unpause failed for {bot_name}: {result}")
         except Exception as e:
             log.warning(f"  Unpause error for {bot_name}: {e}")
+
+    def _audit_strategies(self, bots):
+        """H3: Sovereign SBP AI Strategy Auditor
+        Reads the last 24h of fills from DB. If Toxic Fill Rate > 50%,
+        autonomously adjusts bot parameters via beroun-config/UDS.
+        """
+        if not self.pnl_db:
+            return
+            
+        try:
+            for bot in bots:
+                bot_name = bot["name"]
+                
+                # We mainly care about Hydra's toxic rate for now (as defined in H3)
+                if bot_name != "hydra":
+                    continue
+                    
+                # 1. Check DB for toxic fills limit
+                conn = self.pnl_db._get_conn()
+                cursor = conn.cursor()
+                
+                # Time window: last 6 hours instead of 24h so AI can react faster
+                cutoff_ms = int((time.time() - 3600 * 6) * 1000)
+                
+                cursor.execute(
+                    "SELECT COUNT(*) FROM fills WHERE bot=? AND is_closer=1 AND net_pnl < 0 "
+                    "AND ts_ms >= ?",
+                    (bot_name, cutoff_ms)
+                )
+                toxic_count = cursor.fetchone()[0]
+                
+                cursor.execute(
+                    "SELECT COUNT(*) FROM fills WHERE bot=? AND is_closer=1 "
+                    "AND ts_ms >= ?",
+                    (bot_name, cutoff_ms)
+                )
+                total_closed = cursor.fetchone()[0]
+                
+                if total_closed < 5:
+                    continue  # Not enough data
+                    
+                toxic_pct = (toxic_count / total_closed) * 100.0
+                
+                log.info(f"🛡️ [AI Auditor] {bot_name} 6h Toxic Rate: {toxic_pct:.1f}% ({toxic_count}/{total_closed})")
+                
+                if toxic_pct > 50.0:
+                    log.warning(f"🚨 [AI Auditor] {bot_name} Toxic limit exceeded! Executing auto-tune safeguard.")
+                    
+                    # 2. Extract current grid configuration to modify it safely
+                    current_grid = bot.get("grid_step", 10.0)
+                    new_grid = min(current_grid + 5.0, 50.0) # Clamp to 50
+                    
+                    # 3. Call hydra-config CLI to update the running mmap values
+                    cli_cmd = ["/home/wwwenda/sniper/target/release/hydra-config", "set-grid", str(int(new_grid))]
+                    subprocess.run(cli_cmd, capture_output=True, check=False)
+                    
+                    # Also set levels down to 1 to minimize grid depth exposure
+                    cli_cmd_lvl = ["/home/wwwenda/sniper/target/release/hydra-config", "set-levels", "1"]
+                    subprocess.run(cli_cmd_lvl, capture_output=True, check=False)
+                    
+                    # Alert the user on Telegram
+                    alert_msg = (
+                        f"🚨 <b>{bot_name.upper()} Strategy Audit</b>\n"
+                        f"Toxic Fill Rate kritický: {toxic_pct:.1f}% (limit 50%)\n"
+                        f"🤖 <b>AI Intervence:</b> Zvyšuji obranu.\n"
+                        f"• Grid step zvýšen z ${current_grid:.0f} na ${new_grid:.0f}\n"
+                        f"• Počet úrovní sražen na 1\n"
+                    )
+                    self.send_telegram(alert_msg)
+
+        except Exception as e:
+            log.error(f"[AI Auditor] Error during strategy audit: {e}")
 
     def _send_fallback_report(self, error_msg):
         """Send minimal report when Gemini is unavailable."""
