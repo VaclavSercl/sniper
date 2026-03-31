@@ -16,12 +16,26 @@ import threading
 import logging
 import subprocess
 import os
-from http.server import HTTPServer, BaseHTTPRequestHandler
+import asyncio
+from typing import AsyncGenerator
+
+from fastapi import FastAPI, Response
+from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+from sse_starlette.sse import EventSourceResponse
 
 log = logging.getLogger("dashboard_sse")
 
 DASHBOARD_PORT = 3004
 SSE_INTERVAL = 0.5  # 500ms between updates
+
+app = FastAPI(title="Sniper Master Dashboard API")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # mmap paths
 CROSS_EXCHANGE_PATH = "/dev/shm/beroun/cross_exchange.bin"
@@ -45,6 +59,36 @@ PAIR_NAMES = [
 
 # Global reference to CortexClient (set by start_dashboard_server)
 _cortex = None
+
+
+# Global permanent mmaps
+_mmap_cross = None
+_mmap_engine = None
+_mmap_l2 = None
+
+def _init_mmaps():
+    """Vytvoří permanentní memory-mapping objektů k zamezení kernel overheadu."""
+    global _mmap_cross, _mmap_engine, _mmap_l2
+    try:
+        if os.path.exists(CROSS_EXCHANGE_PATH) and _mmap_cross is None:
+            fd = os.open(CROSS_EXCHANGE_PATH, os.O_RDONLY)
+            _mmap_cross = mmap.mmap(fd, 0, access=mmap.ACCESS_READ)
+            os.close(fd)
+    except Exception as e: log.error(f"Cross mmap err: {e}")
+
+    try:
+        if os.path.exists(ENGINE_STATE_PATH) and _mmap_engine is None:
+            fd = os.open(ENGINE_STATE_PATH, os.O_RDONLY)
+            _mmap_engine = mmap.mmap(fd, 0, access=mmap.ACCESS_READ)
+            os.close(fd)
+    except Exception as e: log.error(f"Engine mmap err: {e}")
+
+    try:
+        if os.path.exists(L2_COMMAND_PATH) and _mmap_l2 is None:
+            fd = os.open(L2_COMMAND_PATH, os.O_RDONLY)
+            _mmap_l2 = mmap.mmap(fd, 0, access=mmap.ACCESS_READ)
+            os.close(fd)
+    except Exception as e: log.error(f"L2 mmap err: {e}")
 
 
 def _build_dashboard_state():
@@ -129,29 +173,26 @@ def _get_latency_percentiles():
     result = {"p50": 0, "p95": 0, "p99": 0, "samples": 0, "mean": 0}
 
     try:
-        if not os.path.exists(L2_COMMAND_PATH):
+        _init_mmaps()
+        if _mmap_l2 is None:
             return result
 
-        with open(L2_COMMAND_PATH, 'rb') as f:
-            mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+        mm = _mmap_l2
 
-            if mm.size() < LATENCY_RING_OFF + LATENCY_RING_SIZE * 8:
-                mm.close()
-                return result
+        if mm.size() < LATENCY_RING_OFF + LATENCY_RING_SIZE * 8:
+            return result
 
-            # Read ring head
-            head = struct.unpack_from('<Q', mm, LATENCY_HEAD_OFF)[0]
+        # Read ring head
+        head = struct.unpack_from('<Q', mm, LATENCY_HEAD_OFF)[0]
 
-            # Read all 64 ring slots
-            values = []
-            for i in range(LATENCY_RING_SIZE):
-                v = struct.unpack_from('<Q', mm, LATENCY_RING_OFF + i * 8)[0]
-                if v > 0 and v < 1_000_000:  # Sanity: 0 < v < 1 second in µs
-                    values.append(v)
+        # Read all 64 ring slots
+        values = []
+        for i in range(LATENCY_RING_SIZE):
+            v = struct.unpack_from('<Q', mm, LATENCY_RING_OFF + i * 8)[0]
+            if v > 0 and v < 1_000_000:  # Sanity: 0 < v < 1 second in µs
+                values.append(v)
 
-            mm.close()
-
-            if not values:
+        if not values:
                 return result
 
             values.sort()
@@ -184,22 +225,15 @@ def _get_cross_exchange_state():
     result = {"pairs": [], "alive": False, "binance": False, "bitfinex": False}
 
     try:
-        if not os.path.exists(CROSS_EXCHANGE_PATH):
+        _init_mmaps()
+        if _mmap_cross is None:
             return result
 
-        with open(CROSS_EXCHANGE_PATH, 'rb') as f:
-            mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+        mm = _mmap_cross
 
-            # ExchangeBBA = 64 bytes: i64 bid, i64 ask, i64 bid_vol, i64 ask_vol, u64 ts, u32 exch_id, u32 connected, 16 pad
-            # CrossPairState = 2×ExchangeBBA(128) + arb metrics(56) + pair identity(32) = ~216 bytes per pair
-            # But repr(C, align(64)) means each ExchangeBBA = 64B, so CrossPairState is bigger
-            # ExchangeBBA: 5×8 + 2×4 + 16 = 64 bytes (perfect)
-            # CrossPairState: 2×64(BBA) + i64+i64+i64+u32+u64+u64+u64+u64+u32+u32 = 128 + 72 = ~256 bytes (aligned)
-            # With align(64): ceil to next 64 multiple = 256 (4 cache lines)
-
-            # Simplified: read raw pair data
-            BBA_SIZE = 64
-            PAIR_SIZE = 448  # 2×BBA(128) + metrics block aligned to 64B boundaries
+        # Simplified: read raw pair data
+        BBA_SIZE = 64
+        PAIR_SIZE = 448  # 2×BBA(128) + metrics block aligned to 64B boundaries
 
             pairs = []
             for i in range(10):  # Max 10 pairs
@@ -267,7 +301,6 @@ def _get_cross_exchange_state():
                 result["alive"] = age_ms < 30000
 
             result["pairs"] = pairs
-            mm.close()
 
     except Exception as e:
         log.debug(f"Cross-exchange read: {e}")
@@ -350,13 +383,13 @@ def _get_ml_shield_state():
     result = {"online": False, "skew": 0.0, "confidence": 0.0}
 
     try:
-        if not os.path.exists(ENGINE_STATE_PATH):
+        _init_mmaps()
+        if _mmap_engine is None:
             return result
 
-        with open(ENGINE_STATE_PATH, 'rb') as f:
-            mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+        mm = _mmap_engine
 
-            if mm.size() > OFF_L1_CONF + 8:
+        if mm.size() > OFF_L1_CONF + 8:
                 skew_raw = struct.unpack_from('<q', mm, OFF_L1_SKEW)[0]
                 conf_raw = struct.unpack_from('<Q', mm, OFF_L1_CONF)[0]
                 toxic_hits = struct.unpack_from('<Q', mm, OFF_L1_TOXIC)[0]
@@ -367,8 +400,6 @@ def _get_ml_shield_state():
                 result["toxic_hits"] = toxic_hits
                 result["ai_bias"] = round(ai_bias / PRICE_SCALE, 6)
                 result["online"] = abs(skew_raw) > 0 or conf_raw > 0
-
-            mm.close()
 
     except Exception as e:
         log.debug(f"ML Shield read: {e}")
@@ -484,68 +515,42 @@ def _get_system_health():
     return result
 
 
-class DashboardHandler(BaseHTTPRequestHandler):
-    """Handles SSE stream + static HTML serving."""
-
-    def log_message(self, format, *args):
-        pass  # Silence HTTP logs
-
-    def do_GET(self):
-        if self.path == "/events":
-            self._handle_sse()
-        elif self.path == "/" or self.path == "/dashboard":
-            self._serve_html("master_dashboard.html")
-        elif self.path.startswith("/bot"):
-            self._serve_html("bot_dashboard.html")
-        elif self.path == "/api/state":
-            self._handle_api()
-        else:
-            self.send_error(404)
-
-    def _handle_sse(self):
-        """Stream SSE events with dashboard state."""
-        self.send_response(200)
-        self.send_header("Content-Type", "text/event-stream")
-        self.send_header("Cache-Control", "no-cache")
-        self.send_header("Connection", "keep-alive")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.end_headers()
-
-        try:
-            while True:
-                state = _build_dashboard_state()
-                data = json.dumps(state)
-                self.wfile.write(f"data: {data}\n\n".encode())
-                self.wfile.flush()
-                time.sleep(SSE_INTERVAL)
-        except (BrokenPipeError, ConnectionResetError):
-            pass
-
-    def _handle_api(self):
-        """One-shot JSON API endpoint."""
+async def _event_generator() -> AsyncGenerator[dict, None]:
+    """Asynchronní yield datových událostí pro SSE klienty, uvolňující GIL."""
+    while True:
         state = _build_dashboard_state()
-        body = json.dumps(state).encode()
-        self.send_response(200)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Content-Length", str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
+        yield {
+            "event": "message",
+            "data": json.dumps(state)
+        }
+        await asyncio.sleep(SSE_INTERVAL)
 
-    def _serve_html(self, filename="master_dashboard.html"):
-        """Serve HTML files."""
-        import os
-        html_path = os.path.join(os.path.dirname(__file__), filename)
-        try:
-            with open(html_path, "r") as f:
-                body = f.read().encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-        except FileNotFoundError:
-            self.send_error(404, f"{filename} not found")
+@app.get("/events")
+async def sse_endpoint():
+    return EventSourceResponse(_event_generator())
+
+@app.get("/api/state")
+async def api_state():
+    return _build_dashboard_state()
+
+@app.get("/")
+@app.get("/dashboard", response_class=HTMLResponse)
+async def serve_master_dashboard():
+    html_path = os.path.join(os.path.dirname(__file__), "master_dashboard.html")
+    try:
+        with open(html_path, "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return Response(content="master_dashboard.html not found", status_code=404)
+
+@app.get("/bot/{bot_name}", response_class=HTMLResponse)
+async def serve_bot_dashboard(bot_name: str):
+    html_path = os.path.join(os.path.dirname(__file__), "bot_dashboard.html")
+    try:
+        with open(html_path, "r", encoding="utf-8") as f:
+            return f.read()
+    except FileNotFoundError:
+        return Response(content="bot_dashboard.html not found", status_code=404)
 
 
 def start_dashboard_server(cortex_client):
@@ -554,13 +559,9 @@ def start_dashboard_server(cortex_client):
     _cortex = cortex_client
 
     def _run():
-        from http.server import ThreadingHTTPServer
-        class ReusableServer(ThreadingHTTPServer):
-            allow_reuse_address = True
-            allow_reuse_port = True
-        server = ReusableServer(("0.0.0.0", DASHBOARD_PORT), DashboardHandler)
-        log.info(f"🎛️ Master Dashboard SSE server: http://0.0.0.0:{DASHBOARD_PORT}")
-        server.serve_forever()
+        import uvicorn
+        log.info(f"🎛️ Master Dashboard SSE server (FastAPI): http://0.0.0.0:{DASHBOARD_PORT}")
+        uvicorn.run(app, host="0.0.0.0", port=DASHBOARD_PORT, log_level="warning")
 
     t = threading.Thread(target=_run, daemon=True)
     t.start()
