@@ -69,3 +69,90 @@ pub fn clamp_f64(val: f64, min: f64, max: f64) -> f64 {
 pub fn fixed_i_div(a: i64) -> i64 {
     a / PRICE_SCALE_I
 }
+
+// ═══════════════════════════════════════════════════════════
+// NEW: V12/2026 Sovereign Architecture Safe Math Wrapper
+// ═══════════════════════════════════════════════════════════
+use std::ops::{Add, Sub, Mul, Div, AddAssign, SubAssign};
+
+/// Zero-cost abstraction wrapper pro L0/L1 výpočty s PRICE_SCALE (1e8).
+/// Garance kompilátoru, že FixedPrice v paměti existuje pouze jako nativní i64,
+/// eliminuje paměťový overhead, f64-zaokrouhlování a nedeterminismus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[repr(transparent)]
+pub struct FixedPrice(pub i64);
+
+impl FixedPrice {
+    #[inline(always)]
+    pub const fn new(scaled_val: i64) -> Self {
+        Self(scaled_val)
+    }
+
+    #[inline(always)]
+    pub const fn zero() -> Self {
+        Self(0)
+    }
+
+    #[inline(always)]
+    pub const fn from_f64(val: f64) -> Self {
+        Self((val * PRICE_SCALE) as i64)
+    }
+
+    #[inline(always)]
+    pub fn as_f64(self) -> f64 {
+        self.0 as f64 / PRICE_SCALE
+    }
+}
+
+// ── Sčítání (Safe Add) ──
+impl Add for FixedPrice {
+    type Output = Self;
+    #[inline(always)]
+    fn add(self, rhs: Self) -> Self::Output {
+        Self(self.0.checked_add(rhs.0).expect("FixedPrice Overflow (Add)"))
+    }
+}
+
+impl AddAssign for FixedPrice {
+    #[inline(always)]
+    fn add_assign(&mut self, rhs: Self) {
+        self.0 = self.0.checked_add(rhs.0).expect("FixedPrice Overflow (AddAssign)");
+    }
+}
+
+// ── Odčítání (Safe Sub) ──
+impl Sub for FixedPrice {
+    type Output = Self;
+    #[inline(always)]
+    fn sub(self, rhs: Self) -> Self::Output {
+        Self(self.0.checked_sub(rhs.0).expect("FixedPrice Underflow (Sub)"))
+    }
+}
+
+impl SubAssign for FixedPrice {
+    #[inline(always)]
+    fn sub_assign(&mut self, rhs: Self) {
+        self.0 = self.0.checked_sub(rhs.0).expect("FixedPrice Underflow (SubAssign)");
+    }
+}
+
+// ── Násobení s vyrovnáním měřítka ──
+impl Mul for FixedPrice {
+    type Output = Self;
+    #[inline(always)]
+    fn mul(self, rhs: Self) -> Self::Output {
+        let prod = (self.0 as i128) * (rhs.0 as i128);
+        Self((prod / (PRICE_SCALE as i128)) as i64)
+    }
+}
+
+// ── Dělení s vyrovnáním měřítka ──
+impl Div for FixedPrice {
+    type Output = Self;
+    #[inline(always)]
+    fn div(self, rhs: Self) -> Self::Output {
+        assert!(rhs.0 != 0, "FixedPrice Division by Zero");
+        let a = (self.0 as i128) * (PRICE_SCALE as i128);
+        Self((a / (rhs.0 as i128)) as i64)
+    }
+}
