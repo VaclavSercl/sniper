@@ -24,7 +24,8 @@ use sniper_types::PRICE_SCALE;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use bytes::BytesMut;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::UnixListener;
 use tokio::sync::RwLock;
 
@@ -39,14 +40,14 @@ const MAX_POS_CEIL: f64 = 0.02;
 // ── Request / Response types ──
 
 #[derive(Deserialize)]
-struct UdsRequest {
-    cmd: String,
+struct UdsRequest<'a> {
+    cmd: &'a str,
     #[serde(default)]
-    bot: Option<String>,
+    bot: Option<&'a str>,
     #[serde(default)]
     value: Option<f64>,
     #[serde(default)]
-    regime: Option<String>,
+    regime: Option<&'a str>,
     // L1 tuning (SET_L1_TUNING)
     #[serde(default)]
     skew_max_usd: Option<f64>,
@@ -120,22 +121,23 @@ pub async fn run_uds_server(memory: Arc<RwLock<ArmadaMemory>>) {
         let uptime = start.elapsed().as_secs();
 
         tokio::spawn(async move {
-            let (reader, mut writer) = stream.into_split();
-            let mut buf_reader = BufReader::new(reader);
-            let mut line = String::new();
+            let mut stream = stream;
+            let mut buf = BytesMut::with_capacity(1024);
+            
+            // ZERO-COPY: Čtení do statického bufferu
+            let _ = stream.read_buf(&mut buf).await;
+            if buf.is_empty() { return; }
 
-            if buf_reader.read_line(&mut line).await.is_err() {
-                return;
-            }
-
-            let response = match serde_json::from_str::<UdsRequest>(line.trim()) {
+            let response = match serde_json::from_slice::<UdsRequest>(&buf) {
                 Ok(req) => handle_request(req, &mem, uptime).await,
-                Err(e) => UdsResponse::err(&format!("Invalid JSON: {e}")),
+                Err(e) => UdsResponse::err(&format!("Invalid JSON slice: {e}")),
             };
 
-            if let Ok(json) = serde_json::to_string(&response) {
-                let _ = writer.write_all(json.as_bytes()).await;
-                let _ = writer.write_all(b"\n").await;
+            // ZERO-COPY: Přímý zápis na stream přes vec
+            let mut out_buf = Vec::with_capacity(2048);
+            if serde_json::to_writer(&mut out_buf, &response).is_ok() {
+                out_buf.push(b'\n');
+                let _ = stream.write_all(&out_buf).await;
             }
         });
     }
@@ -145,8 +147,8 @@ pub async fn run_uds_server(memory: Arc<RwLock<ArmadaMemory>>) {
 // Command dispatcher
 // ═══════════════════════════════════════════════════════════
 
-async fn handle_request(
-    req: UdsRequest,
+async fn handle_request<'a>(
+    req: UdsRequest<'a>,
     memory: &Arc<RwLock<ArmadaMemory>>,
     uptime: u64,
 ) -> UdsResponse {
@@ -228,7 +230,7 @@ async fn handle_request(
                 return UdsResponse::err("Missing 'value' field");
             };
             let clamped = value.clamp(GRID_FLOOR, GRID_CEIL);
-            let bot_name = req.bot.as_deref().unwrap_or("hydra");
+            let bot_name = req.bot.unwrap_or("hydra");
             let mem = memory.read().await;
             let Some(risk) = mem.risk_for_bot(bot_name) else {
                 return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));
@@ -246,7 +248,7 @@ async fn handle_request(
                 return UdsResponse::err("Missing 'value' field");
             };
             let clamped = value.clamp(MAX_POS_FLOOR, MAX_POS_CEIL);
-            let bot_name = req.bot.as_deref().unwrap_or("hydra");
+            let bot_name = req.bot.unwrap_or("hydra");
             let mem = memory.read().await;
             let Some(risk) = mem.risk_for_bot(bot_name) else {
                 return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));
@@ -260,7 +262,7 @@ async fn handle_request(
         }
 
         "SET_REGIME" => {
-            let Some(ref regime) = req.regime else {
+            let Some(regime) = req.regime else {
                 return UdsResponse::err("Missing 'regime' field");
             };
             let regime_id: u64 = match regime.to_uppercase().as_str() {
@@ -269,7 +271,7 @@ async fn handle_request(
                 "CHAOS" | "BEARISH_SHOCK" => 3,
                 _ => 0,
             };
-            let bot_name = req.bot.as_deref().unwrap_or("hydra");
+            let bot_name = req.bot.unwrap_or("hydra");
             let mem = memory.read().await;
             let Some(engine) = mem.engine_for_bot(bot_name) else {
                 return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));
@@ -284,7 +286,7 @@ async fn handle_request(
         }
 
         "PAUSE" => {
-            let bot_name = req.bot.as_deref().unwrap_or("hydra");
+            let bot_name = req.bot.unwrap_or("hydra");
             let mem = memory.read().await;
             let Some(risk) = mem.risk_for_bot(bot_name) else {
                 return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));
@@ -295,7 +297,7 @@ async fn handle_request(
         }
 
         "UNPAUSE" => {
-            let bot_name = req.bot.as_deref().unwrap_or("hydra");
+            let bot_name = req.bot.unwrap_or("hydra");
             let mem = memory.read().await;
             let Some(risk) = mem.risk_for_bot(bot_name) else {
                 return UdsResponse::err(&format!("Bot '{bot_name}' not found or offline"));

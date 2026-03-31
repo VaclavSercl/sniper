@@ -127,6 +127,7 @@ async fn run_binance_ws_inner(engine: &EngineState) -> anyhow::Result<()> {
             }
         }
     }
+    Ok(())
 }
 
 // ═══ MODULE 2: FEAR & GREED INDEX ═══
