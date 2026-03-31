@@ -316,8 +316,8 @@ async fn async_main() -> Result<()> {
         };
         info!(event = "exec_ws_connected");
 
-        // Order channel: HFT loop → exec writer
-        let (order_tx, mut order_rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+        // Order channel: HFT loop → exec writer (Zero-alloc SmallVec)
+        let (order_tx, mut order_rx) = tokio::sync::mpsc::unbounded_channel::<smallvec::SmallVec<[u8; 128]>>();
         // Error channel: any task → main loop (watchdog kill switch)
         let (err_tx, mut err_rx) = tokio::sync::mpsc::unbounded_channel::<&'static str>();
 
@@ -348,7 +348,7 @@ async fn async_main() -> Result<()> {
                 tokio::select! {
                     msg = order_rx.recv() => {
                         if let Some(order_msg) = msg {
-                            if exec_ws.write_frame(fastwebsockets::Frame::text(Payload::Owned(order_msg.into_bytes()))).await.is_err() {
+                            if exec_ws.write_frame(fastwebsockets::Frame::text(Payload::Borrowed(&order_msg))).await.is_err() {
                                 let _ = err_tx_exec.send("writer_socket_error");
                                 break;
                             }
@@ -621,20 +621,20 @@ async fn async_main() -> Result<()> {
                                                                     let amt_f = (amt_i as f64) / sniper_types::PRICE_SCALE as f64;
                                                                     let price_f = (gbp as f64) / sniper_types::PRICE_SCALE;
 
-                                                                    let mut msg = String::with_capacity(128);
+                                                                    let mut msg: smallvec::SmallVec<[u8; 128]> = smallvec::SmallVec::new();
                                                                     let mut itoa_buf = itoa::Buffer::new();
                                                                     let mut ryu1 = ryu::Buffer::new();
                                                                     let mut ryu2 = ryu::Buffer::new();
                                                                     
-                                                                    msg.push_str(r#"[0,"on",null,{"gid":"#);
-                                                                    msg.push_str(itoa_buf.format(sniper_types::BOT_GID_HYDRA));
-                                                                    msg.push_str(r#","symbol":""#);
-                                                                    msg.push_str(sniper_types::TRADING_SYMBOL);
-                                                                    msg.push_str(r#"","amount":""#);
-                                                                    msg.push_str(ryu1.format(amt_f));
-                                                                    msg.push_str(r#"","price":""#);
-                                                                    msg.push_str(ryu2.format(price_f));
-                                                                    msg.push_str(r#"","type":"EXCHANGE IOC"}]"#);
+                                                                    msg.extend_from_slice(b"[0,\"on\",null,{\"gid\":");
+                                                                    msg.extend_from_slice(itoa_buf.format(sniper_types::BOT_GID_HYDRA).as_bytes());
+                                                                    msg.extend_from_slice(b",\"symbol\":\"");
+                                                                    msg.extend_from_slice(sniper_types::TRADING_SYMBOL.as_bytes());
+                                                                    msg.extend_from_slice(b"\",\"amount\":\"");
+                                                                    msg.extend_from_slice(ryu1.format(amt_f).as_bytes());
+                                                                    msg.extend_from_slice(b"\",\"price\":\"");
+                                                                    msg.extend_from_slice(ryu2.format(price_f).as_bytes());
+                                                                    msg.extend_from_slice(b"\",\"type\":\"EXCHANGE IOC\"}]");
                                                                     
                                                                     let _ = order_tx.send(msg);
                                                                     mask |= bit;
@@ -662,20 +662,20 @@ async fn async_main() -> Result<()> {
                                                                     let amt_f = -((amt_i as f64) / sniper_types::PRICE_SCALE as f64);
                                                                     let price_f = (gsp as f64) / sniper_types::PRICE_SCALE;
 
-                                                                    let mut msg = String::with_capacity(128);
+                                                                    let mut msg: smallvec::SmallVec<[u8; 128]> = smallvec::SmallVec::new();
                                                                     let mut itoa_buf = itoa::Buffer::new();
                                                                     let mut ryu1 = ryu::Buffer::new();
                                                                     let mut ryu2 = ryu::Buffer::new();
                                                                     
-                                                                    msg.push_str(r#"[0,"on",null,{"gid":"#);
-                                                                    msg.push_str(itoa_buf.format(sniper_types::BOT_GID_HYDRA));
-                                                                    msg.push_str(r#","symbol":""#);
-                                                                    msg.push_str(sniper_types::TRADING_SYMBOL);
-                                                                    msg.push_str(r#"","amount":""#);
-                                                                    msg.push_str(ryu1.format(amt_f));
-                                                                    msg.push_str(r#"","price":""#);
-                                                                    msg.push_str(ryu2.format(price_f));
-                                                                    msg.push_str(r#"","type":"EXCHANGE IOC"}]"#);
+                                                                    msg.extend_from_slice(b"[0,\"on\",null,{\"gid\":");
+                                                                    msg.extend_from_slice(itoa_buf.format(sniper_types::BOT_GID_HYDRA).as_bytes());
+                                                                    msg.extend_from_slice(b",\"symbol\":\"");
+                                                                    msg.extend_from_slice(sniper_types::TRADING_SYMBOL.as_bytes());
+                                                                    msg.extend_from_slice(b"\",\"amount\":\"");
+                                                                    msg.extend_from_slice(ryu1.format(amt_f).as_bytes());
+                                                                    msg.extend_from_slice(b"\",\"price\":\"");
+                                                                    msg.extend_from_slice(ryu2.format(price_f).as_bytes());
+                                                                    msg.extend_from_slice(b"\",\"type\":\"EXCHANGE IOC\"}]");
                                                                     
                                                                     let _ = order_tx.send(msg);
                                                                     mask |= bit;
@@ -936,10 +936,9 @@ async fn async_main() -> Result<()> {
                                                             notifier.alert(format!(
                                                                 "🚨 CROSS-BOT EMERGENCY: Flash crash {}bps detected by Moonshot — cancelling all Hydra orders!",
                                                                 drop));
-                                                            // Cancel all orders immediately
-                                                            let _ = order_tx.send(
-                                                                r#"[0,"oc_multi",null,{"all":1}]"#.to_string()
-                                                            );
+                                                            let mut m = smallvec::SmallVec::new();
+                                                            m.extend_from_slice(b"[0,\"oc_multi\",null,{\"all\":1}]");
+                                                            let _ = order_tx.send(m);
                                                             continue; // Skip quoting entirely this tick
                                                         }
 
@@ -987,7 +986,9 @@ async fn async_main() -> Result<()> {
                                                                 let cancel_ids = collect_all_order_ids(eng);
                                                                 if !cancel_ids.is_empty() {
                                                                     let ids_str: Vec<String> = cancel_ids.iter().map(|id| id.to_string()).collect();
-                                                                    let _ = order_tx.send(format!(r#"[0,"oc_multi",null,{{"id":[{}]}}]"#, ids_str.join(",")));
+                                                                    let mut m = smallvec::SmallVec::new();
+                                                                    m.extend_from_slice(format!(r#"[0,"oc_multi",null,{{"id":[{}]}}]"#, ids_str.join(",")).as_bytes());
+                                                                    let _ = order_tx.send(m);
                                                                 }
                                                                 risk.paused.store(1, Ordering::SeqCst);
                                                                 notifier.alert(format!(
@@ -1116,7 +1117,9 @@ async fn async_main() -> Result<()> {
 
                                                             let orders_str = order_parts.join(",");
                                                             let msg = format!(r#"[0,"ox_multi",null,[{}{}]]"#, oc_payload, orders_str);
-                                                            let _ = order_tx.send(msg);
+                                                            let mut m = smallvec::SmallVec::new();
+                                                            m.extend_from_slice(msg.as_bytes());
+                                                            let _ = order_tx.send(m);
 
                                                             // 7. DASHBOARD METRICS
                                                             eng.last_buy_price.store(buy_i, Ordering::SeqCst);
@@ -1192,7 +1195,7 @@ async fn async_main() -> Result<()> {
 
 /// Graceful shutdown: cancel tracked orders, wait for TCP flush, exit.
 async fn graceful_shutdown(
-    order_tx: &tokio::sync::mpsc::UnboundedSender<String>,
+    order_tx: &tokio::sync::mpsc::UnboundedSender<smallvec::SmallVec<[u8; 128]>>,
     notifier: &AsyncNotifier,
     engine_ptr: *const EngineState,
 ) {
@@ -1210,7 +1213,10 @@ async fn graceful_shutdown(
         r#"[0,"oc_multi",null,{"all":1}]"#.to_string()
     };
 
-    if let Err(e) = order_tx.send(cancel_msg) {
+    let mut m = smallvec::SmallVec::new();
+    m.extend_from_slice(cancel_msg.as_bytes());
+
+    if let Err(e) = order_tx.send(m) {
         tracing::error!(event = "shutdown_cancel_failed", error = %e);
     } else {
         info!(event = "cancel_sent");

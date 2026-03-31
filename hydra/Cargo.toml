@@ -60,3 +60,4 @@ fastwebsockets = { version = "0.8", features = ["upgrade", "hyper", "simd"] }
 hyper = "1.0"
 http-body-util = "0.1"
 hyper-util = { version = "0.1", features = ["tokio", "server-auto", "client-legacy"] }
+smallvec = "1.15.1"
