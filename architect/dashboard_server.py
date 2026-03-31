@@ -26,7 +26,15 @@ SSE_INTERVAL = 0.5  # 500ms between updates
 # mmap paths
 CROSS_EXCHANGE_PATH = "/dev/shm/beroun/cross_exchange.bin"
 ENGINE_STATE_PATH = "/dev/shm/beroun/engine_state.bin"
+L2_COMMAND_PATH = "/dev/shm/beroun/l2_command.bin"
 PRICE_SCALE = 100_000_000
+
+# Latency ring buffer layout (from l2_command.rs CL6+)
+# CL1-CL5 = 5×64 = 320 bytes, then L1TelemetryRing starts
+LATENCY_HEAD_OFF = 320         # AtomicUsize (8 bytes) + 56 pad = 64B
+LATENCY_RING_OFF = 384         # 64 × AtomicU64 (8 bytes each) = 512B
+LATENCY_RING_SIZE = 64
+LATENCY_SPARKLINE_MAX = 120    # 120 samples = 1 minute at 500ms interval
 
 # Cross-exchange pair names (match CROSS_EXCHANGE_PAIRS in binance.rs)
 PAIR_NAMES = [
@@ -84,8 +92,70 @@ def _build_dashboard_state():
     # 6. ML Shield metrics (Phase 6)
     state["ml_shield"] = _get_ml_shield_state()
 
+    # 7. Latency percentiles + sparkline history
+    lat = _get_latency_percentiles()
+    state["latency"] = lat
+    # Collect history for sparkline (only if we have data)
+    if lat.get("p50", 0) > 0:
+        _latency_history.append({
+            "p50": lat["p50"], "p95": lat["p95"], "p99": lat["p99"],
+            "ts": int(time.time() * 1000),
+        })
+        while len(_latency_history) > LATENCY_SPARKLINE_MAX:
+            _latency_history.popleft()
+    state["latency_history"] = list(_latency_history)
+
     return state
 
+
+# ═══════════════════════════════════════════════════════════
+# Latency Ring Buffer Reader (Phase 4.1 → Phase 7.2 Sparkline)
+# ═══════════════════════════════════════════════════════════
+from collections import deque
+_latency_history = deque(maxlen=LATENCY_SPARKLINE_MAX)
+
+def _get_latency_percentiles():
+    """Read latency ring buffer from l2_command.bin mmap and compute percentiles."""
+    result = {"p50": 0, "p95": 0, "p99": 0, "samples": 0, "mean": 0}
+
+    try:
+        if not os.path.exists(L2_COMMAND_PATH):
+            return result
+
+        with open(L2_COMMAND_PATH, 'rb') as f:
+            mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+
+            if mm.size() < LATENCY_RING_OFF + LATENCY_RING_SIZE * 8:
+                mm.close()
+                return result
+
+            # Read ring head
+            head = struct.unpack_from('<Q', mm, LATENCY_HEAD_OFF)[0]
+
+            # Read all 64 ring slots
+            values = []
+            for i in range(LATENCY_RING_SIZE):
+                v = struct.unpack_from('<Q', mm, LATENCY_RING_OFF + i * 8)[0]
+                if v > 0 and v < 1_000_000:  # Sanity: 0 < v < 1 second in µs
+                    values.append(v)
+
+            mm.close()
+
+            if not values:
+                return result
+
+            values.sort()
+            n = len(values)
+            result["samples"] = n
+            result["mean"] = round(sum(values) / n, 1)
+            result["p50"] = values[n // 2]
+            result["p95"] = values[min(int(n * 0.95), n - 1)]
+            result["p99"] = values[min(int(n * 0.99), n - 1)]
+
+    except Exception as e:
+        log.debug(f"Latency ring read: {e}")
+
+    return result
 
 # ═══════════════════════════════════════════════════════════
 # Cross-Exchange State Reader (Phase 5.4)

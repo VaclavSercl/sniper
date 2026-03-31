@@ -195,6 +195,18 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
         <div id="risk-content"><span style="color:var(--text-muted);font-size:0.8em">Waiting for risk data...</span></div>
     </div>
 </div>
+
+<!-- Latency Percentiles Panel (Phase 7.2) -->
+<div class="panels">
+    <div class="panel" id="latency-panel" style="grid-column:1/-1">
+        <div class="panel-title"><span class="accent">⚡</span> LATENCY PERCENTILES (Tick-to-Trade)</div>
+        <div style="display:flex;gap:16px;align-items:flex-start">
+            <div id="latency-stats" style="min-width:140px"></div>
+            <div id="latency-sparkline" style="flex:1;height:80px"></div>
+        </div>
+    </div>
+</div>
+
 <!-- Server Health Panel -->
 <div class="health-section">
     <div class="panel-title"><span class="accent">🖥️</span> SERVER HEALTH</div>
@@ -370,6 +382,7 @@ function update(state) {
     renderCrossExchange(state.cross_exchange || {});
     renderMlShield(state.ml_shield || {});
     renderRisk(state.cross_exchange || {});
+    renderLatency(state.latency || {}, state.latency_history || []);
     renderSystem(state.system || {});
 }
 
@@ -481,6 +494,52 @@ function renderRisk(cx) {
             <div class="bv" style="color:var(--orange)">$50</div></div>
     </div>`;
     el.innerHTML = html;
+}
+
+function renderLatency(lat, history) {
+    const statsEl = document.getElementById('latency-stats');
+    const chartEl = document.getElementById('latency-sparkline');
+    if (!statsEl || !chartEl) return;
+
+    if (!lat.p50) {
+        statsEl.innerHTML = '<span style="color:var(--text-muted);font-size:0.8em">No latency data</span>';
+        chartEl.innerHTML = '';
+        return;
+    }
+
+    const p50c = lat.p50 < 80 ? 'var(--green)' : lat.p50 < 200 ? 'var(--yellow)' : 'var(--red)';
+    const p99c = lat.p99 < 150 ? 'var(--green)' : lat.p99 < 500 ? 'var(--yellow)' : 'var(--red)';
+
+    statsEl.innerHTML = `
+        <div class="bm"><div class="bl">P50</div><div class="bv" style="color:${p50c}">${lat.p50}µs</div></div>
+        <div class="bm"><div class="bl">P95</div><div class="bv" style="color:var(--yellow)">${lat.p95}µs</div></div>
+        <div class="bm"><div class="bl">P99</div><div class="bv" style="color:${p99c}">${lat.p99}µs</div></div>
+        <div class="bm"><div class="bl">Mean</div><div class="bv">${lat.mean}µs</div></div>
+        <div class="bm"><div class="bl">Samples</div><div class="bv">${lat.samples}</div></div>`;
+
+    // SVG Sparkline
+    if (history.length < 2) {
+        chartEl.innerHTML = '<span style="color:var(--text-muted);font-size:0.7em">Collecting data...</span>';
+        return;
+    }
+
+    const W = chartEl.clientWidth || 400;
+    const H = 76;
+    const maxVal = Math.max(...history.map(h => h.p99), 200);
+    const dx = W / (history.length - 1);
+
+    function toPoints(key) {
+        return history.map((h, i) => `${(i * dx).toFixed(1)},${(H - (h[key] / maxVal) * (H - 4)).toFixed(1)}`).join(' ');
+    }
+
+    chartEl.innerHTML = `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block">
+        <rect width="${W}" height="${H}" fill="rgba(255,255,255,0.02)" rx="4"/>
+        <line x1="0" y1="${H - (100/maxVal)*(H-4)}" x2="${W}" y2="${H - (100/maxVal)*(H-4)}" stroke="rgba(255,255,255,0.06)" stroke-dasharray="4,4"/>
+        <polyline points="${toPoints('p99')}" fill="none" stroke="var(--red)" stroke-width="1" opacity="0.5"/>
+        <polyline points="${toPoints('p95')}" fill="none" stroke="var(--yellow)" stroke-width="1.2" opacity="0.6"/>
+        <polyline points="${toPoints('p50')}" fill="none" stroke="var(--green)" stroke-width="1.5"/>
+        <text x="4" y="12" fill="var(--text-muted)" font-size="8" font-family="JetBrains Mono">P50 P95 P99 (µs) — max ${maxVal}</text>
+    </svg>`;
 }
 
 function makeGauge(containerId, pct, unit, tempMode) {
