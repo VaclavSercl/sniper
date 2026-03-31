@@ -3,7 +3,6 @@
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use std::collections::HashMap;
 
 use anyhow::Result;
 use tracing::info;
@@ -47,6 +46,77 @@ fn calculate_triangle_i64(
     (rate_i64, profit_bps as i64)
 }
 
+const MAX_TICKER_SLOTS: usize = 32;
+
+/// Cache-friendly flat lookup table replacing HashMap.
+/// Linear scan over 32 × 16B = 512B = 8 cache lines.
+/// All hot path data lives in L1 cache.
+struct FlatMap {
+    keys: [u64; MAX_TICKER_SLOTS],
+    vals: [u64; MAX_TICKER_SLOTS],
+    len: usize,
+}
+
+impl FlatMap {
+    const fn new() -> Self {
+        Self { keys: [0; MAX_TICKER_SLOTS], vals: [0; MAX_TICKER_SLOTS], len: 0 }
+    }
+
+    #[inline]
+    fn get(&self, key: u64) -> Option<u64> {
+        // Linear scan — fast for ≤32 entries (fully in L1 cache)
+        for i in 0..self.len {
+            if self.keys[i] == key { return Some(self.vals[i]); }
+        }
+        None
+    }
+
+    #[inline]
+    fn insert(&mut self, key: u64, val: u64) {
+        for i in 0..self.len {
+            if self.keys[i] == key { self.vals[i] = val; return; }
+        }
+        if self.len < MAX_TICKER_SLOTS {
+            self.keys[self.len] = key;
+            self.vals[self.len] = val;
+            self.len += 1;
+        }
+    }
+}
+
+/// Same as FlatMap but keyed on i64 (for channel IDs)
+struct FlatMapI64 {
+    keys: [i64; MAX_TICKER_SLOTS],
+    vals: [u64; MAX_TICKER_SLOTS],
+    len: usize,
+}
+
+impl FlatMapI64 {
+    const fn new() -> Self {
+        Self { keys: [0; MAX_TICKER_SLOTS], vals: [0; MAX_TICKER_SLOTS], len: 0 }
+    }
+
+    #[inline]
+    fn get(&self, key: i64) -> Option<u64> {
+        for i in 0..self.len {
+            if self.keys[i] == key { return Some(self.vals[i]); }
+        }
+        None
+    }
+
+    #[inline]
+    fn insert(&mut self, key: i64, val: u64) {
+        for i in 0..self.len {
+            if self.keys[i] == key { self.vals[i] = val; return; }
+        }
+        if self.len < MAX_TICKER_SLOTS {
+            self.keys[self.len] = key;
+            self.vals[self.len] = val;
+            self.len += 1;
+        }
+    }
+}
+
 struct TrigonEngine {
     notifier: Arc<AsyncNotifier>,
     engine: *const TrigonEngineState,
@@ -54,9 +124,9 @@ struct TrigonEngine {
     fee_state: *const sniper_types::fee_types::GlobalFeeState,
     l2_cmd: *const sniper_types::l2_command::L2CommandMatrix,
     
-    chan_to_symbol: HashMap<i64, u64>,
-    symbol_bids_i: HashMap<u64, u64>,
-    symbol_asks_i: HashMap<u64, u64>,
+    chan_to_symbol: FlatMapI64,
+    symbol_bids_i: FlatMap,
+    symbol_asks_i: FlatMap,
     
     subscribed_symbols: Vec<String>,
     last_scan: Instant,
@@ -117,7 +187,7 @@ impl SovereignEngine for TrigonEngine {
             let risk = unsafe { &*self.risk };
             let fee_state = unsafe { &*self.fee_state };
             
-            if let Some(&sym_hash) = self.chan_to_symbol.get(&chan) {
+            if let Some(sym_hash) = self.chan_to_symbol.get(chan) {
                 let bid_f = bid as u64;
                 let ask_f = ask as u64;
                 self.symbol_bids_i.insert(sym_hash, bid_f);
@@ -154,7 +224,7 @@ impl SovereignEngine for TrigonEngine {
                         for l in 0..TRIGON_LEGS {
                             let h = tr.leg_symbols[l].load(Ordering::Acquire);
                             dirs[l] = tr.leg_directions[l].load(Ordering::Acquire);
-                            if let (Some(&b), Some(&a)) = (self.symbol_bids_i.get(&h), self.symbol_asks_i.get(&h)) {
+                            if let (Some(b), Some(a)) = (self.symbol_bids_i.get(h), self.symbol_asks_i.get(h)) {
                                 bids[l] = b;
                                 asks[l] = a;
                             } else {
@@ -275,9 +345,9 @@ async fn main() -> Result<()> {
         risk: risk_ptr,
         fee_state: fee_ptr,
         l2_cmd: &l2_shared.cmd,
-        chan_to_symbol: HashMap::new(),
-        symbol_bids_i: HashMap::new(),
-        symbol_asks_i: HashMap::new(),
+        chan_to_symbol: FlatMapI64::new(),
+        symbol_bids_i: FlatMap::new(),
+        symbol_asks_i: FlatMap::new(),
         subscribed_symbols: Vec::new(),
         last_scan: Instant::now() - core::time::Duration::from_secs(10),
         last_exec_ms: [0; TRIGON_MAX_TRIANGLES],

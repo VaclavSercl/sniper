@@ -72,8 +72,11 @@ pub fn sort_book(levels: *mut [sniper_types::OrderBookLevel; sniper_types::BOOK_
 
 pub fn calculate_checksum(engine: &sniper_types::EngineState, debug: bool) -> i32 {
     fence(Ordering::SeqCst);
-    let mut s = String::with_capacity(1024);
-    let mut levels_found = 0;
+    let mut hasher = Hasher::new();
+    let mut levels_found: u32 = 0;
+    // Stack-only scratch buffer for write_bfx formatting (no heap)
+    let mut fmt_buf = arrayvec::ArrayString::<64>::new();
+
     for i in 0..25 {
         let bid = &engine.bids[i];
         let ask = &engine.asks[i];
@@ -81,35 +84,42 @@ pub fn calculate_checksum(engine: &sniper_types::EngineState, debug: bool) -> i3
         let bc = bid.count.load(Ordering::SeqCst);
         let ap = ask.price.load(Ordering::SeqCst);
         let ac = ask.count.load(Ordering::SeqCst);
+
         if bc > 0 && bp > 0 {
+            if levels_found > 0 { hasher.update(b":"); }
             levels_found += 1;
             let p = bp as f64 / sniper_types::PRICE_SCALE;
             let a = bid.amount.load(Ordering::SeqCst) as f64 / sniper_types::PRICE_SCALE;
-            if !s.is_empty() { s.push(':'); }
-            let _ = write_bfx(&mut s, p);
-            s.push(':');
-            let _ = write_bfx(&mut s, a);
+            fmt_buf.clear();
+            let _ = write_bfx(&mut fmt_buf, p);
+            hasher.update(fmt_buf.as_bytes());
+            hasher.update(b":");
+            fmt_buf.clear();
+            let _ = write_bfx(&mut fmt_buf, a);
+            hasher.update(fmt_buf.as_bytes());
         }
         if ac > 0 && ap > 0 {
+            if levels_found > 0 { hasher.update(b":"); }
             levels_found += 1;
             let p = ap as f64 / sniper_types::PRICE_SCALE;
             let a = ask.amount.load(Ordering::SeqCst) as f64 / sniper_types::PRICE_SCALE;
-            if !s.is_empty() { s.push(':'); }
-            let _ = write_bfx(&mut s, p);
-            s.push(':');
-            let _ = write_bfx(&mut s, a);
+            fmt_buf.clear();
+            let _ = write_bfx(&mut fmt_buf, p);
+            hasher.update(fmt_buf.as_bytes());
+            hasher.update(b":");
+            fmt_buf.clear();
+            let _ = write_bfx(&mut fmt_buf, a);
+            hasher.update(fmt_buf.as_bytes());
         }
     }
+
     if debug || levels_found == 0 {
-        let preview = if s.len() > 200 { &s[..200] } else { &s };
         info!(event = "checksum_debug", levels = levels_found,
               bids0_p = engine.bids[0].price.load(Ordering::SeqCst),
               bids0_c = engine.bids[0].count.load(Ordering::SeqCst),
               asks0_p = engine.asks[0].price.load(Ordering::SeqCst),
-              asks0_c = engine.asks[0].count.load(Ordering::SeqCst),
-              cs_str_preview = %preview);
+              asks0_c = engine.asks[0].count.load(Ordering::SeqCst));
     }
-    let mut h = Hasher::new();
-    h.update(s.as_bytes());
-    h.finalize() as i32
+
+    hasher.finalize() as i32
 }

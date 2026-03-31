@@ -308,7 +308,12 @@ async fn main() -> Result<()> {
         l2cmd: &l2cmd.cmd,
         args,
         binance: Binance::new(),
-        http_client: reqwest::Client::builder().timeout(Duration::from_secs(5)).build()?,
+        http_client: reqwest::Client::builder()
+            .timeout(Duration::from_secs(5))
+            .pool_max_idle_per_host(2)
+            .pool_idle_timeout(Duration::from_secs(30))
+            .tcp_keepalive(Duration::from_secs(15))
+            .build()?,
         authed: false,
         last_exec_ms: 0,
         last_scan: Instant::now(),

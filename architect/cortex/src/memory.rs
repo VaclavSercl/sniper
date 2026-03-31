@@ -247,10 +247,11 @@ impl ArmadaMemory {
 
     /// Nexus snapshot — lightweight, process-based (no EngineState mmap).
     fn snapshot_nexus(&self) -> BotSnapshot {
-        let online = std::process::Command::new("pgrep")
-            .args(["-f", "nexus-core"])
-            .output()
-            .map(|o| o.status.success())
+        // Zero-fork liveness check: read PID file + kill(pid, 0)
+        let online = std::fs::read_to_string("/tmp/nexus-core.pid")
+            .ok()
+            .and_then(|s| s.trim().parse::<i32>().ok())
+            .map(|pid| unsafe { libc::kill(pid, 0) } == 0)
             .unwrap_or(false);
 
         BotSnapshot {

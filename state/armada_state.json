@@ -1,24 +1,24 @@
 {
   "hydra": {
-    "mode": "LIVE",
-    "since": "2026-03-31T23:40:12.897115"
+    "mode": "PAPER",
+    "since": "2026-04-01T00:09:10.391728"
   },
   "moonshot": {
-    "mode": "LIVE",
-    "since": "2026-03-31T23:40:17.949953"
+    "mode": "PAPER",
+    "since": "2026-04-01T00:09:17.481237"
   },
   "grid": {
-    "mode": "LIVE",
-    "since": "2026-03-31T23:40:22.983064"
+    "mode": "PAPER",
+    "since": "2026-04-01T00:09:24.561167"
   },
   "trigon": {
-    "mode": "LIVE",
-    "since": "2026-03-31T23:40:28.011451"
+    "mode": "PAPER",
+    "since": "2026-04-01T00:09:31.638577"
   },
   "nexus": {
     "mode": "PAPER",
-    "since": "2026-03-31T23:40:33.070884"
+    "since": "2026-04-01T00:09:38.703062"
   },
-  "last_healthy_ts": "2026-03-31T23:45:33.138531",
+  "last_healthy_ts": "2026-04-01T00:09:38.703079",
   "shutdown_reason": "planned_reboot_test"
 }

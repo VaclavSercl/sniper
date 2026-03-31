@@ -860,7 +860,7 @@ PARAMETER CONSTRAINTS:
             _st.pack_into('<Q', mm, CL4, risk_next + 1)  # EVEN = consistent
 
             mm.flush()
-            mm.close()
+            # NOTE: Do NOT close mm — it is self.cmd_mmap, permanent for oracle lifetime
 
             log.info(f"  📡 L2Cmd: ver={next_ver+1} bid_fade={bid_fade}bps ask_fade={ask_fade}bps "
                      f"lat_pad={lat_pad}bps armed={armed} trig=${trigger_price_scaled / PRICE_SCALE:.0f}")

@@ -16,6 +16,9 @@ use sniper_types::mmap_utils::init_mmap;
 
 const VERSION: &str = "1.1.0";
 
+const GRID_ARRAY_CAP: usize = 32;
+type GridLevels = arrayvec::ArrayVec<f64, GRID_ARRAY_CAP>;
+
 fn calculate_grid_levels(
     center: f64,
     spacing: f64,
@@ -23,32 +26,32 @@ fn calculate_grid_levels(
     num_sell: u32,
     mode: u32,
     geo_pct: f64,
-) -> (Vec<f64>, Vec<f64>) {
-    let mut buys = Vec::with_capacity(num_buy as usize);
-    let mut sells = Vec::with_capacity(num_sell as usize);
+) -> (GridLevels, GridLevels) {
+    let mut buys = GridLevels::new();
+    let mut sells = GridLevels::new();
 
     let mut current_buy = center;
     let buy_mult = 1.0 - geo_pct / 100.0;
-    for _ in 1..=(num_buy as usize) {
+    for _ in 1..=(num_buy as usize).min(GRID_ARRAY_CAP) {
         let price = if mode == 0 {
             current_buy - spacing
         } else {
             current_buy * buy_mult
         };
         current_buy = price;
-        if price > 0.0 { buys.push(price); }
+        if price > 0.0 { let _ = buys.try_push(price); }
     }
 
     let mut current_sell = center;
     let sell_mult = 1.0 + geo_pct / 100.0;
-    for _ in 1..=(num_sell as usize) {
+    for _ in 1..=(num_sell as usize).min(GRID_ARRAY_CAP) {
         let price = if mode == 0 {
             current_sell + spacing
         } else {
             current_sell * sell_mult
         };
         current_sell = price;
-        sells.push(price);
+        let _ = sells.try_push(price);
     }
 
     (buys, sells)
@@ -124,21 +127,21 @@ impl SovereignEngine for GridEngine {
                     if spacing > 0.0 && qty > 0.0 && center > 0.0 {
                         let anchor = l2w.grid_dynamic_anchor.load(Ordering::Relaxed);
                         let (buys, sells) = if anchor > 0 {
-                            let mut warp_buys = Vec::new();
-                            let mut warp_sells = Vec::new();
+                            let mut warp_buys = GridLevels::new();
+                            let mut warp_sells = GridLevels::new();
                             for lvl in 1..=30i64 {
                                 if !hedge_active {
                                     if let Some(p) = sniper_types::l2_command::calculate_warped_grid_level(l2w, lvl, true) {
-                                        if p > 0 { warp_buys.push(p as f64 / PRICE_SCALE_I as f64); }
+                                        if p > 0 { let _ = warp_buys.try_push(p as f64 / PRICE_SCALE_I as f64); }
                                     }
                                 }
                                 if let Some(p) = sniper_types::l2_command::calculate_warped_grid_level(l2w, lvl, false) {
-                                    warp_sells.push(p as f64 / PRICE_SCALE_I as f64);
+                                    let _ = warp_sells.try_push(p as f64 / PRICE_SCALE_I as f64);
                                 }
                             }
-                            // Sort for safety
-                            warp_buys.sort_by(|a, b| b.partial_cmp(a).unwrap());
-                            warp_sells.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                            // Sort for safety (in-place, no realloc)
+                            warp_buys.sort_unstable_by(|a, b| b.partial_cmp(a).unwrap());
+                            warp_sells.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap());
                             (warp_buys, warp_sells)
                         } else {
                             calculate_grid_levels(center, spacing, num_buy, num_sell, mode, geo_pct)

@@ -761,6 +761,7 @@ name = "grid"
 version = "1.0.0"
 dependencies = [
  "anyhow",
+ "arrayvec",
  "axum",
  "bytes",
  "chrono",
@@ -942,6 +943,7 @@ name = "hydra"
 version = "11.1.0"
 dependencies = [
  "anyhow",
+ "arrayvec",
  "axum",
  "bytes",
  "chrono",
@@ -2450,6 +2452,7 @@ dependencies = [
  "arrayvec",
  "bytes",
  "futures-util",
+ "libc",
  "memmap2",
  "reqwest 0.13.2",
  "rustls",

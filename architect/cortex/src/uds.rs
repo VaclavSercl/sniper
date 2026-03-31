@@ -205,11 +205,12 @@ async fn handle_request<'a>(
             let btc_price = if hydra.micro_price > 100.0 { hydra.micro_price } else { 0.0 };
             let wallet_total_usd = hydra.wallet_usd + hydra.wallet_btc * btc_price;
 
-            let gpu_alive = std::process::Command::new("curl")
-                .args(["-s", "--max-time", "1", "http://localhost:1234/v1/models"])
-                .output()
-                .map(|o| o.status.success())
-                .unwrap_or(false);
+            // GPU liveness: check heartbeat from mmap (zero-fork, zero-cost)
+            let gpu_alive = {
+                let hydra = mem.hydra_engine();
+                let hb = hydra.ai_heartbeat_ms.load(Ordering::Relaxed);
+                hb > 0 && epoch_ms().saturating_sub(hb) < 30_000
+            };
 
             UdsResponse::ok_with_data(serde_json::json!({
                 "bots": bots,
