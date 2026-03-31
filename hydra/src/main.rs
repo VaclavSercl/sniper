@@ -41,7 +41,6 @@ use sniper_types::mmap_utils::init_mmap;
 use std::sync::atomic::fence;
 use simd_json::prelude::*;
 use simd_json::BorrowedValue;
-use crc32fast::Hasher;
 
 #[inline(always)]
 fn safe_as_i64(v: &BorrowedValue) -> Option<i64> {
@@ -55,113 +54,14 @@ fn safe_as_f64(v: &BorrowedValue) -> Option<f64> {
         .or_else(|| v.as_u64().map(|u| u as f64))
 }
 
-fn update_book(levels: *mut [sniper_types::OrderBookLevel; sniper_types::BOOK_LEVELS], price: u64, amount: i64, count: u64) {
-    let levels = unsafe { &*levels };
-    if count > 0 {
-        let mut found = false;
-        for lvl in levels.iter() {
-            if lvl.price.load(Ordering::SeqCst) == price {
-                lvl.amount.store(amount, Ordering::SeqCst);
-                lvl.count.store(count, Ordering::SeqCst);
-                found = true;
-                break;
-            }
-        }
-        if !found {
-            for lvl in levels.iter() {
-                if lvl.count.load(Ordering::SeqCst) == 0 {
-                    lvl.price.store(price, Ordering::SeqCst);
-                    lvl.amount.store(amount, Ordering::SeqCst);
-                    lvl.count.store(count, Ordering::SeqCst);
-                    break;
-                }
-            }
-        }
-    } else {
-        for lvl in levels.iter() {
-            if lvl.price.load(Ordering::SeqCst) == price {
-                lvl.price.store(0, Ordering::SeqCst);
-                lvl.amount.store(0, Ordering::SeqCst);
-                lvl.count.store(0, Ordering::SeqCst);
-                break;
-            }
-        }
-    }
-}
+mod book;
+pub use book::*;
 
-fn sort_book(levels: *mut [sniper_types::OrderBookLevel; sniper_types::BOOK_LEVELS], is_bid: bool) {
-    let levels = unsafe { &mut *levels };
-    levels.sort_unstable_by(|a, b| {
-        let pa = a.price.load(Ordering::Acquire);
-        let pb = b.price.load(Ordering::Acquire);
-        if pa == 0 && pb == 0 { return std::cmp::Ordering::Equal; }
-        if pa == 0 { return std::cmp::Ordering::Greater; }
-        if pb == 0 { return std::cmp::Ordering::Less; }
-        if is_bid { pb.cmp(&pa) } else { pa.cmp(&pb) }
-    });
-}
+mod pnl;
+pub use pnl::*;
 
-#[inline]
-fn write_bfx(w: &mut impl std::fmt::Write, val: f64) -> std::fmt::Result {
-    if val == val.trunc() {
-        write!(w, "{:.0}", val)
-    } else {
-        let mut buf = [0u8; 32];
-        let n = {
-            use std::io::Write;
-            let mut cursor = std::io::Cursor::new(&mut buf[..]);
-            let _ = write!(cursor, "{:.12}", val);
-            cursor.position() as usize
-        };
-        let s = unsafe { std::str::from_utf8_unchecked(&buf[..n]) };
-        let trimmed = s.trim_end_matches('0').trim_end_matches('.');
-        w.write_str(trimmed)
-    }
-}
-
-fn calculate_checksum(engine: &sniper_types::EngineState, debug: bool) -> i32 {
-    fence(Ordering::SeqCst);
-    let mut s = String::with_capacity(1024);
-    let mut levels_found = 0;
-    for i in 0..25 {
-        let bid = &engine.bids[i];
-        let ask = &engine.asks[i];
-        let bp = bid.price.load(Ordering::SeqCst);
-        let bc = bid.count.load(Ordering::SeqCst);
-        let ap = ask.price.load(Ordering::SeqCst);
-        let ac = ask.count.load(Ordering::SeqCst);
-        if bc > 0 && bp > 0 {
-            levels_found += 1;
-            let p = bp as f64 / sniper_types::PRICE_SCALE;
-            let a = bid.amount.load(Ordering::SeqCst) as f64 / sniper_types::PRICE_SCALE;
-            if !s.is_empty() { s.push(':'); }
-            let _ = write_bfx(&mut s, p);
-            s.push(':');
-            let _ = write_bfx(&mut s, a);
-        }
-        if ac > 0 && ap > 0 {
-            levels_found += 1;
-            let p = ap as f64 / sniper_types::PRICE_SCALE;
-            let a = ask.amount.load(Ordering::SeqCst) as f64 / sniper_types::PRICE_SCALE;
-            if !s.is_empty() { s.push(':'); }
-            let _ = write_bfx(&mut s, p);
-            s.push(':');
-            let _ = write_bfx(&mut s, a);
-        }
-    }
-    if debug || levels_found == 0 {
-        let preview = if s.len() > 200 { &s[..200] } else { &s };
-        info!(event = "checksum_debug", levels = levels_found,
-              bids0_p = engine.bids[0].price.load(Ordering::SeqCst),
-              bids0_c = engine.bids[0].count.load(Ordering::SeqCst),
-              asks0_p = engine.asks[0].price.load(Ordering::SeqCst),
-              asks0_c = engine.asks[0].count.load(Ordering::SeqCst),
-              cs_str_preview = %preview);
-    }
-    let mut h = Hasher::new();
-    h.update(s.as_bytes());
-    h.finalize() as i32
-}
+mod ghost;
+pub use ghost::*;
 
 // ═══ HYDRA ORDER SLOT HELPERS (v9.0) ═══
 #[inline]
@@ -471,74 +371,7 @@ async fn async_main() -> Result<()> {
                                         if mt == "te"
                                             && let Some(trade) = arr[2].as_array()
                                                 && let (Some(trade_amt), Some(trade_price)) = (safe_as_f64(&trade[4]), safe_as_f64(&trade[5])) {
-                                                    let scale = sniper_types::PRICE_SCALE;
-                                                    let old_pos_i = engine.net_position.load(Ordering::SeqCst);
-                                                    let old_pos = old_pos_i as f64 / scale;
-                                                    let old_aep_i = engine.average_entry_price.load(Ordering::SeqCst);
-                                                    let old_aep = old_aep_i as f64 / scale;
-
-                                                    // 1. REALIZED PnL (trade reduces/closes position)
-                                                    if (old_pos > 0.0 && trade_amt < 0.0) || (old_pos < 0.0 && trade_amt > 0.0) {
-                                                        let closed_amt = trade_amt.abs().min(old_pos.abs());
-                                                        let pnl_gain = if old_pos > 0.0 {
-                                                            (trade_price - old_aep) * closed_amt
-                                                        } else {
-                                                            (old_aep - trade_price) * closed_amt
-                                                        };
-                                                        engine.realized_pnl.fetch_add((pnl_gain * scale).round() as i64, Ordering::SeqCst);
-                                                        info!(event = "pnl_realized", gain = pnl_gain, closed = closed_amt, aep = old_aep);
-                                                    }
-
-                                                    // 2. AVERAGE ENTRY PRICE (WAP)
-                                                    let new_pos = old_pos + trade_amt;
-                                                    if new_pos.abs() > 1e-8 {
-                                                        if (old_pos >= 0.0 && trade_amt > 0.0) || (old_pos <= 0.0 && trade_amt < 0.0) {
-                                                            // Enlarging position → weighted average
-                                                            let new_aep = (old_pos.abs() * old_aep + trade_amt.abs() * trade_price) / new_pos.abs();
-                                                            engine.average_entry_price.store((new_aep * scale).round() as i64, Ordering::SeqCst);
-                                                        } else if (old_pos > 0.0 && new_pos < 0.0) || (old_pos < 0.0 && new_pos > 0.0) {
-                                                            // Position flipped → AEP = trade price
-                                                            engine.average_entry_price.store((trade_price * scale).round() as i64, Ordering::SeqCst);
-                                                        }
-                                                        // Partial close: AEP stays the same (no update needed)
-                                                    } else {
-                                                        // Position == 0 → reset AEP
-                                                        engine.average_entry_price.store(0, Ordering::SeqCst);
-                                                    }
-
-                                                    // 3. Update net_position
-                                                    engine.net_position.store((new_pos * scale).round() as i64, Ordering::SeqCst);
-
-                                                    // 4. ALPHA TRACKING: measure AI contribution
-                                                    let ai_bias_now = engine.current_ai_bias.load(Ordering::Acquire) as f64 / scale;
-                                                    if ai_bias_now.abs() > 0.01 {
-                                                        // For buys: positive bias = bought higher = negative alpha
-                                                        // For sells: positive bias = sold higher = positive alpha
-                                                        let alpha = ai_bias_now * trade_amt.abs() * trade_amt.signum();
-                                                        engine.ai_alpha_usd.fetch_add((alpha * scale).round() as i64, Ordering::SeqCst);
-                                                    }
-
-                                                    info!(event = "trade_executed", amount = trade_amt, price = trade_price,
-                                                          new_pos = new_pos, aep = engine.average_entry_price.load(Ordering::SeqCst) as f64 / scale);
-                                                    // v9.5: Fill-rate tracking
-                                                    if trade_amt > 0.0 {
-                                                        engine.buy_fill_count.fetch_add(1, Ordering::Relaxed);
-                                                    } else {
-                                                        engine.sell_fill_count.fetch_add(1, Ordering::Relaxed);
-                                                    }
-                                                    // v10.0: Monthly volume for fee tier
-                                                    let trade_vol_usd = (trade_amt.abs() * trade_price * scale) as u64;
-                                                    engine.monthly_volume_usd.fetch_add(trade_vol_usd, Ordering::Relaxed);
-
-                                                    // v9.2: HYBRID INTELLIGENCE — TradeAnalytics
-                                                    engine.session_fill_count.fetch_add(1, Ordering::Relaxed);
-                                                    if trade_amt > 0.0 {
-                                                        engine.session_buy_volume.fetch_add((trade_amt * scale) as u64, Ordering::Relaxed);
-                                                        engine.session_buy_usd.fetch_add(trade_vol_usd, Ordering::Relaxed);
-                                                    } else {
-                                                        engine.session_sell_volume.fetch_add((trade_amt.abs() * scale) as u64, Ordering::Relaxed);
-                                                        engine.session_sell_usd.fetch_add(trade_vol_usd, Ordering::Relaxed);
-                                                    }
+                                                    pnl::process_trade(engine, trade_amt, trade_price);
                                                 }
                                         if mt == "wu" || mt == "ws" {
                                             let wd: Vec<&BorrowedValue> = if mt == "wu" { vec![&arr[2]] }
@@ -1106,20 +939,10 @@ async fn async_main() -> Result<()> {
                                                         }
 
                                                         // ═══ v11.3 FEE SENTINEL: Profitability Guard ═══
-                                                        // Skip cycle if fees eat the entire spread profit
-                                                        // Read from shared GlobalFeeState mmap (written by PnL daemon)
-                                                        let maker_fee = fee_state.maker_fee_bps.load(Ordering::Relaxed); // bps×100
-                                                        let taker_fee = fee_state.taker_fee_bps.load(Ordering::Relaxed); // bps×100
-                                                        // Round-trip = maker (our resting order) + taker (fill)
-                                                        // Scale: 1000 = 10 bps = 0.10%
-                                                        let round_trip_fee_bps = (maker_fee + taker_fee) / 100; // convert to bps
-                                                        if round_trip_fee_bps > 0 {
-                                                            let spread_bps = ((sell_i - buy_i) as f64 / micro_i as f64 * 10000.0) as u64;
-                                                            if spread_bps < round_trip_fee_bps * 2 {
-                                                                // Spread too thin — fees > profit
-                                                                eng.fee_kills.fetch_add(1, Ordering::Relaxed);
-                                                                continue;
-                                                            }
+                                                        let spread_bps = ((sell_i - buy_i) as f64 / micro_i as f64 * 10000.0) as u64;
+                                                        if !ghost::is_spread_profitable(spread_bps, fee_state) {
+                                                            eng.fee_kills.fetch_add(1, Ordering::Relaxed);
+                                                            continue;
                                                         }
 
                                                         let lb = eng.last_buy_price.load(Ordering::SeqCst);
@@ -1210,21 +1033,10 @@ async fn async_main() -> Result<()> {
 
                                                             // BUY LEVELS (fibonacci spacing from micro-price)
                                                             // ═══ v10.6 GHOST SPLIT ═══
-                                                            let ghost_trans = eng.ghost_transparency.load(Ordering::Relaxed) as f64 / 10000.0;
-                                                            // n_public = how many levels are visible in orderbook
-                                                            // At transparency=1.0 (100%): all public. At 0.1: only ~1 level public per side.
-                                                            let n_public_buy = ((n_buy as f64 * ghost_trans).ceil() as usize).max(1).min(n_buy.max(1_usize));
-                                                            let n_public_sell = ((n_sell as f64 * ghost_trans).ceil() as usize).max(1).min(n_sell.max(1_usize));
-                                                            let ghost_mode = ghost_trans < 0.99;
-
-                                                            // Clear old ghost prices
-                                                            if ghost_mode {
-                                                                for gi in 0..sniper_types::MAX_GRID_LEVELS {
-                                                                    eng.ghost_buy_prices[gi].store(0, Ordering::Relaxed);
-                                                                    eng.ghost_sell_prices[gi].store(0, Ordering::Relaxed);
-                                                                }
-                                                                eng.ghost_active_mask.store(0, Ordering::Relaxed);
-                                                            }
+                                                            let gc = ghost::calculate_ghost_levels(eng, n_buy, n_sell);
+                                                            let n_public_buy = gc.n_public_buy;
+                                                            let n_public_sell = gc.n_public_sell;
+                                                            let ghost_mode = gc.ghost_mode;
 
                                                             for i in 0..n_buy {
                                                                 let spacing = (grid as f64 * sniper_types::LEVEL_SPACING[i]) as i64;

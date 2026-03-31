@@ -14,18 +14,50 @@
 // Trigon (mmap init, IOC execution, fee math, latency padding),
 // Moonshot (reqwest TG client), Grid (L2 Command Matrix)
 //
-// mmap IPC:
-//   - /dev/shm/beroun/cross_exchange.bin (read: BBA + spreads)
-//   - /dev/shm/beroun/l2_command.bin (read: latency padding/killswitch)
-
 use std::time::{SystemTime, UNIX_EPOCH, Duration};
-use std::io::Write;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 
-use futures_util::StreamExt;
-use futures_util::sink::SinkExt;
-use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+use fastwebsockets::{OpCode, Payload};
+use hyper::{Request, header::{CONNECTION, UPGRADE, HOST}};
+use http_body_util::Empty;
+
+struct SpawnExecutor;
+impl<Fut> hyper::rt::Executor<Fut> for SpawnExecutor
+where
+    Fut: std::future::Future + Send + 'static,
+    Fut::Output: Send + 'static,
+{
+    fn execute(&self, fut: Fut) {
+        tokio::spawn(fut);
+    }
+}
+
+async fn connect_ws() -> Result<fastwebsockets::FragmentCollector<hyper_util::rt::tokio::TokioIo<hyper::upgrade::Upgraded>>, Box<dyn std::error::Error + Send + Sync>> {
+    let tcp = tokio::net::TcpStream::connect("api.bitfinex.com:443").await?;
+    tcp.set_nodelay(true)?;
+    let connector = tokio_native_tls::TlsConnector::from(
+        native_tls::TlsConnector::new().map_err(std::io::Error::other)?
+    );
+    let tls = connector.connect("api.bitfinex.com", tcp).await
+        .map_err(std::io::Error::other)?;
+        
+    let req = Request::builder()
+        .method("GET")
+        .uri("wss://api.bitfinex.com/ws/2")
+        .header(HOST, "api.bitfinex.com")
+        .header(UPGRADE, "websocket")
+        .header(CONNECTION, "upgrade")
+        .header("Sec-WebSocket-Key", fastwebsockets::handshake::generate_key())
+        .header("Sec-WebSocket-Version", "13")
+        .body(Empty::<hyper::body::Bytes>::new())
+        .map_err(std::io::Error::other)?;
+
+    let (ws, _) = fastwebsockets::handshake::client(&SpawnExecutor, req, tls).await
+        .map_err(std::io::Error::other)?;
+        
+    Ok(fastwebsockets::FragmentCollector::new(ws))
+}
 use dotenvy::dotenv;
 use tracing::{info, warn, error, Level};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
@@ -36,7 +68,6 @@ use clap::Parser;
 use sniper_types::exchange::cross_types::*;
 use sniper_types::exchange::types::*;
 use sniper_types::exchange::binance::Binance;
-use sniper_types::exchange::bitfinex;
 use sniper_types::PRICE_SCALE;
 
 const VERSION: &str = "1.0.0";
@@ -286,8 +317,7 @@ async fn main() -> Result<()> {
     // Nexus needs BFX WS for order execution (not data — that comes from mmap)
     loop {
         info!(event = "ws_connecting", exchange = "bitfinex");
-        let ws_result = connect_async(bitfinex::WS_URL).await;
-        let (ws, _): (tokio_tungstenite::WebSocketStream<_>, _) = match ws_result {
+        let mut ws = match connect_ws().await {
             Ok(v) => v,
             Err(e) => {
                 warn!(event = "ws_fail", error = %e);
@@ -296,11 +326,9 @@ async fn main() -> Result<()> {
             }
         };
 
-        let (mut write, mut read) = ws.split();
-
         // Authenticate on Bitfinex WS (needed for order placement)
         let auth_msg = sniper_types::exchange::bitfinex_auth_message(&bfx_key, &bfx_secret);
-        write.send(Message::Text(auth_msg.into())).await?;
+        let _ = ws.write_frame(fastwebsockets::Frame::text(Payload::Owned(auth_msg.into_bytes()))).await;
 
         let mut authed = false;
         let mut scan_interval = tokio::time::interval(Duration::from_millis(args.scan_interval_ms));
@@ -433,7 +461,8 @@ async fn main() -> Result<()> {
                         };
 
                         // ═══ SIMULTANEOUS EXECUTION (tokio::join!) ═══
-                        let bfx_fut = write.send(Message::Text(order_msg.into()));
+                        let order_payload = order_msg.into_bytes();
+                        let bfx_fut = ws.write_frame(fastwebsockets::Frame::text(Payload::Owned(order_payload)));
                         let bnb_signed = binance.new_order(&bnb_order);
 
                         if let Some(signed) = bnb_signed {
@@ -483,26 +512,32 @@ async fn main() -> Result<()> {
                 }
 
                 // WebSocket messages (auth confirmations, order status)
-                msg = read.next() => {
-                    match msg {
-                        Some(Ok(Message::Text(text))) => {
-                            let bytes = text.as_bytes();
-                            if bytes.first() == Some(&b'{') {
-                                if let Ok(v) = serde_json::from_slice::<serde_json::Value>(bytes) {
-                                    if v["event"] == "auth" {
-                                        if v["status"] == "OK" {
-                                            authed = true;
-                                            info!(event = "authenticated", bot = "nexus");
-                                        } else {
-                                            error!(event = "auth_failed", bot = "nexus", status = %v["status"], msg = %v["msg"]);
-                                            notifier.alert(format!("❌ AUTH FAILED: {}", v["msg"]));
+                frame = ws.read_frame() => {
+                    match frame {
+                        Ok(frame) => {
+                            if frame.opcode == OpCode::Text {
+                                let bytes = frame.payload.to_vec();
+                                if bytes.first() == Some(&b'{') {
+                                    if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+                                        if v["event"] == "auth" {
+                                            if v["status"] == "OK" {
+                                                authed = true;
+                                                info!(event = "authenticated", bot = "nexus");
+                                            } else {
+                                                let msg = v["msg"].as_str().unwrap_or("unknown");
+                                                error!(event = "auth_failed", bot = "nexus", status = %v["status"], msg = msg);
+                                                notifier.alert(format!("❌ AUTH FAILED: {}", msg));
+                                            }
                                         }
                                     }
                                 }
+                            } else if frame.opcode == OpCode::Close {
+                                break;
+                            } else if frame.opcode == OpCode::Ping {
+                                let _ = ws.write_frame(fastwebsockets::Frame::pong(frame.payload)).await;
                             }
                         }
-                        Some(Ok(Message::Close(_))) | None => break,
-                        _ => {}
+                        Err(_) => break,
                     }
                 }
             }
