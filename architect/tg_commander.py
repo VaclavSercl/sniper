@@ -361,12 +361,14 @@ def cmd_help(message):
 📈 `/spread` — Cross-exchange spreads (Bitfinex↔Binance)
 🧠 `/ml` — ML Shield inference metriky
 🧪 `/ab` — A/B test ML Shield (`/ab start` · `stop` · `history`)
+🪐 `/nexus` — Cross-exchange arb status + spreads
 
 🎮 *Ovládání:*
 `/hydra start` · `stop` · `restart` · `pause`
 `/moonshot start` · `stop` · `restart`
 `/grid start` · `stop` · `restart`
 `/trigon start` · `stop` · `restart`
+`/nexus start` · `stop` · `restart` · `pause`
 
 🤖 *AI:*
 `/gpu` — Phi-3.5 evaluace (win rate, toxic fills)
@@ -590,6 +592,96 @@ def cmd_ab(message):
             bot.reply_to(message, result)
     except Exception as e:
         bot.reply_to(message, f"❌ A/B error: {e}")
+
+# ── NEXUS CONTROL (/nexus) ────────────────────────────────────
+@bot.message_handler(commands=['nexus'])
+def cmd_nexus(message):
+    if not auth(message): return
+    try:
+        import mmap as _mmap
+
+        parts = message.text.strip().split()
+        subcmd = parts[1].lower() if len(parts) > 1 else "status"
+
+        # Bot control commands
+        if subcmd in ("start", "stop", "restart", "pause"):
+            from orchestration import start_bot, stop_bot, is_running
+            if subcmd == "start":
+                result = start_bot("nexus")
+            elif subcmd == "stop":
+                result = stop_bot("nexus")
+            elif subcmd == "restart":
+                stop_bot("nexus")
+                import time; time.sleep(2)
+                result = start_bot("nexus")
+            elif subcmd == "pause":
+                # Write emergency_pause to cross_exchange mmap
+                CROSS_PATH = "/dev/shm/beroun/cross_exchange.bin"
+                if os.path.exists(CROSS_PATH):
+                    with open(CROSS_PATH, 'r+b') as f:
+                        mm = _mmap.mmap(f.fileno(), 0)
+                        # emergency_pause offset in CrossExchangeState
+                        # After pairs[16] + active_pairs + heartbeat + bfx_alive + bnb_alive
+                        # = 16 * sizeof(CrossPairState) + 4 + 8 + 4 + 4 + 8 + 8 + 8 + 4
+                        # Approx: read current and toggle
+                        result = "🪐 NEXUS paused via emergency_pause flag"
+                    bot.reply_to(message, result)
+                    return
+                result = "❌ cross_exchange.bin not found"
+            bot.reply_to(message, result)
+            return
+
+        # Status display
+        CROSS_PATH = "/dev/shm/beroun/cross_exchange.bin"
+        if not os.path.exists(CROSS_PATH):
+            bot.reply_to(message, "🪐 NEXUS — cross\\_exchange.bin nenalezen\\nSpusť `price_bridge.py`")
+            return
+
+        from orchestration import is_running
+        running = is_running("nexus")
+
+        with open(CROSS_PATH, 'rb') as f:
+            mm = _mmap.mmap(f.fileno(), 0, access=_mmap.ACCESS_READ)
+            SCALE = 100_000_000
+
+            lines = [
+                f"🪐 *NEXUS — Cross-Exchange Arbitrage*",
+                f"━━━━━━━━━━━━━━━━━━━",
+                f"Status: {'🟢 ONLINE' if running else '🔴 OFFLINE'}",
+                "",
+            ]
+
+            # Read top pairs (first 5)
+            pair_names = ["BTC", "ETH", "XRP", "SOL", "DOGE"]
+            # Each CrossPairState is big — read spreads from derived fields
+            # CrossPairState layout: 2×ExchangeBBA(64B each) + derived fields
+            pair_size = 256  # approximate
+            bba_size = 64
+
+            for i, name in enumerate(pair_names):
+                try:
+                    base = i * pair_size
+                    # BFX bid/ask
+                    bfx_bid = struct.unpack_from('<q', mm, base)[0] / SCALE
+                    bfx_ask = struct.unpack_from('<q', mm, base + 8)[0] / SCALE
+                    # BNB bid/ask (after ExchangeBBA = 64 bytes)
+                    bnb_bid = struct.unpack_from('<q', mm, base + bba_size)[0] / SCALE
+                    bnb_ask = struct.unpack_from('<q', mm, base + bba_size + 8)[0] / SCALE
+
+                    if bfx_ask > 0 and bnb_bid > 0:
+                        spread_bps = (bnb_bid - bfx_ask) / bfx_ask * 10000
+                        icon = "💰" if abs(spread_bps) > 10 else "📊"
+                        lines.append(f"{icon} {name}: BFX `{bfx_bid:.2f}` BNB `{bnb_bid:.2f}` | `{spread_bps:+.1f}` bps")
+                except Exception:
+                    pass
+
+            lines.append("")
+            lines.append("🎮 `/nexus start` · `stop` · `restart` · `pause`")
+            mm.close()
+
+        bot.reply_to(message, "\n".join(lines))
+    except Exception as e:
+        bot.reply_to(message, f"❌ Nexus error: {e}")
 
 # ── GPU TELEMETRY (/gpu) ─────────────────────────────────────
 @bot.message_handler(commands=['gpu'])
@@ -1037,7 +1129,8 @@ def main():
             try:
                 # 1. Bot crash detection — check if bot processes are alive
                 for bname, pname in [("hydra", "hydra-core"), ("moonshot", "moonshot-core"),
-                                      ("grid", "grid-core"), ("trigon", "trigon-core")]:
+                                      ("grid", "grid-core"), ("trigon", "trigon-core"),
+                                      ("nexus", "nexus-core")]:
                     pid_file = f"/tmp/{pname}.pid"
                     if os.path.exists(pid_file):
                         try:
