@@ -1271,12 +1271,24 @@ PARAMETER CONSTRAINTS:
         restored = []
         for bot, mode in bot_states.items():
             if mode == "LIVE":
+                # LIVE = start + unpause (bot trades with real money)
                 log.info(f"  🟢 Starting {bot} → LIVE")
                 start_bot(bot)
                 time.sleep(10)
                 self._unpause_bot(bot)
                 self._save_bot_state(bot, "LIVE")
                 restored.append(f"🟢 {bot.upper()} → LIVE")
+            elif mode == "PAPER":
+                # PAPER = start bot but keep paused=1 in mmap
+                # Rust binaries have NO paper mode. paused=0 means LIVE trading.
+                # Bot runs for monitoring/scanning but does NOT place orders.
+                log.info(f"  🟠 Starting {bot} → PAPER")
+                start_bot(bot)
+                time.sleep(5)
+                # Explicitly ensure paused stays ON (SBP already set it, but be safe)
+                self._pause_bot(bot)
+                self._save_bot_state(bot, "PAPER")
+                restored.append(f"🟠 {bot.upper()} → PAPER")
             elif mode == "PAUSED":
                 log.info(f"  🟡 Starting {bot} → PAUSED (Scanner)")
                 start_bot(bot)
@@ -1284,13 +1296,6 @@ PARAMETER CONSTRAINTS:
                 self._pause_bot(bot)
                 self._save_bot_state(bot, "PAUSED")
                 restored.append(f"🟡 {bot.upper()} → PAUSED (Scanner)")
-            elif mode == "PAPER":
-                log.info(f"  🟠 Starting {bot} → PAPER")
-                start_bot(bot)
-                time.sleep(5)
-                self._unpause_bot(bot)
-                self._save_bot_state(bot, "PAPER")
-                restored.append(f"🟠 {bot.upper()} → PAPER")
             else:
                 log.info(f"  🔴 {bot} → stays OFFLINE")
                 restored.append(f"🔴 {bot.upper()} → OFFLINE")

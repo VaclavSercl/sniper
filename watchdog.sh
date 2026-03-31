@@ -20,16 +20,16 @@ LOG_DIR="$ARMADA_ROOT/logs"
 
 mkdir -p "$LOCK_DIR" "$LOG_DIR"
 
-# ═══ BOOT GUARD ═══
-# If deploy_armada.sh started less than 90s ago, skip this cycle
-# to avoid duplicate process spawning during boot sequence.
-DEPLOY_PID=$(pgrep -f "deploy_armada.sh" 2>/dev/null | head -1)
-if [ -n "$DEPLOY_PID" ]; then
-    DEPLOY_START=$(stat -c %Y /proc/$DEPLOY_PID 2>/dev/null || echo 0)
+# ═══ BOOT GUARD (lockfile-based) ═══
+# deploy_armada.sh writes a lockfile with epoch timestamp at boot.
+# Watchdog skips its cycle for 120s after boot to prevent duplicates.
+BOOT_LOCK="/tmp/sniper_boot.lock"
+if [ -f "$BOOT_LOCK" ]; then
+    BOOT_TS=$(cat "$BOOT_LOCK" 2>/dev/null || echo 0)
     NOW=$(date +%s)
-    DEPLOY_AGE=$(( NOW - DEPLOY_START ))
-    if [ "$DEPLOY_AGE" -lt 90 ]; then
-        echo "[$(date '+%H:%M:%S')] ⏳ Boot guard: deploy_armada running for ${DEPLOY_AGE}s (<90s), skipping watchdog cycle"
+    BOOT_AGE=$(( NOW - BOOT_TS ))
+    if [ "$BOOT_AGE" -lt 120 ]; then
+        echo "[$(date '+%H:%M:%S')] ⏳ Boot guard: boot ${BOOT_AGE}s ago (<120s), skipping"
         exit 0
     fi
 fi

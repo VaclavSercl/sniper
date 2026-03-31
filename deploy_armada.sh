@@ -61,16 +61,22 @@ fi
 # ═══ KILL ALL OLD INSTANCES ═══
 echo ""
 echo "🧹 Cleaning ALL old instances..."
-pkill -f tg_commander.py 2>/dev/null || true
-pkill -f pnl_daemon.py 2>/dev/null || true
-pkill -f sovereign-cortex 2>/dev/null || true
-pkill -f hydra-core 2>/dev/null || true
-pkill -f moonshot-core 2>/dev/null || true
-pkill -f grid-core 2>/dev/null || true
-pkill -f trigon-core 2>/dev/null || true
-pkill -f nexus-core 2>/dev/null || true
-pkill -f price_bridge.py 2>/dev/null || true
+
+# Write boot lockfile (watchdog.sh checks this to avoid duplicates during boot)
+echo "$(date +%s)" > /tmp/sniper_boot.lock
+# First pass: SIGTERM (graceful)
+for proc in tg_commander.py pnl_daemon.py sovereign-cortex hydra-core hydra-dashboard \
+            moonshot-core grid-core trigon-core nexus-core price_bridge.py market_recorder.py; do
+    pkill -f "$proc" 2>/dev/null || true
+done
 fuser -k 3004/tcp 2>/dev/null || true
+sleep 2
+
+# Second pass: SIGKILL (force) — catch anything that survived SIGTERM
+for proc in tg_commander.py pnl_daemon.py sovereign-cortex hydra-core hydra-dashboard \
+            moonshot-core grid-core trigon-core nexus-core price_bridge.py market_recorder.py; do
+    pkill -9 -f "$proc" 2>/dev/null || true
+done
 
 # Clean stale PID files from previous run (prevents false crash alerts)
 rm -f /tmp/hydra-core.pid /tmp/moonshot-core.pid /tmp/grid-core.pid \
@@ -78,7 +84,7 @@ rm -f /tmp/hydra-core.pid /tmp/moonshot-core.pid /tmp/grid-core.pid \
       /tmp/moonshot-core.lock /tmp/grid-core.lock /tmp/trigon-core.lock \
       /tmp/nexus-core.lock 2>/dev/null || true
 
-sleep 3
+sleep 2
 
 # ═══ SHOW PRE-CRASH STATE ═══
 echo ""
