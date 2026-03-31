@@ -119,7 +119,7 @@ echo "🧠 Starting infrastructure (trading bots stay OFFLINE)..."
 
 # 0. Pre-create mmap files (Cortex requires them on startup)
 echo "  [T+0s]  Pre-creating mmap files..."
-for mfile in engine_state.bin risk_state.bin l2_command.bin cross_exchange.bin pnl_state.bin fee_state.bin state.json; do
+for mfile in engine_state.bin risk_state.bin moonshot_engine.bin moonshot_risk.bin grid_engine.bin grid_risk.bin trigon_engine.bin trigon_risk.bin l2_command.bin cross_exchange.bin pnl_state.bin fee_state.bin state.json; do
     [ ! -f "/dev/shm/beroun/$mfile" ] && dd if=/dev/zero of="/dev/shm/beroun/$mfile" bs=4096 count=1 2>/dev/null
 done
 

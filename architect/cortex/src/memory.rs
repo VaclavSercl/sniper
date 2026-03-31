@@ -6,9 +6,13 @@
 
 use memmap2::{MmapMut, MmapOptions};
 use sniper_types::{EngineState, RiskState, PRICE_SCALE};
+use sniper_types::moonshot_types::{MoonshotEngineState, MoonshotRiskState};
+use sniper_types::grid_types::{GridEngineState, GridRiskState};
+use sniper_types::trigon_types::{TrigonEngineState, TrigonRiskState};
 use std::fs::OpenOptions;
 use std::path::Path;
 use std::sync::atomic::Ordering;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Snapshot of a single bot's state — safe to serialize/format for prompts.
 #[allow(dead_code)]
@@ -162,28 +166,69 @@ impl ArmadaMemory {
         self.snapshot_bot(self.hydra_engine(), self.hydra_risk(), "hydra", "🐍")
     }
 
-    /// Snapshot all online bots (for L2 unified prompt).
     pub fn snapshot_all(&self) -> Vec<BotSnapshot> {
         let mut snapshots = Vec::with_capacity(5);
         snapshots.push(self.snapshot_hydra());
         if let (Some(e), Some(r)) = (&self.moonshot_engine, &self.moonshot_risk) {
-            let engine = unsafe { &*(e.as_ptr() as *const EngineState) };
-            let risk = unsafe { &*(r.as_ptr() as *const RiskState) };
-            snapshots.push(self.snapshot_bot(engine, risk, "moonshot", "🌙"));
+            let engine = unsafe { &*(e.as_ptr() as *const MoonshotEngineState) };
+            let risk = unsafe { &*(r.as_ptr() as *const MoonshotRiskState) };
+            snapshots.push(self.snapshot_moonshot(engine, risk));
         }
         if let (Some(e), Some(r)) = (&self.grid_engine, &self.grid_risk) {
-            let engine = unsafe { &*(e.as_ptr() as *const EngineState) };
-            let risk = unsafe { &*(r.as_ptr() as *const RiskState) };
-            snapshots.push(self.snapshot_bot(engine, risk, "grid", "📐"));
+            let engine = unsafe { &*(e.as_ptr() as *const GridEngineState) };
+            let risk = unsafe { &*(r.as_ptr() as *const GridRiskState) };
+            snapshots.push(self.snapshot_grid(engine, risk));
         }
         if let (Some(e), Some(r)) = (&self.trigon_engine, &self.trigon_risk) {
-            let engine = unsafe { &*(e.as_ptr() as *const EngineState) };
-            let risk = unsafe { &*(r.as_ptr() as *const RiskState) };
-            snapshots.push(self.snapshot_bot(engine, risk, "trigon", "🔺"));
+            let engine = unsafe { &*(e.as_ptr() as *const TrigonEngineState) };
+            let risk = unsafe { &*(r.as_ptr() as *const TrigonRiskState) };
+            snapshots.push(self.snapshot_trigon(engine, risk));
         }
         // Nexus: process-based detection (uses CrossExchangeState, not EngineState)
         snapshots.push(self.snapshot_nexus());
         snapshots
+    }
+
+    fn snapshot_moonshot(&self, e: &MoonshotEngineState, r: &MoonshotRiskState) -> BotSnapshot {
+        let mut snap = self.snapshot_nexus();
+        snap.name = "moonshot";
+        snap.emoji = "🌙";
+        let hb = e.heartbeat_ms.load(Ordering::Relaxed);
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+        snap.online = hb > 0 && now.saturating_sub(hb) < 15000;
+        snap.paused = r.global_paused.load(Ordering::Relaxed) != 0;
+        snap.wallet_btc = e.wallet_btc.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+        snap.wallet_usd = e.wallet_usd.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+        snap
+    }
+
+    fn snapshot_grid(&self, e: &GridEngineState, r: &GridRiskState) -> BotSnapshot {
+        let mut snap = self.snapshot_nexus();
+        snap.name = "grid";
+        snap.emoji = "📐";
+        let hb = e.heartbeat_ms.load(Ordering::Relaxed);
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+        snap.online = hb > 0 && now.saturating_sub(hb) < 15000;
+        snap.paused = r.global_paused.load(Ordering::Relaxed) != 0;
+        snap.best_bid = e.best_bid.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+        snap.best_ask = e.best_ask.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+        snap.micro_price = e.mid_price.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+        snap.net_position = e.net_position.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+        snap.grid_step = r.grid_spacing.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+        snap.grid_levels = (r.num_buy_levels.load(Ordering::Relaxed) + r.num_sell_levels.load(Ordering::Relaxed)) as u64;
+        snap
+    }
+
+    fn snapshot_trigon(&self, e: &TrigonEngineState, r: &TrigonRiskState) -> BotSnapshot {
+        let mut snap = self.snapshot_nexus();
+        snap.name = "trigon";
+        snap.emoji = "🔺";
+        let hb = e.heartbeat_ms.load(Ordering::Relaxed);
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_millis() as u64;
+        snap.online = hb > 0 && now.saturating_sub(hb) < 15000;
+        snap.paused = r.global_paused.load(Ordering::Relaxed) != 0;
+        snap.wallet_usd = e.wallet_usd.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+        snap
     }
 
     /// Nexus snapshot — lightweight, process-based (no EngineState mmap).

@@ -139,7 +139,7 @@ class L2Oracle:
         log.info("  🤖 Calling Gemini CLI...")
         try:
             result = subprocess.run(
-                ["gemini", "-p", prompt],
+                ["gemini", "-m", "gemini-3.1-pro-preview", "-p", prompt],
                 capture_output=True, text=True, timeout=GEMINI_TIMEOUT,
             )
             if result.returncode != 0:
@@ -1507,7 +1507,7 @@ Respond with EXACTLY one JSON object:
         
         try:
             result = subprocess.run(
-                ["gemini", "-p", prompt],
+                ["gemini", "-m", "gemini-3.1-pro-preview", "-p", prompt],
                 capture_output=True, text=True, timeout=GEMINI_TIMEOUT,
             )
             if result.returncode != 0:

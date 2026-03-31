@@ -30,7 +30,17 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s [fee_monitor] %(mess
 log = logging.getLogger("fee_monitor")
 
 # Load environment
-from dotenv import load_dotenv
+def load_dotenv(path):
+    if not os.path.exists(path):
+        return
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            os.environ.setdefault(key.strip(), val.strip().strip('"').strip("'"))
+
 load_dotenv(os.path.join(PROJECT_ROOT, '.env'))
 
 FEE_STATE_PATH = "/dev/shm/beroun/fee_state.bin"

@@ -370,7 +370,6 @@ def cmd_help(message):
 📈 `/spread` — Cross-exchange spreads (Bitfinex↔Binance)
 🪐 `/nexus` — Cross-exchange arb status + spreads
 🧠 `/ml` — ML Shield inference metriky
-🧪 `/ab` — A/B test ML Shield (`/ab start` · `stop` · `history`)
 
 🎮 *Ovládání:*
 `/hydra start` · `stop` · `restart` · `pause`
@@ -615,7 +614,7 @@ def cmd_spread(message):
             lines = ["📈 *CROSS-EXCHANGE SPREADS*", "━━━━━━━━━━━━━━━━━━━"]
 
             BBA_SIZE = 64
-            PAIR_SIZE = 448
+            PAIR_SIZE = 192
 
             for i in range(10):
                 off = i * PAIR_SIZE
@@ -629,7 +628,7 @@ def cmd_spread(message):
 
                 metrics_off = off + 2 * BBA_SIZE
                 best_bps = struct.unpack_from('<q', mm, metrics_off + 16)[0]
-                arb_sigs = struct.unpack_from('<Q', mm, metrics_off + 32)[0]
+                arb_sigs = struct.unpack_from('<Q', mm, metrics_off + 32)[0]  # Due to C-struct 8-byte alignment, best_direction (u32) at 24 adds 4 bytes padding
 
                 name = PAIR_NAMES[i] if i < len(PAIR_NAMES) else f"P{i}"
 
@@ -698,42 +697,6 @@ def cmd_ml(message):
     except Exception as e:
         bot.reply_to(message, f"❌ ML error: {e}")
 
-# ── A/B TESTING (/ab) ─────────────────────────────────────────
-@bot.message_handler(commands=['ab'])
-def cmd_ab(message):
-    if not auth(message): return
-    try:
-        from ab_testing import ab_controller, analyze_historical
-
-        parts = message.text.strip().split()
-        subcmd = parts[1].lower() if len(parts) > 1 else "status"
-
-        if subcmd == "start":
-            result = ab_controller.start_test()
-            bot.reply_to(message, result)
-        elif subcmd == "stop":
-            result = ab_controller.stop_test()
-            bot.reply_to(message, result)
-        elif subcmd == "history":
-            deploy_date = parts[2] if len(parts) > 2 else "2026-03-30"
-            result = analyze_historical(deploy_date)
-            bot.reply_to(message, result)
-        else:
-            # Show current status
-            if ab_controller.is_running:
-                result = ab_controller.generate_report()
-            else:
-                result = (
-                    "🧪 *A/B Testing — ML Shield*\n"
-                    "━━━━━━━━━━━━━━━━━━━\n"
-                    "Status: ⏸ Neběží\n\n"
-                    "`/ab start` — Spustí 7-denní test\n"
-                    "`/ab history` — Historická analýza\n"
-                    "`/ab stop` — Zastaví běžící test"
-                )
-            bot.reply_to(message, result)
-    except Exception as e:
-        bot.reply_to(message, f"❌ A/B error: {e}")
 
 # ── SYSTEM MONITOR (/monitor) ─────────────────────────────────
 @bot.message_handler(commands=['monitor'])
@@ -1099,8 +1062,8 @@ def handle_natural_language(message):
         # XML isolation: user input wrapped in <user_input> tags
         prompt = NL_INTENT_PROMPT + text + NL_INTENT_SUFFIX
         result = subprocess.run(
-            ["gemini", "-p", prompt],
-            capture_output=True, text=True, timeout=30
+            ["gemini", "-m", "gemini-3.1-pro-preview", "-p", prompt],
+            capture_output=True, text=True, timeout=60
         )
         raw = result.stdout.strip()
 
@@ -1238,7 +1201,7 @@ Give a brief strategic analysis in Czech (5 sentences max):
 3) Market awareness: general BTC market comment"""
 
         result = subprocess.run(
-            ["gemini", "-p", prompt],
+            ["gemini", "-m", "gemini-3.1-pro-preview", "-p", prompt],
             capture_output=True, text=True, timeout=60
         )
         response = result.stdout.strip()[:3500]
