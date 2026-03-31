@@ -1675,7 +1675,7 @@ Respond with EXACTLY one JSON object:
                     continue
                     
                 # 1. Check DB for toxic fills limit
-                conn = self.pnl_db._get_conn()
+                conn = self.pnl_db.conn
                 cursor = conn.cursor()
                 
                 # Time window: last 6 hours instead of 24h so AI can react faster
