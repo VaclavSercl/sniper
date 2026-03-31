@@ -973,6 +973,134 @@ def main():
 
     start_event_listener(tg_send_alert)
 
+    # ── SENTINEL ALERT SYSTEM (Phase 7.3) ──
+    # Proactive mmap monitoring thread — pushes alerts without user request
+    def sentinel_loop():
+        import mmap as _mmap
+        COOLDOWN = {}  # key → last_alert_time (prevent spam)
+        COOLDOWN_SEC = 300  # 5 min between same alert type
+
+        def can_alert(key):
+            now = time.time()
+            if now - COOLDOWN.get(key, 0) < COOLDOWN_SEC:
+                return False
+            COOLDOWN[key] = now
+            return True
+
+        def alert(msg):
+            try:
+                bot.send_message(AUTHORIZED_CHAT_ID, msg)
+            except Exception:
+                pass
+
+        log.info("🚨 [Sentinel] Alert system started (10s interval)")
+
+        while True:
+            try:
+                # 1. Bot crash detection — check if bot processes are alive
+                for bname, pname in [("hydra", "hydra-core"), ("moonshot", "moonshot-core"),
+                                      ("grid", "grid-core"), ("trigon", "trigon-core")]:
+                    pid_file = f"/tmp/{pname}.pid"
+                    if os.path.exists(pid_file):
+                        try:
+                            with open(pid_file) as f:
+                                pid = int(f.read().strip())
+                            os.kill(pid, 0)  # Check if alive (signal 0)
+                        except (ProcessLookupError, ValueError):
+                            if can_alert(f"crash_{bname}"):
+                                alert(f"💀 *BOT CRASH*\n`{bname.upper()}` process died!\nPID file exists but process not found.\n\n`/hydra restart` to recover")
+                        except PermissionError:
+                            pass  # Running but different user
+
+                # 2. Cross-exchange arb > 20bps
+                cross_path = "/dev/shm/beroun/cross_exchange.bin"
+                if os.path.exists(cross_path):
+                    try:
+                        with open(cross_path, 'rb') as f:
+                            mm = _mmap.mmap(f.fileno(), 0, access=_mmap.ACCESS_READ)
+                            BBA_SIZE = 64
+                            PAIR_SIZE = 448
+                            PAIR_NAMES_S = ["BTC", "ETH", "XRP", "SOL", "DOGE", "ADA", "AVAX", "LTC", "LINK", "DOT"]
+
+                            for i in range(10):
+                                off = i * PAIR_SIZE
+                                if off + PAIR_SIZE > mm.size():
+                                    break
+                                metrics_off = off + 2 * BBA_SIZE
+                                best_bps = struct.unpack_from('<q', mm, metrics_off + 16)[0] / 100
+                                if abs(best_bps) > 20:
+                                    name = PAIR_NAMES_S[i] if i < len(PAIR_NAMES_S) else f"P{i}"
+                                    if can_alert(f"arb_{name}"):
+                                        direction = struct.unpack_from('<I', mm, metrics_off + 24)[0]
+                                        dir_txt = "BFX→BNB" if direction == 0 else "BNB→BFX"
+                                        alert(
+                                            f"💰 *ARB OPPORTUNITY*\n"
+                                            f"`{name}` spread: `{best_bps:.1f} bps`\n"
+                                            f"Direction: {dir_txt}\n"
+                                            f"_Use /spread for details_"
+                                        )
+                            mm.close()
+                    except Exception:
+                        pass
+
+                # 3. Latency degradation > 500µs
+                l2_path = "/dev/shm/beroun/l2_command.bin"
+                if os.path.exists(l2_path):
+                    try:
+                        with open(l2_path, 'rb') as f:
+                            mm = _mmap.mmap(f.fileno(), 0, access=_mmap.ACCESS_READ)
+                            if mm.size() >= 384 + 64 * 8:
+                                latencies = []
+                                for i in range(64):
+                                    v = struct.unpack_from('<Q', mm, 384 + i * 8)[0]
+                                    if 0 < v < 1_000_000:
+                                        latencies.append(v)
+                                if latencies:
+                                    latencies.sort()
+                                    n = len(latencies)
+                                    p99 = latencies[min(int(n * 0.99), n - 1)]
+                                    if p99 > 500 and can_alert("latency_high"):
+                                        p50 = latencies[n // 2]
+                                        spark = sparkline(latencies[-16:], 16)
+                                        alert(
+                                            f"⚠️ *LATENCY DEGRADATION*\n"
+                                            f"P99: `{p99}µs` (threshold: 500µs)\n"
+                                            f"P50: `{p50}µs`\n"
+                                            f"`{spark}`\n"
+                                            f"_Check server load, consider restart_"
+                                        )
+                            mm.close()
+                    except Exception:
+                        pass
+
+                # 4. Flash crash signal active
+                if os.path.exists(l2_path):
+                    try:
+                        with open(l2_path, 'rb') as f:
+                            mm = _mmap.mmap(f.fileno(), 0, access=_mmap.ACCESS_READ)
+                            # CL4 offset: 3×64=192, flash_crash_epoch_ms at +48
+                            fc_epoch = struct.unpack_from('<Q', mm, 192 + 48)[0]
+                            fc_bps = struct.unpack_from('<q', mm, 192 + 56)[0]
+                            mm.close()
+                            if fc_epoch > 0:
+                                age_ms = int(time.time() * 1000) - fc_epoch
+                                if age_ms < 30000 and can_alert("flash_crash"):
+                                    alert(
+                                        f"🌪️ *FLASH CRASH DETECTED*\n"
+                                        f"Drop: `{fc_bps} bps` ({fc_bps/100:.1f}%)\n"
+                                        f"Age: `{age_ms}ms`\n"
+                                        f"_Hydra auto-cancelled orders. 30s pause._"
+                                    )
+                    except Exception:
+                        pass
+
+            except Exception as e:
+                log.error(f"Sentinel error: {e}")
+
+            time.sleep(10)  # Check every 10 seconds
+
+    threading.Thread(target=sentinel_loop, daemon=True, name="sentinel-alerts").start()
+
     # Start bot polling with robust retry
     log.info("Polling Telegram...")
     while True:
