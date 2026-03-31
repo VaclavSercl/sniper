@@ -164,7 +164,7 @@ impl ArmadaMemory {
 
     /// Snapshot all online bots (for L2 unified prompt).
     pub fn snapshot_all(&self) -> Vec<BotSnapshot> {
-        let mut snapshots = Vec::with_capacity(4);
+        let mut snapshots = Vec::with_capacity(5);
         snapshots.push(self.snapshot_hydra());
         if let (Some(e), Some(r)) = (&self.moonshot_engine, &self.moonshot_risk) {
             let engine = unsafe { &*(e.as_ptr() as *const EngineState) };
@@ -181,7 +181,33 @@ impl ArmadaMemory {
             let risk = unsafe { &*(r.as_ptr() as *const RiskState) };
             snapshots.push(self.snapshot_bot(engine, risk, "trigon", "🔺"));
         }
+        // Nexus: process-based detection (uses CrossExchangeState, not EngineState)
+        snapshots.push(self.snapshot_nexus());
         snapshots
+    }
+
+    /// Nexus snapshot — lightweight, process-based (no EngineState mmap).
+    fn snapshot_nexus(&self) -> BotSnapshot {
+        let online = std::process::Command::new("pgrep")
+            .args(["-f", "nexus-core"])
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false);
+
+        BotSnapshot {
+            name: "nexus", emoji: "🪐", online,
+            best_bid: 0.0, best_ask: 0.0, spread: 0.0,
+            micro_price: 0.0, net_position: 0.0, realized_pnl: 0.0,
+            session_fills: 0, toxic_hits: 0, t2t_micros: 0,
+            l1_confidence: 0.0, l1_fp_rate: 0.0, l1_success_rate: 0.0,
+            l2_regime: "N/A", fear_greed: 0, macro_bias: 0.0,
+            shadow_mode: false, ai_intent: "SOVEREIGN",
+            grid_step: 0.0, grid_levels: 0, max_position: 0.0,
+            authorized_capital: 0.0, daily_loss_limit: 0.0, paused: false,
+            pnl_1h: 0.0, pnl_24h: 0.0, pnl_7d: 0.0, pnl_30d: 0.0,
+            fills_24h_fifo: 0, closed_trades_24h: 0,
+            wallet_btc: 0.0, wallet_usd: 0.0,
+        }
     }
 
     /// Generic bot snapshot from EngineState + RiskState references.
@@ -258,6 +284,7 @@ fn bot_pnl_index(name: &str) -> Option<usize> {
         "moonshot" => Some(1),
         "grid" => Some(2),
         "trigon" => Some(3),
+        "nexus" => Some(4),
         _ => None,
     }
 }
