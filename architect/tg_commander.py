@@ -360,6 +360,7 @@ def cmd_help(message):
 💰 `/pnl` — Detailní PnL report
 📈 `/spread` — Cross-exchange spreads (Bitfinex↔Binance)
 🧠 `/ml` — ML Shield inference metriky
+🧪 `/ab` — A/B test ML Shield (`/ab start` · `stop` · `history`)
 
 🎮 *Ovládání:*
 `/hydra start` · `stop` · `restart` · `pause`
@@ -552,6 +553,43 @@ def cmd_ml(message):
             bot.reply_to(message, report)
     except Exception as e:
         bot.reply_to(message, f"❌ ML error: {e}")
+
+# ── A/B TESTING (/ab) ─────────────────────────────────────────
+@bot.message_handler(commands=['ab'])
+def cmd_ab(message):
+    if not auth(message): return
+    try:
+        from ab_testing import ab_controller, analyze_historical
+
+        parts = message.text.strip().split()
+        subcmd = parts[1].lower() if len(parts) > 1 else "status"
+
+        if subcmd == "start":
+            result = ab_controller.start_test()
+            bot.reply_to(message, result)
+        elif subcmd == "stop":
+            result = ab_controller.stop_test()
+            bot.reply_to(message, result)
+        elif subcmd == "history":
+            deploy_date = parts[2] if len(parts) > 2 else "2026-03-30"
+            result = analyze_historical(deploy_date)
+            bot.reply_to(message, result)
+        else:
+            # Show current status
+            if ab_controller.is_running:
+                result = ab_controller.generate_report()
+            else:
+                result = (
+                    "🧪 *A/B Testing — ML Shield*\n"
+                    "━━━━━━━━━━━━━━━━━━━\n"
+                    "Status: ⏸ Neběží\n\n"
+                    "`/ab start` — Spustí 7-denní test\n"
+                    "`/ab history` — Historická analýza\n"
+                    "`/ab stop` — Zastaví běžící test"
+                )
+            bot.reply_to(message, result)
+    except Exception as e:
+        bot.reply_to(message, f"❌ A/B error: {e}")
 
 # ── GPU TELEMETRY (/gpu) ─────────────────────────────────────
 @bot.message_handler(commands=['gpu'])
