@@ -12,10 +12,10 @@ Captures EVERYTHING happening in the system for post-mortem analysis:
 - L2 Oracle decisions from l2_command.bin
 
 Writes timestamped JSONL to logs/system_monitor.jsonl
-Run duration: configurable (default 3h)
+Run duration: configurable (default 33 days = 792h)
 
 Usage:
-    python3 architect/system_monitor.py [--hours 3]
+    python3 architect/system_monitor.py [--days 33]
 """
 
 import os
@@ -32,6 +32,7 @@ from pathlib import Path
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG_DIR = os.path.join(PROJECT_ROOT, "logs")
 MONITOR_LOG = os.path.join(LOG_DIR, "system_monitor.jsonl")
+MONITOR_PID = os.path.join(LOG_DIR, "system_monitor.pid")
 MMAP_DIR = "/dev/shm/beroun"
 STATE_FILE = os.path.join(PROJECT_ROOT, "state", "armada_state.json")
 PNL_DB = os.path.expanduser("~/.local/share/sniper/pnl.db")
@@ -62,10 +63,18 @@ POLL_INTERVAL = 5  # seconds between polls
 
 
 class SystemMonitor:
-    def __init__(self, duration_hours=3):
+    def __init__(self, duration_hours=792):
         self.duration = duration_hours * 3600
         self.start_time = time.time()
         os.makedirs(LOG_DIR, exist_ok=True)
+
+        # Overwrite old log on fresh start
+        if os.path.exists(MONITOR_LOG):
+            os.remove(MONITOR_LOG)
+
+        # Write PID file for status checks
+        with open(MONITOR_PID, "w") as f:
+            f.write(str(os.getpid()))
 
         # State tracking
         self.prev_processes = {}       # pattern -> {pid, cmdline}
@@ -394,11 +403,38 @@ class SystemMonitor:
                 pass
 
 
-if __name__ == "__main__":
-    hours = 3
-    for i, arg in enumerate(sys.argv[1:]):
-        if arg == "--hours" and i + 2 < len(sys.argv):
-            hours = float(sys.argv[i + 2])
+def get_status():
+    """Return monitor status dict for dashboard/telegram."""
+    result = {"online": False, "pid": None, "log_size_kb": 0, "events": 0, "uptime_h": 0}
+    try:
+        if os.path.exists(MONITOR_PID):
+            with open(MONITOR_PID) as f:
+                pid = int(f.read().strip())
+            # Check if process alive
+            os.kill(pid, 0)
+            result["online"] = True
+            result["pid"] = pid
+    except (ProcessLookupError, ValueError, FileNotFoundError):
+        pass
+    try:
+        if os.path.exists(MONITOR_LOG):
+            st = os.stat(MONITOR_LOG)
+            result["log_size_kb"] = round(st.st_size / 1024, 1)
+            result["uptime_h"] = round((time.time() - st.st_ctime) / 3600, 1)
+            with open(MONITOR_LOG) as f:
+                result["events"] = sum(1 for _ in f)
+    except Exception:
+        pass
+    return result
 
-    monitor = SystemMonitor(duration_hours=hours)
+
+if __name__ == "__main__":
+    days = 33
+    for i, arg in enumerate(sys.argv[1:]):
+        if arg == "--days" and i + 2 < len(sys.argv):
+            days = float(sys.argv[i + 2])
+        elif arg == "--hours" and i + 2 < len(sys.argv):
+            days = float(sys.argv[i + 2]) / 24
+
+    monitor = SystemMonitor(duration_hours=days * 24)
     monitor.run()

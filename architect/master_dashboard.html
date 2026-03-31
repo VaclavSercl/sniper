@@ -240,9 +240,11 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
         <div class="gauge-card" id="gc-disk-root"><div class="gauge-svg" id="g-disk-root"></div><div class="gauge-label">SSD /</div><div class="gauge-detail" id="gd-disk-root">—</div></div>
         <div class="gauge-card" id="gc-disk-data"><div class="gauge-svg" id="g-disk-data"></div><div class="gauge-label">HDD /data</div><div class="gauge-detail" id="gd-disk-data">—</div></div>
     </div>
+    </div>
     <div class="health-info" id="health-info">
         <div class="hi">Uptime: <span class="hi-val" id="hi-uptime">—</span></div>
         <div class="hi">Load: <span class="hi-val" id="hi-load">—</span></div>
+        <div class="hi" id="hi-monitor" style="margin-left:auto">🔬 Monitor: <span class="hi-val" id="hi-mon-status">—</span></div>
     </div>
 </div>
 
@@ -454,6 +456,7 @@ function update(state) {
     renderFees(state.nexus || {});
     renderLatency(state.latency || {}, state.latency_history || []);
     renderSystem(state.system || {});
+    renderMonitor(state.monitor || {});
 
     // Nexus health dot
     const nexusOnline = state.nexus && state.nexus.online;
@@ -771,6 +774,16 @@ function renderSystem(sys) {
 
     document.getElementById('hi-uptime').textContent = sys.uptime || '?';
     document.getElementById('hi-load').textContent = (sys.load_1m||0) + ' / ' + (sys.load_5m||0) + ' / ' + (sys.load_15m||0);
+}
+
+function renderMonitor(mon) {
+    const el = document.getElementById('hi-mon-status');
+    if (!el) return;
+    if (mon && mon.online) {
+        el.innerHTML = `<span style="color:var(--green)">ON</span> <span style="color:var(--text-dim)">(${(mon.log_size_kb/1024).toFixed(1)} MB · ${mon.events} events)</span>`;
+    } else {
+        el.innerHTML = `<span style="color:var(--red)">OFF</span>`;
+    }
 }
 
 // SSE Connection

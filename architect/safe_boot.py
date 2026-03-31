@@ -127,8 +127,15 @@ class SafeBootPipeline:
         return {"ok": True, "cmd": self.binary}
 
     def enforce_paper_state(self):
-        """Forces the armada_state.json to downgrade modes to PAPER automatically."""
-        import copy
+        """Forces PAPER/PAUSED mode via BOTH armada_state.json AND mmap.
+        
+        CRITICAL: Rust bots read paused state from mmap (risk_state.bin),
+        NOT from armada_state.json. Writing only to JSON leaves bots in
+        LIVE mode. We must write to BOTH.
+        """
+        import mmap as _mmap
+        import struct as _struct
+        
         try:
             if os.path.exists(STATE_FILE):
                 with open(STATE_FILE, "r") as f:
@@ -138,8 +145,9 @@ class SafeBootPipeline:
                 
             if self.bot not in state:
                 state[self.bot] = {}
-                
-            if self.bot == "nexus":
+            
+            # Hydra and Nexus go to PAPER, others to PAUSED
+            if self.bot in ("nexus", "hydra"):
                 fallback_mode = "PAPER"
             else:
                 fallback_mode = "PAUSED"
@@ -153,7 +161,21 @@ class SafeBootPipeline:
             
             with open(STATE_FILE, "w") as f:
                 json.dump(state, f, indent=2)
-                
+            
+            # ═══ CRITICAL: Write paused=1 to mmap risk_state.bin ═══
+            # Rust bots check ONLY this mmap field, not the JSON file.
+            risk_path = "/dev/shm/beroun/risk_state.bin"
+            if os.path.exists(risk_path) and fallback_mode in ("PAPER", "PAUSED"):
+                try:
+                    with open(risk_path, "r+b") as rf:
+                        mm = _mmap.mmap(rf.fileno(), 0)
+                        _struct.pack_into('<Q', mm, 0, 1)  # paused = 1
+                        mm.flush()
+                        mm.close()
+                    log.info(f"🛡️ [SBP] {self.bot}: risk_state.bin paused=1 written (mmap enforcement)")
+                except Exception as me:
+                    log.error(f"⚠️ [SBP] Failed to write mmap pause for {self.bot}: {me}")
+                    
         except Exception as e:
             log.error(f"Failed to enforce paper state: {e}")
 

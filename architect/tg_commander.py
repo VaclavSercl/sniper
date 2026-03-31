@@ -728,6 +728,47 @@ def cmd_ab(message):
     except Exception as e:
         bot.reply_to(message, f"❌ A/B error: {e}")
 
+# ── SYSTEM MONITOR (/monitor) ─────────────────────────────────
+@bot.message_handler(commands=['monitor'])
+def cmd_monitor(message):
+    if not auth(message): return
+    try:
+        parts = message.text.strip().split()
+        subcmd = parts[1].lower() if len(parts) > 1 else "status"
+
+        MONITOR_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "system_monitor.py")
+        MONITOR_LOG = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs", "system_monitor.jsonl")
+        MONITOR_PID = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "logs", "system_monitor.pid")
+
+        if subcmd == "on":
+            # Kill old monitor if running
+            subprocess.run(["pkill", "-f", "system_monitor.py"], capture_output=True)
+            import time as _t; _t.sleep(1)
+            # Start new 33-day monitor (overwrites old log)
+            subprocess.Popen(
+                ["python3", MONITOR_SCRIPT, "--days", "33"],
+                stdout=open(MONITOR_LOG.replace(".jsonl", "_stdout.log"), "a"),
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+                cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            )
+            _t.sleep(2)
+            bot.reply_to(message, "🔬 System Monitor *ON* (33 dnů)\nLog: `system_monitor.jsonl`")
+        elif subcmd == "off":
+            subprocess.run(["pkill", "-f", "system_monitor.py"], capture_output=True)
+            bot.reply_to(message, "⏹️ System Monitor *OFF*")
+        else:
+            # Status
+            from system_monitor import get_status as _ms
+            st = _ms()
+            if st["online"]:
+                reply = f"🔬 *SYSTEM MONITOR*\n━━━━━━━━━━━━━━━━━━━\nStatus: 🟢 *ON* (PID {st['pid']})\nLog: `{st['log_size_kb']:.1f}` KB ({st['log_size_kb']/1024:.2f} MB)\nEvents: `{st['events']}`\nUptime: `{st['uptime_h']:.1f}h`"
+            else:
+                reply = "🔬 *SYSTEM MONITOR*\n━━━━━━━━━━━━━━━━━━━\nStatus: 🔴 *OFF*\n\n`/monitor on` pro zapnutí (33 dnů)"
+            bot.reply_to(message, reply)
+    except Exception as e:
+        bot.reply_to(message, f"❌ Monitor error: {e}")
+
 # ── WALLET STATUS (/wallet) ───────────────────────────────────
 @bot.message_handler(commands=['wallet'])
 def cmd_wallet(message):

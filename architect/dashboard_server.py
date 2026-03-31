@@ -108,6 +108,13 @@ def _build_dashboard_state():
     # 8. Nexus state (Phase N6)
     state["nexus"] = _get_nexus_state()
 
+    # 9. System Monitor status
+    try:
+        from system_monitor import get_status as _mon_status
+        state["monitor"] = _mon_status()
+    except Exception:
+        state["monitor"] = {"online": False, "log_size_kb": 0, "events": 0}
+
     return state
 
 
