@@ -1208,16 +1208,20 @@ PARAMETER CONSTRAINTS:
             pass
 
     def _calc_downtime(self, state):
-        """Calculate how long the system was down."""
-        last = state.get("last_healthy_ts")
+        """Calculate how long the system was down.
+        Uses _pre_boot_healthy_ts if available (saved before SBP overwrites it).
+        """
+        last = getattr(self, '_pre_boot_healthy_ts', None) or state.get("last_healthy_ts")
         if not last:
             return "unknown"
         try:
             last_dt = datetime.fromisoformat(last)
             if last_dt.tzinfo is None:
-                last_dt = last_dt.replace(tzinfo=timezone(timedelta(hours=1)))
-            delta = datetime.now(timezone(timedelta(hours=1))) - last_dt
-            mins = int(delta.total_seconds() / 60)
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            now = datetime.now(timezone.utc)
+            delta = now - last_dt
+            secs = max(0, int(delta.total_seconds()))  # Never negative
+            mins = secs // 60
             if mins < 60:
                 return f"{mins} min"
             return f"{mins // 60}h {mins % 60}m"
@@ -1229,6 +1233,11 @@ PARAMETER CONSTRAINTS:
         log.info("🧠 ═══ SOVEREIGN RECOVERY — Cycle #1 ═══")
 
         state = self._read_saved_state()
+        
+        # Save original healthy_ts BEFORE SBP overwrote it
+        # (SBP writes new timestamps during boot, making downtime negative)
+        self._pre_boot_healthy_ts = state.get("last_healthy_ts")
+        
         downtime = self._calc_downtime(state)
         log.info(f"  Downtime: {downtime}")
 

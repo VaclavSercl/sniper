@@ -1359,24 +1359,32 @@ def main():
                 pass
 
         log.info("🚨 [Sentinel] Alert system started (10s interval)")
+        _sentinel_start_ts = time.time()  # Boot grace period reference
 
         while True:
             try:
                 # 1. Bot crash detection — check if bot processes are alive
-                for bname, pname in [("hydra", "hydra-core"), ("moonshot", "moonshot-core"),
-                                      ("grid", "grid-core"), ("trigon", "trigon-core"),
-                                      ("nexus", "nexus-core")]:
-                    pid_file = f"/tmp/{pname}.pid"
-                    if os.path.exists(pid_file):
+                #    Skip during first 90s after Commander start (boot grace period)
+                if time.time() - _sentinel_start_ts > 90:
+                    for bname, pname in [("hydra", "hydra-core"), ("moonshot", "moonshot-core"),
+                                          ("grid", "grid-core"), ("trigon", "trigon-core"),
+                                          ("nexus", "nexus-core")]:
                         try:
-                            with open(pid_file) as f:
-                                pid = int(f.read().strip())
-                            os.kill(pid, 0)  # Check if alive (signal 0)
-                        except (ProcessLookupError, ValueError):
+                            r = subprocess.run(["pgrep", "-f", pname], capture_output=True, text=True, timeout=3)
+                            is_alive = r.returncode == 0 and r.stdout.strip()
+                        except Exception:
+                            is_alive = True  # Assume alive on check failure
+                        if not is_alive:
+                            # Check armada_state — don't alert if bot is supposed to be OFF
+                            try:
+                                with open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "state", "armada_state.json")) as sf:
+                                    bmode = json.load(sf).get(bname, {}).get("mode", "OFFLINE")
+                                if bmode in ("OFFLINE", "STOPPED"):
+                                    continue
+                            except Exception:
+                                pass
                             if can_alert(f"crash_{bname}"):
-                                alert(f"💀 *BOT CRASH*\n`{bname.upper()}` process died!\nPID file exists but process not found.\n\n`/hydra restart` to recover")
-                        except PermissionError:
-                            pass  # Running but different user
+                                alert(f"💀 *BOT CRASH*\n`{bname.upper()}` process not running!\nExpected mode: {bmode}\n\n`/{bname} restart` to recover")
 
                 # 2. Cross-exchange arb > 20bps
                 cross_path = "/dev/shm/beroun/cross_exchange.bin"

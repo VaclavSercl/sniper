@@ -71,6 +71,13 @@ pkill -f trigon-core 2>/dev/null || true
 pkill -f nexus-core 2>/dev/null || true
 pkill -f price_bridge.py 2>/dev/null || true
 fuser -k 3004/tcp 2>/dev/null || true
+
+# Clean stale PID files from previous run (prevents false crash alerts)
+rm -f /tmp/hydra-core.pid /tmp/moonshot-core.pid /tmp/grid-core.pid \
+      /tmp/trigon-core.pid /tmp/nexus-core.pid /tmp/hydra-core.lock \
+      /tmp/moonshot-core.lock /tmp/grid-core.lock /tmp/trigon-core.lock \
+      /tmp/nexus-core.lock 2>/dev/null || true
+
 sleep 3
 
 # ═══ SHOW PRE-CRASH STATE ═══
