@@ -79,7 +79,7 @@ class SafeBootPipeline:
             thirty_mins_ago = int((time.time() - 1800) * 1000)
             
             df = pd.read_sql_query(
-                "SELECT ts_ms, close_px FROM candles_1s WHERE symbol='tBTCUSD' AND ts_ms > ?",
+                "SELECT ts, close FROM candles_1s WHERE symbol='tBTCUSD' AND ts > ?",
                 conn, params=(thirty_mins_ago,)
             )
             conn.close()
@@ -89,8 +89,8 @@ class SafeBootPipeline:
                 return {"ok": True}
                 
             # Calculate rolling price standard deviation (volatility proxy)
-            std_dev = df['close_px'].std()
-            price = df['close_px'].iloc[-1]
+            std_dev = df['close'].std()
+            price = df['close'].iloc[-1]
             
             log.info(f"📊 [SBP] 30m BTC Volatility (StdDev): ${std_dev:.2f} at ${price:.0f}")
             
@@ -139,11 +139,16 @@ class SafeBootPipeline:
             if self.bot not in state:
                 state[self.bot] = {}
                 
+            if self.bot == "nexus":
+                fallback_mode = "PAPER"
+            else:
+                fallback_mode = "PAUSED"
+
             # Override mode safely
             if state[self.bot].get("mode") == "LIVE":
-                log.warning(f"🛡️ [SBP] Downgrading {self.bot} from LIVE -> PAPER for Phase 3")
+                log.warning(f"🛡️ [SBP] Downgrading {self.bot} from LIVE -> {fallback_mode} for Phase 3")
                 
-            state[self.bot]["mode"] = "PAPER"
+            state[self.bot]["mode"] = fallback_mode
             state[self.bot]["since"] = datetime.now().isoformat()
             
             with open(STATE_FILE, "w") as f:

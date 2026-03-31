@@ -1234,7 +1234,7 @@ PARAMETER CONSTRAINTS:
 
         # Collect pre-crash states
         bot_states = {}
-        for bot in ["hydra", "moonshot", "grid", "trigon"]:
+        for bot in ["hydra", "moonshot", "grid", "trigon", "nexus"]:
             info = state.get(bot, {})
             mode = info.get("mode", "OFFLINE") if isinstance(info, dict) else "OFFLINE"
             bot_states[bot] = mode
@@ -1275,6 +1275,13 @@ PARAMETER CONSTRAINTS:
                 self._pause_bot(bot)
                 self._save_bot_state(bot, "PAUSED")
                 restored.append(f"🟡 {bot.upper()} → PAUSED (Scanner)")
+            elif mode == "PAPER":
+                log.info(f"  🟠 Starting {bot} → PAPER")
+                start_bot(bot)
+                time.sleep(5)
+                self._unpause_bot(bot)
+                self._save_bot_state(bot, "PAPER")
+                restored.append(f"🟠 {bot.upper()} → PAPER")
             else:
                 log.info(f"  🔴 {bot} → stays OFFLINE")
                 restored.append(f"🔴 {bot.upper()} → OFFLINE")

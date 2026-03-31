@@ -7,8 +7,12 @@ edition = "2024"
 name = "nexus-core"
 path = "src/main.rs"
 
+[[bin]]
+name = "nexus-config"
+path = "src/config_cli.rs"
+
 [dependencies]
-sniper-shared = { path = "../shared" }
+sniper-shared = { version = "11.1.0", path = "../shared" }
 chrono = "0.4.44"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"

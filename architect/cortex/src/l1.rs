@@ -284,6 +284,19 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
 
     let mut cycle: u64 = 0;
 
+    // Open L2 Command Matrix to read portfolio_is_hedged (CL4)
+    let l2cmd_mmap = {
+        let f = std::fs::OpenOptions::new().read(true).write(true).create(true).truncate(false)
+            .open(sniper_types::l2_command::L2_COMMAND_PATH).unwrap();
+        unsafe { memmap2::MmapMut::map_mut(&f).unwrap() }
+    };
+    let global_risk = unsafe {
+        &*(&l2cmd_mmap[std::mem::size_of::<sniper_types::l2_command::L2CommandMatrix>()
+            + std::mem::size_of::<sniper_types::l2_command::L2ASMatrix>()
+            + std::mem::size_of::<sniper_types::l2_command::L2GridWarpMatrix>()]
+            as *const _ as *const sniper_types::l2_command::L2GlobalRiskMatrix)
+    };
+
     loop {
         let t0 = Instant::now();
 
@@ -412,7 +425,7 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
                     regime,
                     fear_greed: engine.macro_fear_greed.load(Ordering::Relaxed),
                     macro_bias: engine.macro_bias.load(Ordering::Relaxed) as f64 / 10000.0,
-                    portfolio_hedged: false, // TODO: read CL4 mmap when cortex integrates l2_command
+                    portfolio_hedged: global_risk.portfolio_is_hedged.load(Ordering::Relaxed) == 1,
                 });
             }
         }

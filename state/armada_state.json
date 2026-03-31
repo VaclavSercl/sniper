@@ -1,7 +1,7 @@
 {
   "hydra": {
-    "mode": "LIVE",
-    "since": "2026-03-30T12:31:40.612503"
+    "mode": "PAPER",
+    "since": "2026-03-31T12:25:07.357340"
   },
   "moonshot": {
     "mode": "PAUSED",
@@ -17,8 +17,8 @@
   },
   "nexus": {
     "mode": "PAPER",
-    "since": "2026-03-31T10:09:00.000000"
+    "since": "2026-03-31T12:13:53.631380"
   },
-  "last_healthy_ts": "2026-03-31T11:47:56.412206",
+  "last_healthy_ts": "2026-03-31T12:44:44.267302",
   "shutdown_reason": "initial"
 }

@@ -51,6 +51,7 @@ BOTS = {
     },
     "nexus": {
         "core": os.path.join(BIN_DIR, "nexus-core"),
+        "config": os.path.join(BIN_DIR, "nexus-config"),
         "cpu": 3,
         "port": 3004,
         "emoji": "🪐",
@@ -118,11 +119,29 @@ def start_bot(name: str) -> str:
         log.error(f"⚠️ SBP evaluation crashed: {e}. Bot start aborted for safety.")
         return f"❌ [SBP CRASHED] {name.upper()}: {e}"
     
+    # Check state for PAPER mode
+    state_file = os.path.join(PROJECT_ROOT, "state", "armada_state.json")
+    is_paper = False
+    try:
+        if os.path.exists(state_file):
+            import json
+            with open(state_file) as sf:
+                s_data = json.load(sf)
+                if s_data.get(name, {}).get("mode") == "PAPER":
+                    is_paper = True
+    except Exception:
+        pass
+
+    # Build args
+    args = ["taskset", "-c", str(info["cpu"]), info["core"]]
+    if is_paper and name == "nexus":
+        args.append("--paper")
+
     # Start core
     core_log = os.path.join(LOG_DIR, f"{name}-core.log")
     try:
         subprocess.Popen(
-            ["taskset", "-c", str(info["cpu"]), info["core"]],
+            args,
             stdout=open(core_log, "a"),
             stderr=subprocess.STDOUT,
             start_new_session=True,

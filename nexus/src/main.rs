@@ -52,7 +52,7 @@ const GID_NEXUS: u32 = 5000; // Unique GID for Nexus orders on Bitfinex
 #[command(name = "nexus-core", version = VERSION, about = "Cross-Exchange Arbitrage Bot")]
 struct Args {
     /// Paper trading mode — log signals but don't execute orders
-    #[arg(long, default_value_t = true)]
+    #[arg(long)]
     paper: bool,
 
     /// Minimum net profit in bps (after fees + slippage)
@@ -321,6 +321,8 @@ fn scan_for_arb(
 // ═══════════════════════════════════════════════════════════
 #[tokio::main]
 async fn main() -> Result<()> {
+    println!("DEBUG: CrossExchangeState size: {}", std::mem::size_of::<CrossExchangeState>());
+    println!("DEBUG: active_pairs offset: {}", std::mem::size_of::<[CrossPairState; MAX_CROSS_PAIRS]>());
     dotenv().ok();
     let args = Args::parse();
 
@@ -405,6 +407,7 @@ async fn main() -> Result<()> {
 
         let mut authed = false;
         let mut scan_interval = tokio::time::interval(Duration::from_millis(args.scan_interval_ms));
+        let mut last_scan = std::time::Instant::now();
 
         info!(event = "ws_connected", exchange = "bitfinex", mode = mode);
 
@@ -434,6 +437,27 @@ async fn main() -> Result<()> {
                     if now_ms - last_exec_ms < args.cooldown_ms { continue; }
 
                     // Scan for arbitrage opportunity
+                    
+                    let active = cross_state.active_pairs.load(Ordering::Acquire) as usize;
+                    if last_scan.elapsed().as_secs() > 10 && active > 0 {
+                        let mut best_gross = -1000.0;
+                        let mut best_pair = "";
+                        for i in 0..active.min(MAX_CROSS_PAIRS) {
+                            let pair = &cross_state.pairs[i];
+                            if pair.enabled.load(Ordering::Acquire) == 0 { continue; }
+                            let spread_bps = pair.best_spread_bps.load(Ordering::Relaxed) as f64 / 100.0;
+                            if spread_bps > best_gross {
+                                best_gross = spread_bps;
+                                best_pair = PAIR_NAMES[i];
+                            }
+                        }
+                        if best_gross > -1000.0 {
+                            println!("🚀 ARB SCORE: {} (best spread {:.1} bps)", best_pair, best_gross);
+                            info!(event = "arb_score", pair = best_pair, spread_bps = format!("{:.1}", best_gross));
+                        }
+                        last_scan = std::time::Instant::now();
+                    }
+
                     if let Some(signal) = scan_for_arb(cross_state, &args, latency_pad) {
                         total_signals += 1;
                         notifier.signal(
@@ -449,6 +473,8 @@ async fn main() -> Result<()> {
                             net_bps = format!("{:.1}", signal.net_bps),
                             size_usd = format!("{:.2}", signal.size_usd),
                             total_signals = total_signals);
+
+                        println!("🚀 ARB SCORE: {} {} (net {:.1} bps)", signal.pair_name, signal.direction, signal.net_bps);
 
                         if args.paper {
                             // Paper mode — just log

@@ -11,7 +11,7 @@
 use std::sync::atomic::{AtomicU64, AtomicI64, AtomicU32};
 
 /// Maximum number of simultaneously tracked triangles
-pub const TRIGON_MAX_TRIANGLES: usize = 10;
+pub const TRIGON_MAX_TRIANGLES: usize = 24;
 
 /// Maximum number of legs per triangle (always 3 but for array sizing)
 pub const TRIGON_LEGS: usize = 3;
@@ -146,4 +146,14 @@ pub const KNOWN_TRIANGLES: &[(&str, &str, &str)] = &[
     ("tBTCUST", "tBTC:EURQ", "tEURQ:UST"),
     // UST → BTC → EURR → UST  (EUR/USDT via EURR token)
     ("tBTCUST", "tBTC:EURR", "tEURR:UST"),
+
+    // ═══ ETH CROSSES (M4 Scale-up) ═══
+    ("tETHUSD", "tETHUST", "tUSTUSD"),
+    ("tETHUSD", "tETHEUR", "tEURUST"),
+    ("tETHUSD", "tETHGBP", "tGBPUST"),
+
+    // ═══ SOL CROSSES (M4 Scale-up) ═══
+    ("tSOLUSD", "tSOLUST", "tUSTUSD"),
+    ("tSOLUSD", "tSOLEUR", "tEURUST"),
+    ("tSOLUSD", "tSOLGBP", "tGBPUST"),
 ];
