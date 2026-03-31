@@ -14,10 +14,12 @@ Replaces l2.rs in Cortex — all Gemini calls now in one place.
 
 import json
 import subprocess
+import asyncio
 import struct
 import logging
 import time
 import os
+import mmap
 from datetime import datetime, timezone, timedelta
 
 from orchestration import start_bot, stop_bot
@@ -57,7 +59,7 @@ try:
 except ImportError:
     HAS_PNL_DB = False
 
-class L2Oracle:
+class L2OracleAsync:
     """Strategic Oracle — the 'frontal lobe' of the Armada."""
 
     # ═══ PAPER TRIAL CONSTANTS ═══
@@ -82,13 +84,25 @@ class L2Oracle:
 
         self.pnl_db = PnlDatabase() if HAS_PNL_DB else None
 
+        # 1. Optimalizace: Mapujeme paměť permanentně POUZE pro čtení a zápis
+        L2_CMD_PATH = "/dev/shm/beroun/l2_command.bin"
+        os.makedirs(os.path.dirname(L2_CMD_PATH), exist_ok=True)
+        if not os.path.exists(L2_CMD_PATH):
+            with open(L2_CMD_PATH, "wb") as f:
+                f.write(b'\0' * 896)
+                
+        fd = os.open(L2_CMD_PATH, os.O_RDWR)
+        # NEPOUŽÍVAT ftruncate uvnitř loopu, zabije záchyt v Rustu L0
+        self.cmd_mmap = mmap.mmap(fd, 896)
+        os.close(fd)
+
         # ═══ PAPER TRIAL ENGINE (SBP Phase 4-6) ═══
         # Tracks bots in paper trial. After 66 min, AI evaluates and promotes.
         # Key: bot_name → {"start_ts": datetime, "initial_fills": int, "pre_crash_mode": str}
         self._paper_trials = {}
         self._paper_trial_evaluated = set()  # Bots already evaluated (no re-eval)
 
-    def run_cycle(self, report_type=None):
+    async def run_cycle(self, report_type=None):
         """Execute one L2 Oracle cycle. Called every 5 min.
         report_type: None=silent, 'hourly'/'daily'/'weekly'/'monthly'=send TG report.
         """
@@ -136,20 +150,29 @@ class L2Oracle:
         prompt = self._build_prompt(bots, gpu_data)
 
         # 3. Call Gemini CLI
-        log.info("  🤖 Calling Gemini CLI...")
+        log.info("  🤖 Calling Gemini CLI (async/neblokující)...")
         try:
-            result = subprocess.run(
-                ["gemini", "-m", "gemini-3.1-pro-preview", "-p", prompt],
-                capture_output=True, text=True, timeout=GEMINI_TIMEOUT,
+            # 2. Optimalizace: Async Process (žádný GIL lock)
+            process = await asyncio.create_subprocess_exec(
+                "gemini", "-m", "gemini-3.1-pro-preview", "--format=json", "-p", prompt,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
             )
-            if result.returncode != 0:
-                log.error(f"Gemini failed: {result.stderr[:200]}")
-                self._send_fallback_report("Gemini chyba")
+            
+            # S čekáním na AI můžeme provádět paralelní operace
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=GEMINI_TIMEOUT)
+            if process.returncode != 0:
+                err_text = stderr.decode()[:200]
+                log.error(f"Gemini failed: {err_text}")
+                self._send_fallback_report(f"Gemini chyba: {err_text}")
                 return
-            raw = result.stdout.strip()
+            raw = stdout.decode().strip()
             log.info(f"  ✅ Gemini responded ({len(raw)} bytes)")
-        except subprocess.TimeoutExpired:
+        except asyncio.TimeoutError:
             log.error("Gemini timeout!")
+            if 'process' in locals():
+                try: process.kill()
+                except Exception: pass
             self._send_fallback_report("Gemini timeout")
             return
         except Exception as e:
@@ -602,15 +625,7 @@ PARAMETER CONSTRAINTS:
         """
         try:
             import struct as _st
-            L2_CMD_PATH = "/dev/shm/beroun/l2_command.bin"
-            L2_CMD_SIZE = 896  # CL1-5(320) + Ring(576)
-
-            os.makedirs(os.path.dirname(L2_CMD_PATH), exist_ok=True)
-            fd = os.open(L2_CMD_PATH, os.O_RDWR | os.O_CREAT)
-            os.ftruncate(fd, L2_CMD_SIZE)
-            import mmap
-            mm = mmap.mmap(fd, L2_CMD_SIZE)
-            os.close(fd)
+            mm = self.cmd_mmap
 
             # Read current version
             cur_ver = _st.unpack_from('<Q', mm, 0)[0]
@@ -618,7 +633,6 @@ PARAMETER CONSTRAINTS:
 
             # Step 1: Write ODD version (= "writing in progress", L1 will spin)
             _st.pack_into('<Q', mm, 0, next_ver)
-            mm.flush()
 
             # Step 2: Write control fields (Cache Line 1: L2 → L1)
             # Layout: ver(8) + bid_fade(8) + ask_fade(8) + lat_pad(8) + killswitch(8) + pad(24)

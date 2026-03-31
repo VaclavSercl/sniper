@@ -19,12 +19,14 @@ import struct
 import signal
 import threading
 import logging
+import asyncio
 from datetime import datetime, timezone, timedelta
 
 import telebot
 from telebot import apihelper
-from cortex_client import CortexClient, start_event_listener
-from l2_oracle import L2Oracle
+from orchestration import BOTS, get_pid, is_running, start_bot, stop_bot, save_bot_state
+from cortex_client import CortexClient, read_cortex_state
+from l2_oracle import L2OracleAsync
 
 # ── CONFIG ──────────────────────────────────────────────────
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -1246,7 +1248,7 @@ def main():
             except Exception as e:
                 log.error(f"L2 Telegram send failed: {e}")
 
-        oracle = L2Oracle(cortex, tg_send)
+        oracle = L2OracleAsync(cortex, tg_send)
         time.sleep(15)  # Let Cortex initialize
         log.info("🌐 L2 Strategic Oracle: ONLINE (5 min cycle, reports hourly)")
 
@@ -1288,7 +1290,7 @@ def main():
                             last_report_month = now.month
                             report_type = "monthly"
 
-                oracle.run_cycle(report_type=report_type)
+                asyncio.run(oracle.run_cycle(report_type=report_type))
             except Exception as e:
                 log.error(f"L2 Oracle error: {e}")
             time.sleep(300)  # 5 minutes
