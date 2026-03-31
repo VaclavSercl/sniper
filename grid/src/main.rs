@@ -51,7 +51,7 @@ impl AsyncNotifier {
         let (tx, mut rx) = mpsc::unbounded_channel::<String>();
         let token = std::env::var("TELEGRAM_BOT_TOKEN").unwrap_or_default();
         let chat_id = std::env::var("TELEGRAM_CHAT_ID").unwrap_or_default();
-        let client = reqwest::Client::builder().timeout(Duration::from_secs(10)).build().unwrap();
+        let client = reqwest::Client::builder().timeout(Duration::from_secs(10)).build().unwrap_or_default();
 
         let exe_dir = std::env::current_exe()
             .ok().and_then(|p| p.parent().map(|d| d.to_path_buf()))
@@ -83,7 +83,7 @@ impl AsyncNotifier {
 // mmap
 // ═══════════════════════════════════════════════════════════
 fn init_mmap_ptr<T: Default>(path: &str) -> Result<MmapMut> {
-    let dir = std::path::Path::new(path).parent().unwrap();
+    let dir = std::path::Path::new(path).parent().unwrap_or_else(|| std::path::Path::new("/dev/shm/beroun"));
     std::fs::create_dir_all(dir)?;
     let file = OpenOptions::new().read(true).write(true).create(true).open(path)?;
     file.set_len(std::mem::size_of::<T>() as u64)?;

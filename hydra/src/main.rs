@@ -62,7 +62,7 @@ impl AsyncNotifier {
                         tokio::task::spawn_blocking(|| {
                             let _ = std::process::Command::new(std::env::current_exe().unwrap_or_default().with_file_name("hydra-config"))
                                 .arg("export-json")
-                                .stdout(std::fs::File::create("/dev/shm/beroun/state.json").unwrap_or_else(|_| std::fs::File::create("/dev/null").unwrap()))
+                                .stdout(std::fs::File::create("/dev/shm/beroun/state.json").unwrap_or_else(|_| std::fs::File::create("/dev/null").unwrap_or_else(|_| std::fs::File::open("/dev/null").expect("cannot open /dev/null"))))
                                 .status(); // .status() waits for child — prevents zombie
                         });
                     }
@@ -184,7 +184,7 @@ fn write_bfx(w: &mut impl std::fmt::Write, val: f64) -> std::fmt::Result {
         let n = {
             use std::io::Write;
             let mut cursor = std::io::Cursor::new(&mut buf[..]);
-            write!(cursor, "{:.12}", val).unwrap();
+            let _ = write!(cursor, "{:.12}", val);
             cursor.position() as usize
         };
         let s = unsafe { std::str::from_utf8_unchecked(&buf[..n]) };

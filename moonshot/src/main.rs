@@ -52,7 +52,7 @@ impl AsyncNotifier {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
             .build()
-            .unwrap();
+            .unwrap_or_default();
 
         // Resolve alerts log path relative to binary
         let exe_dir = std::env::current_exe()
@@ -88,7 +88,7 @@ impl AsyncNotifier {
 // mmap Initialization
 // ═══════════════════════════════════════════════════════════
 fn init_mmap_ptr<T: Default>(path: &str) -> Result<MmapMut> {
-    let dir = std::path::Path::new(path).parent().unwrap();
+    let dir = std::path::Path::new(path).parent().unwrap_or_else(|| std::path::Path::new("/dev/shm/beroun"));
     std::fs::create_dir_all(dir)?;
     let file = OpenOptions::new().read(true).write(true).create(true).open(path)?;
     file.set_len(std::mem::size_of::<T>() as u64)?;

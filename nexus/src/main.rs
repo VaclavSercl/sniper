@@ -105,7 +105,7 @@ impl AsyncNotifier {
         let client = reqwest::Client::builder()
             .timeout(Duration::from_secs(10))
             .build()
-            .unwrap();
+            .unwrap_or_default();
 
         let exe_dir = std::env::current_exe()
             .ok().and_then(|p| p.parent().map(|d| d.to_path_buf()))

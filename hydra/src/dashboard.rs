@@ -623,13 +623,20 @@ async fn main() -> Result<()> {
             for attempt in 1..=15 {
                 // SO_REUSEADDR+SO_REUSEPORT for graceful restart (old socket may linger)
                 // Double-start is prevented by flock guard above, not by socket binding
-                let socket = tokio::net::TcpSocket::new_v4().unwrap();
+                let socket = match tokio::net::TcpSocket::new_v4() {
+                    Ok(s) => s,
+                    Err(e) => {
+                        eprintln!("[DASHBOARD] Socket creation failed: {e}");
+                        tokio::time::sleep(Duration::from_secs(3)).await;
+                        continue;
+                    }
+                };
                 let _ = socket.set_reuseaddr(true);
                 #[cfg(unix)]
                 {
                     let _ = socket.set_reuseport(true);
                 }
-                match socket.bind("0.0.0.0:3000".parse().unwrap())
+                match socket.bind("0.0.0.0:3000".parse().unwrap_or_else(|_| std::net::SocketAddr::from(([0,0,0,0], 3000))))
                     .and_then(|()| socket.listen(1024))
                 {
                     Ok(l) => { bound = Some(l); break; }
@@ -707,7 +714,7 @@ async fn main() -> Result<()> {
         let shadow_pnl = engine.shadow_pnl.load(Ordering::Acquire) as f64 / scale;
         let toxic = engine.toxic_flow_hits.load(Ordering::Acquire);
         let freeze_until = engine.sweep_freeze_until.load(Ordering::Acquire);
-        let now_ms = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+        let now_ms = SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
         let freeze_active = freeze_until > now_ms;
         let l1_skew = engine.l1_skew_adjustment.load(Ordering::Acquire) as f64 / scale;
         let obi = engine.l2_imbalance.load(Ordering::Acquire) as f64 / scale;
