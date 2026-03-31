@@ -137,12 +137,44 @@ impl SubAssign for FixedPrice {
 }
 
 // ── Násobení s vyrovnáním měřítka ──
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+fn fast_div_128_64(a: i128, b: i64) -> i64 {
+    let b_abs = b.abs();
+    let hi = (a >> 64) as i64;
+    // Fast path: hardware idiv (15-20 cycles) instead of __divti3 (200-400 cycles).
+    // Avoid #DE fault if the quotient won't fit entirely in 64 bits.
+    if b == 0 || hi.abs() >= b_abs {
+        return (a / b as i128) as i64;
+    }
+    
+    let lo = a as u64;
+    let mut quotient: i64;
+    unsafe {
+        std::arch::asm!(
+            "idiv {divisor}",
+            divisor = in(reg) b,
+            inout("rax") lo => quotient,
+            in("rdx") hi,
+            options(nostack, pure, nomem)
+        );
+    }
+    quotient
+}
+
+#[cfg(not(target_arch = "x86_64"))]
+#[inline(always)]
+fn fast_div_128_64(a: i128, b: i64) -> i64 {
+    (a / b as i128) as i64
+}
+
+// ── Násobení s vyrovnáním měřítka ──
 impl Mul for FixedPrice {
     type Output = Self;
     #[inline(always)]
     fn mul(self, rhs: Self) -> Self::Output {
         let prod = (self.0 as i128) * (rhs.0 as i128);
-        Self((prod / (PRICE_SCALE as i128)) as i64)
+        Self(fast_div_128_64(prod, PRICE_SCALE as i64))
     }
 }
 
@@ -153,6 +185,6 @@ impl Div for FixedPrice {
     fn div(self, rhs: Self) -> Self::Output {
         assert!(rhs.0 != 0, "FixedPrice Division by Zero");
         let a = (self.0 as i128) * (PRICE_SCALE as i128);
-        Self((a / (rhs.0 as i128)) as i64)
+        Self(fast_div_128_64(a, rhs.0))
     }
 }
