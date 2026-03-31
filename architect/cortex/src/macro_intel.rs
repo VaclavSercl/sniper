@@ -58,29 +58,30 @@ fn safe_truncate(s: &str, max_bytes: usize) -> &str {
 // ═══ MODULE 1: BINANCE CROSS-EXCHANGE WEBSOCKET ═══
 
 /// Run Binance BTC/USDT aggTrade WebSocket (blocking — run in dedicated thread).
-pub fn run_binance_ws(engine: &EngineState) {
+pub async fn run_binance_ws(engine: &EngineState) {
     println!("  🌐 [MACRO] Binance BTC/USDT WebSocket starting...");
 
     loop {
-        match run_binance_ws_inner(engine) {
+        match run_binance_ws_inner(engine).await {
             Ok(()) => println!("  ⚠️ [MACRO] Binance WS closed, reconnecting in 5s..."),
             Err(e) => println!("  ❌ [MACRO] Binance WS error: {e}, reconnecting in 5s..."),
         }
-        std::thread::sleep(Duration::from_secs(5));
+        tokio::time::sleep(Duration::from_secs(5)).await;
     }
 }
 
-fn run_binance_ws_inner(engine: &EngineState) -> anyhow::Result<()> {
-    use tungstenite::{connect, Message};
+async fn run_binance_ws_inner(engine: &EngineState) -> anyhow::Result<()> {
+    use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
+    use futures_util::StreamExt;
 
-    let (mut socket, _response) = connect(BINANCE_WS_URL)?;
+    let (mut socket, _response) = connect_async(BINANCE_WS_URL).await?;
     println!("  🟢 [MACRO] Binance BTC/USDT aggTrade connected");
 
     let mut sell_window: VecDeque<(f64, f64)> = VecDeque::new(); // (timestamp, volume)
     let mut price_buffer: VecDeque<(f64, f64)> = VecDeque::with_capacity(100);
 
-    loop {
-        let msg = socket.read()?;
+    while let Some(msg_res) = socket.next().await {
+        let msg = msg_res?;
         if let Message::Text(text) = msg {
             if let Ok(trade) = serde_json::from_str::<serde_json::Value>(&text) {
                 let price: f64 = trade["p"].as_str().and_then(|s| s.parse().ok()).unwrap_or(0.0);
@@ -131,24 +132,26 @@ fn run_binance_ws_inner(engine: &EngineState) -> anyhow::Result<()> {
 // ═══ MODULE 2: FEAR & GREED INDEX ═══
 
 /// Fetch Fear & Greed Index every 5 minutes (blocking — run in dedicated thread).
-pub fn run_fear_greed(engine: &EngineState) {
+pub async fn run_fear_greed(engine: &EngineState) {
     println!("  📊 [MACRO] Fear & Greed monitor starting ({}s interval)...", FEAR_GREED_INTERVAL_S);
 
     loop {
-        match fetch_fear_greed(engine) {
+        match fetch_fear_greed(engine).await {
             Ok(val) => println!("  📊 [MACRO] Fear & Greed: {val}"),
             Err(e) => println!("  ⚠️ [MACRO] F&G fetch error: {e}"),
         }
-        std::thread::sleep(Duration::from_secs(FEAR_GREED_INTERVAL_S));
+        tokio::time::sleep(Duration::from_secs(FEAR_GREED_INTERVAL_S)).await;
     }
 }
 
-fn fetch_fear_greed(engine: &EngineState) -> anyhow::Result<u64> {
-    let body: String = ureq::get(FEAR_GREED_URL)
+async fn fetch_fear_greed(engine: &EngineState) -> anyhow::Result<u64> {
+    let client = reqwest::Client::new();
+    let body: String = client.get(FEAR_GREED_URL)
         .header("User-Agent", "SniperCortex/13.0")
-        .call()?
-        .body_mut()
-        .read_to_string()?;
+        .send()
+        .await?
+        .text()
+        .await?;
 
     let data: serde_json::Value = serde_json::from_str(&body)?;
     let value = data["data"][0]["value"]
@@ -165,13 +168,13 @@ fn fetch_fear_greed(engine: &EngineState) -> anyhow::Result<u64> {
 // ═══ MODULE 3: NEWS RSS SENTIMENT ═══
 
 /// Scan crypto RSS feeds every 3 minutes (blocking — run in dedicated thread).
-pub fn run_news_sentiment(engine: &EngineState) {
+pub async fn run_news_sentiment(engine: &EngineState) {
     println!("  📰 [MACRO] News RSS sentiment starting ({}s interval)...", NEWS_INTERVAL_S);
 
     let mut seen_titles: HashSet<String> = HashSet::new();
 
     loop {
-        match scan_rss_feeds(engine, &mut seen_titles) {
+        match scan_rss_feeds(engine, &mut seen_titles).await {
             Ok(n) => if n > 0 { println!("  📰 [MACRO] Scored {n} new articles"); },
             Err(e) => println!("  ⚠️ [MACRO] RSS scan error: {e}"),
         }
@@ -182,19 +185,21 @@ pub fn run_news_sentiment(engine: &EngineState) {
             seen_titles = keep.into_iter().collect();
         }
 
-        std::thread::sleep(Duration::from_secs(NEWS_INTERVAL_S));
+        tokio::time::sleep(Duration::from_secs(NEWS_INTERVAL_S)).await;
     }
 }
 
-fn scan_rss_feeds(engine: &EngineState, seen: &mut HashSet<String>) -> anyhow::Result<usize> {
+async fn scan_rss_feeds(engine: &EngineState, seen: &mut HashSet<String>) -> anyhow::Result<usize> {
     let mut scores: Vec<f64> = Vec::new();
+    let client = reqwest::Client::new();
 
     for &feed_url in RSS_FEEDS {
-        let body = match ureq::get(feed_url)
+        let body = match client.get(feed_url)
             .header("User-Agent", "SniperCortex/13.0")
-            .call()
+            .send()
+            .await
         {
-            Ok(mut resp) => match resp.body_mut().read_to_string() {
+            Ok(resp) => match resp.text().await {
                 Ok(s) => s,
                 Err(_) => continue,
             },

@@ -101,19 +101,13 @@ async fn main() -> anyhow::Result<()> {
         let engine_ptr = mem.hydra_engine() as *const sniper_types::EngineState;
         let engine_ref: &'static sniper_types::EngineState = unsafe { &*engine_ptr };
 
-        std::thread::Builder::new()
-            .name("macro-binance".into())
-            .spawn(move || { macro_intel::run_binance_ws(engine_ref); })?;
+        tokio::spawn(async move { macro_intel::run_binance_ws(engine_ref).await; });
 
         let engine_fg = engine_ref;
-        std::thread::Builder::new()
-            .name("macro-fg".into())
-            .spawn(move || { macro_intel::run_fear_greed(engine_fg); })?;
+        tokio::spawn(async move { macro_intel::run_fear_greed(engine_fg).await; });
 
         let engine_rss = engine_ref;
-        std::thread::Builder::new()
-            .name("macro-rss".into())
-            .spawn(move || { macro_intel::run_news_sentiment(engine_rss); })?;
+        tokio::spawn(async move { macro_intel::run_news_sentiment(engine_rss).await; });
 
         println!("🌍 Macro Intelligence: ONLINE (Binance WS + F&G + RSS)");
     }

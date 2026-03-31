@@ -43,9 +43,10 @@ const GHOST_TRANSPARENCY_STEALTH: u64 = 1000;
 const GHOST_TRANSPARENCY_PUBLIC: u64 = 10000;
 const GHOST_COOLDOWN_SECS: f64 = 120.0;
 
+#[derive(Clone, Copy, Default, Debug)]
 struct BookLevel {
-    price: f64,
-    amount: f64,
+    price: i64,
+    amount: i64,
 }
 
 pub struct AdaptiveL1Brain {
@@ -213,14 +214,14 @@ impl AdaptiveL1Brain {
 
 // ═══ PURE MATH FUNCTIONS ═══
 
-fn read_orderbook_levels(engine: &EngineState, is_bids: bool, n: usize) -> Vec<BookLevel> {
-    let n = n.min(BOOK_LEVELS);
-    let mut levels = Vec::with_capacity(n);
+fn read_orderbook_levels(engine: &EngineState, is_bids: bool, n: usize) -> arrayvec::ArrayVec<BookLevel, BOOK_DEPTH> {
+    let n = n.min(BOOK_LEVELS).min(BOOK_DEPTH);
+    let mut levels = arrayvec::ArrayVec::new();
     let source = if is_bids { &engine.bids } else { &engine.asks };
     for i in 0..n {
-        let price = source[i].price.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
-        let amount = source[i].amount.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
-        if price > 0.0 {
+        let price = source[i].price.load(Ordering::Relaxed) as i64;
+        let amount = source[i].amount.load(Ordering::Relaxed) as i64;
+        if price > 0 {
             levels.push(BookLevel { price, amount: amount.abs() });
         }
     }
@@ -228,17 +229,17 @@ fn read_orderbook_levels(engine: &EngineState, is_bids: bool, n: usize) -> Vec<B
 }
 
 fn compute_obi(bids: &[BookLevel], asks: &[BookLevel], depth: usize) -> f64 {
-    let bid_vol: f64 = bids.iter().take(depth).map(|l| l.amount).sum();
-    let ask_vol: f64 = asks.iter().take(depth).map(|l| l.amount).sum();
+    let bid_vol: f64 = bids.iter().take(depth).map(|l| l.amount as f64).sum();
+    let ask_vol: f64 = asks.iter().take(depth).map(|l| l.amount as f64).sum();
     let total = bid_vol + ask_vol;
-    if total < 1e-10 { return 0.0; }
+    if total < 1000.0 { return 0.0; }
     (bid_vol - ask_vol) / total
 }
 
 fn detect_sweep(prev: &[BookLevel], curr: &[BookLevel], threshold: f64) -> bool {
     if prev.is_empty() || curr.is_empty() { return false; }
-    let prev_vol: f64 = prev.iter().map(|l| l.amount).sum();
-    let curr_vol: f64 = curr.iter().map(|l| l.amount).sum();
+    let prev_vol: f64 = prev.iter().map(|l| l.amount as f64 / PRICE_SCALE).sum();
+    let curr_vol: f64 = curr.iter().map(|l| l.amount as f64 / PRICE_SCALE).sum();
     // Need meaningful volume to detect a sweep (avoid false positives on thin books)
     if prev_vol < SWEEP_MIN_VOLUME { return false; }
     let drop = (prev_vol - curr_vol) / prev_vol;
@@ -257,7 +258,7 @@ fn compute_iceberg_score(levels: &[BookLevel]) -> f64 {
     if levels.len() < 3 { return 0.0; }
     let mut price_counts = std::collections::HashMap::new();
     for l in levels {
-        let p = (l.price * 100.0).round() as i64;
+        let p = l.price;
         *price_counts.entry(p).or_insert(0u32) += 1;
     }
     let repeated = price_counts.values().filter(|&&c| c > 1).count();
@@ -278,8 +279,8 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
     println!("🛡️ [L1] Hydra tactical shield starting ({}ms cycle)...", CYCLE_MS);
 
     let mut brain = AdaptiveL1Brain::new();
-    let mut prev_bids: Vec<BookLevel> = Vec::new();
-    let mut prev_asks: Vec<BookLevel> = Vec::new();
+    let mut prev_bids: arrayvec::ArrayVec<BookLevel, BOOK_DEPTH> = arrayvec::ArrayVec::new();
+    let mut prev_asks: arrayvec::ArrayVec<BookLevel, BOOK_DEPTH> = arrayvec::ArrayVec::new();
     let mut last_sweep_ms: u64 = 0;
 
     let mut cycle: u64 = 0;
@@ -314,8 +315,8 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
         engine.l1_skew_adjustment.store(skew_scaled, Ordering::Release);
 
         // ── DEPTH TRACKING ──
-        let bid_depth: f64 = bids.iter().map(|l| l.amount).sum();
-        let ask_depth: f64 = asks.iter().map(|l| l.amount).sum();
+        let bid_depth: f64 = bids.iter().map(|l| l.amount as f64 / PRICE_SCALE).sum();
+        let ask_depth: f64 = asks.iter().map(|l| l.amount as f64 / PRICE_SCALE).sum();
         let total_depth = bid_depth + ask_depth;
         if brain.depth_history.len() == 120 { brain.depth_history.pop_front(); }
         brain.depth_history.push_back(total_depth);
@@ -330,7 +331,7 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
         // ── FLICKERING DETECTION ──
         if let Some(first_bid) = bids.first() {
             if brain.bid_price_history.len() == 50 { brain.bid_price_history.pop_front(); }
-            brain.bid_price_history.push_back(first_bid.price);
+            brain.bid_price_history.push_back(first_bid.price as f64 / PRICE_SCALE);
         }
         let (_is_flickering, flicker_rate) = detect_flickering(&brain.bid_price_history, 20);
 
