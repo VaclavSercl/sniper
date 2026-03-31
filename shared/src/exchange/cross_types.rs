@@ -110,6 +110,8 @@ pub struct CrossExchangeState {
     pub daily_cross_pnl: AtomicI64,
     /// Daily loss limit × PRICE_SCALE (positive value, triggers pause if exceeded)
     pub daily_loss_limit: AtomicI64,
+    /// Paper trading mode (1 = paper, 0 = live)
+    pub paper_mode: AtomicU32,
 }
 
 impl Default for CrossExchangeState {
@@ -117,6 +119,7 @@ impl Default for CrossExchangeState {
         let mut state: CrossExchangeState = unsafe { std::mem::zeroed() };
         // Safe defaults
         state.emergency_pause = AtomicU32::new(1); // Paused until explicitly enabled
+        state.paper_mode = AtomicU32::new(1);      // Default to paper mode
         state.max_exposure_bitfinex_usd = AtomicI64::new(500_00000000); // $500
         state.max_exposure_binance_usd = AtomicI64::new(500_00000000);  // $500
         state.daily_loss_limit = AtomicI64::new(50_00000000);           // $50

@@ -401,7 +401,8 @@ async fn main() -> Result<()> {
 
                         println!("🚀 ARB SCORE: {} {} (net {:.1} bps)", signal.pair_name, signal.direction, signal.net_bps);
 
-                        if args.paper {
+                        let is_paper = cross_state.paper_mode.load(Ordering::Relaxed) == 1 || args.paper;
+                        if is_paper {
                             // Paper mode — just log
                             info!(event = "paper_trade",
                                 pair = signal.pair_name,

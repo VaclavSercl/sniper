@@ -613,21 +613,35 @@ async fn async_main() -> Result<()> {
                                                                 let bit = 1u64 << i;
                                                                 if dist < trigger_dist && (mask & bit) == 0 {
                                                                     // FLASH INJECT: fire IOC buy
-                                                                    let price_f = gbp as f64 / sniper_types::PRICE_SCALE;
-                                                                    let amt_f = eng.current_order_usd.load(Ordering::Relaxed) as f64
-                                                                        / sniper_types::PRICE_SCALE / price_f;
-                                                                    let amt_f = amt_f.max(0.00015);
-                                                                    let msg = format!(r#"[0,"on",null,{{"gid":{},"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE IOC"}}]"#,
-                                                                        sniper_types::BOT_GID_HYDRA, sniper_types::TRADING_SYMBOL, amt_f, price_f);
+                                                                    let gbp_u = gbp.max(1) as u64;
+                                                                    let usd = eng.current_order_usd.load(Ordering::Relaxed);
+                                                                    let mut amt_i = (usd * sniper_types::PRICE_SCALE as u64) / gbp_u;
+                                                                    if amt_i < 15000 { amt_i = 15000; } // 0.00015 BTC
+                                                                    
+                                                                    let amt_f = (amt_i as f64) / sniper_types::PRICE_SCALE as f64;
+                                                                    let price_f = (gbp as f64) / sniper_types::PRICE_SCALE;
+
+                                                                    let mut msg = String::with_capacity(128);
+                                                                    let mut itoa_buf = itoa::Buffer::new();
+                                                                    let mut ryu1 = ryu::Buffer::new();
+                                                                    let mut ryu2 = ryu::Buffer::new();
+                                                                    
+                                                                    msg.push_str(r#"[0,"on",null,{"gid":"#);
+                                                                    msg.push_str(itoa_buf.format(sniper_types::BOT_GID_HYDRA));
+                                                                    msg.push_str(r#","symbol":""#);
+                                                                    msg.push_str(sniper_types::TRADING_SYMBOL);
+                                                                    msg.push_str(r#"","amount":""#);
+                                                                    msg.push_str(ryu1.format(amt_f));
+                                                                    msg.push_str(r#"","price":""#);
+                                                                    msg.push_str(ryu2.format(price_f));
+                                                                    msg.push_str(r#"","type":"EXCHANGE IOC"}]"#);
+                                                                    
                                                                     let _ = order_tx.send(msg);
                                                                     mask |= bit;
                                                                     eng.ghost_active_mask.store(mask, Ordering::Relaxed);
                                                                     eng.ghost_injections.fetch_add(1, Ordering::Relaxed);
                                                                     ghost_last_inject = Instant::now();
-                                                                    tracing::info!(event = "ghost_inject", side = "buy", level = i,
-                                                                        price = price_f, micro = micro_g as f64 / sniper_types::PRICE_SCALE,
-                                                                        dist_usd = dist as f64 / sniper_types::PRICE_SCALE,
-                                                                        velocity = format!("{:.2}", ghost_velocity / sniper_types::PRICE_SCALE));
+                                                                    tracing::info!(event = "ghost_inject", side = "buy", level = i, dist_usd = dist as f64 / sniper_types::PRICE_SCALE);
                                                                 } else if dist >= trigger_dist * 3 && (mask & bit) != 0 {
                                                                     // Price moved away: clear active flag
                                                                     mask &= !bit;
@@ -640,21 +654,35 @@ async fn async_main() -> Result<()> {
                                                                 let dist = (micro_g - gsp).abs();
                                                                 let bit = 1u64 << (i + sniper_types::MAX_GRID_LEVELS);
                                                                 if dist < trigger_dist && (mask & bit) == 0 {
-                                                                    let price_f = gsp as f64 / sniper_types::PRICE_SCALE;
-                                                                    let amt_f = eng.current_order_usd.load(Ordering::Relaxed) as f64
-                                                                        / sniper_types::PRICE_SCALE / price_f;
-                                                                    let amt_f = amt_f.max(0.00015);
-                                                                    let msg = format!(r#"[0,"on",null,{{"gid":{},"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE IOC"}}]"#,
-                                                                        sniper_types::BOT_GID_HYDRA, sniper_types::TRADING_SYMBOL, -amt_f, price_f);
+                                                                    let gsp_u = gsp.max(1) as u64;
+                                                                    let usd = eng.current_order_usd.load(Ordering::Relaxed);
+                                                                    let mut amt_i = (usd * sniper_types::PRICE_SCALE as u64) / gsp_u;
+                                                                    if amt_i < 15000 { amt_i = 15000; }
+                                                                    
+                                                                    let amt_f = -((amt_i as f64) / sniper_types::PRICE_SCALE as f64);
+                                                                    let price_f = (gsp as f64) / sniper_types::PRICE_SCALE;
+
+                                                                    let mut msg = String::with_capacity(128);
+                                                                    let mut itoa_buf = itoa::Buffer::new();
+                                                                    let mut ryu1 = ryu::Buffer::new();
+                                                                    let mut ryu2 = ryu::Buffer::new();
+                                                                    
+                                                                    msg.push_str(r#"[0,"on",null,{"gid":"#);
+                                                                    msg.push_str(itoa_buf.format(sniper_types::BOT_GID_HYDRA));
+                                                                    msg.push_str(r#","symbol":""#);
+                                                                    msg.push_str(sniper_types::TRADING_SYMBOL);
+                                                                    msg.push_str(r#"","amount":""#);
+                                                                    msg.push_str(ryu1.format(amt_f));
+                                                                    msg.push_str(r#"","price":""#);
+                                                                    msg.push_str(ryu2.format(price_f));
+                                                                    msg.push_str(r#"","type":"EXCHANGE IOC"}]"#);
+                                                                    
                                                                     let _ = order_tx.send(msg);
                                                                     mask |= bit;
                                                                     eng.ghost_active_mask.store(mask, Ordering::Relaxed);
                                                                     eng.ghost_injections.fetch_add(1, Ordering::Relaxed);
                                                                     ghost_last_inject = Instant::now();
-                                                                    tracing::info!(event = "ghost_inject", side = "sell", level = i,
-                                                                        price = price_f, micro = micro_g as f64 / sniper_types::PRICE_SCALE,
-                                                                        dist_usd = dist as f64 / sniper_types::PRICE_SCALE,
-                                                                        velocity = format!("{:.2}", ghost_velocity / sniper_types::PRICE_SCALE));
+                                                                    tracing::info!(event = "ghost_inject", side = "sell", level = i, dist_usd = dist as f64 / sniper_types::PRICE_SCALE);
                                                                 } else if dist >= trigger_dist * 3 && (mask & bit) != 0 {
                                                                     mask &= !bit;
                                                                     eng.ghost_active_mask.store(mask, Ordering::Relaxed);
