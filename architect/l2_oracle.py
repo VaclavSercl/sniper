@@ -14,6 +14,7 @@ Replaces l2.rs in Cortex — all Gemini calls now in one place.
 
 import json
 import subprocess
+import struct
 import logging
 import time
 import os
@@ -22,6 +23,18 @@ from datetime import datetime, timezone, timedelta
 from orchestration import start_bot, stop_bot
 
 log = logging.getLogger("l2_oracle")
+
+# Unicode sparkline helper
+_SPARK_CHARS = '▁▂▃▄▅▆▇█'
+def _sparkline(values, width=12):
+    if not values: return ''
+    mn, mx = min(values), max(values)
+    rng = mx - mn if mx != mn else 1
+    sampled = values
+    if len(values) > width:
+        step = len(values) / width
+        sampled = [values[int(i * step)] for i in range(width)]
+    return ''.join(_SPARK_CHARS[min(int((v - mn) / rng * 7), 7)] for v in sampled)
 
 # Safety clamps (must match Cortex UDS server)
 GRID_FLOOR = 2.0
@@ -1043,6 +1056,45 @@ PARAMETER CONSTRAINTS:
             reasoning = decision.get("global_reasoning", decision.get("reasoning", ""))
             if reasoning:
                 lines.append(f"\n🧠 {reasoning}")
+
+        # ── Latency + ML sparkline ──
+        try:
+            import mmap as _mmap
+            l2_path = "/dev/shm/beroun/l2_command.bin"
+            if os.path.exists(l2_path):
+                with open(l2_path, 'rb') as f:
+                    mm = _mmap.mmap(f.fileno(), 0, access=_mmap.ACCESS_READ)
+                    if mm.size() >= 384 + 64 * 8:
+                        latencies = []
+                        for i in range(64):
+                            v = struct.unpack_from('<Q', mm, 384 + i * 8)[0]
+                            if 0 < v < 1_000_000:
+                                latencies.append(v)
+                        if latencies:
+                            latencies.sort()
+                            n = len(latencies)
+                            p50 = latencies[n // 2]
+                            p99 = latencies[min(int(n * 0.99), n - 1)]
+                            spark = _sparkline(latencies[-min(16, n):], 16)
+                            lines.append(f"\n⚡ Latence: `{spark}` P50={p50}µs P99={p99}µs")
+                    mm.close()
+        except Exception:
+            pass
+
+        try:
+            import mmap as _mmap
+            eng_path = "/dev/shm/beroun/engine_state.bin"
+            if os.path.exists(eng_path):
+                with open(eng_path, 'rb') as f:
+                    mm = _mmap.mmap(f.fileno(), 0, access=_mmap.ACCESS_READ)
+                    if mm.size() > 1608:
+                        skew = struct.unpack_from('<q', mm, 1584)[0] / 100_000_000
+                        conf = struct.unpack_from('<Q', mm, 1600)[0] / 10000
+                        di = "📈" if skew > 0.001 else "📉" if skew < -0.001 else "↔️"
+                        lines.append(f"{di} ML: skew `{skew:+.4f}` conf `{conf*100:.0f}%`")
+                    mm.close()
+        except Exception:
+            pass
 
         return "\n".join(lines)
 

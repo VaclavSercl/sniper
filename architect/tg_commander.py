@@ -129,6 +129,31 @@ def read_cortex_state():
         log.debug(f"Cortex UDS read failed: {e}")
     return None
 
+
+# ── UNICODE SPARKLINE HELPER ────────────────────────────────
+SPARK_CHARS = '▁▂▃▄▅▆▇█'
+
+def sparkline(values, width=12):
+    """Convert a list of numbers into a Unicode sparkline string.
+    Example: sparkline([1, 3, 7, 5, 2]) → '▁▃▇▅▂'
+    """
+    if not values:
+        return ''
+    mn, mx = min(values), max(values)
+    rng = mx - mn if mx != mn else 1
+    chars = []
+    # Resample to target width if needed
+    if len(values) > width:
+        step = len(values) / width
+        sampled = [values[int(i * step)] for i in range(width)]
+    else:
+        sampled = values
+    for v in sampled:
+        idx = int((v - mn) / rng * (len(SPARK_CHARS) - 1))
+        chars.append(SPARK_CHARS[min(idx, len(SPARK_CHARS) - 1)])
+    return ''.join(chars)
+
+
 def build_report(period="hourly"):
     """
     Build unified report matching Cortex L2 format.
@@ -274,6 +299,46 @@ def build_report(period="hourly"):
                     lines.append(f"\n{regime_icon} Rezim: {regime}")
                 if reasoning:
                     lines.append(f"🧠 {reasoning}")
+    except Exception:
+        pass
+
+    # ── Latency Sparkline ──
+    try:
+        import mmap as _mmap
+        l2_path = "/dev/shm/beroun/l2_command.bin"
+        if os.path.exists(l2_path):
+            with open(l2_path, 'rb') as f:
+                mm = _mmap.mmap(f.fileno(), 0, access=_mmap.ACCESS_READ)
+                if mm.size() >= 384 + 64 * 8:
+                    latencies = []
+                    for i in range(64):
+                        v = struct.unpack_from('<Q', mm, 384 + i * 8)[0]
+                        if 0 < v < 1_000_000:
+                            latencies.append(v)
+                    if latencies:
+                        latencies.sort()
+                        n = len(latencies)
+                        p50 = latencies[n // 2]
+                        p99 = latencies[min(int(n * 0.99), n - 1)]
+                        spark = sparkline(latencies[-min(16, n):], 16)
+                        lines.append(f"\n⚡ Latence: `{spark}` P50={p50}µs P99={p99}µs")
+                mm.close()
+    except Exception:
+        pass
+
+    # ── ML Shield Sparkline ──
+    try:
+        import mmap as _mmap
+        eng_path = "/dev/shm/beroun/engine_state.bin"
+        if os.path.exists(eng_path):
+            with open(eng_path, 'rb') as f:
+                mm = _mmap.mmap(f.fileno(), 0, access=_mmap.ACCESS_READ)
+                if mm.size() > 1608:
+                    skew = struct.unpack_from('<q', mm, 1584)[0] / 100_000_000
+                    conf = struct.unpack_from('<Q', mm, 1600)[0] / 10000
+                    direction = "📈" if skew > 0.001 else "📉" if skew < -0.001 else "↔️"
+                    lines.append(f"{direction} ML: skew `{skew:+.4f}` conf `{conf*100:.0f}%`")
+                mm.close()
     except Exception:
         pass
 
