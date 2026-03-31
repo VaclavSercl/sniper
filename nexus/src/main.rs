@@ -179,41 +179,48 @@ fn scan_for_arb(
     let daily_limit = cross_state.daily_loss_limit.load(Ordering::Acquire) as f64 / PRICE_SCALE;
     if daily_pnl < -daily_limit { return None; } // Over daily loss limit
 
-    let total_fee_bps = args.bfx_fee_bps + args.bnb_fee_bps + args.slippage_bps + latency_pad_bps;
+    let total_fee_bps = ((args.bfx_fee_bps + args.bnb_fee_bps + args.slippage_bps + latency_pad_bps) * 100.0) as i64;
+    let min_profit_100 = (args.min_profit_bps * 100.0) as i64;
+    
     let mut best: Option<ArbSignal> = None;
 
     for i in 0..active.min(MAX_CROSS_PAIRS) {
         let pair = &cross_state.pairs[i];
-        if pair.enabled.load(Ordering::Acquire) == 0 { continue; }
+        if pair.enabled.load(Ordering::Relaxed) == 0 { continue; }
 
         // Read BBA from both exchanges
-        let bfx_bid = pair.bitfinex.bid.load(Ordering::Acquire) as f64 / PRICE_SCALE;
-        let bfx_ask = pair.bitfinex.ask.load(Ordering::Acquire) as f64 / PRICE_SCALE;
-        let bnb_bid = pair.binance.bid.load(Ordering::Acquire) as f64 / PRICE_SCALE;
-        let bnb_ask = pair.binance.ask.load(Ordering::Acquire) as f64 / PRICE_SCALE;
+        let bfx_bid = pair.bitfinex.bid.load(Ordering::Relaxed) as i64;
+        let bfx_ask = pair.bitfinex.ask.load(Ordering::Relaxed) as i64;
+        let bnb_bid = pair.binance.bid.load(Ordering::Relaxed) as i64;
+        let bnb_ask = pair.binance.ask.load(Ordering::Relaxed) as i64;
 
         // Staleness check: both sides must have recent data (< 5s)
         let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
-        let bfx_age = now_ms.saturating_sub(pair.bitfinex.last_update_ms.load(Ordering::Acquire));
-        let bnb_age = now_ms.saturating_sub(pair.binance.last_update_ms.load(Ordering::Acquire));
+        let bfx_age = now_ms.saturating_sub(pair.bitfinex.last_update_ms.load(Ordering::Relaxed));
+        let bnb_age = now_ms.saturating_sub(pair.binance.last_update_ms.load(Ordering::Relaxed));
         if bfx_age > 5000 || bnb_age > 5000 { continue; }
 
         // Zero price check
-        if bfx_bid <= 0.0 || bfx_ask <= 0.0 || bnb_bid <= 0.0 || bnb_ask <= 0.0 { continue; }
+        if bfx_bid <= 0 || bfx_ask <= 0 || bnb_bid <= 0 || bnb_ask <= 0 { continue; }
 
         // Direction 1: Buy on BFX (pay ask), Sell on BNB (receive bid)
-        let spread_1 = (bnb_bid - bfx_ask) / bfx_ask * 10000.0; // bps
+        let spread_1 = ((bnb_bid - bfx_ask) * 1_000_000) / bfx_ask; // 100ths of a bps
         // Direction 2: Buy on BNB (pay ask), Sell on BFX (receive bid)
-        let spread_2 = (bfx_bid - bnb_ask) / bnb_ask * 10000.0; // bps
+        let spread_2 = ((bfx_bid - bnb_ask) * 1_000_000) / bnb_ask; // 100ths of a bps
 
-        let (direction, gross_bps, buy_price, sell_price) = if spread_1 > spread_2 {
+        let (direction, gross_bps_100, buy_price_i, sell_price_i) = if spread_1 > spread_2 {
             (ArbDirection::BuyBfxSellBnb, spread_1, bfx_ask, bnb_bid)
         } else {
             (ArbDirection::BuyBnbSellBfx, spread_2, bnb_ask, bfx_bid)
         };
 
-        let net_bps = gross_bps - total_fee_bps;
-        if net_bps < args.min_profit_bps { continue; }
+        let net_bps_100 = gross_bps_100 - total_fee_bps;
+        if net_bps_100 < min_profit_100 { continue; }
+
+        let gross_bps = gross_bps_100 as f64 / 100.0;
+        let net_bps = net_bps_100 as f64 / 100.0;
+        let buy_price = buy_price_i as f64 / PRICE_SCALE;
+        let sell_price = sell_price_i as f64 / PRICE_SCALE;
 
         // Check exposure limits
         let max_exposure = match direction {
@@ -369,7 +376,7 @@ async fn main() -> Result<()> {
                         let mut best_pair = "";
                         for i in 0..active.min(MAX_CROSS_PAIRS) {
                             let pair = &cross_state.pairs[i];
-                            if pair.enabled.load(Ordering::Acquire) == 0 { continue; }
+                            if pair.enabled.load(Ordering::Relaxed) == 0 { continue; }
                             let spread_bps = pair.best_spread_bps.load(Ordering::Relaxed) as f64 / 100.0;
                             if spread_bps > best_gross {
                                 best_gross = spread_bps;
@@ -427,18 +434,19 @@ async fn main() -> Result<()> {
                         let bfx_signed_qty = if bfx_side == "BUY" { qty } else { -qty };
                         let bfx_symbol = BFX_SYMBOLS[signal.pair_idx];
 
-                        let mut order_msg = String::with_capacity(512);
+                        let mut order_msg = bytes::BytesMut::with_capacity(512);
+                        let mut itoa_buf = itoa::Buffer::new();
                         let mut buf = ryu::Buffer::new();
                         let mut buf2 = ryu::Buffer::new();
-                        order_msg.push_str("[0,\"ox_multi\",null,[[\"on\",{\"gid\":");
-                        order_msg.push_str(&GID_NEXUS.to_string());
-                        order_msg.push_str(",\"symbol\":\"");
-                        order_msg.push_str(bfx_symbol);
-                        order_msg.push_str("\",\"amount\":");
-                        order_msg.push_str(buf.format(bfx_signed_qty));
-                        order_msg.push_str(",\"price\":\"");
-                        order_msg.push_str(buf2.format(bfx_price));
-                        order_msg.push_str("\",\"type\":\"EXCHANGE IOC\"}]]]");
+                        order_msg.extend_from_slice(b"[0,\"ox_multi\",null,[[\"on\",{\"gid\":");
+                        order_msg.extend_from_slice(itoa_buf.format(GID_NEXUS).as_bytes());
+                        order_msg.extend_from_slice(b",\"symbol\":\"");
+                        order_msg.extend_from_slice(bfx_symbol.as_bytes());
+                        order_msg.extend_from_slice(b"\",\"amount\":\"");
+                        order_msg.extend_from_slice(buf.format(bfx_signed_qty).as_bytes());
+                        order_msg.extend_from_slice(b"\",\"price\":\"");
+                        order_msg.extend_from_slice(buf2.format(bfx_price).as_bytes());
+                        order_msg.extend_from_slice(b"\",\"type\":\"EXCHANGE IOC\"}]]]");
 
                         // BNB side: REST IOC order
                         let bnb_side = match signal.direction {
@@ -462,8 +470,7 @@ async fn main() -> Result<()> {
                         };
 
                         // ═══ SIMULTANEOUS EXECUTION (tokio::join!) ═══
-                        let order_payload = order_msg.into_bytes();
-                        let bfx_fut = ws.write_frame(fastwebsockets::Frame::text(Payload::Owned(order_payload)));
+                        let bfx_fut = ws.write_frame(fastwebsockets::Frame::text(Payload::Owned(order_msg.to_vec())));
                         let bnb_signed = binance.new_order(&bnb_order);
 
                         if let Some(signed) = bnb_signed {

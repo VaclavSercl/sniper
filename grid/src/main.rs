@@ -58,21 +58,27 @@ fn calculate_grid_levels(
     let mut buys = Vec::with_capacity(num_buy as usize);
     let mut sells = Vec::with_capacity(num_sell as usize);
 
-    for i in 1..=(num_buy as usize) {
+    let mut current_buy = center;
+    let buy_mult = 1.0 - geo_pct / 100.0;
+    for _ in 1..=(num_buy as usize) {
         let price = if mode == 0 {
-            center - (i as f64 * spacing)        // Arithmetic
+            current_buy - spacing        // Arithmetic
         } else {
-            center * (1.0 - geo_pct / 100.0).powi(i as i32) // Geometric
+            current_buy * buy_mult       // Geometric
         };
+        current_buy = price;
         if price > 0.0 { buys.push(price); }
     }
 
-    for i in 1..=(num_sell as usize) {
+    let mut current_sell = center;
+    let sell_mult = 1.0 + geo_pct / 100.0;
+    for _ in 1..=(num_sell as usize) {
         let price = if mode == 0 {
-            center + (i as f64 * spacing)
+            current_sell + spacing
         } else {
-            center * (1.0 + geo_pct / 100.0).powi(i as i32)
+            current_sell * sell_mult
         };
+        current_sell = price;
         sells.push(price);
     }
 
@@ -138,7 +144,9 @@ async fn main() -> Result<()> {
         let mut authed = false;
         let mut ticker_chan: Option<i64> = None;
         let mut last_grid_calc = Instant::now();
-        let mut order_msg = String::with_capacity(2048);
+        let mut order_msg = bytes::BytesMut::with_capacity(2048);
+        let mut ryu1 = ryu::Buffer::new();
+        let mut ryu2 = ryu::Buffer::new();
 
         while let Some(msg) = read.next().await {
             let loop_start = Instant::now();
@@ -232,36 +240,35 @@ async fn main() -> Result<()> {
 
                                 // Build multi-order: cancel all + place grid
                                 order_msg.clear();
-                                order_msg.push_str("[0,\"ox_multi\",null,[");
-                                // Cancel all existing
-                                order_msg.push_str("[\"oc_multi\",{\"symbol\":\"");
-                                order_msg.push_str(symbol);
-                                order_msg.push_str("\"}]");
+                                order_msg.extend_from_slice(b"[0,\"ox_multi\",null,[[\"oc_multi\",{\"symbol\":\"");
+                                order_msg.extend_from_slice(symbol.as_bytes());
+                                order_msg.extend_from_slice(b"\"}]");
 
                                 // Place buy levels
                                 for price in &buys {
-                                    order_msg.push_str(",[\"on\",{\"gid\":3000,\"symbol\":\"");
-                                    order_msg.push_str(symbol);
-                                    order_msg.push_str("\",\"amount\":");
-                                    order_msg.push_str(&format!("{:.5}", qty));
-                                    order_msg.push_str(",\"price\":\"");
-                                    order_msg.push_str(&format!("{:.1}", price));
-                                    order_msg.push_str("\",\"type\":\"EXCHANGE LIMIT\"}]");
+                                    order_msg.extend_from_slice(b",[\"on\",{\"gid\":3000,\"symbol\":\"");
+                                    order_msg.extend_from_slice(symbol.as_bytes());
+                                    order_msg.extend_from_slice(b"\",\"amount\":\"");
+                                    order_msg.extend_from_slice(ryu1.format(qty).as_bytes());
+                                    order_msg.extend_from_slice(b"\",\"price\":\"");
+                                    order_msg.extend_from_slice(ryu2.format(*price).as_bytes());
+                                    order_msg.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\"}]");
                                 }
 
                                 // Place sell levels
                                 for price in &sells {
-                                    order_msg.push_str(",[\"on\",{\"gid\":3000,\"symbol\":\"");
-                                    order_msg.push_str(symbol);
-                                    order_msg.push_str("\",\"amount\":");
-                                    order_msg.push_str(&format!("{:.5}", -qty));
-                                    order_msg.push_str(",\"price\":\"");
-                                    order_msg.push_str(&format!("{:.1}", price));
-                                    order_msg.push_str("\",\"type\":\"EXCHANGE LIMIT\"}]");
+                                    order_msg.extend_from_slice(b",[\"on\",{\"gid\":3000,\"symbol\":\"");
+                                    order_msg.extend_from_slice(symbol.as_bytes());
+                                    order_msg.extend_from_slice(b"\",\"amount\":\"");
+                                    order_msg.extend_from_slice(ryu1.format(-qty).as_bytes());
+                                    order_msg.extend_from_slice(b"\",\"price\":\"");
+                                    order_msg.extend_from_slice(ryu2.format(*price).as_bytes());
+                                    order_msg.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\"}]");
                                 }
 
-                                order_msg.push_str("]]");
-                                let _ = write.send(Message::Text(order_msg.clone().into())).await;
+                                order_msg.extend_from_slice(b"]]");
+                                let text_msg = unsafe { String::from_utf8_unchecked(order_msg.to_vec()) };
+                                let _ = write.send(Message::Text(text_msg.into())).await;
                                 last_grid_calc = Instant::now();
                             }
                         }

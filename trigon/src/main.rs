@@ -28,7 +28,6 @@ use anyhow::{Context, Result};
 
 use sniper_types::trigon_types::*;
 use sniper_types::moonshot_types::{str_to_symbol_hash, symbol_hash_to_str};
-use sniper_types::PRICE_SCALE_I;
 use sniper_types::exchange::bitfinex;
 
 // ═════════════════════════════════════════════════════════════
@@ -48,29 +47,34 @@ const VERSION: &str = "1.0.0";
 /// For legs with direction=0 (BUY): use ASK price (pay more)
 /// For legs with direction=1 (SELL): use BID price (receive less)
 /// Returns (implied_rate, profit_bps_after_fees)
-fn calculate_triangle(
-    bids: &[f64; 3],
-    asks: &[f64; 3],
+fn calculate_triangle_i64(
+    bids: &[u64; 3],
+    asks: &[u64; 3],
     directions: &[u32; 3],
-    fee_bps: f64,
-) -> (f64, f64) {
-    let mut rate = 1.0;
+    fee_bps: u64, // e.g. 2000 = 20 bps
+) -> (i64, i64) {
+    let initial: u128 = 1_000_000_000_000_000;
+    let mut amt = initial;
+
     for i in 0..3 {
         if directions[i] == 0 {
-            // BUY leg: we pay ASK (e.g., buy BTC with USD → use tBTCUSD ASK)
-            if asks[i] > 0.0 { rate /= asks[i]; } else { return (0.0, -10000.0); }
+            if asks[i] == 0 { return (0, -10000_00); }
+            amt = (amt * sniper_types::PRICE_SCALE_I as u128) / asks[i] as u128;
         } else {
-            // SELL leg: we receive BID (e.g., sell ETH for USD → use tETHUSD BID)
-            if bids[i] > 0.0 { rate *= bids[i]; } else { return (0.0, -10000.0); }
+            if bids[i] == 0 { return (0, -10000_00); }
+            amt = (amt * bids[i] as u128) / sniper_types::PRICE_SCALE_I as u128;
         }
     }
 
-    // Fee for each leg (3 trades)
-    let fee_multiplier = (1.0 - fee_bps / 10000.0).powi(3);
-    let rate_after_fees = rate * fee_multiplier;
-    let profit_bps = (rate_after_fees - 1.0) * 10000.0;
-
-    (rate, profit_bps)
+    let rate_i64 = ((amt * sniper_types::PRICE_SCALE_I as u128) / initial) as i64;
+    
+    let fee_mult = 1_000_000 - fee_bps as u128;
+    let mut out_amt = amt;
+    for _ in 0..3 { out_amt = (out_amt * fee_mult) / 1_000_000; }
+    
+    let profit_bps = ((out_amt as i128 - initial as i128) * 10000 * 100) / initial as i128;
+    
+    (rate_i64, profit_bps as i64)
 }
 
 // Ticker parser → shared exchange module (Phase 5.2)
@@ -127,8 +131,11 @@ async fn main() -> Result<()> {
 
         // Collect all unique symbols from configured triangles
         let mut chan_to_symbol: HashMap<i64, u64> = HashMap::new();
-        let mut symbol_bids: HashMap<u64, f64> = HashMap::new();
-        let mut symbol_asks: HashMap<u64, f64> = HashMap::new();
+        let mut order_msg = bytes::BytesMut::with_capacity(1024);
+        let mut ryu1 = ryu::Buffer::new();
+        let mut ryu2 = ryu::Buffer::new();
+        let mut symbol_bids_i: HashMap<u64, u64> = HashMap::new();
+        let mut symbol_asks_i: HashMap<u64, u64> = HashMap::new();
         let mut subscribed_symbols: Vec<String> = Vec::new();
 
         for i in 0..TRIGON_MAX_TRIANGLES {
@@ -164,7 +171,6 @@ async fn main() -> Result<()> {
 
         let mut authed = false;
         let mut last_scan = Instant::now();
-        let mut order_msg = String::with_capacity(2048);
         let mut last_exec_ms: [u64; TRIGON_MAX_TRIANGLES] = [0; TRIGON_MAX_TRIANGLES];
 
         // ═══ MESSAGE LOOP ═══
@@ -181,10 +187,10 @@ async fn main() -> Result<()> {
                 // Fast path: ticker update
                 if let Some((chan, bid, ask)) = sniper_types::exchange::fast_parse_ticker(bytes) {
                     if let Some(&sym_hash) = chan_to_symbol.get(&chan) {
-                        let bid_f = bid as f64 / PRICE_SCALE_I as f64;
-                        let ask_f = ask as f64 / PRICE_SCALE_I as f64;
-                        symbol_bids.insert(sym_hash, bid_f);
-                        symbol_asks.insert(sym_hash, ask_f);
+                        let bid_f = bid as u64;
+                        let ask_f = ask as u64;
+                        symbol_bids_i.insert(sym_hash, bid_f);
+                        symbol_asks_i.insert(sym_hash, ask_f);
 
                         // Update leg data in engine state
                         for t in 0..TRIGON_MAX_TRIANGLES {
@@ -205,23 +211,23 @@ async fn main() -> Result<()> {
                             // Read real taker fee from shared GlobalFeeState
                             // All 3 legs are IOC → taker fee applies to each
                             // Scale: bps×100 → bps (e.g., 2000 → 20 bps)
-                            let fee_bps = fee_state.taker_fee_bps.load(Ordering::Relaxed) as f64 / 100.0;
+                            let fee_bps = fee_state.taker_fee_bps.load(Ordering::Relaxed);
                             let paused = risk.global_paused.load(Ordering::Acquire) != 0;
-                            let mut best_profit = -10000.0f64;
+                            let mut best_profit = -1000000i64;
 
                             for t in 0..TRIGON_MAX_TRIANGLES {
                                 let tr = &risk.triangles[t];
                                 if tr.enabled.load(Ordering::Acquire) == 0 { continue; }
 
-                                let mut bids = [0.0f64; 3];
-                                let mut asks = [0.0f64; 3];
+                                let mut bids = [0u64; 3];
+                                let mut asks = [0u64; 3];
                                 let mut dirs = [0u32; 3];
                                 let mut all_valid = true;
 
                                 for l in 0..TRIGON_LEGS {
                                     let h = tr.leg_symbols[l].load(Ordering::Acquire);
                                     dirs[l] = tr.leg_directions[l].load(Ordering::Acquire);
-                                    if let (Some(&b), Some(&a)) = (symbol_bids.get(&h), symbol_asks.get(&h)) {
+                                    if let (Some(&b), Some(&a)) = (symbol_bids_i.get(&h), symbol_asks_i.get(&h)) {
                                         bids[l] = b;
                                         asks[l] = a;
                                     } else {
@@ -232,19 +238,19 @@ async fn main() -> Result<()> {
 
                                 if !all_valid { continue; }
 
-                                let (rate, profit) = calculate_triangle(&bids, &asks, &dirs, fee_bps);
+                                let (rate, profit) = calculate_triangle_i64(&bids, &asks, &dirs, fee_bps);
                                 let et = &engine.triangles[t];
-                                et.implied_rate.store((rate * PRICE_SCALE_I as f64) as i64, Ordering::Release);
-                                et.profit_bps.store((profit * 100.0) as i64, Ordering::Release);
-                                et.fee_cost_bps.store((fee_bps * 3.0 * 100.0) as u64, Ordering::Release);
+                                et.implied_rate.store(rate, Ordering::Release);
+                                et.profit_bps.store(profit / 100, Ordering::Release);
+                                et.fee_cost_bps.store(fee_bps * 3 / 100, Ordering::Release);
                                 et.last_calc_ns.store(now_ms * 1_000_000, Ordering::Release);
 
                                 if profit > best_profit { best_profit = profit; }
 
                                 // Execute if profitable and not paused
-                                let min_profit = tr.min_profit_bps.load(Ordering::Acquire) as f64 / 100.0;
+                                let min_profit = (tr.min_profit_bps.load(Ordering::Acquire) * 100) as i64;
                                 let cooldown = tr.cooldown_ms.load(Ordering::Acquire);
-                                let max_usd = tr.max_order_usd.load(Ordering::Acquire) as f64 / PRICE_SCALE_I as f64;
+                                let max_usd = tr.max_order_usd.load(Ordering::Acquire) as i64;
 
                                 // ═══ v14.2 LATENCY-AWARE PADDING (Issue #18) ═══
                                 // L2 pre-computes p95 Tick-to-Trade → padding & killswitch
@@ -256,57 +262,56 @@ async fn main() -> Result<()> {
                                     let (v2, ok2) = sniper_types::l2_command::l2cmd_version_check(l2cmd);
                                     if v1 == v2 && ok1 && ok2 {
                                         if kill == 1 { continue; } // Killswitch: exchange overloaded
-                                        pad.max(0) as f64
-                                    } else { 0.0 }
+                                        (pad.max(0) * 100) as i64
+                                    } else { 0 }
                                 };
                                 let effective_min_profit = min_profit + latency_pad;
 
                                 if !paused && profit > effective_min_profit
                                     && et.executing.load(Ordering::Acquire) == 0
                                     && (now_ms - last_exec_ms[t]) > cooldown
-                                    && max_usd > 0.0
+                                    && max_usd > 0
                                 {
                                     et.executing.store(1, Ordering::Release);
 
-                                    // Build ox_multi with 3 IOC legs + GID 4000
-                                    // Each leg: symbol, direction (BUY=positive, SELL=negative), price
                                     order_msg.clear();
-                                    order_msg.push_str("[0,\"ox_multi\",null,[");
+                                    order_msg.extend_from_slice(b"[0,\"ox_multi\",null,[");
 
                                     for l in 0..TRIGON_LEGS {
                                         let sym_hash = tr.leg_symbols[l].load(Ordering::Acquire);
                                         let dir = dirs[l];
                                         let sym = symbol_hash_to_str(sym_hash);
-                                        let price = if dir == 0 { asks[l] } else { bids[l] };
-                                        // Compute quantity: max_usd / price of this leg
-                                        let qty = if price > 0.0 { max_usd / price } else { 0.0 };
-                                        let signed_qty = if dir == 0 { qty } else { -qty };
+                                        let price_i = if dir == 0 { asks[l] } else { bids[l] };
+                                        let price = (price_i as f64) / sniper_types::PRICE_SCALE_I as f64;
 
-                                        if l > 0 { order_msg.push(','); }
-                                        order_msg.push_str("[\"on\",{\"gid\":4000,\"symbol\":\"");
-                                        order_msg.push_str(&sym);
-                                        order_msg.push_str("\",\"amount\":");
-                                        // Use ryu for fast float formatting
-                                        let mut buf = ryu::Buffer::new();
-                                        order_msg.push_str(buf.format(signed_qty));
-                                        order_msg.push_str(",\"price\":\"");
-                                        let mut buf2 = ryu::Buffer::new();
-                                        order_msg.push_str(buf2.format(price));
-                                        order_msg.push_str("\",\"type\":\"EXCHANGE IOC\"}]");
+                                        // Leg quantity
+                                        let max_usd_f = (max_usd as f64) / sniper_types::PRICE_SCALE_I as f64;
+                                        let mut qty = if price > 0.0 { max_usd_f / price } else { 0.0 };
+                                        if dir == 1 { qty = -qty; } // SELL is negative
+
+                                        if l > 0 { order_msg.extend_from_slice(b","); }
+                                        order_msg.extend_from_slice(b"[\"on\",{\"gid\":4000,\"symbol\":\"");
+                                        order_msg.extend_from_slice(sym.as_bytes());
+                                        order_msg.extend_from_slice(b"\",\"amount\":\"");
+                                        order_msg.extend_from_slice(ryu1.format(qty).as_bytes());
+                                        order_msg.extend_from_slice(b"\",\"price\":\"");
+                                        order_msg.extend_from_slice(ryu2.format(price).as_bytes());
+                                        order_msg.extend_from_slice(b"\",\"type\":\"EXCHANGE IOC\"}]");
                                     }
-                                    order_msg.push_str("]]");
+                                    order_msg.extend_from_slice(b"]]");
 
-                                    match write.send(Message::Text(order_msg.clone().into())).await {
+                                    let text_msg = unsafe { String::from_utf8_unchecked(order_msg.to_vec()) };
+                                    match write.send(Message::Text(text_msg.into())).await {
                                         Ok(_) => {
                                             et.executions.fetch_add(1, Ordering::Relaxed);
                                             last_exec_ms[t] = now_ms;
                                             info!(event = "arb_execute", triangle = t,
-                                                profit_bps = format!("{:.2}", profit),
-                                                rate = format!("{:.8}", rate),
-                                                max_usd = format!("{:.2}", max_usd));
+                                                profit_bps = profit,
+                                                rate = rate,
+                                                max_usd_f = format!("{:.2}", (max_usd as f64) / sniper_types::PRICE_SCALE_I as f64));
                                             notifier.send(format!(
-                                                "💰 ARB EXEC! Tri#{} profit={:.2}bps rate={:.8} size=${:.2}",
-                                                t, profit, rate, max_usd));
+                                                "💰 ARB EXEC! Tri#{} profit={} / 100 bps rate={} size=${:.2}",
+                                                t, profit, rate, (max_usd as f64) / sniper_types::PRICE_SCALE_I as f64));
                                         }
                                         Err(e) => {
                                             warn!(event = "arb_send_fail", triangle = t, error = %e);
@@ -316,7 +321,7 @@ async fn main() -> Result<()> {
                                 }
                             }
 
-                            engine.best_profit_bps.store((best_profit * 100.0) as i64, Ordering::Release);
+                            engine.best_profit_bps.store(best_profit / 100, Ordering::Release);
                             engine.scan_latency_ns.store(loop_start.elapsed().as_nanos() as u64, Ordering::Release);
                             last_scan = Instant::now();
                         }

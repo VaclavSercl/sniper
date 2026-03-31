@@ -115,7 +115,10 @@ async fn main() -> Result<()> {
         }
 
         let mut authed = false;
-        let mut order_msg = String::with_capacity(1024);
+        let mut order_msg = bytes::BytesMut::with_capacity(1024);
+        let mut itoa_buf = itoa::Buffer::new();
+        let mut ryu1 = ryu::Buffer::new();
+        let mut ryu2 = ryu::Buffer::new();
 
         // ═══ MESSAGE LOOP ═══
         while let Some(msg) = read.next().await {
@@ -162,17 +165,17 @@ async fn main() -> Result<()> {
                                 if order_usd > 0.0 && mid_f64 > 0.0 {
                                     let coin_amount = (order_usd / mid_f64).max(0.00015);
                                     if let Some(symbol) = idx_to_symbol.get(&idx) {
-                                        // IOC BUY at market — flash crash instant execution
                                         order_msg.clear();
-                                        order_msg.push_str("[0,\"on\",null,{\"gid\":2001,\"symbol\":\"");
-                                        order_msg.push_str(symbol);
-                                        order_msg.push_str("\",\"amount\":");
-                                        order_msg.push_str(&format!("{:.5}", coin_amount));
-                                        order_msg.push_str(",\"price\":\"");
-                                        order_msg.push_str(&format!("{:.4}", mid_f64));
-                                        order_msg.push_str("\",\"type\":\"EXCHANGE IOC\"}]");
+                                        order_msg.extend_from_slice(b"[0,\"on\",null,{\"gid\":2001,\"symbol\":\"");
+                                        order_msg.extend_from_slice(symbol.as_bytes());
+                                        order_msg.extend_from_slice(b"\",\"amount\":\"");
+                                        order_msg.extend_from_slice(ryu1.format(coin_amount).as_bytes());
+                                        order_msg.extend_from_slice(b"\",\"price\":\"");
+                                        order_msg.extend_from_slice(ryu2.format(mid_f64).as_bytes());
+                                        order_msg.extend_from_slice(b"\",\"type\":\"EXCHANGE IOC\"}]");
 
-                                        let _ = write.send(Message::Text(order_msg.clone().into())).await;
+                                        let text_msg = unsafe { String::from_utf8_unchecked(order_msg.to_vec()) };
+                                        let _ = write.send(Message::Text(text_msg.into())).await;
                                         warn!(event = "moonshot_fired", symbol = %symbol,
                                               trigger = trigger as f64 / PRICE_SCALE_I as f64,
                                               price = mid_f64, amount = coin_amount);
@@ -210,23 +213,24 @@ async fn main() -> Result<()> {
 
                                 if let Some(symbol) = idx_to_symbol.get(&idx) {
                                     order_msg.clear();
-                                    order_msg.push_str("[0,\"ox_multi\",null,[[\"oc_multi\",{\"symbol\":\"");
-                                    order_msg.push_str(symbol);
-                                    order_msg.push_str("\"}],[\"on\",{\"gid\":2000,\"symbol\":\"");
-                                    order_msg.push_str(symbol);
-                                    order_msg.push_str("\",\"amount\":");
-                                    order_msg.push_str(&format!("{:.5}", coin_amount));
-                                    order_msg.push_str(",\"price\":\"");
-                                    order_msg.push_str(&format!("{:.4}", buy_p));
-                                    order_msg.push_str("\",\"type\":\"EXCHANGE LIMIT\"}],[\"on\",{\"gid\":2000,\"symbol\":\"");
-                                    order_msg.push_str(symbol);
-                                    order_msg.push_str("\",\"amount\":");
-                                    order_msg.push_str(&format!("{:.5}", -coin_amount));
-                                    order_msg.push_str(",\"price\":\"");
-                                    order_msg.push_str(&format!("{:.4}", sell_p));
-                                    order_msg.push_str("\",\"type\":\"EXCHANGE LIMIT\"}]]]");
+                                    order_msg.extend_from_slice(b"[0,\"ox_multi\",null,[[\"oc_multi\",{\"symbol\":\"");
+                                    order_msg.extend_from_slice(symbol.as_bytes());
+                                    order_msg.extend_from_slice(b"\"}],[\"on\",{\"gid\":2000,\"symbol\":\"");
+                                    order_msg.extend_from_slice(symbol.as_bytes());
+                                    order_msg.extend_from_slice(b"\",\"amount\":\"");
+                                    order_msg.extend_from_slice(ryu1.format(coin_amount).as_bytes());
+                                    order_msg.extend_from_slice(b"\",\"price\":\"");
+                                    order_msg.extend_from_slice(ryu2.format(buy_p).as_bytes());
+                                    order_msg.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\"}],[\"on\",{\"gid\":2000,\"symbol\":\"");
+                                    order_msg.extend_from_slice(symbol.as_bytes());
+                                    order_msg.extend_from_slice(b"\",\"amount\":\"");
+                                    order_msg.extend_from_slice(ryu1.format(-coin_amount).as_bytes());
+                                    order_msg.extend_from_slice(b"\",\"price\":\"");
+                                    order_msg.extend_from_slice(ryu2.format(sell_p).as_bytes());
+                                    order_msg.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\"}]]]");
 
-                                    let _ = write.send(Message::Text(order_msg.clone().into())).await;
+                                    let text_msg = unsafe { String::from_utf8_unchecked(order_msg.to_vec()) };
+                                    let _ = write.send(Message::Text(text_msg.into())).await;
                                     e.buy_order_price.store((buy_p * PRICE_SCALE_I as f64) as u64, Ordering::Release);
                                     last_order_ts[idx] = Instant::now();
                                 }
