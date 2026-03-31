@@ -289,10 +289,12 @@ def get_status():
 @bot.message_handler(commands=["help", "start"])
 def cmd_help(message):
     if not auth(message): return
-    bot.reply_to(message, """🐺 *SNIPER ARMADA v14.0*
+    bot.reply_to(message, """🐺 *SNIPER ARMADA v18.0 — ML Intelligence*
 
 📊 `/status` — Stav + PnL všech botů
 💰 `/pnl` — Detailní PnL report
+📈 `/spread` — Cross-exchange spreads (Bitfinex↔Binance)
+🧠 `/ml` — ML Shield inference metriky
 
 🎮 *Ovládání:*
 `/hydra start` · `stop` · `restart` · `pause`
@@ -300,7 +302,7 @@ def cmd_help(message):
 `/grid start` · `stop` · `restart`
 `/trigon start` · `stop` · `restart`
 
-🧠 *AI:*
+🤖 *AI:*
 `/gpu` — Phi-3.5 evaluace (win rate, toxic fills)
 `/analyze` — Gemini analýza trhu
 `/oracle` — L2 strategický cyklus
@@ -381,6 +383,110 @@ def cmd_pnl(message):
         bot.reply_to(message, "❌ PnL engine not found. Run: `python3 architect/pnl_daemon.py`")
     except Exception as e:
         bot.reply_to(message, f"❌ PnL error: {e}")
+
+# ── CROSS-EXCHANGE SPREADS (/spread) ─────────────────────────
+@bot.message_handler(commands=['spread'])
+def cmd_spread(message):
+    if not auth(message): return
+    try:
+        import mmap as _mmap
+
+        CROSS_PATH = "/dev/shm/beroun/cross_exchange.bin"
+        PS = 100_000_000
+        PAIR_NAMES = ["BTC", "ETH", "XRP", "SOL", "DOGE", "ADA", "AVAX", "LTC", "LINK", "DOT"]
+
+        if not os.path.exists(CROSS_PATH):
+            bot.reply_to(message, "🌐 Cross-exchange mmap neexistuje.\nSpusť: `python3 architect/price_bridge.py`")
+            return
+
+        with open(CROSS_PATH, 'rb') as f:
+            mm = _mmap.mmap(f.fileno(), 0, access=_mmap.ACCESS_READ)
+
+            lines = ["📈 *CROSS-EXCHANGE SPREADS*", "━━━━━━━━━━━━━━━━━━━"]
+
+            BBA_SIZE = 64
+            PAIR_SIZE = 448
+
+            for i in range(10):
+                off = i * PAIR_SIZE
+                if off + PAIR_SIZE > mm.size():
+                    break
+
+                bfx_bid = struct.unpack_from('<q', mm, off)[0]
+                bfx_ask = struct.unpack_from('<q', mm, off + 8)[0]
+                bnb_bid = struct.unpack_from('<q', mm, off + BBA_SIZE)[0]
+                bnb_ask = struct.unpack_from('<q', mm, off + BBA_SIZE + 8)[0]
+
+                metrics_off = off + 2 * BBA_SIZE
+                best_bps = struct.unpack_from('<q', mm, metrics_off + 16)[0]
+                arb_sigs = struct.unpack_from('<Q', mm, metrics_off + 32)[0]
+
+                name = PAIR_NAMES[i] if i < len(PAIR_NAMES) else f"P{i}"
+
+                if bnb_bid > 0 or bfx_bid > 0:
+                    bfx_p = bfx_bid / PS
+                    bnb_p = bnb_bid / PS
+                    delta = abs(bfx_p - bnb_p)
+                    spread = best_bps / 100
+
+                    icon = "🟢" if abs(spread) > 3 else "🟡" if abs(spread) > 1 else "⚪"
+                    lines.append(
+                        f"\n{icon} *{name}*\n"
+                        f"BFX: `${bfx_p:,.2f}` | BNB: `${bnb_p:,.2f}`\n"
+                        f"Δ `${delta:.2f}` ({spread:.2f} bps) | Signals: {arb_sigs}"
+                    )
+
+            mm.close()
+
+            if len(lines) <= 2:
+                lines.append("\nℹ️ Žádná data — price_bridge neběží")
+
+            bot.reply_to(message, "\n".join(lines))
+    except Exception as e:
+        bot.reply_to(message, f"❌ Spread error: {e}")
+
+# ── ML SHIELD STATUS (/ml) ───────────────────────────────────
+@bot.message_handler(commands=['ml'])
+def cmd_ml(message):
+    if not auth(message): return
+    try:
+        import mmap as _mmap
+
+        ENGINE_PATH = "/dev/shm/beroun/engine_state.bin"
+        PS = 100_000_000
+
+        if not os.path.exists(ENGINE_PATH):
+            bot.reply_to(message, "🧠 Engine mmap neexistuje. Hydra neběží.")
+            return
+
+        with open(ENGINE_PATH, 'rb') as f:
+            mm = _mmap.mmap(f.fileno(), 0, access=_mmap.ACCESS_READ)
+
+            # Offsets from types.rs
+            skew = struct.unpack_from('<q', mm, 1584)[0] / PS
+            conf = struct.unpack_from('<Q', mm, 1600)[0] / 10000
+            toxic = struct.unpack_from('<Q', mm, 1568)[0]
+            ai_bias = struct.unpack_from('<q', mm, 1464)[0] / PS
+
+            mm.close()
+
+            direction = "📈 BULLISH" if skew > 0.001 else "📉 BEARISH" if skew < -0.001 else "↔️ NEUTRAL"
+            conf_icon = "🟢" if conf > 0.6 else "🟡" if conf > 0.4 else "🔴"
+
+            report = (
+                f"🧠 *ML SHIELD STATUS*\n"
+                f"━━━━━━━━━━━━━━━━━━━\n"
+                f"Direction: {direction}\n"
+                f"Skew Bias: `{'+' if skew > 0 else ''}{skew:.6f}`\n"
+                f"{conf_icon} Confidence: `{conf*100:.1f}%`\n"
+                f"AI Bias: `{'+' if ai_bias > 0 else ''}{ai_bias:.6f}`\n"
+                f"☠️ Toxic Hits: `{toxic}`\n"
+                f"━━━━━━━━━━━━━━━━━━━\n"
+                f"_20Hz inference · 10 features · online learning_"
+            )
+            bot.reply_to(message, report)
+    except Exception as e:
+        bot.reply_to(message, f"❌ ML error: {e}")
 
 # ── GPU TELEMETRY (/gpu) ─────────────────────────────────────
 @bot.message_handler(commands=['gpu'])

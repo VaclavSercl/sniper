@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🏛️ Sniper Armada — Master Command Center</title>
+<title>🏛️ Sniper Armada v18.0 — Master Command Center</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -121,7 +121,7 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
 <div class="header">
     <div class="header-left">
         <div class="logo">🏛️ SNIPER ARMADA</div>
-        <span class="version">v15.0</span>
+        <span class="version">v18.0</span>
     </div>
     <div class="health-bar" id="health-bar">
         <div class="health-dot"><div class="dot off" id="h-cortex"></div>CORTEX</div>
@@ -176,6 +176,25 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
     </div>
 </div>
 
+<!-- Cross-Exchange Intelligence Panel (Phase 5.4) -->
+<div class="panels">
+    <div class="panel" id="cross-panel" style="grid-column:1/-1">
+        <div class="panel-title"><span class="accent">🌐</span> CROSS-EXCHANGE INTELLIGENCE (Bitfinex ↔ Binance)</div>
+        <div id="cross-content"><span style="color:var(--text-muted);font-size:0.8em">Waiting for cross-exchange data...</span></div>
+    </div>
+</div>
+
+<!-- ML Shield + Risk Panel (Phase 6) -->
+<div class="panels">
+    <div class="panel" id="ml-panel">
+        <div class="panel-title"><span class="accent">🧠</span> ML SHIELD (Online Learning)</div>
+        <div id="ml-content"><span style="color:var(--text-muted);font-size:0.8em">Waiting for ML data...</span></div>
+    </div>
+    <div class="panel" id="risk-panel">
+        <div class="panel-title"><span class="accent">🛡️</span> RISK CONTROLS</div>
+        <div id="risk-content"><span style="color:var(--text-muted);font-size:0.8em">Waiting for risk data...</span></div>
+    </div>
+</div>
 <!-- Server Health Panel -->
 <div class="health-section">
     <div class="panel-title"><span class="accent">🖥️</span> SERVER HEALTH</div>
@@ -195,7 +214,7 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
 </div>
 
 <div class="footer">
-    Sniper Armada v15.0 · Sovereign Cortex · SSE Real-time · Port 3004
+    Sniper Armada v18.0 · ML Intelligence · SSE Real-time · Port 3004
 </div>
 
 <script>
@@ -348,7 +367,120 @@ function update(state) {
     renderBots(bots);
     renderGpu(gpu);
     renderL2(l2, gpu);
+    renderCrossExchange(state.cross_exchange || {});
+    renderMlShield(state.ml_shield || {});
+    renderRisk(state.cross_exchange || {});
     renderSystem(state.system || {});
+}
+
+function renderCrossExchange(cx) {
+    const el = document.getElementById('cross-content');
+    if (!el) return;
+    const pairs = cx.pairs || [];
+    if (!pairs.length) {
+        el.innerHTML = '<span style="color:var(--text-muted);font-size:0.8em">No cross-exchange data (price_bridge offline)</span>';
+        return;
+    }
+
+    const bfxDot = cx.bitfinex ? '<span class="dot on" style="display:inline-block;width:6px;height:6px"></span> BFX' : '<span class="dot off" style="display:inline-block;width:6px;height:6px"></span> BFX';
+    const bnbDot = cx.binance ? '<span class="dot on" style="display:inline-block;width:6px;height:6px"></span> BNB' : '<span class="dot off" style="display:inline-block;width:6px;height:6px"></span> BNB';
+    const alive = cx.alive ? '🟢' : '🔴';
+
+    let html = `<div style="display:flex;gap:12px;margin-bottom:8px;font-size:0.7em;color:var(--text-muted)">
+        <span>${alive} Bridge</span> <span>${bfxDot}</span> <span>${bnbDot}</span>
+        <span style="margin-left:auto">Pairs: ${pairs.length}</span>
+    </div>`;
+
+    html += `<table style="width:100%;border-collapse:collapse;font-family:'JetBrains Mono',monospace;font-size:0.7em">
+    <tr style="color:var(--text-muted);border-bottom:1px solid var(--border)">
+        <th style="text-align:left;padding:4px">Pair</th>
+        <th style="text-align:right;padding:4px">BFX Bid</th>
+        <th style="text-align:right;padding:4px">BNB Bid</th>
+        <th style="text-align:right;padding:4px">Spread (bps)</th>
+        <th style="text-align:right;padding:4px">Direction</th>
+        <th style="text-align:right;padding:4px">Signals</th>
+    </tr>`;
+
+    for (const p of pairs) {
+        const spreadColor = Math.abs(p.spread_bps) > 5 ? 'var(--green)' : Math.abs(p.spread_bps) > 2 ? 'var(--yellow)' : 'var(--text-muted)';
+        html += `<tr style="border-bottom:1px solid rgba(255,255,255,0.02)">
+            <td style="padding:3px 4px;font-weight:600">${p.name}</td>
+            <td style="padding:3px 4px;text-align:right;color:var(--blue)">$${p.bfx_bid.toLocaleString()}</td>
+            <td style="padding:3px 4px;text-align:right;color:var(--orange)">$${p.bnb_bid.toLocaleString()}</td>
+            <td style="padding:3px 4px;text-align:right;color:${spreadColor};font-weight:600">${p.spread_bps.toFixed(2)}</td>
+            <td style="padding:3px 4px;text-align:right;font-size:0.85em">${p.direction}</td>
+            <td style="padding:3px 4px;text-align:right">${p.arb_signals}</td>
+        </tr>`;
+    }
+    html += '</table>';
+    el.innerHTML = html;
+}
+
+function renderMlShield(ml) {
+    const el = document.getElementById('ml-content');
+    if (!el) return;
+    if (!ml.online) {
+        el.innerHTML = '<span style="color:var(--text-muted);font-size:0.8em">ML Shield offline</span>';
+        return;
+    }
+
+    const skew = ml.skew || 0;
+    const conf = ml.confidence || 0;
+    const skewPct = Math.min(Math.abs(skew) * 100, 50); // Scale for visual
+    const skewDir = skew > 0 ? 'BULLISH' : skew < 0 ? 'BEARISH' : 'NEUTRAL';
+    const skewColor = skew > 0 ? 'var(--green)' : skew < 0 ? 'var(--red)' : 'var(--text-muted)';
+    const confPct = Math.round(conf * 100);
+    const confColor = conf > 0.6 ? 'var(--green)' : conf > 0.4 ? 'var(--yellow)' : 'var(--red)';
+
+    let html = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div class="bm"><div class="bl">Prediction</div>
+            <div class="bv" style="color:${skewColor}">${skewDir}</div></div>
+        <div class="bm"><div class="bl">Confidence</div>
+            <div class="bv" style="color:${confColor}">${confPct}%</div></div>
+        <div class="bm"><div class="bl">Skew Bias</div>
+            <div class="bv" style="color:${skewColor}">${skew > 0 ? '+' : ''}${skew.toFixed(6)}</div></div>
+        <div class="bm"><div class="bl">Toxic Hits</div>
+            <div class="bv" style="color:${(ml.toxic_hits||0)>10?'var(--red)':'var(--text)'}">${ml.toxic_hits||0}</div></div>
+    </div>`;
+
+    // Skew direction bar
+    const leftPct = skew < 0 ? skewPct : 0;
+    const rightPct = skew > 0 ? skewPct : 0;
+    html += `<div style="font-size:0.6em;color:var(--text-muted);margin-bottom:2px">DIRECTIONAL BIAS</div>
+    <div style="display:flex;align-items:center;gap:4px">
+        <span style="font-size:0.6em;color:var(--red);min-width:20px">🐻</span>
+        <div style="flex:1;height:8px;background:rgba(255,255,255,0.05);border-radius:4px;position:relative;overflow:hidden">
+            <div style="position:absolute;right:50%;height:100%;width:${leftPct}%;background:var(--red);border-radius:4px;transition:width 0.3s"></div>
+            <div style="position:absolute;left:50%;height:100%;width:${rightPct}%;background:var(--green);border-radius:4px;transition:width 0.3s"></div>
+            <div style="position:absolute;left:50%;top:0;bottom:0;width:1px;background:rgba(255,255,255,0.15)"></div>
+        </div>
+        <span style="font-size:0.6em;color:var(--green);min-width:20px">🐂</span>
+    </div>`;
+
+    el.innerHTML = html;
+}
+
+function renderRisk(cx) {
+    const el = document.getElementById('risk-content');
+    if (!el) return;
+
+    const emergency = cx.emergency_pause || false;
+    const dailyPnl = cx.daily_pnl || 0;
+    const emColor = emergency ? 'var(--red)' : 'var(--green)';
+    const emLabel = emergency ? '⛔ EMERGENCY PAUSE' : '✅ NORMAL';
+
+    let html = `<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div class="bm"><div class="bl">Status</div>
+            <div class="bv" style="color:${emColor};font-size:0.8em">${emLabel}</div></div>
+        <div class="bm"><div class="bl">Daily Cross PnL</div>
+            <div class="bv ${dailyPnl >= 0 ? 'green' : 'red'}">${fmtPnl(dailyPnl)}</div></div>
+        <div class="bm"><div class="bl">Max Exposure</div>
+            <div class="bv yellow">$500</div></div>
+        <div class="bm"><div class="bl">Daily Loss Limit</div>
+            <div class="bv" style="color:var(--orange)">$50</div></div>
+    </div>`;
+    el.innerHTML = html;
 }
 
 function makeGauge(containerId, pct, unit, tempMode) {

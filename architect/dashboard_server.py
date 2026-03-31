@@ -10,6 +10,8 @@ Zero external dependencies — uses stdlib http.server.
 import json
 import time
 import socket
+import struct
+import mmap
 import threading
 import logging
 import subprocess
@@ -20,6 +22,18 @@ log = logging.getLogger("dashboard_sse")
 
 DASHBOARD_PORT = 3004
 SSE_INTERVAL = 0.5  # 500ms between updates
+
+# mmap paths
+CROSS_EXCHANGE_PATH = "/dev/shm/beroun/cross_exchange.bin"
+ENGINE_STATE_PATH = "/dev/shm/beroun/engine_state.bin"
+PRICE_SCALE = 100_000_000
+
+# Cross-exchange pair names (match CROSS_EXCHANGE_PAIRS in binance.rs)
+PAIR_NAMES = [
+    "BTC", "ETH", "XRP", "SOL", "DOGE",
+    "ADA", "AVAX", "LTC", "LINK", "DOT",
+    "", "", "", "", "", "",
+]
 
 # Global reference to CortexClient (set by start_dashboard_server)
 _cortex = None
@@ -64,7 +78,175 @@ def _build_dashboard_state():
     # 4. System health metrics (cached 2s)
     state["system"] = _get_system_health()
 
+    # 5. Cross-Exchange Intelligence (Phase 5.4/5.5)
+    state["cross_exchange"] = _get_cross_exchange_state()
+
+    # 6. ML Shield metrics (Phase 6)
+    state["ml_shield"] = _get_ml_shield_state()
+
     return state
+
+
+# ═══════════════════════════════════════════════════════════
+# Cross-Exchange State Reader (Phase 5.4)
+# ═══════════════════════════════════════════════════════════
+_cross_cache = {}
+_cross_cache_ts = 0
+_CROSS_TTL = 1.0
+
+def _get_cross_exchange_state():
+    """Read cross-exchange mmap and extract pair spreads + risk data."""
+    global _cross_cache, _cross_cache_ts
+    now = time.time()
+    if now - _cross_cache_ts < _CROSS_TTL:
+        return _cross_cache
+
+    result = {"pairs": [], "alive": False, "binance": False, "bitfinex": False}
+
+    try:
+        if not os.path.exists(CROSS_EXCHANGE_PATH):
+            return result
+
+        with open(CROSS_EXCHANGE_PATH, 'rb') as f:
+            mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+
+            # ExchangeBBA = 64 bytes: i64 bid, i64 ask, i64 bid_vol, i64 ask_vol, u64 ts, u32 exch_id, u32 connected, 16 pad
+            # CrossPairState = 2×ExchangeBBA(128) + arb metrics(56) + pair identity(32) = ~216 bytes per pair
+            # But repr(C, align(64)) means each ExchangeBBA = 64B, so CrossPairState is bigger
+            # ExchangeBBA: 5×8 + 2×4 + 16 = 64 bytes (perfect)
+            # CrossPairState: 2×64(BBA) + i64+i64+i64+u32+u64+u64+u64+u64+u32+u32 = 128 + 72 = ~256 bytes (aligned)
+            # With align(64): ceil to next 64 multiple = 256 (4 cache lines)
+
+            # Simplified: read raw pair data
+            BBA_SIZE = 64
+            PAIR_SIZE = 448  # 2×BBA(128) + metrics block aligned to 64B boundaries
+
+            pairs = []
+            for i in range(10):  # Max 10 pairs
+                pair_off = i * PAIR_SIZE
+                if pair_off + PAIR_SIZE > mm.size():
+                    break
+
+                # Bitfinex BBA
+                bfx_bid = struct.unpack_from('<q', mm, pair_off + 0)[0]
+                bfx_ask = struct.unpack_from('<q', mm, pair_off + 8)[0]
+                bfx_ts = struct.unpack_from('<Q', mm, pair_off + 32)[0]
+                bfx_conn = struct.unpack_from('<I', mm, pair_off + 44)[0]
+
+                # Binance BBA
+                bnb_off = pair_off + BBA_SIZE
+                bnb_bid = struct.unpack_from('<q', mm, bnb_off + 0)[0]
+                bnb_ask = struct.unpack_from('<q', mm, bnb_off + 8)[0]
+                bnb_ts = struct.unpack_from('<Q', mm, bnb_off + 32)[0]
+                bnb_conn = struct.unpack_from('<I', mm, bnb_off + 44)[0]
+
+                # Spread metrics (after both BBAs = pair_off + 128)
+                metrics_off = pair_off + 2 * BBA_SIZE
+                spread_bfx_bnb = struct.unpack_from('<q', mm, metrics_off + 0)[0]
+                spread_bnb_bfx = struct.unpack_from('<q', mm, metrics_off + 8)[0]
+                best_spread_bps = struct.unpack_from('<q', mm, metrics_off + 16)[0]
+                best_dir = struct.unpack_from('<I', mm, metrics_off + 24)[0]
+                arb_signals = struct.unpack_from('<Q', mm, metrics_off + 32)[0]
+
+                # Pair identity
+                ident_off = metrics_off + 48
+                enabled = struct.unpack_from('<I', mm, ident_off + 28)[0] if ident_off + 32 <= mm.size() else 0
+
+                name = PAIR_NAMES[i] if i < len(PAIR_NAMES) else f"P{i}"
+
+                if bnb_bid > 0 or bfx_bid > 0:
+                    pairs.append({
+                        "name": name,
+                        "bfx_bid": round(bfx_bid / PRICE_SCALE, 2),
+                        "bfx_ask": round(bfx_ask / PRICE_SCALE, 2),
+                        "bnb_bid": round(bnb_bid / PRICE_SCALE, 2),
+                        "bnb_ask": round(bnb_ask / PRICE_SCALE, 2),
+                        "spread_bps": round(best_spread_bps / 100, 2),
+                        "direction": "BFX→BNB" if best_dir == 0 else "BNB→BFX",
+                        "arb_signals": arb_signals,
+                        "bfx_alive": bfx_conn == 1,
+                        "bnb_alive": bnb_conn == 1,
+                    })
+
+            # Global metadata (after pairs array)
+            global_off = 16 * PAIR_SIZE
+            if global_off + 64 <= mm.size():
+                active = struct.unpack_from('<I', mm, global_off)[0]
+                heartbeat = struct.unpack_from('<Q', mm, global_off + 4)[0]
+                bfx_alive = struct.unpack_from('<I', mm, global_off + 12)[0]
+                bnb_alive = struct.unpack_from('<I', mm, global_off + 16)[0]
+                emergency = struct.unpack_from('<I', mm, global_off + 52)[0]
+                daily_pnl = struct.unpack_from('<q', mm, global_off + 56)[0]
+
+                result["active_pairs"] = active
+                result["bitfinex"] = bfx_alive == 1
+                result["binance"] = bnb_alive == 1
+                result["emergency_pause"] = emergency == 1
+                result["daily_pnl"] = round(daily_pnl / PRICE_SCALE, 4)
+                age_ms = int(time.time() * 1000) - heartbeat if heartbeat > 0 else 99999
+                result["alive"] = age_ms < 30000
+
+            result["pairs"] = pairs
+            mm.close()
+
+    except Exception as e:
+        log.debug(f"Cross-exchange read: {e}")
+
+    _cross_cache = result
+    _cross_cache_ts = now
+    return result
+
+
+# ═══════════════════════════════════════════════════════════
+# ML Shield State Reader (Phase 6)
+# ═══════════════════════════════════════════════════════════
+_ml_cache = {}
+_ml_cache_ts = 0
+_ML_TTL = 1.0
+
+# Byte offsets in EngineState (from types.rs analysis)
+OFF_L1_SKEW = 1584      # i64 l1_skew_adjustment
+OFF_L1_CONF = 1600      # u64 l1_confidence_score
+OFF_L1_TOXIC = 1568     # u64 toxic_flow_hits
+OFF_L1_UPTIME = 1648    # u64 l1_uptime_pct
+OFF_AI_BIAS = 1464      # i64 current_ai_bias
+
+def _get_ml_shield_state():
+    """Read ML Shield inference state from engine mmap."""
+    global _ml_cache, _ml_cache_ts
+    now = time.time()
+    if now - _ml_cache_ts < _ML_TTL:
+        return _ml_cache
+
+    result = {"online": False, "skew": 0.0, "confidence": 0.0}
+
+    try:
+        if not os.path.exists(ENGINE_STATE_PATH):
+            return result
+
+        with open(ENGINE_STATE_PATH, 'rb') as f:
+            mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+
+            if mm.size() > OFF_L1_CONF + 8:
+                skew_raw = struct.unpack_from('<q', mm, OFF_L1_SKEW)[0]
+                conf_raw = struct.unpack_from('<Q', mm, OFF_L1_CONF)[0]
+                toxic_hits = struct.unpack_from('<Q', mm, OFF_L1_TOXIC)[0]
+                ai_bias = struct.unpack_from('<q', mm, OFF_AI_BIAS)[0]
+
+                result["skew"] = round(skew_raw / PRICE_SCALE, 6)
+                result["confidence"] = round(conf_raw / 10000, 4)
+                result["toxic_hits"] = toxic_hits
+                result["ai_bias"] = round(ai_bias / PRICE_SCALE, 6)
+                result["online"] = abs(skew_raw) > 0 or conf_raw > 0
+
+            mm.close()
+
+    except Exception as e:
+        log.debug(f"ML Shield read: {e}")
+
+    _ml_cache = result
+    _ml_cache_ts = now
+    return result
 
 
 # ── System Health Collector (cached) ──
