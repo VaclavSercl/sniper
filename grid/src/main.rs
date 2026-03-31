@@ -1,59 +1,28 @@
 // 📐 Grid L0 Engine — Dynamic Multi-Level Grid Trading
-// Sniper Armada · Bot #3 · v1.0.0
-//
-// Places N BUY levels below center + N SELL levels above center.
-// Supports arithmetic (fixed USD spacing) and geometric (fixed % spacing).
-// AI-driven parameter tuning via L2 Oracle (sniper_orchestrator.py).
-//
-// Strategy from HFT-Grid:
-//   - 5 BUY + 5 SELL levels (configurable 1-10)
-//   - When BUY fills → place corresponding SELL (grid_spacing higher)
-//   - When SELL fills → place corresponding BUY (grid_spacing lower)
-//   - Dynamic spacing via ATR/2 (configurable via AI)
-//   - 3 consecutive losses → 24h halt
-//
-// Architecture:
-//   - L0 (this): Rust async, WebSocket, grid management
-//   - L1: Python l1_shield.py (volatility filter, ATR calc)
-//   - L2: Python sniper_orchestrator.py (grid params, center price)
-
-use std::time::{SystemTime, UNIX_EPOCH, Instant, Duration};
+// Framework: SovereignEngine
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use futures_util::{StreamExt, SinkExt};
+use anyhow::Result;
+use tracing::{info, warn, error};
 use serde_json::json;
-use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
-use dotenvy::dotenv;
-use tracing::{info, warn, error, Level};
-use tracing_subscriber::{fmt, prelude::*, EnvFilter};
-use anyhow::{Context, Result};
 
 use sniper_types::grid_types::*;
 use sniper_types::{PRICE_SCALE, PRICE_SCALE_I};
-use sniper_types::exchange::bitfinex;
-
-const VERSION: &str = "1.0.0";
-
-// ═══════════════════════════════════════════════════════════
-// Shared modules (v12.0 — unified from shared crate)
-// ═══════════════════════════════════════════════════════════
+use sniper_types::framework::{SovereignEngine, SovereignRunner};
 use sniper_types::notifier::AsyncNotifier;
 use sniper_types::mmap_utils::init_mmap;
 
+const VERSION: &str = "1.1.0";
 
-// Auth → shared exchange module (Phase 5.2)
-
-// ═══════════════════════════════════════════════════════════
-// Grid Level Calculator
-// ═══════════════════════════════════════════════════════════
 fn calculate_grid_levels(
     center: f64,
     spacing: f64,
     num_buy: u32,
     num_sell: u32,
-    mode: u32,       // 0 = arithmetic, 1 = geometric
-    geo_pct: f64,     // geometric step %
+    mode: u32,
+    geo_pct: f64,
 ) -> (Vec<f64>, Vec<f64>) {
     let mut buys = Vec::with_capacity(num_buy as usize);
     let mut sells = Vec::with_capacity(num_sell as usize);
@@ -62,9 +31,9 @@ fn calculate_grid_levels(
     let buy_mult = 1.0 - geo_pct / 100.0;
     for _ in 1..=(num_buy as usize) {
         let price = if mode == 0 {
-            current_buy - spacing        // Arithmetic
+            current_buy - spacing
         } else {
-            current_buy * buy_mult       // Geometric
+            current_buy * buy_mult
         };
         current_buy = price;
         if price > 0.0 { buys.push(price); }
@@ -85,221 +54,187 @@ fn calculate_grid_levels(
     (buys, sells)
 }
 
-// Ticker parser → shared exchange module (Phase 5.2)
-
-// ═══════════════════════════════════════════════════════════
-// MAIN
-// ═══════════════════════════════════════════════════════════
-#[tokio::main]
-async fn main() -> Result<()> {
-    dotenv().ok();
-    tracing_subscriber::registry()
-        .with(fmt::layer().with_target(false).json())
-        .with(EnvFilter::from_default_env().add_directive(Level::INFO.into()))
-        .init();
-
-    let notifier = Arc::new(AsyncNotifier::new("grid", "📐"));
-    let engine_mmap = init_mmap::<GridEngineState>(GRID_ENGINE_PATH)?;
-    let risk_mmap = init_mmap::<GridRiskState>(GRID_RISK_PATH)?;
-    let engine = unsafe { &*(engine_mmap.as_ptr() as *const GridEngineState) };
-    let risk = unsafe { &*(risk_mmap.as_ptr() as *const GridRiskState) };
-
-    // L2 Shared State (v12.0)
-    let l2_mmap = init_mmap::<sniper_types::l2_command::L2SharedState>(
-        sniper_types::l2_command::L2_COMMAND_PATH,
-    )?;
-    let l2_shared = unsafe { &*(l2_mmap.as_ptr() as *const sniper_types::l2_command::L2SharedState) };
+struct GridEngine {
+    notifier: Arc<AsyncNotifier>,
+    engine: *const GridEngineState,
+    risk: *const GridRiskState,
+    l2_warp: *const sniper_types::l2_command::L2GridWarpMatrix,
+    l2_risk: *const sniper_types::l2_command::L2GlobalRiskMatrix,
+    l2_portfolio: *const sniper_types::l2_command::L2PortfolioTelemetry,
     
-    let grid_warp = &l2_shared.grid_warp;
-    let l2risk = &l2_shared.global_risk;
-    let l2portfolio = &l2_shared.portfolio;
+    ticker_chan: Option<i64>,
+    last_grid_calc: Instant,
+    
+    ryu1: ryu::Buffer,
+    ryu2: ryu::Buffer,
+}
 
-    let key = std::env::var("BITFINEX_API_KEY").context("Missing BITFINEX_API_KEY")?;
-    let sec = std::env::var("BITFINEX_API_SECRET").context("Missing BITFINEX_API_SECRET")?;
+unsafe impl Send for GridEngine {}
+unsafe impl Sync for GridEngine {}
 
-    info!(event = "system_start", version = VERSION, bot = "grid", strategy = "multi_level_grid");
+impl SovereignEngine for GridEngine {
+    fn subscriptions(&mut self) -> Vec<String> {
+        vec![json!({"event": "subscribe", "channel": "ticker", "symbol": "tBTCUSD"}).to_string()]
+    }
 
-    // ═══ SINGLE-INSTANCE LOCK (v12.0 — shared module) ═══
-    let _lock_guard = sniper_types::lock::ensure_single_instance("grid-core")?;
+    fn on_start(&mut self) -> Result<()> {
+        let _lock_guard = sniper_types::lock::ensure_single_instance("grid-core")?;
+        self.notifier.send(format!("📐 Grid v{} ONLINE", VERSION));
+        Ok(())
+    }
 
-    notifier.send(format!("📐 Grid v{} (Dynamic Multi-Level) ONLINE", VERSION));
+    fn on_auth(&mut self) {
+        info!(event = "authenticated", bot = "grid");
+    }
 
-    loop {
-        let ws_result = connect_async(bitfinex::WS_URL).await;
-        let (ws, _) = match ws_result {
-            Ok(v) => v,
-            Err(e) => { warn!(event = "ws_fail", error = %e); tokio::time::sleep(Duration::from_secs(60)).await; continue; }
-        };
+    fn on_market_message(&mut self, payload: &[u8], out_buf: &mut bytes::BytesMut) {
+        let loop_start = Instant::now();
+        if let Some((chan, bid, ask)) = sniper_types::exchange::fast_parse_ticker(payload) {
+            if Some(chan) == self.ticker_chan {
+                let e = unsafe { &*self.engine };
+                let r = unsafe { &*self.risk };
+                let l2p = unsafe { &*self.l2_portfolio };
+                let l2r = unsafe { &*self.l2_risk };
+                let l2w = unsafe { &*self.l2_warp };
 
-        let (mut write, mut read) = ws.split();
+                let mid = (bid + ask) / 2;
+                e.best_bid.store(bid as u64, Ordering::Release);
+                e.best_ask.store(ask as u64, Ordering::Release);
+                e.mid_price.store(mid as u64, Ordering::Release);
+                e.latency_ns.store(loop_start.elapsed().as_nanos() as u64, Ordering::Release);
 
-        // Auth (shared exchange module)
-        let auth_msg = sniper_types::exchange::bitfinex_auth_message(&key, &sec);
-        write.send(Message::Text(auth_msg.into())).await?;
+                let paused = r.global_paused.load(Ordering::Acquire) != 0;
+                let grid_inv = e.net_position.load(Ordering::Relaxed);
+                l2p.grid_inventory.store(grid_inv, Ordering::Relaxed);
+                
+                let hedge_active = !sniper_types::l2_command::should_grid_place_bid(l2r);
 
-        // Subscribe to ticker
-        let symbol = "tBTCUSD"; // Default, overridable via risk state
-        write.send(Message::Text(json!({"event":"subscribe","channel":"ticker","symbol":symbol}).to_string().into())).await?;
+                if !paused && self.last_grid_calc.elapsed().as_secs() >= 3 {
+                    let spacing = r.grid_spacing.load(Ordering::Acquire) as f64 / PRICE_SCALE;
+                    let num_buy = r.num_buy_levels.load(Ordering::Acquire);
+                    let num_sell = r.num_sell_levels.load(Ordering::Acquire);
+                    let mode = r.grid_mode.load(Ordering::Acquire);
+                    let geo_pct = r.geometric_step_pct.load(Ordering::Acquire) as f64 / PRICE_SCALE;
+                    let qty = r.order_qty.load(Ordering::Acquire) as f64 / PRICE_SCALE;
+                    let center_override = r.center_price_override.load(Ordering::Acquire) as f64 / PRICE_SCALE;
 
-        let mut authed = false;
-        let mut ticker_chan: Option<i64> = None;
-        let mut last_grid_calc = Instant::now();
-        let mut order_msg = bytes::BytesMut::with_capacity(2048);
-        let mut ryu1 = ryu::Buffer::new();
-        let mut ryu2 = ryu::Buffer::new();
+                    let mid_f64 = mid as f64 / PRICE_SCALE_I as f64;
+                    let center = if center_override > 0.0 { center_override } else { mid_f64 };
 
-        while let Some(msg) = read.next().await {
-            let loop_start = Instant::now();
-            let msg = match msg { Ok(m) => m, Err(_) => break };
-
-            let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
-            engine.heartbeat_ms.store(now_ms, Ordering::Release);
-
-            if let Message::Text(text) = msg {
-                let bytes = text.as_bytes();
-
-                // Fast path: ticker
-                if let Some((chan, bid, ask)) = sniper_types::exchange::fast_parse_ticker(bytes) {
-                    if ticker_chan == Some(chan) {
-                        let mid = (bid + ask) / 2;
-                        engine.best_bid.store(bid as u64, Ordering::Release);
-                        engine.best_ask.store(ask as u64, Ordering::Release);
-                        engine.mid_price.store(mid as u64, Ordering::Release);
-                        engine.latency_ns.store(loop_start.elapsed().as_nanos() as u64, Ordering::Release);
-
-                        // Grid recalculation every 3 seconds
-                        let paused = risk.global_paused.load(Ordering::Acquire) != 0;
-
-                        // Phase 3: Report grid inventory to L2 portfolio aggregator
-                        let grid_inv = engine.net_position.load(Ordering::Relaxed);
-                        l2portfolio.grid_inventory.store(grid_inv, Ordering::Relaxed);
-
-                        // Phase 3: Portfolio shield check (VPIN crisis → stop buying)
-                        let hedge_active = !sniper_types::l2_command::should_grid_place_bid(l2risk);
-
-                        if authed && !paused && last_grid_calc.elapsed().as_secs() >= 3 {
-                            let spacing = risk.grid_spacing.load(Ordering::Acquire) as f64 / PRICE_SCALE;
-                            let num_buy = risk.num_buy_levels.load(Ordering::Acquire);
-                            let num_sell = risk.num_sell_levels.load(Ordering::Acquire);
-                            let mode = risk.grid_mode.load(Ordering::Acquire);
-                            let geo_pct = risk.geometric_step_pct.load(Ordering::Acquire) as f64 / PRICE_SCALE;
-                            let qty = risk.order_qty.load(Ordering::Acquire) as f64 / PRICE_SCALE;
-                            let center_override = risk.center_price_override.load(Ordering::Acquire) as f64 / PRICE_SCALE;
-
-                            let mid_f64 = mid as f64 / PRICE_SCALE_I as f64;
-                            let center = if center_override > 0.0 { center_override } else { mid_f64 };
-
-                            if spacing > 0.0 && qty > 0.0 && center > 0.0 {
-                                // ═══ v14.3 GAUSSIAN WARP GRID (Issue #18 Phase 2b) ═══
-                                // If L2 has set a dynamic anchor, use warped quadratic levels
-                                // Otherwise fall back to linear calculate_grid_levels
-                                let anchor = grid_warp.grid_dynamic_anchor.load(Ordering::Relaxed);
-                                let (buys, sells) = if anchor > 0 {
-                                    // L2 controls grid topology
-                                    let mut warp_buys = Vec::new();
-                                    let mut warp_sells = Vec::new();
-                                    for lvl in 1..=30i64 {
-                                        // Phase 3: Skip ALL bids if hedge shield is active
-                                        if !hedge_active {
-                                            if let Some(p) = sniper_types::l2_command::calculate_warped_grid_level(
-                                                grid_warp, lvl, true
-                                            ) {
-                                                if p > 0 {
-                                                    warp_buys.push(p as f64 / PRICE_SCALE_I as f64);
-                                                }
-                                            }
-                                        }
-                                        if let Some(p) = sniper_types::l2_command::calculate_warped_grid_level(
-                                            grid_warp, lvl, false
-                                        ) {
-                                            warp_sells.push(p as f64 / PRICE_SCALE_I as f64);
-                                        }
-                                    }
-                                    (warp_buys, warp_sells)
-                                } else {
-                                    // Fallback: original linear grid
-                                    calculate_grid_levels(center, spacing, num_buy, num_sell, mode, geo_pct)
-                                };
-
-                                // Write levels to mmap for dashboard
-                                for (i, &price) in buys.iter().enumerate() {
-                                    if i < GRID_MAX_LEVELS {
-                                        engine.buy_levels[i].price.store((price * PRICE_SCALE_I as f64) as u64, Ordering::Release);
-                                        engine.buy_levels[i].quantity.store((qty * PRICE_SCALE_I as f64) as u64, Ordering::Release);
+                    if spacing > 0.0 && qty > 0.0 && center > 0.0 {
+                        let anchor = l2w.grid_dynamic_anchor.load(Ordering::Relaxed);
+                        let (buys, sells) = if anchor > 0 {
+                            let mut warp_buys = Vec::new();
+                            let mut warp_sells = Vec::new();
+                            for lvl in 1..=30i64 {
+                                if !hedge_active {
+                                    if let Some(p) = sniper_types::l2_command::calculate_warped_grid_level(l2w, lvl, true) {
+                                        if p > 0 { warp_buys.push(p as f64 / PRICE_SCALE_I as f64); }
                                     }
                                 }
-                                engine.active_buy_levels.store(buys.len() as u32, Ordering::Release);
-
-                                for (i, &price) in sells.iter().enumerate() {
-                                    if i < GRID_MAX_LEVELS {
-                                        engine.sell_levels[i].price.store((price * PRICE_SCALE_I as f64) as u64, Ordering::Release);
-                                        engine.sell_levels[i].quantity.store((qty * PRICE_SCALE_I as f64) as u64, Ordering::Release);
-                                    }
+                                if let Some(p) = sniper_types::l2_command::calculate_warped_grid_level(l2w, lvl, false) {
+                                    warp_sells.push(p as f64 / PRICE_SCALE_I as f64);
                                 }
-                                engine.active_sell_levels.store(sells.len() as u32, Ordering::Release);
+                            }
+                            // Sort for safety
+                            warp_buys.sort_by(|a, b| b.partial_cmp(a).unwrap());
+                            warp_sells.sort_by(|a, b| a.partial_cmp(b).unwrap());
+                            (warp_buys, warp_sells)
+                        } else {
+                            calculate_grid_levels(center, spacing, num_buy, num_sell, mode, geo_pct)
+                        };
 
-                                // Build multi-order: cancel all + place grid
-                                order_msg.clear();
-                                order_msg.extend_from_slice(b"[0,\"ox_multi\",null,[[\"oc_multi\",{\"symbol\":\"");
-                                order_msg.extend_from_slice(symbol.as_bytes());
-                                order_msg.extend_from_slice(b"\"}]");
-
-                                // Place buy levels
-                                for price in &buys {
-                                    order_msg.extend_from_slice(b",[\"on\",{\"gid\":3000,\"symbol\":\"");
-                                    order_msg.extend_from_slice(symbol.as_bytes());
-                                    order_msg.extend_from_slice(b"\",\"amount\":\"");
-                                    order_msg.extend_from_slice(ryu1.format(qty).as_bytes());
-                                    order_msg.extend_from_slice(b"\",\"price\":\"");
-                                    order_msg.extend_from_slice(ryu2.format(*price).as_bytes());
-                                    order_msg.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\"}]");
-                                }
-
-                                // Place sell levels
-                                for price in &sells {
-                                    order_msg.extend_from_slice(b",[\"on\",{\"gid\":3000,\"symbol\":\"");
-                                    order_msg.extend_from_slice(symbol.as_bytes());
-                                    order_msg.extend_from_slice(b"\",\"amount\":\"");
-                                    order_msg.extend_from_slice(ryu1.format(-qty).as_bytes());
-                                    order_msg.extend_from_slice(b"\",\"price\":\"");
-                                    order_msg.extend_from_slice(ryu2.format(*price).as_bytes());
-                                    order_msg.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\"}]");
-                                }
-
-                                order_msg.extend_from_slice(b"]]");
-                                let text_msg = unsafe { String::from_utf8_unchecked(order_msg.to_vec()) };
-                                let _ = write.send(Message::Text(text_msg.into())).await;
-                                last_grid_calc = Instant::now();
+                        let buys_ref = unsafe { &mut (*(self.engine as *mut GridEngineState)).buy_levels };
+                        for (i, &price) in buys.iter().enumerate() {
+                            if i < GRID_MAX_LEVELS {
+                                buys_ref[i].price.store((price * PRICE_SCALE_I as f64) as u64, Ordering::Release);
+                                buys_ref[i].quantity.store((qty * PRICE_SCALE_I as f64) as u64, Ordering::Release);
                             }
                         }
-                    }
-                    continue;
-                }
+                        
+                        let e_mut = unsafe { &mut *(self.engine as *mut GridEngineState) };
+                        e_mut.active_buy_levels.store(buys.len() as u32, Ordering::Release);
 
-                // Slow path: events
-                if bytes.first() == Some(&b'{') {
-                    let v: serde_json::Value = serde_json::from_slice(bytes).unwrap_or_default();
-                    if v["event"] == "auth" {
-                        if v["status"] == "OK" {
-                            authed = true;
-                            info!(event = "authenticated", bot = "grid");
-                        } else {
-                            error!(event = "auth_failed", bot = "grid", status = %v["status"], msg = %v["msg"]);
-                            notifier.send(format!("❌ AUTH FAILED: {}", v["msg"]));
+                        let sells_ref = unsafe { &mut (*(self.engine as *mut GridEngineState)).sell_levels };
+                        for (i, &price) in sells.iter().enumerate() {
+                            if i < GRID_MAX_LEVELS {
+                                sells_ref[i].price.store((price * PRICE_SCALE_I as f64) as u64, Ordering::Release);
+                                sells_ref[i].quantity.store((qty * PRICE_SCALE_I as f64) as u64, Ordering::Release);
+                            }
                         }
-                    }
-                    if v["event"] == "subscribed" && v["channel"] == "ticker" {
-                        if let Some(cid) = v["chanId"].as_i64() {
-                            ticker_chan = Some(cid);
-                            info!(event = "ticker_subscribed", chan_id = cid);
+                        e_mut.active_sell_levels.store(sells.len() as u32, Ordering::Release);
+
+                        let symbol = b"tBTCUSD";
+                        out_buf.extend_from_slice(b"[0,\"ox_multi\",null,[[\"oc_multi\",{\"symbol\":\"tBTCUSD\"}]");
+
+                        for price in &buys {
+                            out_buf.extend_from_slice(b",[\"on\",{\"gid\":3000,\"symbol\":\"tBTCUSD\",\"amount\":\"");
+                            out_buf.extend_from_slice(self.ryu1.format(qty).as_bytes());
+                            out_buf.extend_from_slice(b"\",\"price\":\"");
+                            out_buf.extend_from_slice(self.ryu2.format(*price).as_bytes());
+                            out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\"}]");
                         }
+
+                        for price in &sells {
+                            out_buf.extend_from_slice(b",[\"on\",{\"gid\":3000,\"symbol\":\"tBTCUSD\",\"amount\":\"");
+                            out_buf.extend_from_slice(self.ryu1.format(-qty).as_bytes());
+                            out_buf.extend_from_slice(b"\",\"price\":\"");
+                            out_buf.extend_from_slice(self.ryu2.format(*price).as_bytes());
+                            out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\"}]");
+                        }
+
+                        out_buf.extend_from_slice(b"]]");
+                        self.last_grid_calc = Instant::now();
                     }
                 }
             }
         }
-
-        warn!(event = "ws_disconnected", bot = "grid");
-        notifier.send("⚠️ Grid: WebSocket disconnected, reconnecting...".to_string());
-        tokio::time::sleep(Duration::from_secs(5)).await;
     }
+
+    fn on_system_event(&mut self, value: &serde_json::Value, _out_buf: &mut bytes::BytesMut) {
+        if value["event"] == "subscribed" && value["channel"] == "ticker" {
+            if let Some(cid) = value["chanId"].as_i64() {
+                self.ticker_chan = Some(cid);
+                info!(event = "ticker_subscribed", chan_id = cid);
+            }
+        }
+    }
+
+    fn on_loop(&mut self, _out_buf: &mut bytes::BytesMut) {
+        let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+        unsafe { &*self.engine }.heartbeat_ms.store(now_ms, Ordering::Release);
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+    tracing_subscriber::fmt::init();
+    
+    let engine_mmap = init_mmap::<GridEngineState>(GRID_ENGINE_PATH)?;
+    let risk_mmap = init_mmap::<GridRiskState>(GRID_RISK_PATH)?;
+    let l2_mmap = init_mmap::<sniper_types::l2_command::L2SharedState>(
+        sniper_types::l2_command::L2_COMMAND_PATH,
+    )?;
+
+    let engine_ptr = engine_mmap.as_ptr() as *const GridEngineState;
+    let risk_ptr = risk_mmap.as_ptr() as *const GridRiskState;
+    let l2_shared = unsafe { &*(l2_mmap.as_ptr() as *const sniper_types::l2_command::L2SharedState) };
+
+    let engine = GridEngine {
+        notifier: Arc::new(AsyncNotifier::new("grid", "📐")),
+        engine: engine_ptr,
+        risk: risk_ptr,
+        l2_warp: &l2_shared.grid_warp,
+        l2_risk: &l2_shared.global_risk,
+        l2_portfolio: &l2_shared.portfolio,
+        ticker_chan: None,
+        last_grid_calc: Instant::now() - core::time::Duration::from_secs(10), // force init run
+        ryu1: ryu::Buffer::new(),
+        ryu2: ryu::Buffer::new(),
+    };
+
+    let mut runner = SovereignRunner::new(engine, "Grid");
+    runner.run().await?;
+    
+    Ok(())
 }
