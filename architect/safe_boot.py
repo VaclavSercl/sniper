@@ -146,11 +146,8 @@ class SafeBootPipeline:
             if self.bot not in state:
                 state[self.bot] = {}
             
-            # Hydra and Nexus go to PAPER, others to PAUSED
-            if self.bot in ("nexus", "hydra"):
-                fallback_mode = "PAPER"
-            else:
-                fallback_mode = "PAUSED"
+            # ALL bots default to PAPER after SBP (uniform state)
+            fallback_mode = "PAPER"
 
             # Override mode safely
             if state[self.bot].get("mode") == "LIVE":
