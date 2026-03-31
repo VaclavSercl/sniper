@@ -2,7 +2,7 @@
 Description=Sniper Armada v19.0 — Sovereign HFT + AI + Telegram C2
 After=network-online.target lmstudio.service
 Wants=network-online.target
-Requires=lmstudio.service
+Wants=lmstudio.service
 StartLimitIntervalSec=0
 
 [Service]

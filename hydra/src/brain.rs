@@ -381,19 +381,27 @@ fn cmd_analyze(conn: &Connection) -> Result<()> {
 }
 
 fn update_patterns(conn: &Connection) -> Result<()> {
-    // Find optimal grid per regime (grid that produced best avg PnL)
+    // Find optimal grid per regime: the grid_step that produced the best AVG(pnl)
     conn.execute_batch("
         INSERT OR REPLACE INTO patterns (regime, optimal_grid, optimal_pos, avg_pnl, sample_count, updated_at)
         SELECT
-            regime,
-            grid_step as optimal_grid,
-            AVG(max_position) as optimal_pos,
-            AVG(pnl) as avg_pnl,
+            c.regime,
+            best.optimal_grid,
+            AVG(c.max_position) as optimal_pos,
+            AVG(c.pnl) as avg_pnl,
             COUNT(*) as sample_count,
             datetime('now', 'localtime')
-        FROM cycles
-        WHERE regime IS NOT NULL AND regime != ''
-        GROUP BY regime
+        FROM cycles c
+        INNER JOIN (
+            SELECT regime, grid_step as optimal_grid,
+                   ROW_NUMBER() OVER (PARTITION BY regime ORDER BY AVG(pnl) DESC) as rn
+            FROM cycles
+            WHERE regime IS NOT NULL AND regime != ''
+            GROUP BY regime, grid_step
+            HAVING COUNT(*) >= 3
+        ) best ON c.regime = best.regime AND best.rn = 1
+        WHERE c.regime IS NOT NULL AND c.regime != ''
+        GROUP BY c.regime
         HAVING COUNT(*) >= 3
     ")?;
     Ok(())
@@ -825,22 +833,28 @@ fn cmd_backtest(conn: &Connection, days: u32, dry_run: bool) -> Result<()> {
 }
 
 fn cmd_lessons(conn: &Connection, regime: Option<String>, active_only: bool) -> Result<()> {
-    let query = match (&regime, active_only) {
-        (Some(r), true) => format!(
+    let mut stmt = match (&regime, active_only) {
+        (Some(_), true) => conn.prepare(
             "SELECT id, regime, rule_type, condition, action, reasoning, confidence, sample_count, source, created_at \
-             FROM lessons WHERE regime='{}' AND active=1 ORDER BY confidence DESC", r),
-        (Some(r), false) => format!(
+             FROM lessons WHERE regime=?1 AND active=1 ORDER BY confidence DESC")?,
+        (Some(_), false) => conn.prepare(
             "SELECT id, regime, rule_type, condition, action, reasoning, confidence, sample_count, source, created_at \
-             FROM lessons WHERE regime='{}' ORDER BY confidence DESC", r),
-        (None, true) => "SELECT id, regime, rule_type, condition, action, reasoning, confidence, sample_count, source, created_at \
-             FROM lessons WHERE active=1 ORDER BY confidence DESC".to_string(),
-        (None, false) => "SELECT id, regime, rule_type, condition, action, reasoning, confidence, sample_count, source, created_at \
-             FROM lessons ORDER BY confidence DESC".to_string(),
+             FROM lessons WHERE regime=?1 ORDER BY confidence DESC")?,
+        (None, true) => conn.prepare(
+            "SELECT id, regime, rule_type, condition, action, reasoning, confidence, sample_count, source, created_at \
+             FROM lessons WHERE active=1 ORDER BY confidence DESC")?,
+        (None, false) => conn.prepare(
+            "SELECT id, regime, rule_type, condition, action, reasoning, confidence, sample_count, source, created_at \
+             FROM lessons ORDER BY confidence DESC")?,
     };
 
-    let mut stmt = conn.prepare(&query)?;
     let mut rows = Vec::new();
-    let mut row_iter = stmt.query([])?;
+    // Use parameterized query — regime filter via params, not string interpolation
+    let mut row_iter = if let Some(ref r) = regime {
+        stmt.query(params![r])?
+    } else {
+        stmt.query([])?
+    };
     while let Some(row) = row_iter.next()? {
         let entry = serde_json::json!({
             "id": row.get::<_, i64>(0)?,

@@ -956,7 +956,16 @@ PARAMETER CONSTRAINTS:
             log.info(f"  📐 Grid spacing: ${spacing}")
 
     def _apply_trigon(self, cfg):
-        """Apply AI decisions to Trigon risk mmap."""
+        """Apply AI decisions to Trigon risk mmap.
+        
+        TrigonRiskState layout (from trigon_types.rs):
+          triangles[24]:     24 × TrigonTriangleRisk@128B = 3072 bytes
+          global_paused:     offset 3072 (u64)
+          daily_loss_limit:  offset 3080 (i64)
+          max_concurrent:    offset 3088 (u32)
+          fee_bps:           offset 3092 (+pad4) = 3096 (u64)
+          ai_heartbeat_ms:   offset 3104 (u64)
+        """
         if not cfg:
             return
             
@@ -977,29 +986,49 @@ PARAMETER CONSTRAINTS:
             os.close(fd)
 
             SCALE = 100_000_000.0
+            
+            # ═══ Offset after triangles[24] array (24 × 128B = 3072) ═══
+            GLOBAL_OFF = 24 * 128  # 3072
 
-            # global_paused at offset 0
+            # global_paused at GLOBAL_OFF + 0
             if cfg.get("pause_trading") is True:
-                _st.pack_into('<Q', mm, 0, 1)
+                _st.pack_into('<Q', mm, GLOBAL_OFF, 1)
                 log.info("  ⏸️ Trigon PAUSED")
             elif cfg.get("pause_trading") is False:
                 if self._is_paper("trigon"):
                     log.info("  🛡️ Trigon unpause BLOCKED — PAPER mode")
                 else:
-                    _st.pack_into('<Q', mm, 0, 0)
+                    _st.pack_into('<Q', mm, GLOBAL_OFF, 0)
                     log.info("  ▶️ Trigon UNPAUSED")
 
-            # min_profit_bps at offset 8
+            # min_profit_bps: write to each triangle's min_profit_bps field
+            # TrigonTriangleRisk layout: leg_symbols[3](24) + leg_directions[3](12) = 36,
+            #   then pad to align(8) = 40, then min_profit_bps at offset 40 within each 128B entry
             mpb = cfg.get("min_profit_bps")
             if mpb is not None:
-                _st.pack_into('<Q', mm, 8, int(float(mpb) * 100))  # stored as bps×100
+                TRIANGLE_MIN_PROFIT_OFF = 40  # offset within each TrigonTriangleRisk
+                for i in range(24):
+                    base = i * 128
+                    # Only write to enabled triangles (enabled field at offset 108)
+                    enabled = _st.unpack_from('<I', mm, base + 108)[0]
+                    if enabled:
+                        _st.pack_into('<Q', mm, base + TRIANGLE_MIN_PROFIT_OFF, int(float(mpb) * 100))
                 log.info(f"  🔺 Trigon min_profit: {mpb} bps")
 
-            # max_order_usd at offset 16
+            # max_order_usd: at offset 48 within each TrigonTriangleRisk
             mou = cfg.get("max_order_usd")
             if mou is not None:
-                _st.pack_into('<Q', mm, 16, int(float(mou) * SCALE))
+                TRIANGLE_MAX_ORDER_OFF = 48  # offset within each TrigonTriangleRisk
+                for i in range(24):
+                    base = i * 128
+                    enabled = _st.unpack_from('<I', mm, base + 108)[0]
+                    if enabled:
+                        _st.pack_into('<Q', mm, base + TRIANGLE_MAX_ORDER_OFF, int(float(mou) * SCALE))
                 log.info(f"  🔺 Trigon max_order: ${mou}")
+
+            # AI heartbeat at GLOBAL_OFF + 32 (after global_paused(8) + daily_loss_limit(8) + max_concurrent(4) + pad(4) + fee_bps(8))
+            import time
+            _st.pack_into('<Q', mm, GLOBAL_OFF + 32, int(time.time() * 1000))
 
             mm.flush()
             mm.close()

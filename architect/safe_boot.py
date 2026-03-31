@@ -136,6 +136,20 @@ class SafeBootPipeline:
         import mmap as _mmap
         import struct as _struct
         
+        # ═══ Per-bot mmap risk file paths and global_paused offsets ═══
+        # Each bot has its own risk mmap with global_paused at a different offset.
+        # Offsets derived from #[repr(C, align(64))] Rust struct layouts:
+        #   Hydra:    risk_state.bin, offset 0 (RiskState.paused is first field)
+        #   Moonshot: moonshot_risk.bin, offset 2560 (20 × MoonshotPairRisk@128B)
+        #   Grid:     grid_risk.bin, offset 72 (flat struct, after spacing/levels/qty/mode fields)
+        #   Trigon:   trigon_risk.bin, offset 3072 (24 × TrigonTriangleRisk@128B)
+        BOT_RISK_MAP = {
+            "hydra":    ("/dev/shm/beroun/risk_state.bin", 0),
+            "moonshot": ("/dev/shm/beroun/moonshot_risk.bin", 2560),
+            "grid":     ("/dev/shm/beroun/grid_risk.bin", 72),
+            "trigon":   ("/dev/shm/beroun/trigon_risk.bin", 3072),
+        }
+        
         try:
             if os.path.exists(STATE_FILE):
                 with open(STATE_FILE, "r") as f:
@@ -159,19 +173,23 @@ class SafeBootPipeline:
             with open(STATE_FILE, "w") as f:
                 json.dump(state, f, indent=2)
             
-            # ═══ CRITICAL: Write paused=1 to mmap risk_state.bin ═══
-            # Rust bots check ONLY this mmap field, not the JSON file.
-            risk_path = "/dev/shm/beroun/risk_state.bin"
-            if os.path.exists(risk_path) and fallback_mode in ("PAPER", "PAUSED"):
-                try:
-                    with open(risk_path, "r+b") as rf:
-                        mm = _mmap.mmap(rf.fileno(), 0)
-                        _struct.pack_into('<Q', mm, 0, 1)  # paused = 1
-                        mm.flush()
-                        mm.close()
-                    log.info(f"🛡️ [SBP] {self.bot}: risk_state.bin paused=1 written (mmap enforcement)")
-                except Exception as me:
-                    log.error(f"⚠️ [SBP] Failed to write mmap pause for {self.bot}: {me}")
+            # ═══ CRITICAL: Write paused=1 to bot-specific mmap risk file ═══
+            # Rust bots check ONLY their own mmap field, not the JSON file.
+            risk_entry = BOT_RISK_MAP.get(self.bot)
+            if risk_entry and fallback_mode in ("PAPER", "PAUSED"):
+                risk_path, pause_offset = risk_entry
+                if os.path.exists(risk_path):
+                    try:
+                        with open(risk_path, "r+b") as rf:
+                            mm = _mmap.mmap(rf.fileno(), 0)
+                            _struct.pack_into('<Q', mm, pause_offset, 1)  # paused = 1
+                            mm.flush()
+                            mm.close()
+                        log.info(f"🛡️ [SBP] {self.bot}: {os.path.basename(risk_path)}[{pause_offset}] paused=1 written")
+                    except Exception as me:
+                        log.error(f"⚠️ [SBP] Failed to write mmap pause for {self.bot}: {me}")
+                else:
+                    log.warning(f"⚠️ [SBP] {self.bot}: risk mmap {risk_path} not found (pre-create needed)")
                     
         except Exception as e:
             log.error(f"Failed to enforce paper state: {e}")

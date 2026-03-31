@@ -112,6 +112,12 @@ if ! is_alive "price_bridge"; then
     ALERTS=$((ALERTS + 1))
 fi
 
+if ! is_alive "fee_monitor"; then
+    tg_alert "fee_down" "⚠️ WATCHDOG: Fee Monitor spadl → restartuji"
+    cd "$ARMADA_ROOT" && python3 architect/fee_monitor.py >> "$LOG_DIR/fee_monitor.log" 2>&1 &
+    ALERTS=$((ALERTS + 1))
+fi
+
 # Nexus: only alert, don't restart (L2 Oracle manages trading bots)
 if ! is_alive "nexus-core"; then
     # Only alert if nexus is supposed to be running (check armada_state)
@@ -124,7 +130,7 @@ fi
 
 # ═══ DUPLICATE CLEANUP ═══
 # Note: watchdog.sh is NOT checked — cron creates new bash instances each minute, pgrep sees them all
-for proc in tg_commander pnl_daemon price_bridge market_recorder sovereign-cortex; do
+for proc in tg_commander pnl_daemon price_bridge market_recorder fee_monitor sovereign-cortex; do
     kill_dupes "$proc"
 done
 

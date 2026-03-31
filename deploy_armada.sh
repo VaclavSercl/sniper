@@ -51,7 +51,7 @@ tg_alert() {
 }
 
 echo "🐺 ═══════════════════════════════════════════"
-echo "   SNIPER ARMADA v15.0 — SOVEREIGN BOOT"
+echo "   SNIPER ARMADA v19.0 — SOVEREIGN BOOT"
 echo "   $(date '+%Y-%m-%d %H:%M:%S %Z')"
 echo "═══════════════════════════════════════════════"
 
