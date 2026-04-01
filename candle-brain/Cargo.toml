@@ -1,6 +1,6 @@
 [package]
 name = "candle-brain"
-version = "21.0.0"
+version = "21.1.0"
 edition = "2024"
 description = "In-process L1 AI inference for Sniper Armada HFT — Candle + GGUF + Logit Sniping"
 

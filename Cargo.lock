@@ -285,7 +285,7 @@ checksum = "1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33"
 
 [[package]]
 name = "candle-brain"
-version = "21.0.0"
+version = "21.1.0"
 dependencies = [
  "anyhow",
  "candle-core",
@@ -1435,7 +1435,7 @@ checksum = "0cc23270f6e1808e30a928bdc84dea0b9b4136a8bc82338574f23baf47bbd280"
 
 [[package]]
 name = "grid"
-version = "20.1.0"
+version = "21.1.0"
 dependencies = [
  "anyhow",
  "arrayvec",
@@ -1663,7 +1663,7 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 
 [[package]]
 name = "hydra"
-version = "20.1.0"
+version = "21.1.0"
 dependencies = [
  "anyhow",
  "arrayvec",
@@ -2272,7 +2272,7 @@ dependencies = [
 
 [[package]]
 name = "moonshot"
-version = "20.1.0"
+version = "21.1.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -2333,7 +2333,7 @@ dependencies = [
 
 [[package]]
 name = "nexus"
-version = "20.1.0"
+version = "21.1.0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3483,7 +3483,7 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "sniper-shared"
-version = "20.1.0"
+version = "21.1.0"
 dependencies = [
  "anyhow",
  "arrayvec",
@@ -3535,7 +3535,7 @@ dependencies = [
 
 [[package]]
 name = "sovereign-cortex"
-version = "20.1.0"
+version = "21.1.0"
 dependencies = [
  "anyhow",
  "arrayvec",
@@ -4115,7 +4115,7 @@ dependencies = [
 
 [[package]]
 name = "trigon"
-version = "20.1.0"
+version = "21.1.0"
 dependencies = [
  "anyhow",
  "axum",

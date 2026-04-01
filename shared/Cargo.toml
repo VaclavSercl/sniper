@@ -1,6 +1,6 @@
 [package]
 name = "sniper-shared"
-version = "20.1.0"
+version = "21.1.0"
 edition = "2024"
 
 [lib]

@@ -1,8 +1,8 @@
-# 🐺 SNIPER ARMADA v19.0 — Architecture Document
+# 🐺 SNIPER ARMADA v21.1 — Architecture Document
 
-> **Sovereign HFT Trading System** — Institutional-grade algorithmic trading on Bitfinex.
+> **Sovereign HFT Trading System** — Pure Rust Hive with in-process AI inference.
 > Sub-millisecond execution. Zero-allocation hot paths. Fully autonomous operation.
-> **SIM v2.0** — Sovereign Intelligence Matrix with closed-loop AI governance.
+> **SIM v2.0** — Sovereign Intelligence Matrix with Candle L1 + ZeroClaw L2 + Gemini 3.1 Pro.
 
 ---
 
