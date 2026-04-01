@@ -81,6 +81,10 @@ impl SovereignEngine for MoonshotEngine {
                 let paused = unsafe { &*self.risk }.global_paused.load(Ordering::Acquire) != 0;
                 
                 if !paused {
+                    // ═══ HIVE MIND: Cross-Bot Toxic Storm (SIM v2.0) ═══
+                    if let Ok(flag) = std::fs::read("/dev/shm/beroun/toxic_storm.bin") {
+                        if !flag.is_empty() && flag[0] == 1 { return; }
+                    }
                     let mid_price = (bid + ask) / 2;
                     let l2cmd = unsafe { &*self.l2cmd };
                     let l2_risk = unsafe { &*self.l2_risk };

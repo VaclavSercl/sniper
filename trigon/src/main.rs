@@ -261,6 +261,11 @@ impl SovereignEngine for TrigonEngine {
                         };
                         let effective_min_profit = min_profit + latency_pad;
 
+                        // ═══ HIVE MIND: Cross-Bot Toxic Storm (SIM v2.0) ═══
+                        if let Ok(flag) = std::fs::read("/dev/shm/beroun/toxic_storm.bin") {
+                            if !flag.is_empty() && flag[0] == 1 { continue; }
+                        }
+
                         if !paused && profit > effective_min_profit
                             && et.executing.load(Ordering::Acquire) == 0
                             && (now_ms - self.last_exec_ms[t]) > cooldown

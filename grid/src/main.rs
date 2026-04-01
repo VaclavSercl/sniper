@@ -113,6 +113,10 @@ impl SovereignEngine for GridEngine {
                 let hedge_active = !sniper_types::l2_command::should_grid_place_bid(l2r);
 
                 if !paused && self.last_grid_calc.elapsed().as_secs() >= 3 {
+                    // ═══ HIVE MIND: Cross-Bot Toxic Storm (SIM v2.0) ═══
+                    if let Ok(flag) = std::fs::read("/dev/shm/beroun/toxic_storm.bin") {
+                        if !flag.is_empty() && flag[0] == 1 { return; }
+                    }
                     let spacing = r.grid_spacing.load(Ordering::Acquire) as f64 / PRICE_SCALE;
                     let num_buy = r.num_buy_levels.load(Ordering::Acquire);
                     let num_sell = r.num_sell_levels.load(Ordering::Acquire);

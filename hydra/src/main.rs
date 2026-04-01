@@ -401,6 +401,16 @@ impl SovereignEngine for HydraEngine {
             }
         }
 
+        // ═══ HIVE MIND: Cross-Bot Toxic Storm (SIM v2.0) ═══
+        // 1-byte mmap written by ML Shield (50ms) + Rust Sentinel (5s)
+        // 0 = clear, 1 = TOXIC STORM → skip order placement
+        if let Ok(flag) = std::fs::read("/dev/shm/beroun/toxic_storm.bin") {
+            if !flag.is_empty() && flag[0] == 1 {
+                self.last_upd = now;
+                return; // All bots defensive — no new orders
+            }
+        }
+
         let mid_i = ((best_bid as i64) + (best_ask as i64)) / 2;
         let bid_vol_0 = engine.bids[0].amount.load(Ordering::Relaxed).unsigned_abs() as f64;
         let ask_vol_0 = engine.asks[0].amount.load(Ordering::Relaxed).unsigned_abs() as f64;
