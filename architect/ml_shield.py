@@ -72,6 +72,15 @@ OFF_REAL_PNL   = 1416    # i64
 CYCLE_MS = 50       # 20 Hz inference
 WARMUP_TICKS = 100  # Collect this many ticks before inference
 
+# ═══ HIVE MIND: Cross-Bot Toxic Storm Flag (SIM v2.0 P1-B) ═══
+# 1-byte mmap file read by ALL Rust bots before every order.
+# 0 = clear, 1 = TOXIC STORM active → bots go defensive.
+HIVE_MIND_PATH = "/dev/shm/beroun/toxic_storm.bin"
+STORM_VPIN_THRESHOLD = 0.7      # VPIN toxicity threshold
+STORM_SPREAD_Z_THRESHOLD = 3.0  # Spread z-score threshold
+STORM_OBI_MOMENTUM = 0.4        # OBI momentum extreme
+STORM_CALM_CYCLES = 10          # Consecutive calm cycles to deactivate
+
 # ═══════════════════════════════════════════════════════════
 # Feature Engineering
 # ═══════════════════════════════════════════════════════════
@@ -388,7 +397,7 @@ def run_inference():
         while not os.path.exists(ENGINE_PATH):
             time.sleep(5)
 
-    log.info("🧠 L1 ML Shield v1.0 starting")
+    log.info("🧠 L1 ML Shield v2.0 starting (SIM v2.0 Hive Mind)")
     log.info(f"   Engine mmap: {ENGINE_PATH}")
     log.info(f"   Cycle: {CYCLE_MS}ms ({1000//CYCLE_MS} Hz)")
     log.info(f"   GPU temp limit: {GPU_TEMP_MAX}°C")
@@ -405,6 +414,16 @@ def run_inference():
     current_skew = struct.unpack_from('<q', mm, OFF_L1_SKEW)[0]
     current_conf = struct.unpack_from('<Q', mm, OFF_L1_CONF)[0]
     log.info(f"   Current l1_skew: {current_skew}, l1_conf: {current_conf}")
+
+    # ═══ HIVE MIND: Initialize toxic storm flag ═══
+    os.makedirs(os.path.dirname(HIVE_MIND_PATH), exist_ok=True)
+    if not os.path.exists(HIVE_MIND_PATH):
+        with open(HIVE_MIND_PATH, 'wb') as hf:
+            hf.write(b'\x00')  # 1 byte: 0 = clear
+    hive_fd = open(HIVE_MIND_PATH, 'r+b')
+    hive_mm = mmap.mmap(hive_fd.fileno(), 1)
+    storm_calm_counter = STORM_CALM_CYCLES  # Start calm
+    log.info(f"   Hive Mind flag: {HIVE_MIND_PATH} (1 byte mmap)")
 
     extractor = FeatureExtractor(window_size=200)
     model = OnlineLinearModel(n_features=10, learning_rate=0.0005, l2_reg=0.01)
@@ -445,6 +464,32 @@ def run_inference():
                 # Write to mmap
                 struct.pack_into('<q', mm, OFF_L1_SKEW, skew_scaled)
                 struct.pack_into('<Q', mm, OFF_L1_CONF, conf_scaled)
+
+                # ═══ HIVE MIND: Toxic Storm Detection ═══
+                # Check 3 conditions: VPIN, spread z-score, OBI momentum
+                try:
+                    vpin_val = features[3] if len(features) > 3 else 0  # VPIN feature
+                    spread_z_val = features[7] if len(features) > 7 else 0  # spread z-score
+                    obi_mom_val = abs(features[4]) if len(features) > 4 else 0  # OBI momentum
+
+                    is_storm = (
+                        vpin_val > STORM_VPIN_THRESHOLD or
+                        spread_z_val > STORM_SPREAD_Z_THRESHOLD or
+                        obi_mom_val > STORM_OBI_MOMENTUM
+                    )
+
+                    if is_storm:
+                        storm_calm_counter = 0
+                        if hive_mm[0] == 0:
+                            hive_mm[0] = 1
+                            log.warning("🌩️ [HIVE MIND] TOXIC STORM ACTIVATED — all bots go defensive")
+                    else:
+                        storm_calm_counter += 1
+                        if storm_calm_counter >= STORM_CALM_CYCLES and hive_mm[0] == 1:
+                            hive_mm[0] = 0
+                            log.info("☀️ [HIVE MIND] Storm cleared — resuming normal operations")
+                except Exception:
+                    pass  # Never crash inference for hive mind
 
             cycle_count += 1
 

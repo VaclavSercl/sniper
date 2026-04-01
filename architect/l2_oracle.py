@@ -282,10 +282,11 @@ class L2OracleAsync:
         except Exception:
             fee_info = "\nExchange Fees: ~10bps maker / ~20bps taker (default)\n"
 
-        # Portfolio Exposure from CL5 (mmap)
+        # Portfolio Exposure + Dynamic VaR (SIM v2.0 Portfolio Coordinator)
         portfolio_section = ""
         try:
             import struct as _st
+            import math as _math
             PRICE_SCALE = 100_000_000
             with open("/dev/shm/beroun/l2_command.bin", "rb") as f:
                 mm_data = f.read(320)  # CL1-5
@@ -301,17 +302,54 @@ class L2OracleAsync:
                 a_delta = _st.unpack_from('<q', mm_data, CL5 + 24)[0] / PRICE_SCALE
                 total_spot = h_inv + g_inv + m_inv
                 net = total_spot + a_delta
+                
+                # Dynamic VaR (SIM v2.0)
+                # Read current price for USD exposure
+                current_price = 0
+                for b in bots:
+                    if b.get('price', 0) > 0:
+                        current_price = b['price']
+                        break
+                
+                net_exposure_usd = abs(net) * current_price if current_price > 0 else 0
+                
+                # Vol multiplier from recent spread volatility
+                spread_val = bots[0].get('spread', 1.0) if bots else 1.0
+                vol_multiplier = max(1.0, spread_val / 2.0)  # norm: spread $2 = 1x
+                
+                # Dynamic max exposure: 5% of equity / vol_multiplier
+                # Equity proxy: $500 (total account)
+                EQUITY_USD = 500.0
+                RISK_PCT = 0.05
+                HARD_MAX_BTC = 0.05  # Rust kill-switch absolute limit
+                dynamic_max_usd = (EQUITY_USD * RISK_PCT) / vol_multiplier
+                dynamic_max_btc = dynamic_max_usd / current_price if current_price > 0 else HARD_MAX_BTC
+                dynamic_max_btc = min(dynamic_max_btc, HARD_MAX_BTC)
+                
+                var_utilization = (abs(net) / dynamic_max_btc * 100) if dynamic_max_btc > 0 else 0
+                
+                # Direction bias detection
+                positions = {'hydra': h_inv, 'grid': g_inv, 'moonshot': m_inv}
+                long_bots = [n for n, v in positions.items() if v > 0.0001]
+                short_bots = [n for n, v in positions.items() if v < -0.0001]
+                
                 portfolio_section = (
-                    f"\n═══ PORTFOLIO EXPOSURE (Phase 3 mmap) ═══\n"
+                    f"\n═══ PORTFOLIO COORDINATOR (SIM v2.0) ═══\n"
                     f"Spot: Hydra={h_inv:.4f} Grid={g_inv:.4f} Moon={m_inv:.4f}\n"
-                    f"Total Spot: {total_spot:.4f} BTC\n"
-                    f"Aegis Hedge: {a_delta:.4f} BTC (urgency={'EMERGENCY' if urgency else 'passive'})\n"
-                    f"Net Exposure: {net:.4f} BTC\n"
-                    f"Shield: {'ACTIVE — Grid bids BLOCKED' if hedged else 'OFF'}\n"
-                    f"Last VPIN: {vpin_raw:+.2f}\n"
+                    f"Total Spot: {total_spot:.4f} BTC | Aegis Hedge: {a_delta:.4f}\n"
+                    f"Net Exposure: {net:.4f} BTC (${net_exposure_usd:.0f})\n"
+                    f"Shield: {'ACTIVE — Grid bids BLOCKED' if hedged else 'OFF'} | VPIN: {vpin_raw:+.2f}\n"
+                    f"\n📊 DYNAMIC VaR:\n"
+                    f"  Max Exposure: {dynamic_max_btc:.4f} BTC (${dynamic_max_usd:.0f})\n"
+                    f"  Vol Multiplier: {vol_multiplier:.1f}x | Hard Kill: {HARD_MAX_BTC} BTC\n"
+                    f"  VaR Utilization: {var_utilization:.0f}%\n"
+                    f"  {'🟢 SAFE' if var_utilization < 60 else '🟠 CAUTION' if var_utilization < 85 else '🔴 CRITICAL — REDUCE EXPOSURE'}\n"
+                    f"\n⚠️ COORDINATION RULE: Do NOT let all bots go LONG simultaneously.\n"
+                    f"  Current LONG: {', '.join(long_bots) if long_bots else 'none'}\n"
+                    f"  Current SHORT: {', '.join(short_bots) if short_bots else 'none'}\n"
                 )
         except Exception:
-            portfolio_section = "\n═══ PORTFOLIO EXPOSURE ═══\nUnavailable (mmap not ready)\n"
+            portfolio_section = "\n═══ PORTFOLIO COORDINATOR ═══\nUnavailable (mmap not ready)\n"
 
         # Server Load Context
         try:
