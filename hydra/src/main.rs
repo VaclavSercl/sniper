@@ -812,7 +812,8 @@ async fn async_main() -> Result<()> {
         ghost_last_inject: Instant::now(),
     };
 
-    let mut runner = SovereignDualRunner::new(engine, "Hydra");
+    let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();
+    let mut runner = SovereignDualRunner::new(engine, venue, "Hydra");
     runner.run().await?;
     
     Ok(())

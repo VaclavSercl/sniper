@@ -240,7 +240,8 @@ async fn main() -> Result<()> {
         ryu2: ryu::Buffer::new(),
     };
 
-    let mut runner = SovereignRunner::new(engine, "Grid");
+    let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();
+    let mut runner = SovereignRunner::new(engine, venue, "Grid");
     runner.run().await?;
     
     Ok(())

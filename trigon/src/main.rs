@@ -360,7 +360,8 @@ async fn main() -> Result<()> {
         ryu2: ryu::Buffer::new(),
     };
 
-    let mut runner = SovereignRunner::new(engine, "Trigon");
+    let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();
+    let mut runner = SovereignRunner::new(engine, venue, "Trigon");
     runner.run().await?;
     
     Ok(())

@@ -5,7 +5,8 @@ use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
 use futures_util::{StreamExt, SinkExt};
 use dotenvy::dotenv;
 
-use crate::exchange::bitfinex;
+use crate::exchange::venue::VenueAdapter;
+use crate::exchange::ExchangeCredentials;
 
 /// Zastřešující Trait pro všechny L0 Sovereign Boty.
 pub trait SovereignEngine {
@@ -15,7 +16,7 @@ pub trait SovereignEngine {
     /// Spuštěno před navázáním síťového spojení (mmap init atd.)
     fn on_start(&mut self) -> Result<()>;
     
-    /// Spuštěno po úspěšném Bitfinex Auth OK
+    /// Spuštěno po úspěšném Auth OK
     fn on_auth(&mut self);
     
     /// Rychlá smyčka pro čistý socket stream z burzy (např. Ticker, Book)
@@ -31,47 +32,57 @@ pub trait SovereignEngine {
     fn on_shutdown(&mut self, _out_buf: &mut bytes::BytesMut) {}
 }
 
-/// Sjednocený Sovereign WebSocket Runner
-pub struct SovereignRunner<E: SovereignEngine> {
+// ═══════════════════════════════════════════════════════════
+// Single-WS Runner (used by Grid, Moonshot, Trigon, Nexus)
+// ═══════════════════════════════════════════════════════════
+
+/// Sovereign WebSocket Runner — venue-agnostic via VenueAdapter.
+///
+/// Monomorphized: `SovereignRunner<GridEngine, BitfinexVenue>` gets
+/// fully inlined by the compiler. Zero-cost abstraction.
+pub struct SovereignRunner<E: SovereignEngine, V: VenueAdapter> {
     pub engine: E,
+    pub venue: V,
     pub name: String,
 }
 
-impl<E: SovereignEngine> SovereignRunner<E> {
-    pub fn new(engine: E, name: &str) -> Self {
-        Self { engine, name: name.to_string() }
+impl<E: SovereignEngine, V: VenueAdapter> SovereignRunner<E, V> {
+    pub fn new(engine: E, venue: V, name: &str) -> Self {
+        Self { engine, venue, name: name.to_string() }
     }
 
     pub async fn run(&mut self) -> Result<()> {
         dotenv().ok();
         
-        let key = std::env::var("BITFINEX_API_KEY").context("BITFINEX_API_KEY")?;
-        let sec = std::env::var("BITFINEX_API_SECRET").context("BITFINEX_API_SECRET")?;
+        let creds = ExchangeCredentials::from_env(self.venue.env_prefix())
+            .context(format!("Missing {}_API_KEY / {}_API_SECRET", 
+                self.venue.env_prefix(), self.venue.env_prefix()))?;
 
         self.engine.on_start()?;
         
         let mut out_buf = bytes::BytesMut::with_capacity(2048);
 
         loop {
-            let ws_result = connect_async(bitfinex::WS_URL).await;
+            let ws_result = connect_async(self.venue.ws_url()).await;
             let (ws, _) = match ws_result {
                 Ok(v) => v,
                 Err(e) => { 
-                    warn!(event = "ws_fail", error = %e); 
+                    warn!(event = "ws_fail", venue = self.venue.name(), error = %e); 
                     tokio::time::sleep(Duration::from_secs(5)).await; 
                     continue; 
                 }
             };
 
-            info!("Connected to Sovereign WebSocket for {}", self.name);
+            info!("Connected to {} WebSocket for {}", self.venue.name(), self.name);
 
             let (mut write, mut read) = ws.split();
 
-            // Auth
-            let auth_msg = crate::exchange::bitfinex_auth_message(&key, &sec);
-            if let Err(e) = write.send(Message::Text(auth_msg.into())).await {
-                error!("Auth send failed: {}", e);
-                continue;
+            // Auth via VenueAdapter
+            if let Some(auth_msg) = self.venue.auth_message(&creds) {
+                if let Err(e) = write.send(Message::Text(auth_msg.into())).await {
+                    error!("Auth send failed: {}", e);
+                    continue;
+                }
             }
 
             let mut authed = false;
@@ -124,35 +135,43 @@ impl<E: SovereignEngine> SovereignRunner<E> {
     }
 }
 
-/// Sjednocený Sovereign WebSocket Runner s Dual-WS architekturou (MDATA + EXEC)
-pub struct SovereignDualRunner<E: SovereignEngine> {
+// ═══════════════════════════════════════════════════════════
+// Dual-WS Runner (used by Hydra — MDATA + EXEC separation)
+// ═══════════════════════════════════════════════════════════
+
+/// Sovereign Dual-WebSocket Runner — MDATA + EXEC channels.
+/// Used by Hydra for maximum throughput: market data on one WS,
+/// order execution on another.
+pub struct SovereignDualRunner<E: SovereignEngine, V: VenueAdapter> {
     pub engine: E,
+    pub venue: V,
     pub name: String,
 }
 
-impl<E: SovereignEngine> SovereignDualRunner<E> {
-    pub fn new(engine: E, name: &str) -> Self {
-        Self { engine, name: name.to_string() }
+impl<E: SovereignEngine, V: VenueAdapter> SovereignDualRunner<E, V> {
+    pub fn new(engine: E, venue: V, name: &str) -> Self {
+        Self { engine, venue, name: name.to_string() }
     }
 
     pub async fn run(&mut self) -> Result<()> {
         dotenv().ok();
         
-        let key = std::env::var("BITFINEX_API_KEY").context("BITFINEX_API_KEY")?;
-        let sec = std::env::var("BITFINEX_API_SECRET").context("BITFINEX_API_SECRET")?;
+        let creds = ExchangeCredentials::from_env(self.venue.env_prefix())
+            .context(format!("Missing {}_API_KEY / {}_API_SECRET",
+                self.venue.env_prefix(), self.venue.env_prefix()))?;
 
         self.engine.on_start()?;
         
         let mut out_buf = bytes::BytesMut::with_capacity(4096);
 
         loop {
-            info!("Connecting Dual Sovereign WebSockets for {}", self.name);
-            let ws_mdata_res = connect_async(bitfinex::WS_URL).await;
+            info!("Connecting Dual {} WebSockets for {}", self.venue.name(), self.name);
+            let ws_mdata_res = connect_async(self.venue.ws_url()).await;
             let (ws_mdata, _) = match ws_mdata_res {
                 Ok(v) => v, Err(e) => { warn!(event = "ws_mdata_fail", error = %e); tokio::time::sleep(Duration::from_secs(5)).await; continue; }
             };
             
-            let ws_exec_res = connect_async(bitfinex::WS_URL).await;
+            let ws_exec_res = connect_async(self.venue.ws_url()).await;
             let (ws_exec, _) = match ws_exec_res {
                 Ok(v) => v, Err(e) => { warn!(event = "ws_exec_fail", error = %e); tokio::time::sleep(Duration::from_secs(5)).await; continue; }
             };
@@ -160,19 +179,19 @@ impl<E: SovereignEngine> SovereignDualRunner<E> {
             let (mut mdata_write, mut mdata_read) = ws_mdata.split();
             let (mut exec_write, mut exec_read) = ws_exec.split();
 
-            // Setup MDATA
-            // (No auth on mdata, just pure speed)
+            // Setup MDATA (No auth, just pure speed)
             let subs = self.engine.subscriptions();
             for sub in subs {
                 let _ = mdata_write.send(Message::Text(sub.into())).await;
             }
 
-            // Setup EXEC
+            // Setup EXEC — auth via VenueAdapter
             let _ = exec_write.send(Message::Text(r#"{"event":"conf","flags":131072}"#.into())).await;
-            let auth_msg = crate::exchange::bitfinex_auth_message(&key, &sec);
-            if let Err(e) = exec_write.send(Message::Text(auth_msg.into())).await {
-                error!("Auth send failed: {}", e);
-                continue;
+            if let Some(auth_msg) = self.venue.auth_message(&creds) {
+                if let Err(e) = exec_write.send(Message::Text(auth_msg.into())).await {
+                    error!("Auth send failed: {}", e);
+                    continue;
+                }
             }
 
             let mut authed = false;
