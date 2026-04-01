@@ -184,7 +184,7 @@ def save_snapshot(snapshot):
 
 def reconcile():
     """Main reconciliation: query both exchanges, compare, alert."""
-    now = datetime.now(timezone(timedelta(hours=1))).strftime("%Y-%m-%d %H:%M CET")
+    now = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M %Z")
     log.info(f"═══ Balance Reconciliation — {now} ═══")
 
     # Read current balances

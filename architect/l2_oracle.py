@@ -1112,7 +1112,7 @@ PARAMETER CONSTRAINTS:
 
     def _build_report(self, bots, decision, report_type="hourly"):
         """Build Telegram report from snapshot + decision."""
-        now = datetime.now(timezone(timedelta(hours=1))).strftime("%H:%M")
+        now = datetime.now().astimezone().strftime("%H:%M")
 
         TITLES = {
             "hourly":  "⏰ HODINOVÝ REPORT",
@@ -1732,7 +1732,7 @@ Respond with EXACTLY one JSON object:
 
     def _send_fallback_report(self, error_msg):
         """Send minimal report when Gemini is unavailable."""
-        now = datetime.now(timezone(timedelta(hours=1))).strftime("%H:%M")
+        now = datetime.now().astimezone().strftime("%H:%M")
         snap = self.cortex.get_snapshot()
 
         lines = [

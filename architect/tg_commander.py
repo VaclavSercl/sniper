@@ -171,7 +171,7 @@ def build_report(period="hourly"):
     Build unified report matching Cortex L2 format.
     period: "hourly", "daily", "weekly", "monthly"
     """
-    now_str = datetime.now(timezone(timedelta(hours=1))).strftime("%H:%M")
+    now_str = datetime.now().astimezone().strftime("%H:%M")
     period_labels = {
         "hourly":  ("⏰ HODINOVY REPORT", [1, 24, 168]),
         "daily":   ("📅 DENNI REPORT",    [24, 168, 720]),
@@ -1275,7 +1275,7 @@ def main():
         while True:
             try:
                 # Determine report type based on time (CET)
-                now = datetime.now(timezone(timedelta(hours=1)))
+                now = datetime.now().astimezone()
                 report_type = None
 
                 if manual_trigger:
