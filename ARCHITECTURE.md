@@ -66,7 +66,7 @@ The Cortex is a dedicated Rust daemon running 5 concurrent subsystems:
 ### L1 Shield (50ms cycle)
 - Reads order book from `engine_state.bin` via mmap
 - Computes OBI (Order Book Imbalance) and toxic flow detection
-- Sends OBI tensor to local **Phi-3.5 Mini** GPU model (LM Studio :1234)
+- Sends OBI tensor to local **Phi-3.5 Mini** GPU model (LM Studio :1234, 10s timeout)
 - Writes `l1_skew_adjustment`, `toxic_flow_hits`, `l1_confidence_score` back to mmap
 - **Zero-alloc**: All computation uses stack buffers and incremental hashing
 
@@ -124,6 +124,7 @@ The Cortex is a dedicated Rust daemon running 5 concurrent subsystems:
 | `grid_risk.bin` | `GridRiskState` | ~256B | Oracle L2 | Grid L0 |
 | `trigon_engine.bin` | `TrigonEngineState` | ~12KB | Trigon L0 | Cortex |
 | `trigon_risk.bin` | `TrigonRiskState` | ~3KB | Oracle L2 | Trigon L0 |
+| `cross_exchange.bin`| `CrossExchangeState` | ~4KB | Price Bridge | Nexus, Cortex |
 | `l2_command.bin` | `L2SharedState` | 896B | Oracle L2 | All L0 bots |
 
 ### Cache Line Protocol

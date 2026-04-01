@@ -23,7 +23,7 @@ fi
 # Phase 1: Graceful SIGTERM
 PROCS=(
     "tg_commander"
-    "dashboard_server"
+    "hydra-dashboard"
     "pnl_daemon"
     "market_recorder"
     "price_bridge"

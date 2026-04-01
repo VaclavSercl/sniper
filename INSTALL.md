@@ -105,6 +105,7 @@ journalctl -u sniper-armada --since "1 min ago" | grep -c panic  # 0
 | `/dev/shm/beroun/grid_risk.bin` | Grid | Risk IPC |
 | `/dev/shm/beroun/trigon_engine.bin` | Trigon | Engine IPC |
 | `/dev/shm/beroun/trigon_risk.bin` | Trigon | Risk IPC |
+| `/dev/shm/beroun/cross_exchange.bin`| Nexus | Cross-Exchange BBA IPC |
 | `/dev/shm/beroun/pnl_state.bin` | PnL Daemon | FIFO PnL data |
 | `/dev/shm/beroun/mdf.bin` | MDF | Market data feed |
 

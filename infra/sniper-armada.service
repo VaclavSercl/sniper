@@ -22,8 +22,8 @@ ExecStart=/home/wwwenda/sniper/deploy_armada.sh
 ExecStop=/home/wwwenda/sniper/infra/stop_armada.sh
 
 # ═══ TIMEOUTS ═══
-# deploy_armada.sh takes ~30s for boot sequence (23s + margin)
-TimeoutStartSec=120
+# deploy_armada.sh takes ~30s for boot sequence (23s + margin), but keeping 180s to be strictly safe.
+TimeoutStartSec=180
 TimeoutStopSec=30
 
 # ═══ RESTART POLICY ═══
