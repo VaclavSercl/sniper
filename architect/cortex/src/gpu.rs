@@ -480,7 +480,7 @@ fn call_lms(user_prompt: &str) -> anyhow::Result<GpuDecision> {
     let json_body = serde_json::to_string(&body)?;
 
     let agent = ureq::Agent::config_builder()
-        .timeout_global(Some(std::time::Duration::from_millis(5000)))
+        .timeout_global(Some(std::time::Duration::from_millis(10000)))
         .build()
         .new_agent();
 

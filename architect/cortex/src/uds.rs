@@ -311,6 +311,7 @@ async fn handle_request<'a>(
                 BotRisk::Moonshot(r) => r.global_paused.store(1, Ordering::SeqCst),
                 BotRisk::Grid(r) => r.global_paused.store(1, Ordering::SeqCst),
                 BotRisk::Trigon(r) => r.global_paused.store(1, Ordering::SeqCst),
+                BotRisk::Nexus(r) => r.emergency_pause.store(1, Ordering::SeqCst),
             }
             println!("  🔌 [UDS] PAUSE: {bot_name} paused");
             UdsResponse::ok()
@@ -327,6 +328,7 @@ async fn handle_request<'a>(
                 BotRisk::Moonshot(r) => r.global_paused.store(0, Ordering::SeqCst),
                 BotRisk::Grid(r) => r.global_paused.store(0, Ordering::SeqCst),
                 BotRisk::Trigon(r) => r.global_paused.store(0, Ordering::SeqCst),
+                BotRisk::Nexus(r) => r.emergency_pause.store(0, Ordering::SeqCst),
             }
             println!("  🔌 [UDS] UNPAUSE: {bot_name} unpaused");
             UdsResponse::ok()

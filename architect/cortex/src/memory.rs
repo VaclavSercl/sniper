@@ -9,6 +9,7 @@ use sniper_types::{EngineState, RiskState, PRICE_SCALE};
 use sniper_types::moonshot_types::{MoonshotEngineState, MoonshotRiskState};
 use sniper_types::grid_types::{GridEngineState, GridRiskState};
 use sniper_types::trigon_types::{TrigonEngineState, TrigonRiskState};
+use sniper_types::exchange::cross_types::CrossExchangeState;
 use std::fs::OpenOptions;
 use std::path::Path;
 use std::sync::atomic::Ordering;
@@ -19,6 +20,7 @@ pub enum BotRisk<'a> {
     Moonshot(&'a MoonshotRiskState),
     Grid(&'a GridRiskState),
     Trigon(&'a TrigonRiskState),
+    Nexus(&'a CrossExchangeState),
 }
 
 pub enum BotEngine<'a> {
@@ -80,6 +82,7 @@ pub struct ArmadaMemory {
     grid_risk: Option<MmapMut>,
     trigon_engine: Option<MmapMut>,
     trigon_risk: Option<MmapMut>,
+    cross_exchange: Option<MmapMut>,
 }
 
 impl ArmadaMemory {
@@ -102,12 +105,14 @@ impl ArmadaMemory {
         let grid_risk = Self::try_map_file("/dev/shm/beroun/grid_risk.bin", "Grid Risk");
         let trigon_engine = Self::try_map_file("/dev/shm/beroun/trigon_engine.bin", "Trigon");
         let trigon_risk = Self::try_map_file("/dev/shm/beroun/trigon_risk.bin", "Trigon Risk");
+        let cross_exchange = Self::try_map_file("/dev/shm/beroun/cross_exchange.bin", "Nexus CrossExchange");
 
         Ok(ArmadaMemory {
             hydra_engine, hydra_risk,
             moonshot_engine, moonshot_risk,
             grid_engine, grid_risk,
             trigon_engine, trigon_risk,
+            cross_exchange,
         })
     }
 
@@ -156,6 +161,8 @@ impl ArmadaMemory {
                 .map(|m| BotRisk::Grid(unsafe { &*(m.as_ptr() as *const GridRiskState) })),
             "trigon" => self.trigon_risk.as_ref()
                 .map(|m| BotRisk::Trigon(unsafe { &*(m.as_ptr() as *const TrigonRiskState) })),
+            "nexus" => self.cross_exchange.as_ref()
+                .map(|m| BotRisk::Nexus(unsafe { &*(m.as_ptr() as *const CrossExchangeState) })),
             _ => None,
         }
     }
