@@ -5,7 +5,10 @@
 // Layer 2: AI Timeout     — tracks L1/L2 responsiveness
 // Layer 3: Business Logic — PnL anomaly, toxic spike, position drift
 // Layer 4: Boot Alert     — startup notification + version info
+// Layer 5: System Resources — GPU temp, VRAM, disk, RAM, net
+// Layer 6: Regime Sentinel — flash crash, liquidity drain, sweep storm
 //
+// Writes regime_alert to /dev/shm/beroun/toxic_storm.bin (shared with ML Shield).
 // All alerts pushed to Python Commander via /tmp/commander_events.sock.
 // ═══════════════════════════════════════════════════════════
 
@@ -41,6 +44,13 @@ const COOLDOWN_SECS: u64 = 900;        // 15 min anti-spam per alert type
 const SUSTAINED_THRESHOLD: u64 = 60;   // 60 × 5s = 5 min sustained before alert
 const CRITICAL_PCT: f64 = 95.0;        // Resource critical threshold
 
+// ── Regime Sentinel (Layer 6) ──
+const HIVE_MIND_PATH: &str = "/dev/shm/beroun/toxic_storm.bin";
+const FLASH_CRASH_PCT: f64 = 0.005;    // 0.5% price drop = flash crash
+const FLASH_CRASH_WINDOW: usize = 6;    // 6 × 5s = 30s window
+const SWEEP_STORM_COUNT: usize = 3;     // 3 spread explosions in window
+const REGIME_CALM_CYCLES: u64 = 12;     // 12 × 5s = 60s calm = deactivate
+
 // ── History for delta detection ──
 struct SentinelHistory {
     prev_pnl: f64,
@@ -59,6 +69,13 @@ struct SentinelHistory {
     disk_high_cycles: u64,
     prev_cpu_idle: u64,
     prev_cpu_total: u64,
+    // Layer 6: Regime detection
+    price_ring: Vec<f64>,               // ring buffer of mid prices
+    price_ring_idx: usize,
+    spread_explosion_ring: Vec<bool>,    // ring of spread explosion events
+    spread_ring_idx: usize,
+    regime_calm_counter: u64,
+    regime_active: bool,
 }
 
 impl SentinelHistory {
@@ -78,6 +95,13 @@ impl SentinelHistory {
             disk_high_cycles: 0,
             prev_cpu_idle: 0,
             prev_cpu_total: 0,
+            // Layer 6
+            price_ring: vec![0.0; FLASH_CRASH_WINDOW + 1],
+            price_ring_idx: 0,
+            spread_explosion_ring: vec![false; FLASH_CRASH_WINDOW + 1],
+            spread_ring_idx: 0,
+            regime_calm_counter: REGIME_CALM_CYCLES,
+            regime_active: false,
         }
     }
 
@@ -293,6 +317,89 @@ pub async fn run_sentinel(memory: Arc<ArmadaMemory>) {
             push_alert("WARNING", alert).await;
             // Small delay between alerts to avoid rate limiting
             time::sleep(Duration::from_millis(500)).await;
+        }
+
+        // ═══ LAYER 6: Regime Sentinel (flash crash, liquidity drain, sweep) ═══
+        {
+            // Get reference price from first online bot
+            let current_price = snapshots.iter()
+                .find(|s| s.online && s.micro_price > 0.0)
+                .map(|s| s.micro_price)
+                .unwrap_or(0.0);
+
+            if current_price > 0.0 {
+                // Store price in ring buffer
+                history.price_ring[history.price_ring_idx] = current_price;
+                history.price_ring_idx = (history.price_ring_idx + 1) % history.price_ring.len();
+
+                // Check for flash crash: price drop > FLASH_CRASH_PCT in FLASH_CRASH_WINDOW
+                let oldest_idx = history.price_ring_idx; // oldest entry
+                let oldest_price = history.price_ring[oldest_idx];
+                let mut flash_crash = false;
+                if oldest_price > 0.0 {
+                    let drop_pct = (oldest_price - current_price) / oldest_price;
+                    if drop_pct > FLASH_CRASH_PCT {
+                        flash_crash = true;
+                        if history.should_alert("flash_crash") {
+                            let msg = format!(
+                                "🔴 REGIME SENTINEL: FLASH CRASH DETECTED\n\
+                                 ━━━━━━━━━━━━━━━━━━━━━━\n\
+                                 💥 Price: ${oldest_price:.2} → ${current_price:.2} ({:.2}% drop in {}s)\n\
+                                 🛡️ Hive Mind ACTIVATED — all bots defensive",
+                                drop_pct * 100.0, FLASH_CRASH_WINDOW * SENTINEL_INTERVAL_SECS as usize
+                            );
+                            alerts.push(msg);
+                        }
+                    }
+                }
+
+                // Check spread explosion (liquidity drain)
+                let spread_exploded = snapshots.iter().any(|s| {
+                    s.online && s.grid_step > 0.0 && s.spread > s.grid_step * 5.0
+                });
+                history.spread_explosion_ring[history.spread_ring_idx] = spread_exploded;
+                history.spread_ring_idx = (history.spread_ring_idx + 1) % history.spread_explosion_ring.len();
+
+                // Sweep storm: count spread explosions in window
+                let sweep_count = history.spread_explosion_ring.iter().filter(|&&x| x).count();
+                let sweep_storm = sweep_count >= SWEEP_STORM_COUNT;
+
+                // Composite regime alert
+                if flash_crash || sweep_storm {
+                    history.regime_calm_counter = 0;
+                    if !history.regime_active {
+                        history.regime_active = true;
+                        // Write to Hive Mind mmap
+                        if let Ok(mut f) = std::fs::OpenOptions::new().write(true).open(HIVE_MIND_PATH) {
+                            use std::io::Write;
+                            let _ = f.write_all(&[1u8]);
+                        }
+                        if sweep_storm && !flash_crash {
+                            if history.should_alert("sweep_storm") {
+                                let msg = format!(
+                                    "⚡ REGIME SENTINEL: SWEEP STORM\n\
+                                     ━━━━━━━━━━━━━━━━━━━━━━\n\
+                                     🌩️ {sweep_count} spread explosions in {}s\n\
+                                     🛡️ Hive Mind ACTIVATED — liquidity drain detected",
+                                    FLASH_CRASH_WINDOW * SENTINEL_INTERVAL_SECS as usize
+                                );
+                                alerts.push(msg);
+                            }
+                        }
+                    }
+                } else {
+                    history.regime_calm_counter += 1;
+                    if history.regime_calm_counter >= REGIME_CALM_CYCLES && history.regime_active {
+                        history.regime_active = false;
+                        // Clear Hive Mind mmap
+                        if let Ok(mut f) = std::fs::OpenOptions::new().write(true).open(HIVE_MIND_PATH) {
+                            use std::io::Write;
+                            let _ = f.write_all(&[0u8]);
+                        }
+                        eprintln!("  ☀️ [SENTINEL] Regime CLEARED — resuming normal ops");
+                    }
+                }
+            }
         }
 
         // ═══ LAYER 5: System Resources (every 60s = 12th cycle) ═══

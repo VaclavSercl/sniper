@@ -281,6 +281,26 @@ class OnlineLinearModel:
         self._std = np.zeros(n_features, dtype=np.float64)
         self._res = np.zeros(n_features, dtype=np.float64)
 
+        # Try to load saved weights from nightly retrain
+        self._try_load_weights()
+
+    def _try_load_weights(self):
+        """Load pre-trained weights if available (from nightly retrain)."""
+        model_path = os.path.expanduser("~/.local/share/sniper/model_weights.npz")
+        if os.path.exists(model_path):
+            try:
+                data = np.load(model_path)
+                if data['w_fast'].shape == self.w_fast.shape:
+                    self.w_fast = data['w_fast'].copy()
+                    self.w_slow = data['w_slow'].copy()
+                    self.running_mean = data['running_mean'].copy()
+                    self.running_var = data['running_var'].copy()
+                    log.info(f"📦 [Model] Loaded pre-trained weights from {model_path}")
+                else:
+                    log.warning(f"📦 [Model] Shape mismatch — using fresh weights")
+            except Exception as e:
+                log.warning(f"📦 [Model] Could not load weights: {e}")
+
     def normalize(self, features):
         """Online normalization using in-place operations."""
         self.n_samples += 1
