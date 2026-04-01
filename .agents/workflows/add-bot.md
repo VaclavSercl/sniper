@@ -27,7 +27,7 @@ mkdir -p newbot/src
 # newbot/Cargo.toml
 [package]
 name = "newbot"
-version = "20.1.0"
+version = "21.0.0"
 edition = "2024"
 
 [[bin]]
@@ -187,7 +187,7 @@ runner.run().await
 // shared/src/bot_manifest.rs — přidat:
 pub const NEWBOT_MANIFEST: BotManifest = BotManifest {
     name: "NewBot",
-    version: "20.1",
+    version: "21.0",
     strategy: StrategyType::MarketMaking,
     gid: crate::BOT_GID_NEWBOT,
     supported_venues: &[ExchangeId::Bitfinex],
@@ -226,12 +226,31 @@ ps aux | grep newbot-core
 | `SovereignDualRunner<E, V>` | 2 WS na stejnou burzu (MDATA+EXEC) | Hydra |
 | `SovereignCrossVenueRunner<E, V1, V2>` | 2 WS na různé burzy | Nexus |
 
+## v21.0: L1 Candle Integration (volitelné)
+
+Pokud bot potřebuje L1 AI reflexy:
+```toml
+# Cargo.toml
+candle-brain = { path = "../candle-brain" }
+```
+```rust
+// V on_start():
+let brain = candle_brain::CandleL1Brain::boot_default()?;
+// V on_market_message():
+let (action, _) = brain.reflex_action(obi, spread_bps, 0.0, 0.01)?;
+```
+
+## v21.0: ZeroClaw Registration (pro L2 AI discovery)
+
+Přidejte tool do `zeroclaw/tools/` aby L2 Oracle mohl parametry bota upravovat.
+
 ## Checklist
 
 - [ ] Cargo.toml + workspace registrace
 - [ ] GID přiděleno (nový `BOT_GID_*` v types.rs)
 - [ ] `SovereignEngine` implementován (7 metod)
 - [ ] BotManifest přidán do `bot_manifest.rs`
+- [ ] ZeroClaw tool pro parameter tuning (volitelné)
 - [ ] Deploy script aktualizován
 - [ ] `cargo test` projde
 - [ ] `cargo build --release` projde
