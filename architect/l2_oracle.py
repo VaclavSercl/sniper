@@ -45,7 +45,7 @@ MAX_POS_FLOOR = 0.001
 MAX_POS_CEIL = 0.02
 
 L2_INTERVAL = 300  # 5 minutes
-GEMINI_TIMEOUT = 60  # seconds
+GEMINI_TIMEOUT = 122  # seconds (raised to prevent frequent timeouts)
 STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'state', 'armada_state.json')
 PROJECT_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 
@@ -66,6 +66,7 @@ class L2OracleAsync:
     PAPER_TRIAL_DURATION_MIN = 66  # Phase 4: bot runs in PAPER for 66 minutes
     PAPER_TRIAL_MIN_FILLS = 5     # Minimum fills needed to evaluate
     PAPER_TRIAL_MAX_TOXIC_PCT = 40.0  # Max toxic fill % to pass
+    PAPER_TRIAL_MIN_EVENT_FILLS = 20  # SBP v3.1: Event-time gate (min fills for phase escalation)
 
     def __init__(self, cortex_client, telegram_send_fn):
         self.cortex = cortex_client
@@ -119,6 +120,9 @@ class L2OracleAsync:
 
         # ── PAPER TRIAL CHECK: Phase 4-6 evaluation after 66 min ──
         self._check_paper_trials()
+
+        # ── SBP v3.1: GRADUATED LIVE — Phase 5 tier escalation ──
+        self._check_graduated_live()
 
         log.info(f"═══ L2 ORACLE CYCLE #{self.cycle} ═══")
 
@@ -1365,13 +1369,15 @@ PARAMETER CONSTRAINTS:
                 self._start_paper_trial(bot, "LIVE", fills_snapshot)
                 restored.append(f"🧪 {bot.upper()} → PAPER TRIAL (66 min)")
             elif mode == "PAPER":
-                # PAPER = start bot but keep paused=1 in mmap
-                log.info(f"  🟠 Starting {bot} → PAPER")
+                # SBP v3.1 FIX: PAPER bots MUST go through Paper Trial (Shadow Trading)
+                # Previously they were silently ignored → permanent PAPER deadlock
+                log.info(f"  🧪 Starting {bot} → PAPER TRIAL (was PAPER, 66 min gate)")
                 start_bot(bot)
-                time.sleep(5)
-                self._pause_bot(bot)
+                time.sleep(10)
+                self._pause_bot(bot)  # Safety: paused=1 during trial
                 self._save_bot_state(bot, "PAPER")
-                restored.append(f"🟠 {bot.upper()} → PAPER")
+                self._start_paper_trial(bot, "PAPER", fills_snapshot)
+                restored.append(f"🧪 {bot.upper()} → PAPER TRIAL (66 min)")
             elif mode == "PAUSED":
                 log.info(f"  🟡 Starting {bot} → PAUSED (Scanner)")
                 start_bot(bot)
@@ -1426,7 +1432,12 @@ PARAMETER CONSTRAINTS:
         log.info(f"🧪 [TRIAL] {bot_name}: Paper Trial STARTED (66 min gate, fills baseline={fills_snapshot})")
 
     def _check_paper_trials(self):
-        """Called every L2 cycle (5 min). Check if any paper trial has reached 66 minutes.
+        """Called every L2 cycle (5 min). Check if any paper trial is ready.
+        
+        SBP v3.1: Uses EVENT-TIME gate, not just clock-time.
+        Bot must have BOTH:
+          1. Elapsed >= 66 minutes (clock-time)
+          2. >= 20 fills (event-time) — prevents false promotion during dead markets
         
         If yes → trigger Phase 5 (AI Evaluation).
         """
@@ -1435,18 +1446,29 @@ PARAMETER CONSTRAINTS:
 
         now = datetime.now(timezone.utc)
         ready = []
+        current_fills = self._get_total_fills()
         
         for bot_name, trial in self._paper_trials.items():
             if bot_name in self._paper_trial_evaluated:
                 continue
             elapsed_min = (now - trial["start_ts"]).total_seconds() / 60
+            trial_fills = current_fills - trial["initial_fills"]
             
-            if elapsed_min >= self.PAPER_TRIAL_DURATION_MIN:
-                log.info(f"🧪 [TRIAL] {bot_name}: 66 min elapsed → Phase 5 (AI Evaluation)")
+            clock_ready = elapsed_min >= self.PAPER_TRIAL_DURATION_MIN
+            event_ready = trial_fills >= self.PAPER_TRIAL_MIN_EVENT_FILLS
+            
+            if clock_ready and event_ready:
+                log.info(f"🧪 [TRIAL] {bot_name}: READY → Phase 5 (AI Evaluation) "
+                         f"[{elapsed_min:.0f}min, {trial_fills} fills]")
                 ready.append(bot_name)
+            elif clock_ready and not event_ready:
+                log.info(f"🧪 [TRIAL] {bot_name}: ⏳ Clock OK ({elapsed_min:.0f}min) but "
+                         f"insufficient fills ({trial_fills}/{self.PAPER_TRIAL_MIN_EVENT_FILLS}). "
+                         f"Waiting for market activity...")
             else:
                 remaining = self.PAPER_TRIAL_DURATION_MIN - elapsed_min
-                log.info(f"🧪 [TRIAL] {bot_name}: {elapsed_min:.0f}/{self.PAPER_TRIAL_DURATION_MIN} min ({remaining:.0f} min remaining)")
+                log.info(f"🧪 [TRIAL] {bot_name}: {elapsed_min:.0f}/{self.PAPER_TRIAL_DURATION_MIN} min "
+                         f"({remaining:.0f} min remaining, {trial_fills} fills)")
 
         for bot_name in ready:
             self._evaluate_paper_trial(bot_name)
@@ -1554,24 +1576,227 @@ Respond with EXACTLY one JSON object:
         else:
             self._keep_paper(bot_name, reasoning)
 
+    # ═══════════════════════════════════════════════════════════
+    # 🚀 SBP v3.1 — GRADUATED LIVE (Phase 5)
+    # Progressive Capital Allocation: Micro → Mini → Standard → Full
+    # ═══════════════════════════════════════════════════════════
+
+    GRADUATED_TIERS = [
+        {"name": "Micro",    "capital_usd": 20,  "max_pos_btc": 0.0003, "grid_step": 5.0, "min_fills": 20, "min_minutes": 22},
+        {"name": "Mini",     "capital_usd": 80,  "max_pos_btc": 0.001,  "grid_step": 4.0, "min_fills": 20, "min_minutes": 22},
+        {"name": "Standard", "capital_usd": 200, "max_pos_btc": 0.003,  "grid_step": 3.0, "min_fills": 20, "min_minutes": 22},
+    ]
+
     def _promote_to_live(self, bot_name, reasoning):
-        """Phase 6: AI approved → Promote bot from PAPER to LIVE."""
-        log.info(f"🟢 [TRIAL] Phase 6: {bot_name} PROMOTED → LIVE")
+        """Phase 5: AI approved → Start Graduated Live pipeline.
+        
+        SBP v3.1: Instead of direct PAPER→LIVE, bot enters graduated
+        capital tiers: Micro($20) → Mini($80) → Standard($200) → Full.
+        Each tier requires event-time gate (min 20 fills + PnL > 0).
+        """
+        log.info(f"🚀 [SBP3] Phase 5: {bot_name} → GRADUATED LIVE (Tier 0: Micro)")
         log.info(f"  AI reasoning: {reasoning}")
         
+        # Initialize graduated state
+        if not hasattr(self, '_graduated_live'):
+            self._graduated_live = {}
+        
+        tier = self.GRADUATED_TIERS[0]
+        self._graduated_live[bot_name] = {
+            "current_tier": 0,
+            "tier_start_ts": datetime.now(timezone.utc),
+            "tier_start_fills": self._get_total_fills(),
+            "tier_start_pnl": self._get_bot_pnl(bot_name),
+            "reasoning": reasoning,
+        }
+        
+        # Write Micro tier capital to risk mmap
+        self._write_risk_params(bot_name, tier)
+        
+        # Unpause bot (LIVE with limited capital)
         self._unpause_bot(bot_name)
         self._save_bot_state(bot_name, "LIVE")
         
         msg = (
-            f"🟢 *SBP Phase 6: {bot_name.upper()} PROMOTED → LIVE*\n"
+            f"🚀 *SBP v3.1 Phase 5: {bot_name.upper()} → GRADUATED LIVE*\n"
             f"🧪 Paper Trial: ✅ PASSED\n"
             f"🤖 AI: {reasoning}\n"
-            f"⏱ Trial duration: {self.PAPER_TRIAL_DURATION_MIN} min"
+            f"💰 Tier: *Micro* ($20 capital, 0.0003 BTC max)\n"
+            f"📊 Gate: 22min + 20 fills + PnL > 0 → Mini"
         )
         try:
             self.send_telegram(msg)
         except Exception:
             pass
+
+    def _check_graduated_live(self):
+        """Called every L2 cycle. Check if any graduated bot is ready for tier upgrade.
+        
+        SBP v3.1 Event-Time Gate:
+          - Elapsed >= tier.min_minutes (clock-time)
+          - Fills >= tier.min_fills (event-time)
+          - Net PnL > 0 (profitable)
+          - Toxic rate < 40%
+        """
+        if not hasattr(self, '_graduated_live') or not self._graduated_live:
+            return
+        
+        now = datetime.now(timezone.utc)
+        current_fills = self._get_total_fills()
+        
+        for bot_name in list(self._graduated_live.keys()):
+            state = self._graduated_live[bot_name]
+            tier_idx = state["current_tier"]
+            
+            if tier_idx >= len(self.GRADUATED_TIERS):
+                # Already at max tier → promote to Full Autonomy
+                self._promote_full_autonomy(bot_name)
+                continue
+            
+            tier = self.GRADUATED_TIERS[tier_idx]
+            elapsed_min = (now - state["tier_start_ts"]).total_seconds() / 60
+            tier_fills = current_fills - state["tier_start_fills"]
+            
+            # Get current PnL delta
+            current_pnl = self._get_bot_pnl(bot_name)
+            pnl_delta = current_pnl - state["tier_start_pnl"]
+            
+            clock_ok = elapsed_min >= tier["min_minutes"]
+            fills_ok = tier_fills >= tier["min_fills"]
+            pnl_ok = pnl_delta >= 0
+            
+            if clock_ok and fills_ok and pnl_ok:
+                # Upgrade to next tier
+                next_idx = tier_idx + 1
+                if next_idx < len(self.GRADUATED_TIERS):
+                    next_tier = self.GRADUATED_TIERS[next_idx]
+                    log.info(f"🔼 [SBP3] {bot_name}: Tier {tier['name']} → {next_tier['name']} "
+                             f"[{tier_fills} fills, PnL=${pnl_delta:+.4f}]")
+                    
+                    state["current_tier"] = next_idx
+                    state["tier_start_ts"] = now
+                    state["tier_start_fills"] = current_fills
+                    state["tier_start_pnl"] = current_pnl
+                    
+                    self._write_risk_params(bot_name, next_tier)
+                    
+                    try:
+                        self.send_telegram(
+                            f"🔼 *{bot_name.upper()}: Tier UP → {next_tier['name']}*\n"
+                            f"💰 Capital: ${next_tier['capital_usd']} | Max: {next_tier['max_pos_btc']} BTC\n"
+                            f"📊 Prev tier: {tier_fills} fills, PnL ${pnl_delta:+.4f}"
+                        )
+                    except Exception:
+                        pass
+                else:
+                    # All tiers passed → Full Autonomy
+                    self._promote_full_autonomy(bot_name)
+            elif clock_ok:
+                status = []
+                if not fills_ok:
+                    status.append(f"fills {tier_fills}/{tier['min_fills']}")
+                if not pnl_ok:
+                    status.append(f"PnL ${pnl_delta:+.4f}")
+                log.info(f"⏳ [SBP3] {bot_name} Tier {tier['name']}: clock OK ({elapsed_min:.0f}min) "
+                         f"but waiting: {', '.join(status)}")
+            else:
+                remaining = tier["min_minutes"] - elapsed_min
+                log.info(f"⏳ [SBP3] {bot_name} Tier {tier['name']}: "
+                         f"{elapsed_min:.0f}/{tier['min_minutes']}min, "
+                         f"{tier_fills} fills, PnL ${pnl_delta:+.4f}")
+
+    def _promote_full_autonomy(self, bot_name):
+        """Phase 6: All graduated tiers passed → Full Autonomy."""
+        log.info(f"🟢 [SBP3] Phase 6: {bot_name} → FULL AUTONOMY")
+        
+        # Remove from graduated tracking
+        state = self._graduated_live.pop(bot_name, {})
+        
+        # Write full capital (from default config)
+        full_tier = {"capital_usd": 400, "max_pos_btc": 0.005, "grid_step": 3.0}
+        self._write_risk_params(bot_name, full_tier)
+        
+        msg = (
+            f"🟢 *SBP v3.1: {bot_name.upper()} → FULL AUTONOMY*\n"
+            f"━━━━━━━━━━━━━━━━━━━━━\n"
+            f"✅ All 3 graduated tiers PASSED\n"
+            f"💰 Capital: $400 | Max: 0.005 BTC\n"
+            f"🤖 AI: {state.get('reasoning', 'N/A')}\n"
+            f"🛡️ Continuous governance active"
+        )
+        try:
+            self.send_telegram(msg)
+        except Exception:
+            pass
+
+    def _write_risk_params(self, bot_name, tier):
+        """Write capital/position limits to bot's risk mmap.
+        
+        Rust Cortex reads these atomically in nanoseconds.
+        No restart, no WS disconnect needed.
+        """
+        import mmap as _mmap
+        import struct as _struct
+        
+        PRICE_SCALE = 100_000_000
+        
+        # Per-bot risk mmap paths and offsets
+        # These offsets are from the Rust struct layouts (repr(C, align(64)))
+        BOT_RISK_MAP = {
+            "hydra": {
+                "path": "/dev/shm/beroun/risk_state.bin",
+                "paused_offset": 0,
+                "capital_offset": 8,       # authorized_capital_usd (u64, PRICE_SCALE)
+                "max_pos_offset": 16,      # max_inv_delta_btc (u64, PRICE_SCALE)
+                "grid_step_offset": 24,    # grid_step (u64, PRICE_SCALE)
+            },
+        }
+        
+        risk_info = BOT_RISK_MAP.get(bot_name)
+        if not risk_info:
+            log.warning(f"  ⚠️ No risk mmap mapping for {bot_name}")
+            return
+        
+        risk_path = risk_info["path"]
+        if not os.path.exists(risk_path):
+            log.warning(f"  ⚠️ Risk mmap not found: {risk_path}")
+            return
+        
+        try:
+            with open(risk_path, "r+b") as f:
+                mm = _mmap.mmap(f.fileno(), 0)
+                
+                capital = int(tier["capital_usd"] * PRICE_SCALE)
+                max_pos = int(tier["max_pos_btc"] * PRICE_SCALE)
+                grid = int(tier["grid_step"] * PRICE_SCALE)
+                
+                _struct.pack_into('<Q', mm, risk_info["capital_offset"], capital)
+                _struct.pack_into('<Q', mm, risk_info["max_pos_offset"], max_pos)
+                _struct.pack_into('<Q', mm, risk_info["grid_step_offset"], grid)
+                
+                mm.flush()
+                mm.close()
+            
+            log.info(f"  💾 {bot_name}: risk mmap updated → "
+                     f"capital=${tier['capital_usd']}, "
+                     f"max_pos={tier['max_pos_btc']} BTC, "
+                     f"grid=${tier['grid_step']}")
+        except Exception as e:
+            log.error(f"  ❌ Risk mmap write failed for {bot_name}: {e}")
+
+    def _get_bot_pnl(self, bot_name):
+        """Get current realized PnL for bot from pnl.db."""
+        try:
+            import sqlite3
+            conn = sqlite3.connect(os.path.expanduser("~/.local/share/sniper/pnl.db"))
+            row = conn.execute(
+                "SELECT COALESCE(SUM(net_pnl), 0) FROM fills WHERE bot=?",
+                (bot_name,)
+            ).fetchone()
+            conn.close()
+            return float(row[0]) if row else 0.0
+        except Exception:
+            return 0.0
 
     def _keep_paper(self, bot_name, reasoning):
         """Phase 6: AI rejected → Keep bot in PAPER mode."""

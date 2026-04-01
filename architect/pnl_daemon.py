@@ -348,7 +348,10 @@ async def bitfinex_drop_copy_ws(processor):
                 
                 backoff = 1
                 while running:
-                    msg = await asyncio.wait_for(ws.recv(), timeout=5.0)
+                    try:
+                        msg = await asyncio.wait_for(ws.recv(), timeout=30.0)
+                    except asyncio.TimeoutError:
+                        continue  # No message in 30s — stay connected, just retry
                     data = json.loads(msg)
                     
                     if isinstance(data, dict):
@@ -379,8 +382,6 @@ async def bitfinex_drop_copy_ws(processor):
                             # Run synchronously because our processing logic uses fast SQLite WAL
                             processor.process_single_trade_payload(trade_payload)
                             
-        except asyncio.TimeoutError:
-            continue
         except Exception as e:
             if not running: break
             log.warning(f"[DropCopy] WS Error: {e}. Reconnecting in {backoff}s...")
