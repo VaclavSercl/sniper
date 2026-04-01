@@ -1270,12 +1270,16 @@ def main():
         last_report_day = -1
         last_report_week = -1
         last_report_month = -1
+        manual_trigger = False
 
         while True:
             try:
                 # Determine report type based on time (CET)
                 now = datetime.now(timezone(timedelta(hours=1)))
                 report_type = None
+
+                if manual_trigger:
+                    report_type = "hourly"
 
                 if now.hour != last_report_hour:
                     last_report_hour = now.hour
@@ -1307,7 +1311,7 @@ def main():
                 asyncio.run(oracle.run_cycle(report_type=report_type))
             except Exception as e:
                 log.error(f"L2 Oracle error: {e}")
-            oracle_trigger_event.wait(timeout=300)  # Wait up to 5 minutes or until triggered
+            manual_trigger = oracle_trigger_event.wait(timeout=300)  # Wait up to 5 minutes or until triggered
             oracle_trigger_event.clear()
 
     threading.Thread(target=l2_oracle_loop, daemon=True).start()
