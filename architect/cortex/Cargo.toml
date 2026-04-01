@@ -9,6 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 sniper-shared = { path = "../../shared" }
+candle-brain = { path = "../../candle-brain" }
 memmap2 = "0.9"
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }

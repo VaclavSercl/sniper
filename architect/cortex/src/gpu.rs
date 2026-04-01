@@ -1,17 +1,18 @@
 // ═══════════════════════════════════════════════════════════
-// 🤖 SOVEREIGN CORTEX — GPU Inference Module (LM Studio)
-// Non-blocking L1 tactical AI via local Phi-3.5 Mini
+// 🤖 SOVEREIGN CORTEX — L1 AI Inference Module
+// v21.0 Pure Rust Hive: Candle In-Process + LMS HTTP Fallback
 //
 // Architecture:
+//   Primary:  Candle in-process (zero HTTP, <20ms CPU mode)
+//   Fallback: LM Studio HTTP (localhost:1234, ~50ms)
+//
 //   L1 loop (50ms) → pushes snapshots to channel (every 2s)
 //   GPU thread → pops from channel, infers, writes result to mmap
 //   L1 NEVER waits for GPU — fire-and-forget
 //
-// v13.1: Merged prompt design:
-//   - JSON structured input (better for small models)
-//   - Discrete actions (HOLD, SKEW_BID, SKEW_ASK, PAUSE_TRADING)
-//   - System prompt enforcing strict JSON-only output
-//   - OBI history + macro context for trend awareness
+// v21.0: Candle Logit Sniping replaces JSON generation.
+//   1 forward pass → 3 logits (HOLD/BID/ASK) → action in <20ms.
+//   LM Studio kept as fallback for richer reasoning (SKEW/PAUSE).
 // ═══════════════════════════════════════════════════════════
 
 use sniper_types::{EngineState, PRICE_SCALE};
@@ -23,6 +24,14 @@ const LMS_URL: &str = "http://localhost:1234/v1/chat/completions";
 const LMS_MODEL: &str = "phi-3.5-mini-instruct";
 const INFERENCE_INTERVAL_MS: u64 = 2000;
 const MAX_TOKENS: u32 = 80;
+
+/// L1 inference backend selection (set at thread startup).
+enum L1Backend {
+    /// Candle in-process (zero HTTP, Logit Sniping)
+    Candle(candle_brain::CandleL1Brain),
+    /// LM Studio HTTP fallback
+    LmStudio,
+}
 
 // System prompt: strict, no-nonsense, JSON-only.
 // Optimized for small models that tend to "chat" and wrap JSON in markdown.
@@ -204,6 +213,19 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
     let mut inference_count: u64 = 0;
     let mut consecutive_failures: u64 = 0;
 
+    // ── Boot L1 Backend: Candle (primary) or LMS (fallback) ──
+    let mut backend = match candle_brain::CandleL1Brain::boot_default() {
+        Ok(brain) => {
+            println!("  🧠 [L1] Candle in-process brain ONLINE (Logit Sniping)");
+            L1Backend::Candle(brain)
+        }
+        Err(e) => {
+            eprintln!("  ⚠️ [L1] Candle boot failed: {e}");
+            println!("  🤖 [L1] Falling back to LM Studio HTTP (localhost:1234)");
+            L1Backend::LmStudio
+        }
+    };
+
     // Telemetry ring buffer (thread-local, zero I/O)
     let mut ring = vec![DecisionRecord::default(); RING_SIZE];
     let mut write_idx: usize = 0;
@@ -253,19 +275,47 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
         };
 
         let spread = latest.best_ask - latest.best_bid;
-        let prompt_str = format!(
-            "[BTC bid:{:.0} ask:{:.0} spr:{:.1}] [OBI:{:+.2} prev:{:+.2},{:+.2}] \
-             [LOB:{} {:.0}/{:.0}] [RISK tox:{} swp:{}] \
-             [POS {:.5}] [MACRO reg:{} F&G:{}({}) bias:{:+.2}]",
-            latest.best_bid, latest.best_ask, spread,
-            latest.obi, latest.obi_prev[0], latest.obi_prev[1],
-            latest.depth_trend, latest.bid_depth, latest.ask_depth,
-            latest.toxic_hits, latest.sweeps_recent,
-            latest.net_position,
-            latest.regime, latest.fear_greed, fg_label, latest.macro_bias,
-        );
+        let spread_bps = if latest.best_bid > 0.0 { spread / latest.best_bid * 10000.0 } else { 0.0 };
 
-        match call_lms(&prompt_str) {
+        // ── Dual-Backend Inference ──
+        let result = match &mut backend {
+            L1Backend::Candle(brain) => {
+                // Candle: Logit Sniping (in-process, <20ms)
+                brain.reset_cache();
+                match brain.reflex_action(latest.obi, spread_bps, latest.macro_bias, 0.01) {
+                    Ok((action, confidence)) => {
+                        let (action_str, conf_pct) = match action {
+                            candle_brain::HftAction::Hold => ("HOLD", (confidence * 100.0) as u32),
+                            candle_brain::HftAction::Bid => ("SKEW_BID", (confidence * 100.0) as u32),
+                            candle_brain::HftAction::Ask => ("SKEW_ASK", (confidence * 100.0) as u32),
+                        };
+                        Ok(GpuDecision {
+                            action: Some(action_str.to_string()),
+                            confidence_pct: Some(conf_pct),
+                            reason: Some("candle".to_string()),
+                        })
+                    }
+                    Err(e) => Err(anyhow::anyhow!("Candle inference: {}", e)),
+                }
+            }
+            L1Backend::LmStudio => {
+                // LM Studio HTTP fallback (JSON generation, ~50ms)
+                let prompt_str = format!(
+                    "[BTC bid:{:.0} ask:{:.0} spr:{:.1}] [OBI:{:+.2} prev:{:+.2},{:+.2}] \
+                     [LOB:{} {:.0}/{:.0}] [RISK tox:{} swp:{}] \
+                     [POS {:.5}] [MACRO reg:{} F&G:{}({}) bias:{:+.2}]",
+                    latest.best_bid, latest.best_ask, spread,
+                    latest.obi, latest.obi_prev[0], latest.obi_prev[1],
+                    latest.depth_trend, latest.bid_depth, latest.ask_depth,
+                    latest.toxic_hits, latest.sweeps_recent,
+                    latest.net_position,
+                    latest.regime, latest.fear_greed, fg_label, latest.macro_bias,
+                );
+                call_lms(&prompt_str)
+            }
+        };
+
+        match result {
             Ok(decision) => {
                 // PRE-decision snapshot (before applying)
                 let now_ms = epoch_ms();
