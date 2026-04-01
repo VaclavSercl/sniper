@@ -103,6 +103,12 @@ class L2OracleAsync:
         self._paper_trials = {}
         self._paper_trial_evaluated = set()  # Bots already evaluated (no re-eval)
 
+        # ═══ PERFORMANCE TRIBUNAL (SIM v2.0 P0) ═══
+        # Closed-loop AI accountability: saves every L2 decision, evaluates T-1 outcome,
+        # and injects 3+1 RAG context into Gemini prompt.
+        self._init_tribunal_db()
+        self._last_decision_id = None  # Track the most recent saved snapshot
+
     async def run_cycle(self, report_type=None):
         """Execute one L2 Oracle cycle. Called every 5 min.
         report_type: None=silent, 'hourly'/'daily'/'weekly'/'monthly'=send TG report.
@@ -136,8 +142,8 @@ class L2OracleAsync:
         data = snap_resp["data"]
         bots = data.get("bots", [])
 
-        # 1.5. H3: Sovereign Strategy Audit (Auto-Tune)
-        self._audit_strategies(bots)
+        # 1.5. SIM v2.0: Adaptive Parameter Governor (replaces old H3 _audit_strategies)
+        self._governor_audit(bots)
 
         # 1b. Get GPU telemetry (Phi-3.5 performance)
         gpu_resp = self.cortex.get_gpu_stats()
@@ -200,6 +206,9 @@ class L2OracleAsync:
                 except Exception:
                     pass
 
+            # ═══ PERFORMANCE TRIBUNAL: Save decision snapshot ═══
+            self._save_decision_snapshot(decision, bots)
+
         # 6. Send Telegram report (only on scheduled intervals)
         if report_type:
             report = self._build_report(bots, decision, report_type)
@@ -237,35 +246,9 @@ class L2OracleAsync:
 
         bias_label = "Bearish" if bias < -0.3 else ("Bullish" if bias > 0.3 else "Neutral")
 
-        # Feedback loop
-        if self.cycle > 1 and self.prev_decision:
-            d = self.prev_decision
-            prev_regime = d.get("global_regime", d.get("regime", "?"))
-            h = d.get("hydra", {})
-            prev_grid = h.get("recommended_grid_step", h.get("grid_step", "unchanged"))
-            prev_maxp = h.get("max_position_limit", h.get("max_position", "unchanged"))
-            current_pnl = hydra["pnl"] if hydra else 0
-            pnl_delta = current_pnl - self.prev_pnl
-            fills_delta = (hydra["fills"] if hydra else 0) - self.prev_fills
-            toxic_delta = (hydra["toxic"] if hydra else 0) - self.prev_toxic
-
-            if pnl_delta > 0:
-                assessment = "IMPROVED ✅"
-            elif pnl_delta < -0.5:
-                assessment = "DEGRADED ❌"
-            else:
-                assessment = "STABLE"
-
-            feedback = (
-                f"\n═══ PREVIOUS CYCLE FEEDBACK ═══\n"
-                f"Cycle #{self.cycle - 1}: You set regime={prev_regime}, "
-                f"grid={prev_grid}, max_pos={prev_maxp}\n"
-                f"Result: PnL ${self.prev_pnl:.4f} → ${current_pnl:.4f} "
-                f"({assessment}, delta: ${pnl_delta:+.4f})\n"
-                f"New fills: +{fills_delta} | New toxic: +{toxic_delta}\n"
-            )
-        else:
-            feedback = "\n═══ PREVIOUS CYCLE FEEDBACK ═══\nFirst cycle — no prior data available.\n"
+        # ═══ PERFORMANCE TRIBUNAL FEEDBACK (SIM v2.0) ═══
+        # Closed-loop: 3 recent decisions + 1 RAG golden standard
+        feedback = self._load_tribunal_context()
 
         # Read historical PnL
         all_pnl = self.pnl_db.get_all_bots_pnl() if hasattr(self, 'pnl_db') and self.pnl_db else {}
@@ -1884,76 +1867,357 @@ Respond with EXACTLY one JSON object:
             log.warning(f"  Unpause error for {bot_name}: {e}")
 
     def _audit_strategies(self, bots):
-        """H3: Sovereign SBP AI Strategy Auditor
-        Reads the last 24h of fills from DB. If Toxic Fill Rate > 50%,
-        autonomously adjusts bot parameters via beroun-config/UDS.
+        """Legacy H3 stub — redirects to Governor."""
+        self._governor_audit(bots)
+
+    # ═══════════════════════════════════════════════════════════
+    # 🎛️ ADAPTIVE PARAMETER GOVERNOR (SIM v2.0)
+    # All-bot bidirectional performance monitoring + fail-fast
+    # Replaces old _audit_strategies() (H3)
+    # ═══════════════════════════════════════════════════════════
+
+    # Governor thresholds
+    GOV_TOXIC_CRITICAL = 50.0   # % → immediate PAPER
+    GOV_TOXIC_WARNING = 35.0    # % → defensive params
+    GOV_TOXIC_HEALTHY = 20.0    # % → can be more aggressive
+    GOV_PNL_LOSS_7D = -0.50     # $ → defensive
+    GOV_PNL_SEVERE_7D = -2.00   # $ → STOP
+    GOV_PNL_PROFIT_7D = 1.00    # $ → can be more aggressive
+
+    def _governor_audit(self, bots):
+        """SIM v2.0: Adaptive Parameter Governor.
+        
+        Monitors performance of ALL 5 bots (not just Hydra).
+        Bidirectional: tightens on degradation, loosens on profit.
+        Fail-fast: straight to PAPER on critical degradation.
+        Called every L2 cycle (5 min).
         """
         if not self.pnl_db:
             return
-            
+        
+        # Evaluate T-1 decision outcome (Tribunal)
+        self._evaluate_previous_decision(bots)
+        
         try:
+            conn = self.pnl_db.conn
+            cursor = conn.cursor()
+            
             for bot in bots:
-                bot_name = bot["name"]
-                
-                # We mainly care about Hydra's toxic rate for now (as defined in H3)
-                if bot_name != "hydra":
+                bot_name = bot['name']
+                if not bot.get('online'):
                     continue
-                    
-                # 1. Check DB for toxic fills limit
-                conn = self.pnl_db.conn
-                cursor = conn.cursor()
                 
-                # Time window: last 6 hours instead of 24h so AI can react faster
-                cutoff_ms = int((time.time() - 3600 * 6) * 1000)
-                
+                # ── Compute metrics ──
+                cutoff_6h = int((time.time() - 3600 * 6) * 1000)
                 cursor.execute(
-                    "SELECT COUNT(*) FROM fills WHERE bot=? AND is_closer=1 AND net_pnl < 0 "
-                    "AND ts_ms >= ?",
-                    (bot_name, cutoff_ms)
+                    "SELECT COUNT(*) FROM fills WHERE bot=? AND is_closer=1 AND net_pnl < 0 AND ts_ms >= ?",
+                    (bot_name, cutoff_6h)
                 )
                 toxic_count = cursor.fetchone()[0]
-                
                 cursor.execute(
-                    "SELECT COUNT(*) FROM fills WHERE bot=? AND is_closer=1 "
-                    "AND ts_ms >= ?",
-                    (bot_name, cutoff_ms)
+                    "SELECT COUNT(*) FROM fills WHERE bot=? AND is_closer=1 AND ts_ms >= ?",
+                    (bot_name, cutoff_6h)
                 )
                 total_closed = cursor.fetchone()[0]
+                toxic_pct = (toxic_count / total_closed * 100) if total_closed >= 5 else 0
+                
+                # 7d PnL
+                all_pnl = self.pnl_db.get_all_bots_pnl() if self.pnl_db else {}
+                pnl_7d = all_pnl.get(bot_name, {}).get('7d', {}).get('realized', 0)
+                pnl_24h = all_pnl.get(bot_name, {}).get('24h', {}).get('realized', 0)
                 
                 if total_closed < 5:
                     continue  # Not enough data
-                    
-                toxic_pct = (toxic_count / total_closed) * 100.0
                 
-                log.info(f"🛡️ [AI Auditor] {bot_name} 6h Toxic Rate: {toxic_pct:.1f}% ({toxic_count}/{total_closed})")
+                log.info(f"🎛️ [Governor] {bot_name}: toxic={toxic_pct:.0f}% "
+                         f"PnL 24h=${pnl_24h:.4f} 7d=${pnl_7d:.4f}")
                 
-                if toxic_pct > 50.0:
-                    log.warning(f"🚨 [AI Auditor] {bot_name} Toxic limit exceeded! Executing auto-tune safeguard.")
+                # ── FAIL-FAST: Critical degradation → PAPER immediately ──
+                if toxic_pct > self.GOV_TOXIC_CRITICAL or pnl_7d < self.GOV_PNL_SEVERE_7D:
+                    log.warning(f"🚨 [Governor] {bot_name}: FAIL-FAST → PAPER")
+                    log.warning(f"  Reason: toxic={toxic_pct:.0f}%, 7d_pnl=${pnl_7d:.4f}")
                     
-                    # 2. Extract current grid configuration to modify it safely
-                    current_grid = bot.get("grid_step", 10.0)
-                    new_grid = min(current_grid + 5.0, 50.0) # Clamp to 50
+                    self._pause_bot(bot_name)
+                    self._save_bot_state(bot_name, "PAPER")
                     
-                    # 3. Call hydra-config CLI to update the running mmap values
-                    cli_cmd = ["/home/wwwenda/sniper/target/release/hydra-config", "set-grid", str(int(new_grid))]
-                    subprocess.run(cli_cmd, capture_output=True, check=False)
+                    try:
+                        self.send_telegram(
+                            f"🚨 *GOVERNOR: {bot_name.upper()} → PAPER (Fail-Fast)*\n"
+                            f"━━━━━━━━━━━━━━━━━━━━━\n"
+                            f"💀 Toxic: {toxic_pct:.0f}% | 7d PnL: ${pnl_7d:.4f}\n"
+                            f"🛡️ Stairs up, elevator down\n"
+                            f"📋 SBP v3.1 required for re-entry"
+                        )
+                    except Exception:
+                        pass
+                    continue
+                
+                # ── WARNING: Defensive intervention ──
+                if toxic_pct > self.GOV_TOXIC_WARNING or pnl_7d < self.GOV_PNL_LOSS_7D:
+                    log.info(f"🟠 [Governor] {bot_name}: DEFENSIVE intervention")
                     
-                    # Also set levels down to 1 to minimize grid depth exposure
-                    cli_cmd_lvl = ["/home/wwwenda/sniper/target/release/hydra-config", "set-levels", "1"]
-                    subprocess.run(cli_cmd_lvl, capture_output=True, check=False)
+                    if bot_name == "hydra":
+                        current_grid = bot.get('grid_step', 10.0)
+                        new_grid = min(current_grid + 3.0, GRID_CEIL)
+                        if new_grid != current_grid:
+                            try:
+                                cli_cmd = ["/home/wwwenda/sniper/target/release/hydra-config",
+                                           "set-grid", str(int(new_grid))]
+                                subprocess.run(cli_cmd, capture_output=True, check=False)
+                                log.info(f"  🛡️ Grid: ${current_grid:.0f} → ${new_grid:.0f}")
+                            except Exception:
+                                pass
+                    elif bot_name in ("trigon", "nexus", "grid"):
+                        try:
+                            self.send_telegram(
+                                f"🟠 *GOVERNOR: {bot_name.upper()} — defensive mode*\n"
+                                f"Toxic: {toxic_pct:.0f}% | 7d: ${pnl_7d:.4f}\n"
+                                f"💡 L2 Gemini will apply defensive params next cycle"
+                            )
+                        except Exception:
+                            pass
+                    continue
+                
+                # ── HEALTHY: Can be more aggressive ──
+                if toxic_pct < self.GOV_TOXIC_HEALTHY and pnl_7d > self.GOV_PNL_PROFIT_7D:
+                    log.info(f"🟢 [Governor] {bot_name}: HEALTHY — eligible for tighter params")
                     
-                    # Alert the user on Telegram
-                    alert_msg = (
-                        f"🚨 <b>{bot_name.upper()} Strategy Audit</b>\n"
-                        f"Toxic Fill Rate kritický: {toxic_pct:.1f}% (limit 50%)\n"
-                        f"🤖 <b>AI Intervence:</b> Zvyšuji obranu.\n"
-                        f"• Grid step zvýšen z ${current_grid:.0f} na ${new_grid:.0f}\n"
-                        f"• Počet úrovní sražen na 1\n"
-                    )
-                    self.send_telegram(alert_msg)
+                    if bot_name == "hydra":
+                        current_grid = bot.get('grid_step', 10.0)
+                        if current_grid > 8.0:
+                            new_grid = max(current_grid - 2.0, GRID_FLOOR)
+                            try:
+                                cli_cmd = ["/home/wwwenda/sniper/target/release/hydra-config",
+                                           "set-grid", str(int(new_grid))]
+                                subprocess.run(cli_cmd, capture_output=True, check=False)
+                                log.info(f"  ⚡ Grid tightened: ${current_grid:.0f} → ${new_grid:.0f}")
+                            except Exception:
+                                pass
 
         except Exception as e:
-            log.error(f"[AI Auditor] Error during strategy audit: {e}")
+            log.error(f"🎛️ [Governor] Error: {e}")
+
+    # ═══════════════════════════════════════════════════════════
+    # 🏛️ PERFORMANCE TRIBUNAL (SIM v2.0)
+    # Closed-loop AI accountability + decision history
+    # ═══════════════════════════════════════════════════════════
+
+    def _init_tribunal_db(self):
+        """Initialize decision_history table in pnl.db."""
+        try:
+            import sqlite3
+            db_path = os.path.expanduser("~/.local/share/sniper/pnl.db")
+            os.makedirs(os.path.dirname(db_path), exist_ok=True)
+            conn = sqlite3.connect(db_path)
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS decision_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    cycle_id INTEGER NOT NULL,
+                    ts_utc TEXT NOT NULL,
+                    ts_ms INTEGER NOT NULL,
+                    regime TEXT,
+                    reasoning TEXT,
+                    params_json TEXT,
+                    pre_pnl_json TEXT,
+                    post_pnl_json TEXT,
+                    verdict TEXT,
+                    pnl_delta_total REAL DEFAULT 0,
+                    volatility REAL DEFAULT 0,
+                    toxic_rate REAL DEFAULT 0
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_dh_ts ON decision_history(ts_ms)")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_dh_regime ON decision_history(regime)")
+            conn.commit()
+            conn.close()
+            log.info("🏛️ [Tribunal] decision_history table ready")
+        except Exception as e:
+            log.error(f"🏛️ [Tribunal] DB init failed: {e}")
+
+    def _save_decision_snapshot(self, decision, bots):
+        """Save current L2 decision + pre-state for later evaluation.
+        
+        Called after _apply_decision(). The post_pnl is filled
+        on the NEXT cycle by _evaluate_previous_decision().
+        """
+        try:
+            import sqlite3
+            conn = sqlite3.connect(os.path.expanduser("~/.local/share/sniper/pnl.db"))
+            
+            # Pre-PnL snapshot per bot
+            pre_pnl = {}
+            for b in bots:
+                pre_pnl[b['name']] = {
+                    'pnl': b.get('pnl', 0),
+                    'fills': b.get('fills', 0),
+                    'toxic': b.get('toxic', 0),
+                    'position': b.get('position', 0),
+                    'grid_step': b.get('grid_step', 0),
+                }
+            
+            # Extract key params from decision
+            params = {}
+            for bot_key in ['hydra', 'moonshot', 'grid', 'trigon', 'nexus', 'l1_tuning']:
+                if bot_key in decision:
+                    params[bot_key] = decision[bot_key]
+            
+            now = datetime.now(timezone.utc)
+            conn.execute(
+                "INSERT INTO decision_history "
+                "(cycle_id, ts_utc, ts_ms, regime, reasoning, params_json, pre_pnl_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    self.cycle,
+                    now.isoformat(),
+                    int(now.timestamp() * 1000),
+                    decision.get('global_regime', 'UNKNOWN'),
+                    decision.get('global_reasoning', '')[:500],
+                    json.dumps(params),
+                    json.dumps(pre_pnl),
+                )
+            )
+            self._last_decision_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.commit()
+            conn.close()
+            log.info(f"🏛️ [Tribunal] Decision #{self._last_decision_id} saved")
+        except Exception as e:
+            log.error(f"🏛️ [Tribunal] Save snapshot failed: {e}")
+
+    def _evaluate_previous_decision(self, bots):
+        """Called at start of each cycle. Fills post_pnl and verdict for T-1."""
+        if not self._last_decision_id:
+            return
+        try:
+            import sqlite3
+            conn = sqlite3.connect(os.path.expanduser("~/.local/share/sniper/pnl.db"))
+            
+            row = conn.execute(
+                "SELECT id, pre_pnl_json FROM decision_history WHERE id=?",
+                (self._last_decision_id,)
+            ).fetchone()
+            if not row:
+                conn.close()
+                return
+            
+            pre_pnl = json.loads(row[1]) if row[1] else {}
+            
+            # Build post_pnl from current bot state
+            post_pnl = {}
+            total_delta = 0.0
+            for b in bots:
+                name = b['name']
+                pre = pre_pnl.get(name, {})
+                delta = b.get('pnl', 0) - pre.get('pnl', 0)
+                total_delta += delta
+                fills_pre = pre.get('fills', 0)
+                fills_now = b.get('fills', 0)
+                fills_delta = fills_now - fills_pre
+                toxic_pre = pre.get('toxic', 0)
+                toxic_now = b.get('toxic', 0)
+                toxic_delta = toxic_now - toxic_pre
+                toxic_rate = (toxic_delta / fills_delta * 100) if fills_delta > 0 else 0
+                post_pnl[name] = {
+                    'pnl': b.get('pnl', 0),
+                    'delta_pnl': round(delta, 6),
+                    'delta_fills': fills_delta,
+                    'toxic_rate': round(toxic_rate, 1),
+                }
+            
+            # Verdict
+            if total_delta > 0.01:
+                verdict = "PROFITABLE"
+            elif total_delta < -0.5:
+                verdict = "LOSS"
+            elif total_delta < -0.01:
+                verdict = "SLIGHT_LOSS"
+            else:
+                verdict = "NEUTRAL"
+            
+            conn.execute(
+                "UPDATE decision_history SET post_pnl_json=?, verdict=?, pnl_delta_total=? WHERE id=?",
+                (json.dumps(post_pnl), verdict, round(total_delta, 6), self._last_decision_id)
+            )
+            conn.commit()
+            conn.close()
+            
+            log.info(f"🏛️ [Tribunal] T-1 verdict: {verdict} (Δ${total_delta:+.4f})")
+        except Exception as e:
+            log.error(f"🏛️ [Tribunal] Evaluation failed: {e}")
+
+    def _load_tribunal_context(self):
+        """Load 3+1 RAG tribunal context for Gemini prompt.
+        
+        Returns formatted string with:
+          - 3 most recent decisions + outcomes (T-3, T-2, T-1)
+          - 1 RAG "golden standard" from same regime
+        """
+        try:
+            import sqlite3
+            conn = sqlite3.connect(os.path.expanduser("~/.local/share/sniper/pnl.db"))
+            
+            recent = conn.execute(
+                "SELECT cycle_id, regime, params_json, verdict, pnl_delta_total, reasoning "
+                "FROM decision_history WHERE verdict IS NOT NULL "
+                "ORDER BY id DESC LIMIT 3"
+            ).fetchall()
+            
+            if not recent:
+                conn.close()
+                return "\n═══ PERFORMANCE TRIBUNAL ═══\nNo prior decisions to evaluate. First cycle.\n"
+            
+            lines = ["\n═══ PERFORMANCE TRIBUNAL (Closed-Loop Feedback) ═══"]
+            lines.append("Your previous decisions and their REAL outcomes:")
+            
+            for i, (cyc, regime, params_j, verdict, pnl_d, reason) in enumerate(reversed(recent)):
+                label = f"T-{len(recent)-i}"
+                try:
+                    params = json.loads(params_j) if params_j else {}
+                    hydra_p = params.get('hydra', {})
+                    grid_s = hydra_p.get('recommended_grid_step', '?')
+                    max_p = hydra_p.get('max_position_limit', '?')
+                except Exception:
+                    grid_s, max_p = '?', '?'
+                lines.append(
+                    f"  [{label}] Cycle#{cyc}: regime={regime}, grid=${grid_s}, max_pos={max_p}\n"
+                    f"    → Outcome: {verdict} (PnL Δ${pnl_d:+.4f})\n"
+                    f"    → Your reasoning: {(reason or '')[:120]}"
+                )
+            
+            # RAG: Golden standard from same regime
+            current_regime = self.prev_decision.get('global_regime', '') if self.prev_decision else ''
+            if current_regime:
+                golden = conn.execute(
+                    "SELECT cycle_id, params_json, pnl_delta_total "
+                    "FROM decision_history "
+                    "WHERE regime=? AND verdict='PROFITABLE' "
+                    "ORDER BY pnl_delta_total DESC LIMIT 1",
+                    (current_regime,)
+                ).fetchone()
+                
+                if golden:
+                    g_cyc, g_params_j, g_pnl = golden
+                    try:
+                        g_params = json.loads(g_params_j) if g_params_j else {}
+                        g_hydra = g_params.get('hydra', {})
+                        g_grid = g_hydra.get('recommended_grid_step', '?')
+                        g_max = g_hydra.get('max_position_limit', '?')
+                    except Exception:
+                        g_grid, g_max = '?', '?'
+                    lines.append(
+                        f"\n  [🏆 GOLDEN BASELINE] Best {current_regime} result: Cycle#{g_cyc}\n"
+                        f"    Settings: grid=${g_grid}, max_pos={g_max}\n"
+                        f"    Outcome: PnL Δ${g_pnl:+.4f}\n"
+                        f"    → USE THIS AS YOUR REFERENCE for the current regime."
+                    )
+            
+            lines.append("\nLEARN from your mistakes. DO NOT repeat parameters that led to LOSS.")
+            
+            conn.close()
+            return "\n".join(lines) + "\n"
+        except Exception as e:
+            log.error(f"🏛️ [Tribunal] Context load failed: {e}")
+            return "\n═══ PERFORMANCE TRIBUNAL ═══\nUnavailable.\n"
 
     def _send_fallback_report(self, error_msg):
         """Send minimal report when Gemini is unavailable."""

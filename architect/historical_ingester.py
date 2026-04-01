@@ -165,6 +165,8 @@ def fetch_bitfinex_trades(symbol="tBTCUSD", days=8):
     cursor_start = start_ms
     batch = 0
     MAX_TRADES = 2_000_000  # Safety cap
+    backoff_s = BFX_RATE_LIMIT_S
+    consecutive_errors = 0
     
     while cursor_start < end_ms and len(all_trades) < MAX_TRADES:
         url = (
@@ -174,8 +176,20 @@ def fetch_bitfinex_trades(symbol="tBTCUSD", days=8):
         
         try:
             resp = requests.get(url, timeout=30)
+            if resp.status_code == 429:
+                wait = min(backoff_s * 2, 120)
+                backoff_s = wait
+                log.warning(f"  [BFX] Rate limited (429). Waiting {wait}s...")
+                time.sleep(wait)
+                consecutive_errors += 1
+                if consecutive_errors > 10:
+                    log.error(f"  [BFX] 10 consecutive 429s. Stopping trade fetch.")
+                    break
+                continue
             resp.raise_for_status()
             data = resp.json()
+            consecutive_errors = 0
+            backoff_s = BFX_RATE_LIMIT_S
             
             if not data:
                 break
