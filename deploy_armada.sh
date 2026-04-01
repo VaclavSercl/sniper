@@ -160,8 +160,8 @@ sleep 2
 
 # 6. ZeroClaw L2 Daemon (replaces l2_oracle.py)
 echo "  [T+25s] Starting ZeroClaw L2 Oracle..."
-export GEMINI_API_KEY="${GEMINI_API_KEY:-}"
-if command -v zeroclaw &>/dev/null && [ -n "$GEMINI_API_KEY" ]; then
+[ -f "$ARMADA_ROOT/.env" ] && export $(grep -v '^#' "$ARMADA_ROOT/.env" | grep GEMINI_API_KEY | xargs)
+if command -v zeroclaw &>/dev/null && [ -n "${GEMINI_API_KEY:-}" ]; then
     zeroclaw daemon >> "$LOG_DIR/zeroclaw.log" 2>&1 &
     ZEROCLAW_PID=$!
     echo "  ✅ ZeroClaw L2: PID $ZEROCLAW_PID (Gemini 3.1 Pro)"
