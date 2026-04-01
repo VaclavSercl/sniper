@@ -1,5 +1,5 @@
 #!/bin/bash
-# 🐺 SNIPER ARMADA v19.0 — Sovereign Boot Script
+# 🐺 SNIPER ARMADA v21.0 — Sovereign Boot Script
 # Called by: systemd (sniper-armada.service) or manually
 #
 # Architecture v15: ALL components start OFFLINE after reboot.
@@ -51,7 +51,7 @@ tg_alert() {
 }
 
 echo "🐺 ═══════════════════════════════════════════"
-echo "   SNIPER ARMADA v19.0 — SOVEREIGN BOOT"
+echo "   SNIPER ARMADA v21.0 — SOVEREIGN BOOT"
 echo "   $(date '+%Y-%m-%d %H:%M:%S %Z')"
 echo "═══════════════════════════════════════════════"
 
@@ -152,10 +152,23 @@ python3 "$ARMADA_ROOT/architect/price_bridge.py" >> "$LOG_DIR/price_bridge.log" 
 BRIDGE_PID=$!
 sleep 3
 
-# 5. Commander (includes L2 Oracle as daemon thread)
-echo "  [T+23s] Starting Commander + L2 Oracle..."
+# 5. Commander (Telegram interface)
+echo "  [T+23s] Starting Commander..."
 python3 "$ARMADA_ROOT/architect/tg_commander.py" >> "$LOG_DIR/tg_commander.log" 2>&1 &
 COMMANDER_PID=$!
+sleep 2
+
+# 6. ZeroClaw L2 Daemon (replaces l2_oracle.py)
+echo "  [T+25s] Starting ZeroClaw L2 Oracle..."
+export GEMINI_API_KEY="${GEMINI_API_KEY:-}"
+if command -v zeroclaw &>/dev/null && [ -n "$GEMINI_API_KEY" ]; then
+    zeroclaw daemon >> "$LOG_DIR/zeroclaw.log" 2>&1 &
+    ZEROCLAW_PID=$!
+    echo "  ✅ ZeroClaw L2: PID $ZEROCLAW_PID (Gemini 3.1 Pro)"
+else
+    ZEROCLAW_PID="N/A"
+    echo "  ⚠️  ZeroClaw skipped (no GEMINI_API_KEY or zeroclaw not installed)"
+fi
 
 echo ""
 echo "🐺 ═════════════════════════════════════════════"
@@ -171,9 +184,9 @@ echo "   🤖 L2 Oracle will read pre-crash state in ~15s"
 echo "   🐍 Trading bots: ALL OFFLINE (Oracle decides)"
 echo "═══════════════════════════════════════════════"
 
-tg_alert "🐺 *SOVEREIGN BOOT v19.0*
-🧠 Infrastructure ONLINE
-🌐 Price Bridge: ON
+tg_alert "🐺 *SOVEREIGN BOOT v21.0*
+🧠 Candle L1: Logit Sniping
+🐝 ZeroClaw L2: Gemini 3.1 Pro
 🐍 Trading bots: ALL OFFLINE
 🤖 L2 Oracle deciding in ~15s...
 $(date '+%H:%M:%S')"
