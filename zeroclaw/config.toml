@@ -1,0 +1,43 @@
+# ═══════════════════════════════════════════════════════════
+# 🐝 ZeroClaw — Sniper Armada L2 Orchestrator
+# v21.0 Pure Rust Hive
+#
+# Replaces: l2_oracle.py, tg_commander.py, pnl_daemon.py
+# ═══════════════════════════════════════════════════════════
+
+# ── Provider: Gemini 2.5 Pro (L2 Orchestrator brain) ──
+# Requires GEMINI_API_KEY in environment or .env
+# Fallback: OpenRouter with any model
+default_provider = "gemini"
+default_model = "gemini-2.5-pro"
+default_temperature = 0.3
+provider_timeout_secs = 120
+model_routes = []
+embedding_routes = []
+
+[model_providers]
+
+[extra_headers]
+
+[observability]
+backend = "none"
+runtime_trace_mode = "none"
+runtime_trace_path = "state/runtime-trace.jsonl"
+runtime_trace_max_entries = 200
+
+# ── Autonomy: L2 runs in supervised mode ──
+[autonomy]
+level = "supervised"
+workspace_only = true
+allowed_commands = [
+    "cat",
+    "ls",
+    "grep",
+    "echo",
+    "python3",
+]
+
+# ── Memory: SQLite Vector DB for RAG ──
+[memory]
+backend = "sqlite"
+path = "/home/wwwenda/beroun-brain/long_term/zeroclaw_memory.db"
