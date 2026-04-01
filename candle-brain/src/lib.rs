@@ -7,12 +7,18 @@
 //
 // Key innovation: Logit Sniping
 // - NO text generation (too slow for HFT)
-// - 1 forward pass → read 3 logits (HOLD/BID/ASK)
-// - <3ms per decision vs 15-50ms HTTP
+// - 1 forward pass → read 4 logits (HOLD/BID/ASK/KILL)
+// - <20ms per decision vs 50-100ms HTTP
+//
+// Model Agnosticism: chat_template auto-detects model family
+// and wraps prompts in the correct template format.
 // ═══════════════════════════════════════════════════════════
 
 pub mod brain;
+pub mod chat_template;
 pub mod logit_sniper;
 
-pub use brain::CandleL1Brain;
+pub use brain::{BrainConfig, CandleL1Brain};
+pub use chat_template::ModelFamily;
 pub use logit_sniper::{HftAction, LogitSniper};
+
