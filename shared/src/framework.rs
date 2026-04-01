@@ -273,3 +273,193 @@ impl<E: SovereignEngine, V: VenueAdapter> SovereignDualRunner<E, V> {
         }
     }
 }
+
+// ═══════════════════════════════════════════════════════════
+// Cross-Venue Runner (for multi-exchange arbitrage)
+// ═══════════════════════════════════════════════════════════
+
+/// Extended engine trait for cross-venue bots (e.g., Nexus).
+/// Receives data from two venues simultaneously.
+pub trait CrossVenueEngine: SovereignEngine {
+    /// Subscriptions for the secondary venue
+    fn secondary_subscriptions(&mut self) -> Vec<String>;
+
+    /// Handle market data from the secondary venue
+    fn on_secondary_message(&mut self, payload: &mut [u8], out_buf: &mut bytes::BytesMut);
+}
+
+/// Cross-Venue Runner — connects to TWO exchanges simultaneously.
+/// Primary venue: handles auth + order execution (out_buf goes here).
+/// Secondary venue: market data only (price reference for arb signals).
+///
+/// Usage: `SovereignCrossVenueRunner::new(engine, BitfinexVenue::new(), BinanceVenue::new(), "Nexus")`
+pub struct SovereignCrossVenueRunner<E: CrossVenueEngine, V1: VenueAdapter, V2: VenueAdapter> {
+    pub engine: E,
+    pub primary: V1,
+    pub secondary: V2,
+    pub name: String,
+}
+
+impl<E: CrossVenueEngine, V1: VenueAdapter, V2: VenueAdapter> SovereignCrossVenueRunner<E, V1, V2> {
+    pub fn new(engine: E, primary: V1, secondary: V2, name: &str) -> Self {
+        Self { engine, primary, secondary, name: name.to_string() }
+    }
+
+    pub async fn run(&mut self) -> Result<()> {
+        dotenv().ok();
+
+        let primary_creds = ExchangeCredentials::from_env(self.primary.env_prefix())
+            .context(format!("Missing {}_API_KEY", self.primary.env_prefix()))?;
+
+        self.engine.on_start()?;
+
+        let mut out_buf = bytes::BytesMut::with_capacity(4096);
+
+        loop {
+            info!("Connecting Cross-Venue: {} (primary={}, secondary={})",
+                self.name, self.primary.name(), self.secondary.name());
+
+            // Connect primary venue (auth + execution)
+            let ws_primary_res = connect_async(self.primary.ws_url()).await;
+            let (ws_primary, _) = match ws_primary_res {
+                Ok(v) => v, Err(e) => {
+                    warn!(event = "primary_ws_fail", venue = self.primary.name(), error = %e);
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    continue;
+                }
+            };
+
+            // Connect secondary venue (market data only)
+            let ws_secondary_res = connect_async(self.secondary.ws_url()).await;
+            let (ws_secondary, _) = match ws_secondary_res {
+                Ok(v) => v, Err(e) => {
+                    warn!(event = "secondary_ws_fail", venue = self.secondary.name(), error = %e);
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    continue;
+                }
+            };
+
+            let (mut primary_write, mut primary_read) = ws_primary.split();
+
+            // Auth on primary
+            if let Some(auth_msg) = self.primary.auth_message(&primary_creds) {
+                if let Err(e) = primary_write.send(Message::Text(auth_msg.into())).await {
+                    error!("Primary auth send failed: {}", e);
+                    continue;
+                }
+            }
+
+            // Build secondary venue URL with subscriptions baked in.
+            // For Binance: combined streams via URL path (btcusdt@bookTicker/ethusdt@bookTicker).
+            // For other venues: subscriptions sent via WS message after connect.
+            let sec_subs = self.engine.secondary_subscriptions();
+            let sec_url = if !sec_subs.is_empty() {
+                // Extract stream names from subscribe JSON params
+                let stream_names: Vec<String> = sec_subs.iter()
+                    .filter_map(|s| {
+                        serde_json::from_str::<serde_json::Value>(s).ok()
+                            .and_then(|v| v.get("params")?.as_array().map(|a|
+                                a.iter().filter_map(|p| p.as_str().map(String::from))
+                                    .collect::<Vec<_>>().join("/")
+                            ))
+                    })
+                    .collect();
+                if stream_names.is_empty() {
+                    self.secondary.ws_url().to_string()
+                } else {
+                    format!("{}/{}", self.secondary.ws_url(), stream_names.join("/"))
+                }
+            } else {
+                self.secondary.ws_url().to_string()
+            };
+
+            let ws_sec_res = connect_async(&sec_url).await;
+            let (ws_sec, _) = match ws_sec_res {
+                Ok(v) => v, Err(e) => {
+                    warn!(event = "secondary_ws_fail", error = %e);
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    continue;
+                }
+            };
+            let (_sec_write, mut sec_read) = ws_sec.split();
+
+            let mut _authed = false;
+
+            // Dual-venue polling loop
+            loop {
+                tokio::select! {
+                    // Primary venue (Bitfinex): auth + market data + execution
+                    msg = primary_read.next() => {
+                        let msg = match msg {
+                            Some(Ok(m)) => m,
+                            _ => { warn!("{} primary WS disconnect", self.primary.name()); break; }
+                        };
+                        out_buf.clear();
+                        if let Message::Text(text) = msg {
+                            let bytes = text.as_bytes();
+                            if bytes.first() == Some(&b'{') {
+                                let v: serde_json::Value = serde_json::from_slice(bytes).unwrap_or_default();
+                                if v["event"] == "auth" {
+                                    if v["status"] == "OK" {
+                                        _authed = true;
+                                        self.engine.on_auth();
+                                        let subs = self.engine.subscriptions();
+                                        for sub in subs {
+                                            let _ = primary_write.send(Message::Text(sub.into())).await;
+                                        }
+                                    } else {
+                                        error!(event = "auth_failed", venue = self.primary.name());
+                                    }
+                                } else {
+                                    self.engine.on_system_event(&v, &mut out_buf);
+                                }
+                            } else if bytes.first() == Some(&b'[') {
+                                let mut mut_bytes = bytes.to_vec();
+                                self.engine.on_market_message(&mut mut_bytes, &mut out_buf);
+                            }
+                        }
+                        if !out_buf.is_empty() {
+                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
+                            let _ = primary_write.send(Message::Text(text.into())).await;
+                        }
+                    }
+                    // Secondary venue (Binance): market data only
+                    msg = sec_read.next() => {
+                        let msg = match msg {
+                            Some(Ok(m)) => m,
+                            _ => { warn!("{} secondary WS disconnect", self.secondary.name()); break; }
+                        };
+                        if let Message::Text(text) = msg {
+                            let mut bytes = text.as_bytes().to_vec();
+                            out_buf.clear();
+                            self.engine.on_secondary_message(&mut bytes, &mut out_buf);
+                            // Secondary data may trigger primary venue orders
+                            if !out_buf.is_empty() {
+                                let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
+                                let _ = primary_write.send(Message::Text(text.into())).await;
+                            }
+                        }
+                    }
+                    _ = tokio::time::sleep(Duration::from_millis(1)) => {
+                        out_buf.clear();
+                        self.engine.on_loop(&mut out_buf);
+                        if !out_buf.is_empty() {
+                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
+                            let _ = primary_write.send(Message::Text(text.into())).await;
+                        }
+                    }
+                    _ = tokio::signal::ctrl_c() => {
+                        info!("Received Ctrl-C, shutting down {}", self.name);
+                        out_buf.clear();
+                        self.engine.on_shutdown(&mut out_buf);
+                        if !out_buf.is_empty() {
+                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
+                            let _ = primary_write.send(Message::Text(text.into())).await;
+                        }
+                        return Ok(());
+                    }
+                }
+            }
+        }
+    }
+}
