@@ -107,19 +107,22 @@ def fetch_bitfinex_fees():
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read())
 
-        # Response format: [[maker_fee, ..., maker_rebate], ...]
+        # Response format: [null, null, null, null, [[maker_fee,..],[taker_fee,..]],...]
         # or {fees_funding: ..., fees_trading: {maker_fee: ..., taker_fee: ...}}
         # Handle both array and object format
         if isinstance(data, dict):
             trading = data.get('fees_trading_30d', data.get('fees_trading', {}))
             maker = trading.get('maker_fee', 0.001)  # default 0.1%
             taker = trading.get('taker_fee', 0.002)   # default 0.2%
-        elif isinstance(data, list) and len(data) > 0:
-            # Array format: [[null, null, null, null, [maker_fee, taker_fee, ...]]]
-            fees = data[4] if len(data) > 4 else data[0]
-            if isinstance(fees, list) and len(fees) >= 2:
-                maker = abs(fees[0])
-                taker = abs(fees[1])
+        elif isinstance(data, list) and len(data) > 4:
+            # Array format: [null, null, null, null, [[maker,0,0,...],[taker,0,0,...]]]
+            fee_pair = data[4]
+            if isinstance(fee_pair, list) and len(fee_pair) >= 2:
+                maker_arr = fee_pair[0]  # [maker_fee, ...]
+                taker_arr = fee_pair[1]  # [taker_fee, ...]
+                maker = abs(maker_arr[0]) if isinstance(maker_arr, list) and len(maker_arr) > 0 else 0
+                taker = abs(taker_arr[0]) if isinstance(taker_arr, list) and len(taker_arr) > 0 else 0
+                log.info(f"Bitfinex raw: maker_arr={maker_arr}, taker_arr={taker_arr}")
             else:
                 maker = 0.001
                 taker = 0.002
