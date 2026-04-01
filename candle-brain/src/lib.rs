@@ -17,8 +17,10 @@
 pub mod brain;
 pub mod chat_template;
 pub mod logit_sniper;
+pub mod transplant;
 
 pub use brain::{BrainConfig, CandleL1Brain};
 pub use chat_template::ModelFamily;
 pub use logit_sniper::{HftAction, LogitSniper};
+pub use transplant::{BrainTransplant, TransplantResult};
 
