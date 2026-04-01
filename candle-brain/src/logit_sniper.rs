@@ -21,6 +21,8 @@ pub enum HftAction {
     Bid,
     /// Skew grid toward asks (bearish signal)
     Ask,
+    /// Kill — toxic sweep imminent, cancel all limits NOW
+    Kill,
 }
 
 impl HftAction {
@@ -30,21 +32,20 @@ impl HftAction {
             HftAction::Hold => 0,
             HftAction::Bid => magnitude,
             HftAction::Ask => -magnitude,
+            HftAction::Kill => i64::MIN, // Sentinel: triggers order cancel
         }
     }
 }
 
 /// Logit Sniping engine — maps model output to HFT actions.
 ///
-/// At boot time, resolves token IDs for "HOLD", "BID", "ASK"
+/// At boot time, resolves token IDs for "HOLD", "BID", "ASK", "KILL"
 /// from the model's tokenizer. This makes the system model-agnostic.
 pub struct LogitSniper {
-    /// Token ID for "HOLD"
     pub id_hold: u32,
-    /// Token ID for "BID"
     pub id_bid: u32,
-    /// Token ID for "ASK"
     pub id_ask: u32,
+    pub id_kill: u32,
 }
 
 impl LogitSniper {
@@ -54,13 +55,14 @@ impl LogitSniper {
         let id_hold = Self::resolve_token(tokenizer, "HOLD")?;
         let id_bid = Self::resolve_token(tokenizer, "BID")?;
         let id_ask = Self::resolve_token(tokenizer, "ASK")?;
+        let id_kill = Self::resolve_token(tokenizer, "KILL")?;
 
         info!(
-            "🎯 LogitSniper armed: HOLD={}, BID={}, ASK={}",
-            id_hold, id_bid, id_ask
+            "🎯 LogitSniper armed: HOLD={} BID={} ASK={} KILL={}",
+            id_hold, id_bid, id_ask, id_kill
         );
 
-        Ok(Self { id_hold, id_bid, id_ask })
+        Ok(Self { id_hold, id_bid, id_ask, id_kill })
     }
 
     /// Resolve a token ID dynamically. Tries multiple variants:
@@ -94,30 +96,32 @@ impl LogitSniper {
     }
 
     /// Extract HFT action from raw logits tensor.
-    /// This is the HOT PATH — called on every tick.
-    ///
-    /// Takes the last token's logits and compares probabilities
-    /// for HOLD, BID, ASK. Highest probability wins.
-    ///
+    /// HOT PATH — 4-way softmax over [HOLD, BID, ASK, KILL].
     /// Returns (action, confidence) where confidence is [0.0, 1.0].
     #[inline]
     pub fn snipe(&self, logits: &[f32]) -> (HftAction, f32) {
         let hold = logits.get(self.id_hold as usize).copied().unwrap_or(f32::NEG_INFINITY);
         let bid = logits.get(self.id_bid as usize).copied().unwrap_or(f32::NEG_INFINITY);
         let ask = logits.get(self.id_ask as usize).copied().unwrap_or(f32::NEG_INFINITY);
+        let kill = logits.get(self.id_kill as usize).copied().unwrap_or(f32::NEG_INFINITY);
 
-        // Softmax over just these 3 logits
-        let max_val = hold.max(bid).max(ask);
+        // Softmax over 4 logits
+        let max_val = hold.max(bid).max(ask).max(kill);
         let exp_hold = (hold - max_val).exp();
         let exp_bid = (bid - max_val).exp();
         let exp_ask = (ask - max_val).exp();
-        let sum = exp_hold + exp_bid + exp_ask;
+        let exp_kill = (kill - max_val).exp();
+        let sum = exp_hold + exp_bid + exp_ask + exp_kill;
 
         let p_hold = exp_hold / sum;
         let p_bid = exp_bid / sum;
         let p_ask = exp_ask / sum;
+        let p_kill = exp_kill / sum;
 
-        if p_hold >= p_bid && p_hold >= p_ask {
+        // KILL takes absolute priority if it wins
+        if p_kill >= p_hold && p_kill >= p_bid && p_kill >= p_ask {
+            (HftAction::Kill, p_kill)
+        } else if p_hold >= p_bid && p_hold >= p_ask {
             (HftAction::Hold, p_hold)
         } else if p_bid > p_ask {
             (HftAction::Bid, p_bid)
@@ -133,8 +137,8 @@ mod tests {
 
     #[test]
     fn test_snipe_hold() {
-        let sniper = LogitSniper { id_hold: 0, id_bid: 1, id_ask: 2 };
-        let logits = vec![10.0, 2.0, 1.0]; // HOLD dominates
+        let sniper = LogitSniper { id_hold: 0, id_bid: 1, id_ask: 2, id_kill: 3 };
+        let logits = vec![10.0, 2.0, 1.0, 0.5];
         let (action, conf) = sniper.snipe(&logits);
         assert_eq!(action, HftAction::Hold);
         assert!(conf > 0.9);
@@ -142,18 +146,27 @@ mod tests {
 
     #[test]
     fn test_snipe_bid() {
-        let sniper = LogitSniper { id_hold: 0, id_bid: 1, id_ask: 2 };
-        let logits = vec![1.0, 10.0, 2.0]; // BID dominates
+        let sniper = LogitSniper { id_hold: 0, id_bid: 1, id_ask: 2, id_kill: 3 };
+        let logits = vec![1.0, 10.0, 2.0, 0.5];
         let (action, _) = sniper.snipe(&logits);
         assert_eq!(action, HftAction::Bid);
     }
 
     #[test]
     fn test_snipe_ask() {
-        let sniper = LogitSniper { id_hold: 0, id_bid: 1, id_ask: 2 };
-        let logits = vec![1.0, 2.0, 10.0]; // ASK dominates
+        let sniper = LogitSniper { id_hold: 0, id_bid: 1, id_ask: 2, id_kill: 3 };
+        let logits = vec![1.0, 2.0, 10.0, 0.5];
         let (action, _) = sniper.snipe(&logits);
         assert_eq!(action, HftAction::Ask);
+    }
+
+    #[test]
+    fn test_snipe_kill() {
+        let sniper = LogitSniper { id_hold: 0, id_bid: 1, id_ask: 2, id_kill: 3 };
+        let logits = vec![1.0, 2.0, 1.0, 15.0]; // KILL dominates
+        let (action, conf) = sniper.snipe(&logits);
+        assert_eq!(action, HftAction::Kill);
+        assert!(conf > 0.9);
     }
 
     #[test]
@@ -161,14 +174,14 @@ mod tests {
         assert_eq!(HftAction::Hold.to_bias(5000), 0);
         assert_eq!(HftAction::Bid.to_bias(5000), 5000);
         assert_eq!(HftAction::Ask.to_bias(5000), -5000);
+        assert_eq!(HftAction::Kill.to_bias(5000), i64::MIN);
     }
 
     #[test]
     fn test_confidence_sums_to_one() {
-        let sniper = LogitSniper { id_hold: 0, id_bid: 1, id_ask: 2 };
-        let logits = vec![3.0, 2.0, 1.0];
+        let sniper = LogitSniper { id_hold: 0, id_bid: 1, id_ask: 2, id_kill: 3 };
+        let logits = vec![3.0, 2.0, 1.0, 0.5];
         let (_, conf) = sniper.snipe(&logits);
-        // Individual confidence won't be 1.0, but softmax is normalized
         assert!(conf > 0.0 && conf < 1.0);
     }
 }

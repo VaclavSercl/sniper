@@ -98,12 +98,29 @@ impl CandleL1Brain {
         Self::boot(&BrainConfig::default())
     }
 
-    /// Build minimal prompt for 1-token classification.
-    fn build_prompt(obi: f64, spread_bps: f64, delta: f64, vol: f64) -> String {
+    /// Build Few-Shot anchored prompt for Logit Sniping.
+    ///
+    /// Design: Explicit RULES + 3 in-context examples force the model
+    /// into a "decision tension" state. The prompt ends with "ACTION: "
+    /// and we snipe the logits at that exact position.
+    ///
+    /// TOX = toxicity score [0.0, 1.0] from toxic flow detector.
+    fn build_prompt(obi: f64, spread_bps: f64, delta: f64, tox: f64) -> String {
         format!(
-            "System: HFT reflex. One word: HOLD BID ASK\n\
-             User: OBI:{:.2} SPR:{:.1} DLT:{:.2} VOL:{:.3}\nAssistant:",
-            obi, spread_bps, delta, vol
+            "ROLE: Ultra-low latency HFT Reflex Core.\n\
+             TASK: Classify L2 microstructure to predict next 100ms price tick.\n\
+             OUTPUT: EXACTLY ONE TOKEN FROM [BID, ASK, HOLD, KILL].\n\
+             RULES:\n\
+             1. TOX > 0.70 -> KILL (Toxic sweep imminent, cancel all limits).\n\
+             2. OBI > 0.40 AND TOX < 0.40 -> BID (Buy pressure, skew up).\n\
+             3. OBI < -0.40 AND TOX < 0.40 -> ASK (Sell pressure, skew down).\n\
+             4. Otherwise -> HOLD.\n\
+             \n\
+             DATA: OBI:0.85 | SPR:0.5 | TOX:0.10 -> ACTION: BID\n\
+             DATA: OBI:-0.60 | SPR:0.5 | TOX:0.15 -> ACTION: ASK\n\
+             DATA: OBI:0.10 | SPR:2.5 | TOX:0.85 -> ACTION: KILL\n\
+             DATA: OBI:{:.2} | SPR:{:.1} | TOX:{:.2} -> ACTION: ",
+            obi, spread_bps, tox
         )
     }
 

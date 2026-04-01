@@ -281,13 +281,16 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
         let result = match &mut backend {
             L1Backend::Candle(brain) => {
                 // Candle: Logit Sniping (in-process, <20ms)
+                // 4th param = toxicity score (normalized 0.0-1.0)
+                let tox = latest.toxic_hits as f64 / 1000.0_f64.max(1.0);
                 brain.reset_cache();
-                match brain.reflex_action(latest.obi, spread_bps, latest.macro_bias, 0.01) {
+                match brain.reflex_action(latest.obi, spread_bps, latest.macro_bias, tox.min(1.0)) {
                     Ok((action, confidence)) => {
                         let (action_str, conf_pct) = match action {
                             candle_brain::HftAction::Hold => ("HOLD", (confidence * 100.0) as u32),
                             candle_brain::HftAction::Bid => ("SKEW_BID", (confidence * 100.0) as u32),
                             candle_brain::HftAction::Ask => ("SKEW_ASK", (confidence * 100.0) as u32),
+                            candle_brain::HftAction::Kill => ("PAUSE_TRADING", (confidence * 100.0) as u32),
                         };
                         Ok(GpuDecision {
                             action: Some(action_str.to_string()),
