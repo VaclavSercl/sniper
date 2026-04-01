@@ -28,6 +28,7 @@ import struct
 import time
 import signal
 import logging
+from collections import deque
 import numpy as np
 from l2_rust_offsets import OFF_L1_SKEW, OFF_L1_CONF
 
@@ -80,6 +81,7 @@ STORM_VPIN_THRESHOLD = 0.7      # VPIN toxicity threshold
 STORM_SPREAD_Z_THRESHOLD = 3.0  # Spread z-score threshold
 STORM_OBI_MOMENTUM = 0.4        # OBI momentum extreme
 STORM_CALM_CYCLES = 10          # Consecutive calm cycles to deactivate
+GPU_TEMP_MAX = 85               # GPU temperature limit (°C)
 
 # ═══════════════════════════════════════════════════════════
 # Feature Engineering
@@ -443,7 +445,7 @@ def run_inference():
 
             if features is not None:
                 # Get current mid price for learning feedback
-                current_mid = extractor.mid_history[-1] if extractor.mid_history else 0
+                current_mid = float(extractor.mid_history[extractor.ptr - 1]) if extractor.tick_count > 0 else 0.0
 
                 # Online learning: use previous prediction vs actual return
                 if prev_mid > 0 and current_mid > 0:
@@ -468,9 +470,10 @@ def run_inference():
                 # ═══ HIVE MIND: Toxic Storm Detection ═══
                 # Check 3 conditions: VPIN, spread z-score, OBI momentum
                 try:
-                    vpin_val = features[3] if len(features) > 3 else 0  # VPIN feature
-                    spread_z_val = features[7] if len(features) > 7 else 0  # spread z-score
-                    obi_mom_val = abs(features[4]) if len(features) > 4 else 0  # OBI momentum
+                    n_feat = features.shape[0] if hasattr(features, 'shape') else len(features)
+                    vpin_val = float(features[3]) if n_feat > 3 else 0.0
+                    spread_z_val = float(features[7]) if n_feat > 7 else 0.0
+                    obi_mom_val = abs(float(features[4])) if n_feat > 4 else 0.0
 
                     is_storm = (
                         vpin_val > STORM_VPIN_THRESHOLD or
@@ -494,6 +497,7 @@ def run_inference():
             cycle_count += 1
 
             # Status log every 60s
+            now = time.time()
             if now - last_log_time > 60:
                 hr = model.hit_rate * 100
                 tp = model.total_predictions
