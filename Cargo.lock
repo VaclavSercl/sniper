@@ -758,7 +758,7 @@ dependencies = [
 
 [[package]]
 name = "grid"
-version = "1.0.0"
+version = "20.1.0"
 dependencies = [
  "anyhow",
  "arrayvec",
@@ -940,7 +940,7 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 
 [[package]]
 name = "hydra"
-version = "11.1.0"
+version = "20.1.0"
 dependencies = [
  "anyhow",
  "arrayvec",
@@ -1441,7 +1441,7 @@ dependencies = [
 
 [[package]]
 name = "moonshot"
-version = "1.0.0"
+version = "20.1.0"
 dependencies = [
  "anyhow",
  "axum",
@@ -1502,7 +1502,7 @@ dependencies = [
 
 [[package]]
 name = "nexus"
-version = "1.0.0"
+version = "20.1.0"
 dependencies = [
  "anyhow",
  "bytes",
@@ -2407,7 +2407,7 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "sniper-shared"
-version = "12.0.0"
+version = "20.1.0"
 dependencies = [
  "anyhow",
  "arrayvec",
@@ -2448,7 +2448,7 @@ dependencies = [
 
 [[package]]
 name = "sovereign-cortex"
-version = "14.0.0"
+version = "20.1.0"
 dependencies = [
  "anyhow",
  "arrayvec",
@@ -2928,7 +2928,7 @@ dependencies = [
 
 [[package]]
 name = "trigon"
-version = "1.0.0"
+version = "20.1.0"
 dependencies = [
  "anyhow",
  "axum",

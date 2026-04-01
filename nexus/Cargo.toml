@@ -1,6 +1,6 @@
 [package]
 name = "nexus"
-version = "1.0.0"
+version = "20.1.0"
 edition = "2024"
 
 [[bin]]
