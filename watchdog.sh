@@ -131,6 +131,6 @@ done
 # ═══ LOG ═══
 if [ "$ALERTS" -gt 0 ]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ⚠️ $ALERTS alerts"
-elif [ "$(($(date +%M) % 15))" -eq 0 ]; then
+elif [ "$((10#$(date +%M) % 15))" -eq 0 ]; then
     echo "[$(date '+%Y-%m-%d %H:%M:%S')] ✅ All processes OK"
 fi
