@@ -164,7 +164,7 @@ class L2OracleAsync:
         try:
             # ZeroClaw agent: routes through sovereign constitution + Gemini
             process = await asyncio.create_subprocess_exec(
-                "zeroclaw", "agent", "-m", prompt,
+                "/home/wwwenda/.cargo/bin/zeroclaw", "agent", "-m", prompt,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )

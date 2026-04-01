@@ -1073,7 +1073,7 @@ def handle_natural_language(message):
         # XML isolation: user input wrapped in <user_input> tags
         prompt = NL_INTENT_PROMPT + text + NL_INTENT_SUFFIX
         result = subprocess.run(
-            ["zeroclaw", "agent", "-m", prompt],
+            ["/home/wwwenda/.cargo/bin/zeroclaw", "agent", "-m", prompt],
             capture_output=True, text=True, timeout=60
         )
         raw = result.stdout.strip()
@@ -1217,7 +1217,7 @@ Give a brief strategic analysis in Czech (5 sentences max):
 3) Market awareness: general BTC market comment"""
 
         result = subprocess.run(
-            ["zeroclaw", "agent", "-m", prompt],
+            ["/home/wwwenda/.cargo/bin/zeroclaw", "agent", "-m", prompt],
             capture_output=True, text=True, timeout=60
         )
         response = result.stdout.strip()[:3500]
