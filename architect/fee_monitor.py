@@ -90,22 +90,33 @@ def fetch_bitfinex_fees():
         log.warning("Bitfinex API keys not configured, using defaults")
         return None
 
-    nonce = str(int(time.time() * 1000))
-    body = '{}'
     path = '/v2/auth/r/summary'
-    signature_payload = f'/api{path}{nonce}{body}'
-    sig = hmac.new(secret.encode(), signature_payload.encode(), hashlib.sha384).hexdigest()
+    for attempt in range(3):
+        nonce = str(int(time.time() * 1000))
+        body = '{}'
+        signature_payload = f'/api{path}{nonce}{body}'
+        sig = hmac.new(secret.encode(), signature_payload.encode(), hashlib.sha384).hexdigest()
 
-    url = f'https://api.bitfinex.com{path}'
-    req = urllib.request.Request(url, data=body.encode(), method='POST')
-    req.add_header('Content-Type', 'application/json')
-    req.add_header('bfx-nonce', nonce)
-    req.add_header('bfx-apikey', key)
-    req.add_header('bfx-signature', sig)
+        url = f'https://api.bitfinex.com{path}'
+        req = urllib.request.Request(url, data=body.encode(), method='POST')
+        req.add_header('Content-Type', 'application/json')
+        req.add_header('bfx-nonce', nonce)
+        req.add_header('bfx-apikey', key)
+        req.add_header('bfx-signature', sig)
+
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read())
+            break  # success
+        except Exception as e:
+            log.warning(f"Bitfinex attempt {attempt+1}/3 failed: {e}")
+            if attempt < 2:
+                time.sleep(5)
+            else:
+                log.error(f"Bitfinex fee fetch failed after 3 attempts")
+                return None
 
     try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            data = json.loads(resp.read())
 
         # Response format: [null, null, null, null, [[maker_fee,..],[taker_fee,..]],...]
         # or {fees_funding: ..., fees_trading: {maker_fee: ..., taker_fee: ...}}
