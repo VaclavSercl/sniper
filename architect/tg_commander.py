@@ -587,12 +587,12 @@ def cmd_fees(message):
             "━━━━━━━━━━━━━━━━━━━━━━━",
             "",
             "🔵 *Bitfinex:*",
-            f"  Maker: `{maker/100:.1f}` bps ({maker/100000*100:.3f}%)",
-            f"  Taker: `{taker/100:.1f}` bps ({taker/100000*100:.3f}%)",
+            f"  Maker: `{maker/100:.1f}` bps ({maker/1000000*100:.3f}%)",
+            f"  Taker: `{taker/100:.1f}` bps ({taker/1000000*100:.3f}%)",
             "",
             "🟠 *Binance:*",
-            f"  Maker: `{bnb_maker/100:.1f}` bps ({bnb_maker/100000*100:.3f}%)",
-            f"  Taker: `{bnb_taker/100:.1f}` bps ({bnb_taker/100000*100:.3f}%)",
+            f"  Maker: `{bnb_maker/100:.1f}` bps ({bnb_maker/1000000*100:.3f}%)",
+            f"  Taker: `{bnb_taker/100:.1f}` bps ({bnb_taker/1000000*100:.3f}%)",
             "",
             f"📅 Last fetch: `{last_str}`",
             f"💓 Heartbeat: `{hb_str}` {stale}",
@@ -1068,12 +1068,12 @@ def handle_natural_language(message):
 
     log.info(f"NL input: '{text}'")
 
-    # Try Gemini for intent parsing
+    # Try ZeroClaw for intent parsing
     try:
         # XML isolation: user input wrapped in <user_input> tags
         prompt = NL_INTENT_PROMPT + text + NL_INTENT_SUFFIX
         result = subprocess.run(
-            ["gemini", "-m", "gemini-3.1-pro-preview", "-p", prompt],
+            ["zeroclaw", "agent", "-m", prompt],
             capture_output=True, text=True, timeout=60
         )
         raw = result.stdout.strip()
@@ -1217,7 +1217,7 @@ Give a brief strategic analysis in Czech (5 sentences max):
 3) Market awareness: general BTC market comment"""
 
         result = subprocess.run(
-            ["gemini", "-m", "gemini-3.1-pro-preview", "-p", prompt],
+            ["zeroclaw", "agent", "-m", prompt],
             capture_output=True, text=True, timeout=60
         )
         response = result.stdout.strip()[:3500]

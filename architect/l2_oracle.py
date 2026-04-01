@@ -159,12 +159,12 @@ class L2OracleAsync:
         # 2. Build Gemini prompt
         prompt = self._build_prompt(bots, gpu_data)
 
-        # 3. Call Gemini CLI
-        log.info("  🤖 Calling Gemini CLI (async/neblokující)...")
+        # 3. Call ZeroClaw L2 Oracle
+        log.info("  🐝 Calling ZeroClaw agent (Gemini 3.1 Pro)...")
         try:
-            # 2. Optimalizace: Async Process (žádný GIL lock)
+            # ZeroClaw agent: routes through sovereign constitution + Gemini
             process = await asyncio.create_subprocess_exec(
-                "gemini", "-m", "gemini-3.1-pro-preview", "--output-format=json", "-p", prompt,
+                "zeroclaw", "agent", "-m", prompt,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
@@ -173,11 +173,11 @@ class L2OracleAsync:
             stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=GEMINI_TIMEOUT)
             if process.returncode != 0:
                 err_text = stderr.decode()[:200]
-                log.error(f"Gemini failed: {err_text}")
-                self._send_fallback_report(f"Gemini chyba: {err_text}")
+                log.error(f"ZeroClaw failed: {err_text}")
+                self._send_fallback_report(f"ZeroClaw chyba: {err_text}")
                 return
             raw = stdout.decode().strip()
-            log.info(f"  ✅ Gemini responded ({len(raw)} bytes)")
+            log.info(f"  ✅ ZeroClaw responded ({len(raw)} bytes)")
         except asyncio.TimeoutError:
             log.error("Gemini timeout!")
             if 'process' in locals():
