@@ -6,6 +6,7 @@ members = [
     "grid",
     "trigon",
     "nexus",
+    "candle-brain",
 
     "architect/cortex",
 ]

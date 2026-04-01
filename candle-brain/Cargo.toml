@@ -1,0 +1,32 @@
+[package]
+name = "candle-brain"
+version = "21.0.0"
+edition = "2024"
+description = "In-process L1 AI inference for Sniper Armada HFT — Candle + GGUF + Logit Sniping"
+
+[[bin]]
+name = "candle-brain-test"
+path = "src/bin/test_inference.rs"
+
+[lib]
+name = "candle_brain"
+path = "src/lib.rs"
+
+[features]
+default = []
+# Enable CUDA for GPUs with sm_70+ (RTX 20xx/30xx/40xx)
+# GTX 1060 (sm_61) uses CPU mode — still in-process, no HTTP
+cuda = ["candle-core/cuda"]
+
+[dependencies]
+candle-core = { git = "https://github.com/huggingface/candle" }
+candle-nn = { git = "https://github.com/huggingface/candle" }
+candle-transformers = { git = "https://github.com/huggingface/candle" }
+hf-hub = "0.4"
+tokenizers = "0.21"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# Shared types for mmap integration
+sniper-shared = { path = "../shared" }
