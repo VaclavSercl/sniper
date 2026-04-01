@@ -272,7 +272,8 @@ impl SovereignEngine for TrigonEngine {
                             && max_usd > 0
                         {
                             et.executing.store(1, Ordering::Release);
-                            out_buf.extend_from_slice(b"[0,\"ox_multi\",null,[");
+                            use sniper_types::exchange::bitfinex_venue::BitfinexVenue;
+                            BitfinexVenue::write_batch_open(out_buf);
 
                             for l in 0..TRIGON_LEGS {
                                 let sym_hash = tr.leg_symbols[l].load(Ordering::Acquire);
@@ -285,16 +286,26 @@ impl SovereignEngine for TrigonEngine {
                                 let mut qty = if price > 0.0 { max_usd_f / price } else { 0.0 };
                                 if dir == 1 { qty = -qty; }
 
-                                if l > 0 { out_buf.extend_from_slice(b","); }
-                                out_buf.extend_from_slice(b"[\"on\",{\"gid\":4000,\"symbol\":\"");
-                                out_buf.extend_from_slice(sym.as_bytes());
-                                out_buf.extend_from_slice(b"\",\"amount\":\"");
-                                out_buf.extend_from_slice(self.ryu1.format(qty).as_bytes());
-                                out_buf.extend_from_slice(b"\",\"price\":\"");
-                                out_buf.extend_from_slice(self.ryu2.format(price).as_bytes());
-                                out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE IOC\"}]");
+                                if l == 0 {
+                                    // First leg: no leading comma — use raw open
+                                    out_buf.extend_from_slice(b"[\"on\",{\"gid\":");
+                                    let mut itoa_buf = itoa::Buffer::new();
+                                    out_buf.extend_from_slice(itoa_buf.format(4000u32).as_bytes());
+                                    out_buf.extend_from_slice(b",\"symbol\":\"");
+                                    out_buf.extend_from_slice(sym.as_bytes());
+                                    out_buf.extend_from_slice(b"\",\"amount\":\"");
+                                    out_buf.extend_from_slice(self.ryu1.format(qty).as_bytes());
+                                    out_buf.extend_from_slice(b"\",\"price\":\"");
+                                    out_buf.extend_from_slice(self.ryu2.format(price).as_bytes());
+                                    out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE IOC\"}]");
+                                } else {
+                                    BitfinexVenue::write_ioc_order(
+                                        out_buf, 4000, sym.as_bytes(),
+                                        self.ryu1.format(qty), self.ryu2.format(price),
+                                    );
+                                }
                             }
-                            out_buf.extend_from_slice(b"]]");
+                            BitfinexVenue::write_batch_close(out_buf);
 
                             et.executions.fetch_add(1, Ordering::Relaxed);
                             self.last_exec_ms[t] = now_ms;

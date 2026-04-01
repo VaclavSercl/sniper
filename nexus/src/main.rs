@@ -236,7 +236,10 @@ impl SovereignEngine for NexusEngine {
             let bfx_signed_qty = if bfx_side == "BUY" { qty } else { -qty };
             let bfx_symbol = BFX_SYMBOLS[signal.pair_idx];
 
-            out_buf.extend_from_slice(b"[0,\"ox_multi\",null,[[\"on\",{\"gid\":");
+            use sniper_types::exchange::bitfinex_venue::BitfinexVenue;
+            BitfinexVenue::write_batch_open(out_buf);
+            // First order — no leading comma, write raw
+            out_buf.extend_from_slice(b"[\"on\",{\"gid\":");
             out_buf.extend_from_slice(self.itoa_buf.format(GID_NEXUS).as_bytes());
             out_buf.extend_from_slice(b",\"symbol\":\"");
             out_buf.extend_from_slice(bfx_symbol.as_bytes());
@@ -244,7 +247,8 @@ impl SovereignEngine for NexusEngine {
             out_buf.extend_from_slice(self.ryu1.format(bfx_signed_qty).as_bytes());
             out_buf.extend_from_slice(b"\",\"price\":\"");
             out_buf.extend_from_slice(self.ryu2.format(bfx_price).as_bytes());
-            out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE IOC\"}]]]");
+            out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE IOC\"}]");
+            BitfinexVenue::write_batch_close(out_buf);
 
             let bnb_side = match signal.direction {
                 ArbDirection::BuyBfxSellBnb => OrderSide::Sell,

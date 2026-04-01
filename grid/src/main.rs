@@ -171,26 +171,25 @@ impl SovereignEngine for GridEngine {
                         }
                         e_mut.active_sell_levels.store(sells.len() as u32, Ordering::Release);
 
+                        use sniper_types::exchange::bitfinex_venue::BitfinexVenue;
                         let _symbol = b"tBTCUSD";
-                        out_buf.extend_from_slice(b"[0,\"ox_multi\",null,[[\"oc_multi\",{\"symbol\":\"tBTCUSD\"}]");
+                        BitfinexVenue::write_batch_open_cancel_sym(out_buf, b"tBTCUSD");
 
                         for price in &buys {
-                            out_buf.extend_from_slice(b",[\"on\",{\"gid\":3000,\"symbol\":\"tBTCUSD\",\"amount\":\"");
-                            out_buf.extend_from_slice(self.ryu1.format(qty).as_bytes());
-                            out_buf.extend_from_slice(b"\",\"price\":\"");
-                            out_buf.extend_from_slice(self.ryu2.format(*price).as_bytes());
-                            out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\"}]");
+                            BitfinexVenue::write_limit_order(
+                                out_buf, 3000, b"tBTCUSD",
+                                self.ryu1.format(qty), self.ryu2.format(*price),
+                            );
                         }
 
                         for price in &sells {
-                            out_buf.extend_from_slice(b",[\"on\",{\"gid\":3000,\"symbol\":\"tBTCUSD\",\"amount\":\"");
-                            out_buf.extend_from_slice(self.ryu1.format(-qty).as_bytes());
-                            out_buf.extend_from_slice(b"\",\"price\":\"");
-                            out_buf.extend_from_slice(self.ryu2.format(*price).as_bytes());
-                            out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\"}]");
+                            BitfinexVenue::write_limit_order(
+                                out_buf, 3000, b"tBTCUSD",
+                                self.ryu1.format(-qty), self.ryu2.format(*price),
+                            );
                         }
 
-                        out_buf.extend_from_slice(b"]]");
+                        BitfinexVenue::write_batch_close(out_buf);
                         self.last_grid_calc = Instant::now();
                     }
                 }

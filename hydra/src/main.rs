@@ -262,8 +262,11 @@ impl SovereignEngine for HydraEngine {
 
                                         let mut ryu1 = ryu::Buffer::new();
                                         let mut ryu2 = ryu::Buffer::new();
-                                        out_buf.extend_from_slice(format!(r#"[0,"on",null,{{"gid":{},"symbol":"{}","amount":"{}","price":"{}","type":"EXCHANGE IOC"}}]"#,
-                                            sniper_types::BOT_GID_HYDRA, sniper_types::TRADING_SYMBOL, ryu1.format(amt_f), ryu2.format(price_f)).as_bytes());
+                                        sniper_types::exchange::bitfinex_venue::BitfinexVenue::write_standalone_ioc(
+                                            out_buf, sniper_types::BOT_GID_HYDRA,
+                                            sniper_types::TRADING_SYMBOL.as_bytes(),
+                                            ryu1.format(amt_f), ryu2.format(price_f),
+                                        );
                                         
                                         mask |= bit;
                                         engine.ghost_active_mask.store(mask, Ordering::Relaxed);
@@ -289,8 +292,11 @@ impl SovereignEngine for HydraEngine {
 
                                         let mut ryu1 = ryu::Buffer::new();
                                         let mut ryu2 = ryu::Buffer::new();
-                                        out_buf.extend_from_slice(format!(r#"[0,"on",null,{{"gid":{},"symbol":"{}","amount":"{}","price":"{}","type":"EXCHANGE IOC"}}]"#,
-                                            sniper_types::BOT_GID_HYDRA, sniper_types::TRADING_SYMBOL, ryu1.format(amt_f), ryu2.format(price_f)).as_bytes());
+                                        sniper_types::exchange::bitfinex_venue::BitfinexVenue::write_standalone_ioc(
+                                            out_buf, sniper_types::BOT_GID_HYDRA,
+                                            sniper_types::TRADING_SYMBOL.as_bytes(),
+                                            ryu1.format(amt_f), ryu2.format(price_f),
+                                        );
                                         
                                         mask |= bit;
                                         engine.ghost_active_mask.store(mask, Ordering::Relaxed);
@@ -658,9 +664,14 @@ impl SovereignEngine for HydraEngine {
 
             if order_parts.is_empty() { return; }
 
-            let orders_str = order_parts.join(",");
-            let msg = format!(r#"[0,"ox_multi",null,[{}{}]]"#, oc_payload, orders_str);
-            out_buf.extend_from_slice(msg.as_bytes());
+            use sniper_types::exchange::bitfinex_venue::BitfinexVenue;
+            BitfinexVenue::write_batch_open(out_buf);
+            out_buf.extend_from_slice(oc_payload.as_bytes());
+            for (i, part) in order_parts.iter().enumerate() {
+                if i > 0 || !oc_payload.is_empty() { out_buf.extend_from_slice(b","); }
+                out_buf.extend_from_slice(part.as_bytes());
+            }
+            BitfinexVenue::write_batch_close(out_buf);
 
             engine.last_buy_price.store(buy_i, Ordering::SeqCst);
             engine.last_sell_price.store(sell_i, Ordering::SeqCst);

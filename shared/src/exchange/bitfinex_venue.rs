@@ -174,6 +174,146 @@ impl BitfinexVenue {
     }
 }
 
+// ═══════════════════════════════════════════════════════════
+// Zero-Alloc Order Builders (for L0 hot path)
+//
+// These write BFX wire format directly to out_buf without heap
+// allocations. Bots call these instead of manual extend_from_slice.
+// This centralizes ALL Bitfinex encoding in one file.
+// ═══════════════════════════════════════════════════════════
+
+impl BitfinexVenue {
+    // ── ox_multi batch builders ──
+
+    /// Write the opening of an ox_multi batch with cancel-by-symbol.
+    /// Pattern: `[0,"ox_multi",null,[["oc_multi",{"symbol":"tBTCUSD"}]`
+    #[inline]
+    pub fn write_batch_open_cancel_sym(buf: &mut bytes::BytesMut, symbol: &[u8]) {
+        buf.extend_from_slice(b"[0,\"ox_multi\",null,[[\"oc_multi\",{\"symbol\":\"");
+        buf.extend_from_slice(symbol);
+        buf.extend_from_slice(b"\"}]");
+    }
+
+    /// Write the opening of an ox_multi batch with cancel-by-gid.
+    /// Pattern: `[0,"ox_multi",null,[["oc_multi",{"gid":[3000]}]`
+    #[inline]
+    pub fn write_batch_open_cancel_gid(buf: &mut bytes::BytesMut, gid: u32) {
+        buf.extend_from_slice(b"[0,\"ox_multi\",null,[[\"oc_multi\",{\"gid\":[");
+        let mut itoa_buf = itoa::Buffer::new();
+        buf.extend_from_slice(itoa_buf.format(gid).as_bytes());
+        buf.extend_from_slice(b"]}]");
+    }
+
+    /// Write the opening of an ox_multi batch without cancel.
+    /// Pattern: `[0,"ox_multi",null,[`
+    #[inline]
+    pub fn write_batch_open(buf: &mut bytes::BytesMut) {
+        buf.extend_from_slice(b"[0,\"ox_multi\",null,[");
+    }
+
+    /// Write a LIMIT order into the batch (comma-separated).
+    /// Pattern: `,[\"on\",{\"gid\":3000,\"symbol\":\"tBTCUSD\",\"amount\":\"0.001\",\"price\":\"68000.0\",\"type\":\"EXCHANGE LIMIT\"}]`
+    #[inline]
+    pub fn write_limit_order(
+        buf: &mut bytes::BytesMut,
+        gid: u32,
+        symbol: &[u8],
+        amount: &str,   // pre-formatted by ryu
+        price: &str,    // pre-formatted by ryu
+    ) {
+        buf.extend_from_slice(b",[\"on\",{\"gid\":");
+        let mut itoa_buf = itoa::Buffer::new();
+        buf.extend_from_slice(itoa_buf.format(gid).as_bytes());
+        buf.extend_from_slice(b",\"symbol\":\"");
+        buf.extend_from_slice(symbol);
+        buf.extend_from_slice(b"\",\"amount\":\"");
+        buf.extend_from_slice(amount.as_bytes());
+        buf.extend_from_slice(b"\",\"price\":\"");
+        buf.extend_from_slice(price.as_bytes());
+        buf.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\"}]");
+    }
+
+    /// Write a LIMIT POST-ONLY order into the batch.
+    #[inline]
+    pub fn write_limit_postonly_order(
+        buf: &mut bytes::BytesMut,
+        gid: u32,
+        symbol: &[u8],
+        amount: &str,
+        price: &str,
+    ) {
+        buf.extend_from_slice(b",[\"on\",{\"gid\":");
+        let mut itoa_buf = itoa::Buffer::new();
+        buf.extend_from_slice(itoa_buf.format(gid).as_bytes());
+        buf.extend_from_slice(b",\"symbol\":\"");
+        buf.extend_from_slice(symbol);
+        buf.extend_from_slice(b"\",\"amount\":\"");
+        buf.extend_from_slice(amount.as_bytes());
+        buf.extend_from_slice(b"\",\"price\":\"");
+        buf.extend_from_slice(price.as_bytes());
+        buf.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\",\"flags\":4096}]");
+    }
+
+    /// Write an IOC order into the batch.
+    #[inline]
+    pub fn write_ioc_order(
+        buf: &mut bytes::BytesMut,
+        gid: u32,
+        symbol: &[u8],
+        amount: &str,
+        price: &str,
+    ) {
+        buf.extend_from_slice(b",[\"on\",{\"gid\":");
+        let mut itoa_buf = itoa::Buffer::new();
+        buf.extend_from_slice(itoa_buf.format(gid).as_bytes());
+        buf.extend_from_slice(b",\"symbol\":\"");
+        buf.extend_from_slice(symbol);
+        buf.extend_from_slice(b"\",\"amount\":\"");
+        buf.extend_from_slice(amount.as_bytes());
+        buf.extend_from_slice(b"\",\"price\":\"");
+        buf.extend_from_slice(price.as_bytes());
+        buf.extend_from_slice(b"\",\"type\":\"EXCHANGE IOC\"}]");
+    }
+
+    /// Write a standalone IOC order (not inside ox_multi batch).
+    /// Pattern: `[0,"on",null,{"gid":2001,"symbol":"tBTCUSD","amount":"0.001","price":"68000","type":"EXCHANGE IOC"}]`
+    #[inline]
+    pub fn write_standalone_ioc(
+        buf: &mut bytes::BytesMut,
+        gid: u32,
+        symbol: &[u8],
+        amount: &str,
+        price: &str,
+    ) {
+        buf.extend_from_slice(b"[0,\"on\",null,{\"gid\":");
+        let mut itoa_buf = itoa::Buffer::new();
+        buf.extend_from_slice(itoa_buf.format(gid).as_bytes());
+        buf.extend_from_slice(b",\"symbol\":\"");
+        buf.extend_from_slice(symbol);
+        buf.extend_from_slice(b"\",\"amount\":\"");
+        buf.extend_from_slice(amount.as_bytes());
+        buf.extend_from_slice(b"\",\"price\":\"");
+        buf.extend_from_slice(price.as_bytes());
+        buf.extend_from_slice(b"\",\"type\":\"EXCHANGE IOC\"}]");
+    }
+
+    /// Close the ox_multi batch.
+    /// Pattern: `]]`
+    #[inline]
+    pub fn write_batch_close(buf: &mut bytes::BytesMut) {
+        buf.extend_from_slice(b"]]");
+    }
+
+    /// Write a cancel-all-by-gid standalone message.
+    #[inline]
+    pub fn write_cancel_gid_standalone(buf: &mut bytes::BytesMut, gid: u32) {
+        buf.extend_from_slice(b"[0,\"oc_multi\",null,{\"gid\":[");
+        let mut itoa_buf = itoa::Buffer::new();
+        buf.extend_from_slice(itoa_buf.format(gid).as_bytes());
+        buf.extend_from_slice(b"]}]");
+    }
+}
+
 impl Default for BitfinexVenue {
     fn default() -> Self { Self::new() }
 }

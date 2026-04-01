@@ -98,13 +98,10 @@ impl SovereignEngine for MoonshotEngine {
                         if order_usd > 0.0 && mid_f64 > 0.0 {
                             let coin_amount = (order_usd / mid_f64).max(0.00015);
                             if let Some(symbol) = self.idx_to_symbol.get(&idx) {
-                                out_buf.extend_from_slice(b"[0,\"on\",null,{\"gid\":2001,\"symbol\":\"");
-                                out_buf.extend_from_slice(symbol.as_bytes());
-                                out_buf.extend_from_slice(b"\",\"amount\":\"");
-                                out_buf.extend_from_slice(self.ryu1.format(coin_amount).as_bytes());
-                                out_buf.extend_from_slice(b"\",\"price\":\"");
-                                out_buf.extend_from_slice(self.ryu2.format(mid_f64).as_bytes());
-                                out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE IOC\"}]");
+                                sniper_types::exchange::bitfinex_venue::BitfinexVenue::write_standalone_ioc(
+                                    out_buf, 2001, symbol.as_bytes(),
+                                    self.ryu1.format(coin_amount), self.ryu2.format(mid_f64),
+                                );
 
                                 warn!(event = "moonshot_fired", symbol = %symbol, price = mid_f64);
                                 self.notifier.send(format!("🚀 MOONSHOT FIRED! {} @ ${:.2} (trigger ${:.2})", 
@@ -130,21 +127,17 @@ impl SovereignEngine for MoonshotEngine {
 
                             if buy_p < ask_f64 {
                                 if let Some(symbol) = self.idx_to_symbol.get(&idx) {
-                                    out_buf.extend_from_slice(b"[0,\"ox_multi\",null,[[\"oc_multi\",{\"symbol\":\"");
-                                    out_buf.extend_from_slice(symbol.as_bytes());
-                                    out_buf.extend_from_slice(b"\"}],[\"on\",{\"gid\":2000,\"symbol\":\"");
-                                    out_buf.extend_from_slice(symbol.as_bytes());
-                                    out_buf.extend_from_slice(b"\",\"amount\":\"");
-                                    out_buf.extend_from_slice(self.ryu1.format(coin_amount).as_bytes());
-                                    out_buf.extend_from_slice(b"\",\"price\":\"");
-                                    out_buf.extend_from_slice(self.ryu2.format(buy_p).as_bytes());
-                                    out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\"}],[\"on\",{\"gid\":2000,\"symbol\":\"");
-                                    out_buf.extend_from_slice(symbol.as_bytes());
-                                    out_buf.extend_from_slice(b"\",\"amount\":\"");
-                                    out_buf.extend_from_slice(self.ryu1.format(-coin_amount).as_bytes());
-                                    out_buf.extend_from_slice(b"\",\"price\":\"");
-                                    out_buf.extend_from_slice(self.ryu2.format(sell_p).as_bytes());
-                                    out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\"}]]]");
+                                    use sniper_types::exchange::bitfinex_venue::BitfinexVenue;
+                                    BitfinexVenue::write_batch_open_cancel_sym(out_buf, symbol.as_bytes());
+                                    BitfinexVenue::write_limit_order(
+                                        out_buf, 2000, symbol.as_bytes(),
+                                        self.ryu1.format(coin_amount), self.ryu2.format(buy_p),
+                                    );
+                                    BitfinexVenue::write_limit_order(
+                                        out_buf, 2000, symbol.as_bytes(),
+                                        self.ryu1.format(-coin_amount), self.ryu2.format(sell_p),
+                                    );
+                                    BitfinexVenue::write_batch_close(out_buf);
                                     
                                     e.buy_order_price.store((buy_p * PRICE_SCALE_I as f64) as u64, Ordering::Release);
                                     self.last_order_ts[idx] = Instant::now();
