@@ -2,6 +2,7 @@
 
 > **Sovereign HFT Trading System** — Institutional-grade algorithmic trading on Bitfinex.
 > Sub-millisecond execution. Zero-allocation hot paths. Fully autonomous operation.
+> **SIM v2.0** — Sovereign Intelligence Matrix with closed-loop AI governance.
 
 ---
 
@@ -70,11 +71,14 @@ The Cortex is a dedicated Rust daemon running 5 concurrent subsystems:
 - Writes `l1_skew_adjustment`, `toxic_flow_hits`, `l1_confidence_score` back to mmap
 - **Zero-alloc**: All computation uses stack buffers and incremental hashing
 
-### Sentinel (4-Layer Guardian, 60s cycle)
+### Sentinel (6-Layer Guardian, 5s cycle)
 - **Layer 1:** Mmap heartbeat watchdog (stale > 30s → alert)
 - **Layer 2:** AI timeout tracking (L1/L2 responsiveness)
 - **Layer 3:** Business logic (PnL crash, toxic rate, position drift, spread explosion)
 - **Layer 4:** Network liveness (async TCP connect to api.bitfinex.com:443)
+- **Layer 5:** System resources (CPU, RAM, GPU temp, VRAM, disk, LM Studio)
+- **Layer 6:** Regime Sentinel — flash crash (>0.5% in 30s), sweep storm (3+ spread explosions)
+  - Writes `1` to `/dev/shm/beroun/toxic_storm.bin` (shared with ML Shield Hive Mind)
 
 ### Macro Intelligence
 - **Binance WS:** Real-time BTC/USDT mid-price for cross-venue delta
@@ -195,3 +199,88 @@ sniper/
 ├── deploy_armada.sh # Sovereign Boot Script
 └── watchdog.sh      # Cron-based mmap heartbeat monitor
 ```
+
+---
+
+## SIM v2.0 — Sovereign Intelligence Matrix
+
+### Overview
+
+```
+┌──────────────────────────────────────────────────────┐
+│        SOVEREIGN INTELLIGENCE MATRIX v2.0             │
+├──────────────────────────────────────────────────────┤
+│                                                      │
+│  L2 STRATEGIC BRAIN (Python, 5min cycles)            │
+│  ├── Performance Tribunal (3+1 RAG closed-loop)      │
+│  ├── Adaptive Governor (5-bot bidirectional tuning)  │
+│  └── Portfolio Coordinator (dynamic VaR)             │
+│                                                      │
+│  L1 TACTICAL SHIELD (Rust/Python, 50ms–5s)           │
+│  ├── ML Shield v2.0 (online learning, Hive Mind)     │
+│  ├── Sentinel Layer 6 (flash crash, sweep storm)     │
+│  └── toxic_storm.bin (1-byte mmap, dual-writer)      │
+│         ↑ writes                    ↓ reads           │
+│    ML Shield + Sentinel  →  ALL 5 RUST BOTS          │
+│                                                      │
+│  CONTINUOUS LEARNING (Cron)                           │
+│  ├── Nightly Retrain (00:00, Shadow Validation)      │
+│  └── Weekly GPU Audit (Sun 06:00, Gemini)            │
+│                                                      │
+└──────────────────────────────────────────────────────┘
+```
+
+### Performance Tribunal (Closed-Loop AI)
+
+The L2 Oracle (Gemini) was previously "open-loop" — it made decisions but never
+learned if they were good or bad. The Tribunal fixes this:
+
+1. **Decision History:** Every L2 decision is saved to `decision_history` (SQLite)
+   with full context: regime, PnL snapshot, parameters, bot states.
+2. **T-1 Evaluation:** At the start of each cycle, the Tribunal evaluates the
+   *previous* decision: what was the PnL delta? Did toxicity improve or worsen?
+3. **3+1 RAG Injection:** Gemini receives: 3 most recent decisions + outcomes,
+   plus 1 "golden standard" (best decision ever for current regime).
+
+### Adaptive Parameter Governor
+
+Replaces the old single-bot `_audit_strategies`:
+
+- **ALL 5 bots** monitored (Hydra, Moonshot, Grid, Trigon, Nexus)
+- **Bidirectional tuning:** grid_step widens on loss, tightens on profit
+- **Fail-fast:** toxic > 50% OR 7d PnL < -$2 → immediate PAPER mode
+- Asymmetric: "stairs up, elevator down"
+
+### Portfolio Coordinator
+
+- **Dynamic VaR:** `Max_Exposure = Equity × 5% / VolMultiplier`
+- **VaR Utilization:** SAFE (<60%), CAUTION (60-85%), CRITICAL (>85%)
+- **Cross-bot coordination:** Prevents all bots going LONG simultaneously
+- **Hard limit:** 0.05 BTC absolute maximum
+
+### Hive Mind (Cross-Bot Toxic Storm)
+
+The Hive Mind provides fleet-wide coordination via a shared 1-byte mmap flag:
+
+| Component | Role | Latency |
+|-----------|------|---------|
+| `ml_shield.py` | **Writer** — VPIN > 0.7 OR spread_z > 3 OR OBI_mom > 0.4 | 50ms |
+| `sentinel.rs` Layer 6 | **Writer** — flash crash > 0.5% OR 3+ spread explosions | 5s |
+| All 5 Rust bots | **Reader** — skip order placement when flag = 1 | < 1μs |
+
+```
+/dev/shm/beroun/toxic_storm.bin  (1 byte)
+  0x00 = CLEAR  → normal trading
+  0x01 = STORM  → all bots defensive (no new orders)
+```
+
+### Continuous Learning Pipeline
+
+| Schedule | Script | Purpose |
+|----------|--------|---------|
+| `0 0 * * *` | `nightly_retrain.py` | Retrain ML Shield on 24h data |
+| `0 6 * * 0` | `weekly_gpu_audit.py` | Gemini reviews GPU tuning |
+
+**Shadow Validation Gate:** v_new model must beat v_old on **both** hit rate
+AND mark-out PnL on 6h out-of-sample data. If worse → silently discarded.
+Prevents catastrophic forgetting.

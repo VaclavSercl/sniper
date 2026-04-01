@@ -1,4 +1,4 @@
-# 🐺 SNIPER ARMADA v15.1 — Installation Guide
+# 🐺 SNIPER ARMADA v19.0 — Installation Guide (SIM v2.0)
 
 ## Requirements
 
@@ -19,7 +19,7 @@ rustup default stable
 sudo apt install python3 python3-pip build-essential pkg-config libssl-dev
 
 # Python deps
-pip install --user pyTelegramBotAPI websocket-client requests
+pip install --user pyTelegramBotAPI websocket-client requests numpy
 ```
 
 ## Installation
@@ -51,6 +51,8 @@ cargo build --release --workspace
 ### 4. IPC
 ```bash
 mkdir -p /dev/shm/beroun
+# Initialize Hive Mind flag (SIM v2.0)
+printf '\x00' > /dev/shm/beroun/toxic_storm.bin
 ```
 
 ### 5. Deploy
@@ -108,6 +110,7 @@ journalctl -u sniper-armada --since "1 min ago" | grep -c panic  # 0
 | `/dev/shm/beroun/cross_exchange.bin`| Nexus | Cross-Exchange BBA IPC |
 | `/dev/shm/beroun/pnl_state.bin` | PnL Daemon | FIFO PnL data |
 | `/dev/shm/beroun/mdf.bin` | MDF | Market data feed |
+| `/dev/shm/beroun/toxic_storm.bin` | ML Shield + Sentinel | Hive Mind flag (1 byte) |
 
 ## SQLite Databases
 
@@ -126,3 +129,15 @@ journalctl -u sniper-armada --since "1 min ago" | grep -c panic  # 0
 | 1 | Moonshot L0 | SCHED_FIFO 70 |
 | 2 | Grid L0 | normal |
 | 3 | Trigon L0 + OS + Python AI + Dashboards | normal |
+
+## Cron Schedule
+
+| Schedule | Script | Purpose |
+|----------|--------|---------|
+| `* * * * *` | `watchdog.sh` | Process health + restart |
+| `* * * * *` | `market_downsampler.py` | 1s + 1m candle aggregation |
+| `*/30 * * * *` | `fee_monitor.py` | Exchange fee sync |
+| `0 0 * * *` | `nightly_retrain.py` | ML Shield retrain (SIM v2.0) |
+| `0 3 * * *` | `retention_cron.py` | Data retention cleanup |
+| `0 4 * * *` | `market_downsampler.py` | Parquet export + cleanup |
+| `0 6 * * 0` | `weekly_gpu_audit.py` | GPU tuning audit (SIM v2.0) |

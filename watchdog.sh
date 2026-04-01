@@ -112,6 +112,15 @@ if ! is_alive "price_bridge"; then
     ALERTS=$((ALERTS + 1))
 fi
 
+if ! is_alive "ml_shield"; then
+    tg_alert "shield_down" "⚠️ WATCHDOG: ML Shield spadl → restartuji"
+    cd "$ARMADA_ROOT/architect" && python3 ml_shield.py >> "$LOG_DIR/ml_shield.log" 2>&1 &
+    # Ensure Hive Mind flag exists
+    mkdir -p /dev/shm/beroun
+    [ ! -f /dev/shm/beroun/toxic_storm.bin ] && printf '\x00' > /dev/shm/beroun/toxic_storm.bin
+    ALERTS=$((ALERTS + 1))
+fi
+
 # Nexus: only alert, don't restart (L2 Oracle manages trading bots)
 if ! is_alive "nexus-core"; then
     # Only alert if nexus is supposed to be running (check armada_state)
