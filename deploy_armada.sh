@@ -184,7 +184,6 @@ $(date '+%H:%M:%S')"
 
 echo "🛡️ Watchdog duties delegated to cron (watchdog.sh)"
 
-# Keep the deployment script alive so systemd doesn't think the service stopped
-while true; do
-    sleep 3600
-done
+# Script exits here — systemd Type=oneshot+RemainAfterExit=yes
+# keeps child processes alive in the service cgroup.
+exit 0
