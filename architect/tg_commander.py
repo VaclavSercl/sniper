@@ -90,6 +90,9 @@ cortex = CortexClient()  # UDS bridge to Rust Cortex
 # ── BOT REGISTRY ────────────────────────────────────────────
 from orchestration import BOTS, is_running, get_pid, start_bot, stop_bot
 
+# ── GLOBALS ─────────────────────────────────────────────────
+oracle_trigger_event = threading.Event()
+
 # ── SECURITY ────────────────────────────────────────────────
 
 def auth(message) -> bool:
@@ -393,6 +396,12 @@ def cmd_help(message):
 def cmd_status(message):
     if not auth(message): return
     bot.reply_to(message, get_status())
+
+@bot.message_handler(commands=["oracle"])
+def cmd_oracle(message):
+    if not auth(message): return
+    oracle_trigger_event.set()
+    bot.reply_to(message, "🧠 L2 Oracle cyklus byl manuálně vyžádán. Zpracovávám...")
 
 @bot.message_handler(commands=["panic"])
 def cmd_panic(message):
@@ -1114,6 +1123,11 @@ def handle_natural_language(message):
             _run_analysis(message)
             return
 
+        if action == "oracle":
+            bot.reply_to(message, f"🐺 {response}\n\n🧠 Spouštím L2 Oracle cyklus...")
+            oracle_trigger_event.set()
+            return
+
         if action == "panic":
             cmd_panic(message)
             return
@@ -1293,7 +1307,8 @@ def main():
                 asyncio.run(oracle.run_cycle(report_type=report_type))
             except Exception as e:
                 log.error(f"L2 Oracle error: {e}")
-            time.sleep(300)  # 5 minutes
+            oracle_trigger_event.wait(timeout=300)  # Wait up to 5 minutes or until triggered
+            oracle_trigger_event.clear()
 
     threading.Thread(target=l2_oracle_loop, daemon=True).start()
 
