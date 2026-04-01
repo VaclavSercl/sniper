@@ -22,6 +22,7 @@ pub const BOT_GID_HYDRA: u32 = 1000;    // Range: 1000–1999
 pub const BOT_GID_MOONSHOT: u32 = 2000;  // Range: 2000–2999
 pub const BOT_GID_GRID: u32 = 3000;      // Range: 3000–3999
 pub const BOT_GID_TRIGON: u32 = 4000;     // Range: 4000–4999
+pub const BOT_GID_NEXUS: u32 = 5000;     // Range: 5000–5999
 
 /// Fibonacci-like spacing multipliers for grid levels
 /// Level 1: 1.0x grid, Level 2: 2.5x, Level 3: 4.5x, Level 4: 7.0x, Level 5: 10.0x

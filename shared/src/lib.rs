@@ -8,6 +8,7 @@ pub mod grid_types;
 pub mod trigon_types;
 pub mod pnl_types;
 pub mod exchange;
+pub mod bot_manifest;
 
 // ═══ Runtime utilities (behind 'runtime' feature) ═══
 // Enable with: sniper-shared = { path = "../shared", features = ["runtime"] }

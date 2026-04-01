@@ -13,6 +13,7 @@ pub mod binance;
 pub mod cross_types;
 pub mod venue;
 pub mod bitfinex_venue;
+pub mod binance_venue;
 
 pub use types::*;
 
