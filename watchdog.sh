@@ -78,8 +78,9 @@ ALERTS=0
 # ═══ PROCESS HEALTH ═══
 
 if ! is_alive "hydra-core"; then
-    tg_alert "hydra_down" "🚨 WATCHDOG: Hydra-core CRASHED! → restartuji"
-    cd "$ARMADA_ROOT" && taskset -c 0 ./target/release/hydra-core >> "$LOG_DIR/hydra-core.log" 2>&1 &
+    tg_alert "hydra_down" "🚨 WATCHDOG: Hydra-core CRASHED! → restartuji přes SBP"
+    pkill -9 "hydra-core" 2>/dev/null; sleep 1
+    cd "$ARMADA_ROOT" && python3 -c "from architect.orchestration import start_bot; start_bot('hydra')" &
     ALERTS=$((ALERTS + 1))
 fi
 
@@ -91,15 +92,10 @@ for BOT_NAME in moonshot grid trigon nexus; do
         if [ "$BOT_MODE" = "OFFLINE" ] || [ "$BOT_MODE" = "STOPPED" ]; then
             continue
         fi
-        tg_alert "${BOT_NAME}_down" "🚨 WATCHDOG: ${CORE} CRASHED! (was $BOT_MODE) → restartuji"
+        tg_alert "${BOT_NAME}_down" "🚨 WATCHDOG: ${CORE} CRASHED! (was $BOT_MODE) → restartuji přes SBP"
         # Kill any zombie remnants first
         pkill -9 -f "$CORE" 2>/dev/null; sleep 1
-        # CPU assignment: moonshot=1, grid=2, trigon=3, nexus=3
-        CPU=2
-        [ "$BOT_NAME" = "moonshot" ] && CPU=1
-        [ "$BOT_NAME" = "trigon" ] && CPU=3
-        [ "$BOT_NAME" = "nexus" ] && CPU=3
-        cd "$ARMADA_ROOT" && taskset -c $CPU ./target/release/$CORE >> "$LOG_DIR/${CORE}.log" 2>&1 &
+        cd "$ARMADA_ROOT" && python3 -c "from architect.orchestration import start_bot; start_bot('$BOT_NAME')" &
         ALERTS=$((ALERTS + 1))
     fi
 done
