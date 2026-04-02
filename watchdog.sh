@@ -92,6 +92,8 @@ for BOT_NAME in moonshot grid trigon nexus; do
             continue
         fi
         tg_alert "${BOT_NAME}_down" "🚨 WATCHDOG: ${CORE} CRASHED! (was $BOT_MODE) → restartuji"
+        # Kill any zombie remnants first
+        pkill -9 -f "$CORE" 2>/dev/null; sleep 1
         # CPU assignment: moonshot=1, grid=2, trigon=3, nexus=3
         CPU=2
         [ "$BOT_NAME" = "moonshot" ] && CPU=1
@@ -145,7 +147,7 @@ fi
 
 # ═══ DUPLICATE CLEANUP ═══
 # Note: watchdog.sh is NOT checked — cron creates new bash instances each minute, pgrep sees them all
-for proc in tg_commander pnl_daemon price_bridge market_recorder sovereign-cortex; do
+for proc in tg_commander pnl_daemon price_bridge market_recorder sovereign-cortex hydra-core moonshot-core grid-core trigon-core nexus-core; do
     kill_dupes "$proc"
 done
 

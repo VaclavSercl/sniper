@@ -5,7 +5,7 @@
   },
   "moonshot": {
     "mode": "PAPER",
-    "since": "2026-04-02T04:20:08.558566"
+    "since": "2026-04-02T06:19:10.922456"
   },
   "grid": {
     "mode": "PAPER",
@@ -19,7 +19,7 @@
     "mode": "PAPER",
     "since": "2026-04-02T06:08:26.074990"
   },
-  "last_healthy_ts": "2026-04-02T06:13:28.112896",
+  "last_healthy_ts": "2026-04-02T06:18:44.929527",
   "shutdown_reason": "planned_reboot_test",
   "last_healthy": "2026-04-02T00:46:28.062071"
 }
