@@ -78,9 +78,26 @@ ALERTS=0
 # ═══ PROCESS HEALTH ═══
 
 if ! is_alive "hydra-core"; then
-    tg_alert "hydra_down" "🚨 WATCHDOG: Hydra-core CRASHED!"
+    tg_alert "hydra_down" "🚨 WATCHDOG: Hydra-core CRASHED! → restartuji"
+    cd "$ARMADA_ROOT" && taskset -c 0 ./target/release/hydra-core >> "$LOG_DIR/hydra-core.log" 2>&1 &
     ALERTS=$((ALERTS + 1))
 fi
+
+# Trading bots: auto-restart if mode is PAPER or LIVE
+for BOT_NAME in grid trigon nexus; do
+    CORE="${BOT_NAME}-core"
+    if ! is_alive "$CORE"; then
+        BOT_MODE=$(python3 -c "import json; print(json.load(open('$ARMADA_ROOT/state/armada_state.json')).get('$BOT_NAME',{}).get('mode','OFFLINE'))" 2>/dev/null || echo "OFFLINE")
+        if [ "$BOT_MODE" = "OFFLINE" ] || [ "$BOT_MODE" = "STOPPED" ]; then
+            continue
+        fi
+        tg_alert "${BOT_NAME}_down" "🚨 WATCHDOG: ${CORE} CRASHED! (was $BOT_MODE) → restartuji"
+        CPU=2
+        [ "$BOT_NAME" = "nexus" ] && CPU=3
+        cd "$ARMADA_ROOT" && taskset -c $CPU ./target/release/$CORE >> "$LOG_DIR/${CORE}.log" 2>&1 &
+        ALERTS=$((ALERTS + 1))
+    fi
+done
 
 if ! is_alive "tg_commander"; then
     tg_alert "commander_down" "⚠️ WATCHDOG: TG Commander spadl → restartuji"
@@ -121,15 +138,7 @@ if ! is_alive "ml_shield"; then
     ALERTS=$((ALERTS + 1))
 fi
 
-# Nexus: only alert, don't restart (L2 Oracle manages trading bots)
-if ! is_alive "nexus-core"; then
-    # Only alert if nexus is supposed to be running (check armada_state)
-    NEXUS_MODE=$(python3 -c "import json; print(json.load(open('$ARMADA_ROOT/state/armada_state.json')).get('nexus',{}).get('mode','OFFLINE'))" 2>/dev/null || echo "OFFLINE")
-    if [ "$NEXUS_MODE" != "OFFLINE" ] && [ "$NEXUS_MODE" != "PAUSED" ]; then
-        tg_alert "nexus_down" "🚨 WATCHDOG: Nexus-core CRASHED! (was $NEXUS_MODE)"
-        ALERTS=$((ALERTS + 1))
-    fi
-fi
+
 
 # ═══ DUPLICATE CLEANUP ═══
 # Note: watchdog.sh is NOT checked — cron creates new bash instances each minute, pgrep sees them all
