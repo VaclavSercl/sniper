@@ -42,7 +42,7 @@ fn safe_as_f64(v: &BorrowedValue) -> Option<f64> {
 #[inline]
 fn store_order_slot(ids: &[std::sync::atomic::AtomicU64; sniper_types::MAX_GRID_LEVELS], id: u64) {
     for slot in ids {
-        if slot.compare_exchange(0, id, Ordering::SeqCst, Ordering::SeqCst).is_ok() {
+        if slot.compare_exchange(0, id, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
             return;
         }
     }
@@ -51,7 +51,7 @@ fn store_order_slot(ids: &[std::sync::atomic::AtomicU64; sniper_types::MAX_GRID_
 #[inline]
 fn clear_order_slot(ids: &[std::sync::atomic::AtomicU64; sniper_types::MAX_GRID_LEVELS], id: u64) {
     for slot in ids {
-        let _ = slot.compare_exchange(id, 0, Ordering::SeqCst, Ordering::SeqCst);
+        let _ = slot.compare_exchange(id, 0, Ordering::Relaxed, Ordering::Relaxed);
     }
 }
 
@@ -128,6 +128,7 @@ impl SovereignEngine for HydraEngine {
     fn on_system_event(&mut self, value: &serde_json::Value, _out_buf: &mut bytes::BytesMut) {
         if value["event"] == "subscribed" {
             self.chan_id = value["chanId"].as_i64();
+            self.snapshot_loaded = false;
             info!(event = "mdata_subscribed", chan_id = ?self.chan_id);
         } else if value["event"] == "error" {
             info!(event = "mdata_error", msg = ?value["msg"], code = ?value["code"]);
@@ -171,10 +172,8 @@ impl SovereignEngine for HydraEngine {
                     if remote_cs != local_cs {
                         self.cs_fail_count += 1;
                         if self.cs_fail_count >= 5 {
-                            // Wait, how do we trigger reconnect from Engine manually?
-                            // We can panic or kill process and let SystemD restart. 
-                            // But for now just error log
                             error!(event = "checksum_persist", remote = remote_cs, local = local_cs);
+                            panic!("L2 Checksum Drift detected (5 failures). Sovereign kill triggered to force SBP L2 Reconstruction.");
                         }
                     } else {
                         self.cs_fail_count = 0;
@@ -189,16 +188,21 @@ impl SovereignEngine for HydraEngine {
                         let mut ac = 0u32;
                         
                         // CLEAR ENTIRE BOOK BEFORE PROCESSING SNAPSHOT TO AVOID PHANTOM LIQUIDITY
-                        for i in 0..sniper_types::BOOK_LEVELS {
-                            engine.bids[i].price.store(0, Ordering::SeqCst);
-                            engine.bids[i].amount.store(0, Ordering::SeqCst);
-                            engine.bids[i].count.store(0, Ordering::SeqCst);
-                            engine.asks[i].price.store(0, Ordering::SeqCst);
-                            engine.asks[i].amount.store(0, Ordering::SeqCst);
-                            engine.asks[i].count.store(0, Ordering::SeqCst);
+                        if !self.snapshot_loaded && top_arr.len() > 10 {
+                            for i in 0..sniper_types::BOOK_LEVELS {
+                                engine.bids[i].price.store(0, Ordering::Relaxed);
+                                engine.bids[i].amount.store(0, Ordering::Relaxed);
+                                engine.bids[i].count.store(0, Ordering::Relaxed);
+                                
+                                engine.asks[i].price.store(u64::MAX, Ordering::Relaxed);
+                                engine.asks[i].amount.store(0, Ordering::Relaxed);
+                                engine.asks[i].count.store(0, Ordering::Relaxed);
+                            }
+                            fence(Ordering::Release);
                         }
                         
                         for entry in top_arr {
+                            info!(event = "raw_mdata_in", msg = ?entry);
                             if let Some(u) = entry.as_array()
                                 && let (Some(price), Some(count), Some(amount)) = (safe_as_f64(&u[0]), safe_as_i64(&u[1]), safe_as_f64(&u[2])) {
                                     let p = (price * sniper_types::PRICE_SCALE).round() as u64;
@@ -216,6 +220,7 @@ impl SovereignEngine for HydraEngine {
                             info!(event = "snapshot_loaded", bids = bc, asks = ac);
                         }
                     } else {
+                        info!(event = "raw_mdata_single", msg = ?top_arr);
                         if let (Some(price), Some(count), Some(amount)) = (safe_as_f64(&top_arr[0]), safe_as_i64(&top_arr[1]), safe_as_f64(&top_arr[2])) {
                             let p = (price * sniper_types::PRICE_SCALE).round() as u64;
                             let a = (amount * sniper_types::PRICE_SCALE).round() as i64;
@@ -684,15 +689,15 @@ impl SovereignEngine for HydraEngine {
             }
             BitfinexVenue::write_batch_close(out_buf);
 
-            engine.last_buy_price.store(buy_i, Ordering::SeqCst);
-            engine.last_sell_price.store(sell_i, Ordering::SeqCst);
+            engine.last_buy_price.store(buy_i, Ordering::Relaxed);
+            engine.last_sell_price.store(sell_i, Ordering::Relaxed);
             let t2t_us = now.elapsed().as_micros() as u64;
-            engine.t2t_micros.store(t2t_us, Ordering::SeqCst);
+            engine.t2t_micros.store(t2t_us, Ordering::Relaxed);
             sniper_types::l2_command::record_latency(unsafe{&*self.l1ring}, now);
-            engine.micro_price.store(micro_i as u64, Ordering::SeqCst);
-            engine.current_skew.store(inv_skew, Ordering::SeqCst);
-            engine.l2_imbalance.store((obi * sniper_types::PRICE_SCALE) as i64, Ordering::SeqCst);
-            engine.current_order_usd.store(final_order_usd as u64, Ordering::SeqCst);
+            engine.micro_price.store(micro_i as u64, Ordering::Relaxed);
+            engine.current_skew.store(inv_skew, Ordering::Relaxed);
+            engine.l2_imbalance.store((obi * sniper_types::PRICE_SCALE) as i64, Ordering::Relaxed);
+            engine.current_order_usd.store(final_order_usd as u64, Ordering::Relaxed);
             self.last_upd = now;
         }
     }
