@@ -15,6 +15,15 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BIN_DIR = os.path.join(PROJECT_ROOT, "target", "release")
 LOG_DIR = os.path.join(PROJECT_ROOT, "logs")
 
+from enum import Enum
+
+class RiskClass(Enum):
+    HEDGE_EXEC = "HEDGE_EXEC"
+    ARBITRAGE = "ARBITRAGE"
+    MARKET_MAKER = "MARKET_MAKER"
+    STAT_ARB = "STAT_ARB"
+    POSITIONAL = "POSITIONAL"
+
 BOTS = {
     "hydra": {
         "core": os.path.join(BIN_DIR, "hydra-core"),
@@ -24,6 +33,7 @@ BOTS = {
         "port": 3000,
         "emoji": "🐍",
         "desc": "BTC-USD Delta Lead",
+        "type": RiskClass.MARKET_MAKER,
     },
     "moonshot": {
         "core": os.path.join(BIN_DIR, "moonshot-core"),
@@ -32,6 +42,7 @@ BOTS = {
         "port": 3001,
         "emoji": "🌙",
         "desc": "Multi-Symbol Flash Crash",
+        "type": RiskClass.POSITIONAL,
     },
     "grid": {
         "core": os.path.join(BIN_DIR, "grid-core"),
@@ -40,6 +51,7 @@ BOTS = {
         "port": 3002,
         "emoji": "📐",
         "desc": "Dynamic Multi-Level Grid",
+        "type": RiskClass.POSITIONAL,
     },
     "trigon": {
         "core": os.path.join(BIN_DIR, "trigon-core"),
@@ -48,6 +60,7 @@ BOTS = {
         "port": 3003,
         "emoji": "🔺",
         "desc": "Triangular Arbitrage",
+        "type": RiskClass.STAT_ARB,
     },
     "nexus": {
         "core": os.path.join(BIN_DIR, "nexus-core"),
@@ -56,6 +69,7 @@ BOTS = {
         "port": 3004,
         "emoji": "🪐",
         "desc": "Cross-Exchange Arbitrage",
+        "type": RiskClass.ARBITRAGE,
     },
 }
 

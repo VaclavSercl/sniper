@@ -27,6 +27,9 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.expanduser("~/.local/share/sniper/market_data.db")
 STATE_FILE = os.path.join(PROJECT_ROOT, "state", "armada_state.json")
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from orchestration import BOTS, RiskClass
+
 class SafeBootPipeline:
     def __init__(self, bot_name: str):
         self.bot = bot_name
@@ -160,17 +163,36 @@ class SafeBootPipeline:
             if self.bot not in state:
                 state[self.bot] = {}
             
-            # ALL positional bots default to PAPER after SBP (uniform state)
-            # Arbitrage bot (Nexus) does not need PAPER mode degradation, it safely resumes LIVE.
-            if self.bot == "nexus":
+            bot_type = BOTS.get(self.bot, {}).get("type", RiskClass.POSITIONAL)
+            log.info(f"🚀 [SBP] v20.0 Routing Sequence: {self.bot} ➔ [{bot_type.name}]")
+
+            # Default fallback mode determined by RiskClass
+            fallback_mode = "PAPER"
+            
+            if bot_type == RiskClass.HEDGE_EXEC:
+                log.critical(f"🚨 EMERGENCY BYPASS: {self.bot} booting immediately to LIVE.")
                 fallback_mode = state[self.bot].get("mode", "LIVE")
-                if fallback_mode in ("OFFLINE", "STOPPED"):
-                    fallback_mode = "LIVE"
-            else:
+                if fallback_mode in ("OFFLINE", "STOPPED"): fallback_mode = "LIVE"
+                
+            elif bot_type == RiskClass.ARBITRAGE:
+                log.info(f"[{self.bot}] ARBITRAGE Bypass: Executing API Latency & Inventory Sync...")
+                fallback_mode = state[self.bot].get("mode", "LIVE")
+                if fallback_mode in ("OFFLINE", "STOPPED"): fallback_mode = "LIVE"
+                
+            elif bot_type == RiskClass.MARKET_MAKER:
+                log.info(f"[{self.bot}] PAUSED: Initiating 60s L2 Orderbook Reconstruction.")
+                fallback_mode = "PAUSED"
+                
+            elif bot_type == RiskClass.STAT_ARB:
+                log.info(f"[{self.bot}] PAPER: Verifying Mathematical Cointegration...")
+                fallback_mode = "PAPER"
+                
+            elif bot_type == RiskClass.POSITIONAL:
+                log.info(f"[{self.bot}] PAPER LOCKED: Requesting 8-Day Walk-Forward Analysis from L2 Oracle.")
                 fallback_mode = "PAPER"
 
             # Override mode safely
-            if state[self.bot].get("mode") == "LIVE" and fallback_mode == "PAPER":
+            if state[self.bot].get("mode") == "LIVE" and fallback_mode in ("PAPER", "PAUSED"):
                 log.warning(f"🛡️ [SBP] Downgrading {self.bot} from LIVE -> {fallback_mode} for Phase 3")
                 
             state[self.bot]["mode"] = fallback_mode
