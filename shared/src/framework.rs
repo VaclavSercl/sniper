@@ -87,47 +87,60 @@ impl<E: SovereignEngine, V: VenueAdapter> SovereignRunner<E, V> {
 
             let mut authed = false;
 
-            while let Some(msg) = read.next().await {
-                let msg = match msg {
-                    Ok(m) => m,
-                    Err(e) => { warn!("WS read err: {}", e); break; }
-                };
+            loop {
+                tokio::select! {
+                    msg_res = read.next() => {
+                        let msg = match msg_res {
+                            Some(Ok(m)) => m,
+                            Some(Err(e)) => { warn!("WS read err: {}", e); break; }
+                            None => { warn!("WS disconnected"); break; }
+                        };
 
-                out_buf.clear();
+                        out_buf.clear();
 
-                if let Message::Text(text) = msg {
-                    let bytes = text.as_bytes();
+                        if let Message::Text(text) = msg {
+                            let bytes = text.as_bytes();
 
-                    if bytes.first() == Some(&b'{') { 
-                        let v: serde_json::Value = serde_json::from_slice(bytes).unwrap_or_default();
-                        
-                        if v["event"] == "auth" {
-                            if v["status"] == "OK" {
-                                authed = true;
-                                self.engine.on_auth();
+                            if bytes.first() == Some(&b'{') { 
+                                let v: serde_json::Value = serde_json::from_slice(bytes).unwrap_or_default();
                                 
-                                let subs = self.engine.subscriptions();
-                                for sub in subs {
-                                    let _ = write.send(Message::Text(sub.into())).await;
+                                if v["event"] == "auth" {
+                                    if v["status"] == "OK" {
+                                        authed = true;
+                                        self.engine.on_auth();
+                                        
+                                        let subs = self.engine.subscriptions();
+                                        for sub in subs {
+                                            let _ = write.send(Message::Text(sub.into())).await;
+                                        }
+                                    } else {
+                                        error!(event = "auth_failed", status = %v["status"], msg = %v["msg"]);
+                                    }
+                                } else {
+                                    self.engine.on_system_event(&v, &mut out_buf);
                                 }
-                            } else {
-                                error!(event = "auth_failed", status = %v["status"], msg = %v["msg"]);
+                            } else if bytes.first() == Some(&b'[') {
+                                // Market Data Array (Fast-path)
+                                let mut mut_bytes = bytes.to_vec();
+                                self.engine.on_market_message(&mut mut_bytes, &mut out_buf);
                             }
-                        } else {
-                            self.engine.on_system_event(&v, &mut out_buf);
                         }
-                    } else if bytes.first() == Some(&b'[') {
-                        // Market Data Array (Fast-path)
-                        let mut mut_bytes = bytes.to_vec();
-                        self.engine.on_market_message(&mut mut_bytes, &mut out_buf);
+                        
+                        self.engine.on_loop(&mut out_buf);
+                        
+                        if !out_buf.is_empty() {
+                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
+                            let _ = write.send(Message::Text(text.into())).await;
+                        }
                     }
-                }
-                
-                self.engine.on_loop(&mut out_buf);
-                
-                if !out_buf.is_empty() {
-                    let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
-                    let _ = write.send(Message::Text(text.into())).await;
+                    _ = tokio::time::sleep(Duration::from_millis(1)) => {
+                        out_buf.clear();
+                        self.engine.on_loop(&mut out_buf);
+                        if !out_buf.is_empty() {
+                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
+                            let _ = write.send(Message::Text(text.into())).await;
+                        }
+                    }
                 }
             }
             warn!("Sovereign WS read loop ended for {}", self.name);

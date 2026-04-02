@@ -572,6 +572,8 @@ impl SovereignEngine for HydraEngine {
             let drop = l2risk.flash_crash_drop_bps.load(Ordering::Relaxed);
             self.notifier.alert(format!("🚨 CROSS-BOT EMERGENCY: Flash crash {}bps detected by Moonshot — cancelling all Hydra orders!", drop));
             out_buf.extend_from_slice(b"[0,\"oc_multi\",null,{\"all\":1}]");
+            self.last_upd = now;
+            sniper_types::l2_command::record_latency(unsafe{&*self.l1ring}, now);
             return;
         }
 
@@ -582,11 +584,17 @@ impl SovereignEngine for HydraEngine {
         let bb_i = best_bid as i64;
         if buy_i >= ba_i { buy_i = ba_i - MIN_TICK; }
         if sell_i <= bb_i { sell_i = bb_i + MIN_TICK; }
-        if buy_i >= sell_i { return; }
+        if buy_i >= sell_i { 
+            self.last_upd = now;
+            sniper_types::l2_command::record_latency(unsafe{&*self.l1ring}, now);
+            return; 
+        }
 
         let spread_bps = ((sell_i - buy_i) as f64 / micro_i as f64 * 10000.0) as u64;
         if !ghost::is_spread_profitable(spread_bps, fee_state) {
             engine.fee_kills.fetch_add(1, Ordering::Relaxed);
+            self.last_upd = now;
+            sniper_types::l2_command::record_latency(unsafe{&*self.l1ring}, now);
             return;
         }
 
@@ -594,7 +602,6 @@ impl SovereignEngine for HydraEngine {
         let ls = engine.last_sell_price.load(Ordering::SeqCst);
         let db = (buy_i - lb).abs();
         let ds = (sell_i - ls).abs();
-
         if db >= MIN_TICK || ds >= MIN_TICK || lb == 0 {
             let dll = risk.daily_loss_limit.load(Ordering::Acquire) as f64 / sniper_types::PRICE_SCALE;
             let r_pnl = engine.realized_pnl.load(Ordering::Acquire) as f64 / sniper_types::PRICE_SCALE;
@@ -722,6 +729,8 @@ impl SovereignEngine for HydraEngine {
 
             if !has_items { 
                 out_buf.truncate(out_len_snap);
+                self.last_upd = now;
+                sniper_types::l2_command::record_latency(unsafe{&*self.l1ring}, now);
                 return; 
             }
 
@@ -737,6 +746,9 @@ impl SovereignEngine for HydraEngine {
             engine.l2_imbalance.store((obi * sniper_types::PRICE_SCALE) as i64, Ordering::Relaxed);
             engine.current_order_usd.store(final_order_usd as u64, Ordering::Relaxed);
             self.last_upd = now;
+        } else {
+            self.last_upd = now;
+            sniper_types::l2_command::record_latency(unsafe{&*self.l1ring}, now);
         }
     }
 }
