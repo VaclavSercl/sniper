@@ -18,7 +18,7 @@
 - **Hexagonal Architecture** — `VenueAdapter` trait enables zero-effort exchange integration (Bitfinex, Binance, ...)
 - **Cognitive Engineering** — Few-Shot anchored L1 prompt + Sovereign Constitution L2 with Chain-of-Thought forcing
 - **Brain Transplant Protocol** — Safe hot-swap GGUF models with shadow mode validation, zero downtime
-- **Autonomous operation** — Sovereign Boot Protocol with paper→live validation, quota watchdog, Sentinel guardian
+- **Autonomous operation** — Sovereign Boot Protocol (v20.0 Strategy Pattern) with 5 RiskClass Pillars (HEDGE, ARBITRAGE, MARKET_MAKER, STAT_ARB, POSITIONAL), quota watchdog, Sentinel guardian
 - **Lock-free IPC** — mmap with SeqLock atomics, 64-byte cache-line aligned structs via `/dev/shm/beroun/`
 
 ## 🏗️ Architecture

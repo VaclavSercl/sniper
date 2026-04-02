@@ -49,14 +49,15 @@
 | **SeqLock Protocol** | Version counter (even=consistent) guards multi-field reads. |
 
 ### Bot Fleet
+*(Regulated via Sovereing Boot Protocol (SBP) and 5 Pillars of Risk)*
 
-| Bot | Strategy | Latency | Binary |
-|-----|----------|---------|--------|
-| **Hydra** | Market Making + OBI skew + Ghost orders | <1ms | `hydra-core` |
-| **Moonshot** | Flash crash dip buying (multi-pair) | <1ms | `moonshot-core` |
-| **Grid** | Dynamic grid market making (L2 warped) | <1ms | `grid-core` |
-| **Trigon** | Triangular arbitrage (14 triangles) | <1ms | `trigon-core` |
-| **Nexus** | Cross-exchange arb (Bitfinex↔Binance) | <5ms | `nexus-core` |
+| Bot | Strategy | Latency | RiskClass | Binary |
+|-----|----------|---------|-----------|--------|
+| **Hydra** | Market Making + OBI skew + Ghost orders | <1ms | `MARKET_MAKER` | `hydra-core` |
+| **Moonshot** | Flash crash dip buying (multi-pair) | <1ms | `POSITIONAL` | `moonshot-core` |
+| **Grid** | Dynamic grid market making (L2 warped) | <1ms | `POSITIONAL` | `grid-core` |
+| **Trigon** | Triangular arbitrage (14 triangles) | <1ms | `STAT_ARB` | `trigon-core` |
+| **Nexus** | Cross-exchange arb (Bitfinex↔Binance) | <5ms | `ARBITRAGE` | `nexus-core` |
 
 ---
 
