@@ -56,7 +56,6 @@ BOTS = {
         "port": 3004,
         "emoji": "🪐",
         "desc": "Cross-Exchange Arbitrage",
-        "args": ["--paper"],  # Start in paper mode by default
     },
 }
 

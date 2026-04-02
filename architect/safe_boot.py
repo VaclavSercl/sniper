@@ -160,11 +160,17 @@ class SafeBootPipeline:
             if self.bot not in state:
                 state[self.bot] = {}
             
-            # ALL bots default to PAPER after SBP (uniform state)
-            fallback_mode = "PAPER"
+            # ALL positional bots default to PAPER after SBP (uniform state)
+            # Arbitrage bot (Nexus) does not need PAPER mode degradation, it safely resumes LIVE.
+            if self.bot == "nexus":
+                fallback_mode = state[self.bot].get("mode", "LIVE")
+                if fallback_mode in ("OFFLINE", "STOPPED"):
+                    fallback_mode = "LIVE"
+            else:
+                fallback_mode = "PAPER"
 
             # Override mode safely
-            if state[self.bot].get("mode") == "LIVE":
+            if state[self.bot].get("mode") == "LIVE" and fallback_mode == "PAPER":
                 log.warning(f"🛡️ [SBP] Downgrading {self.bot} from LIVE -> {fallback_mode} for Phase 3")
                 
             state[self.bot]["mode"] = fallback_mode
