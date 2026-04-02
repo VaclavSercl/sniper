@@ -491,9 +491,9 @@ def run_inference():
                 # Check 3 conditions: VPIN, spread z-score, OBI momentum
                 try:
                     n_feat = features.shape[0] if hasattr(features, 'shape') else len(features)
-                    vpin_val = float(features[3]) if n_feat > 3 else 0.0
-                    spread_z_val = float(features[7]) if n_feat > 7 else 0.0
-                    obi_mom_val = abs(float(features[4])) if n_feat > 4 else 0.0
+                    obi_mom_val = abs(float(features[2])) if n_feat > 2 else 0.0
+                    spread_z_val = float(features[4]) if n_feat > 4 else 0.0
+                    vpin_val = float(features[5]) if n_feat > 5 else 0.0
 
                     is_storm = (
                         vpin_val > STORM_VPIN_THRESHOLD or
