@@ -37,3 +37,27 @@ Zde je přesný postup (Workflow), který AI musí automaticky iterovat dříve,
 - [ ] Soubor `master_dashboard.html` obsahuje vytvořenou záložku/kartu navázanou na stream z `dashboard_server.py`.
 
 Pokud během vývoje agent narazí na to, že tyto parametry chybí, nesmí bota spustit živě.
+
+---
+
+# 🏦 AI Workflow: Integrace nové Crypto Burzy (Exchange)
+
+Pokud agent přidává do ekosystému integraci na zbrusu novou burzu (např. Bybit, OKX, Kraken), musí ověřit a dodržet tyto pilíře kompliance, jinak se vystavuje arbitrážním chybám v datové fúzi:
+
+## 1. Symbol Normalization (Klíčové pro Arbitráž a Risk)
+- [ ] Všechny tickery z nové burzy (např. `BTCUSD`, `btc-usdt`, `XBTUSD`) musí být mapovány na jednotný vnitřní standard `sniper_types` (např. `BTC/USD`), aby nedošlo k duplicitním orderbookům ve sdílené paměti.
+
+## 2. API & Env Blueprint
+- [ ] V souboru `.env.example` jsou přidány proměnné pro novou burzu (např. `BYBIT_API_KEY`, `BYBIT_API_SECRET`).
+- [ ] Zkontrolováno, že `.env` loader načítá tyto klíče bezpečně z hostitele a nesdílí je v žádných lozích (`bot-core.log`).
+
+## 3. Fee & Rate Limit Monitor
+- [ ] Burza je zaregistrována v `architect/fee_monitor.py` včetně hardcoded "worst-case" defaultů pro taker/maker fees (aby kalkulace nepočítala s nulovými poplatky během startovního `HTTP 500` downtime).
+- [ ] Algoritmus zohledňuje Rate Limity burzy pro REST objednávky.
+
+## 4. Unifikovaný WebSocket Framework (Rust)
+- [ ] Parsery nové burzy v implementaci `sniper_types` se vážou na traity L1 Engine `SovereignEngine` a nepoužívají nezávislé proprietární modely. Tím je zachován plynulý průchod nulovou alokací.
+- [ ] Datové typy Orderbooku a Trade ticks konvertují `f64` (float) do interního atomického fix-point integer mechanismu (`PRICE_SCALE = 1e8`). Obchodování na Floatech je zakázáno!
+
+## 5. Robustní Ping/Pong Keepalive
+- [ ] Je implementován mechanismus odpovědí na ping rámce specifické pro danou burzu, aby se WebSocket odpojoval jen při výpadku a chytil disconnect pomocí `async_alert`.
