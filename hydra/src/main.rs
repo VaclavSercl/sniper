@@ -187,6 +187,17 @@ impl SovereignEngine for HydraEngine {
                     if is_nested {
                         let mut bc = 0u32;
                         let mut ac = 0u32;
+                        
+                        // CLEAR ENTIRE BOOK BEFORE PROCESSING SNAPSHOT TO AVOID PHANTOM LIQUIDITY
+                        for i in 0..sniper_types::BOOK_LEVELS {
+                            engine.bids[i].price.store(0, Ordering::SeqCst);
+                            engine.bids[i].amount.store(0, Ordering::SeqCst);
+                            engine.bids[i].count.store(0, Ordering::SeqCst);
+                            engine.asks[i].price.store(0, Ordering::SeqCst);
+                            engine.asks[i].amount.store(0, Ordering::SeqCst);
+                            engine.asks[i].count.store(0, Ordering::SeqCst);
+                        }
+                        
                         for entry in top_arr {
                             if let Some(u) = entry.as_array()
                                 && let (Some(price), Some(count), Some(amount)) = (safe_as_f64(&u[0]), safe_as_i64(&u[1]), safe_as_f64(&u[2])) {
