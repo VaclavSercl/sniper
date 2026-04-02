@@ -185,31 +185,9 @@ class SafeBootPipeline:
                 
                 # Asynchronní task po 60s interně přepne do LIVE
                 try:
-                    risk_entry = BOT_RISK_MAP.get(self.bot)
-                    risk_path = risk_entry[0] if risk_entry else ""
-                    offset = risk_entry[1] if risk_entry else 0
-                    
-                    async_cmd = f"""
-import time, json, mmap, struct, os
-time.sleep(60)
-state_file = '{STATE_FILE}'
-try:
-    with open(state_file) as f: d = json.load(f)
-    if d.get('{self.bot}', {{}}).get('mode') == 'PAUSED':
-        d['{self.bot}']['mode'] = 'LIVE'
-        with open(state_file, 'w') as f: json.dump(d, f, indent=2)
-        if os.path.exists('{risk_path}'):
-            with open('{risk_path}', 'r+b') as rf:
-                mm = mmap.mmap(rf.fileno(), 0)
-                struct.pack_into('<Q', mm, {offset}, 0)
-                mm.flush()
-                mm.close()
-            os.system('echo "✅ L2 Warmup dokoncen: {self.bot} PREPNUTA DO LIVE" >> {PROJECT_ROOT}/logs/tg_commander.log')
-except Exception as e:
-    os.system('echo "❌ L2 Warmup selhal: " + str(e) >> {PROJECT_ROOT}/logs/tg_commander.log')
-"""
+                    warmup_script = os.path.join(PROJECT_ROOT, "architect", "l2_warmup.py")
                     subprocess.Popen(
-                        ["python3", "-c", async_cmd],
+                        [sys.executable, warmup_script, self.bot, "60"],
                         cwd=PROJECT_ROOT,
                         start_new_session=True,
                         stdout=subprocess.DEVNULL,
