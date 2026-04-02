@@ -347,6 +347,18 @@ def _get_nexus_state():
     except Exception:
         pass
 
+    # Read armada_state.json for actual mode (PAPER/LIVE)
+    try:
+        state_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "state", "armada_state.json")
+        if os.path.exists(state_file):
+            import json
+            with open(state_file) as sf:
+                s_data = json.load(sf)
+                mode = s_data.get("nexus", {}).get("mode", "OFFLINE")
+                result["paper"] = (mode != "LIVE")
+    except Exception:
+        pass
+
     # Read live fees from fee_state.bin
     try:
         FEE_PATH = "/dev/shm/beroun/fee_state.bin"
