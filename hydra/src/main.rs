@@ -55,11 +55,13 @@ fn clear_order_slot(ids: &[std::sync::atomic::AtomicU64; sniper_types::MAX_GRID_
     }
 }
 
-fn collect_all_order_ids(eng: &EngineState) -> Vec<u64> {
-    eng.active_buy_ids.iter().chain(eng.active_sell_ids.iter())
-        .map(|s| s.load(Ordering::SeqCst))
-        .filter(|&id| id > 0)
-        .collect()
+fn collect_all_order_ids(eng: &EngineState) -> arrayvec::ArrayVec<u64, {sniper_types::MAX_GRID_LEVELS * 2}> {
+    let mut vec = arrayvec::ArrayVec::new();
+    for slot in eng.active_buy_ids.iter().chain(eng.active_sell_ids.iter()) {
+        let id = slot.load(Ordering::Relaxed);
+        if id > 0 { vec.push(id); }
+    }
+    vec
 }
 
 fn zero_all_order_slots(eng: &EngineState) {
@@ -599,8 +601,13 @@ impl SovereignEngine for HydraEngine {
             if dll > 0.0 && r_pnl < -dll {
                 let cancel_ids = collect_all_order_ids(engine);
                 if !cancel_ids.is_empty() {
-                    let ids_str: Vec<String> = cancel_ids.iter().map(|id| id.to_string()).collect();
-                    out_buf.extend_from_slice(format!(r#"[0,"oc_multi",null,{{"id":[{}]}}]"#, ids_str.join(",")).as_bytes());
+                    out_buf.extend_from_slice(b"[0,\"oc_multi\",null,{\"id\":[");
+                    let mut itoa_buf = itoa::Buffer::new();
+                    for (i, &id) in cancel_ids.iter().enumerate() {
+                        if i > 0 { out_buf.extend_from_slice(b","); }
+                        out_buf.extend_from_slice(itoa_buf.format(id).as_bytes());
+                    }
+                    out_buf.extend_from_slice(b"]}]");
                 }
                 risk.paused.store(1, Ordering::SeqCst);
                 self.notifier.alert(format!("🛑 *EMERGENCY STOP*\nDaily Loss Limit reached: `${:.2}` (limit `-${:.2}`)\nAll orders cancelled. System *LOCKED*.", r_pnl, dll));
@@ -618,10 +625,23 @@ impl SovereignEngine for HydraEngine {
             else { (grid_levels, grid_levels) };
 
             let cancel_ids = collect_all_order_ids(engine);
-            let oc_payload = if !cancel_ids.is_empty() {
-                let ids_str: Vec<String> = cancel_ids.iter().map(|id| id.to_string()).collect();
-                format!(r#"["oc_multi",{{"id":[{}]}}],"#, ids_str.join(","))
-            } else { String::new() };
+            
+            let mut out_len_snap = out_buf.len();
+            use sniper_types::exchange::bitfinex_venue::BitfinexVenue;
+            BitfinexVenue::write_batch_open(out_buf);
+            
+            let mut has_items = false;
+            let mut itoa_buf = itoa::Buffer::new();
+
+            if !cancel_ids.is_empty() {
+                out_buf.extend_from_slice(b"[\"oc_multi\",{\"id\":[");
+                for (i, &id) in cancel_ids.iter().enumerate() {
+                    if i > 0 { out_buf.extend_from_slice(b","); }
+                    out_buf.extend_from_slice(itoa_buf.format(id).as_bytes());
+                }
+                out_buf.extend_from_slice(b"]}]");
+                has_items = true;
+            }
 
             const MIN_ORDER_BTC: f64 = 0.00015;
             let w_btc = engine.wallet_btc.load(Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE;
@@ -636,7 +656,6 @@ impl SovereignEngine for HydraEngine {
             let cap_available = if pos_f64 < 0.0 || auth_cap <= 0.0 { w_usd } else { (auth_cap - pos_value).max(0.0).min(w_usd) };
             let btc_cap = if pos_f64 > 0.0 || auth_cap <= 0.0 { w_btc } else if mid_price > 0.0 { (auth_cap / mid_price).min(w_btc) } else { w_btc };
 
-            let mut order_parts: Vec<String> = Vec::with_capacity(10);
             let mut total_buy_usd = 0.0;
             let mut total_sell_btc = 0.0;
 
@@ -644,6 +663,9 @@ impl SovereignEngine for HydraEngine {
             let n_public_buy = gc.n_public_buy;
             let n_public_sell = gc.n_public_sell;
             let ghost_mode = gc.ghost_mode;
+
+            let mut fbuf_amt = ryu::Buffer::new();
+            let mut fbuf_price = ryu::Buffer::new();
 
             for i in 0..n_buy {
                 let spacing = (grid as f64 * sniper_types::LEVEL_SPACING[i]) as i64;
@@ -653,8 +675,18 @@ impl SovereignEngine for HydraEngine {
 
                 if i < n_public_buy {
                     if total_buy_usd + cost <= cap_available * 0.95 && amt >= MIN_ORDER_BTC {
-                        order_parts.push(format!(r#"["on",{{"gid":{},"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
-                            sniper_types::BOT_GID_HYDRA, sniper_types::TRADING_SYMBOL, amt, bp));
+                        if has_items { out_buf.extend_from_slice(b","); }
+                        out_buf.extend_from_slice(b"[\"on\",{\"gid\":");
+                        out_buf.extend_from_slice(itoa_buf.format(sniper_types::BOT_GID_HYDRA).as_bytes());
+                        out_buf.extend_from_slice(b",\"symbol\":\"");
+                        out_buf.extend_from_slice(sniper_types::TRADING_SYMBOL.as_bytes());
+                        out_buf.extend_from_slice(b"\",\"amount\":\"");
+                        out_buf.extend_from_slice(fbuf_amt.format_finite(amt).as_bytes());
+                        out_buf.extend_from_slice(b"\",\"price\":\"");
+                        out_buf.extend_from_slice(fbuf_price.format_finite(bp).as_bytes());
+                        out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\",\"flags\":4096}]");
+                        
+                        has_items = true;
                         total_buy_usd += cost;
                     }
                 } else if ghost_mode {
@@ -669,8 +701,18 @@ impl SovereignEngine for HydraEngine {
 
                 if i < n_public_sell {
                     if total_sell_btc + amt <= btc_cap * 0.95 && amt >= MIN_ORDER_BTC {
-                        order_parts.push(format!(r#"["on",{{"gid":{},"symbol":"{}","amount":"{:.5}","price":"{:.2}","type":"EXCHANGE LIMIT","flags":4096}}]"#,
-                            sniper_types::BOT_GID_HYDRA, sniper_types::TRADING_SYMBOL, -amt, sp));
+                        if has_items { out_buf.extend_from_slice(b","); }
+                        out_buf.extend_from_slice(b"[\"on\",{\"gid\":");
+                        out_buf.extend_from_slice(itoa_buf.format(sniper_types::BOT_GID_HYDRA).as_bytes());
+                        out_buf.extend_from_slice(b",\"symbol\":\"");
+                        out_buf.extend_from_slice(sniper_types::TRADING_SYMBOL.as_bytes());
+                        out_buf.extend_from_slice(b"\",\"amount\":\"");
+                        out_buf.extend_from_slice(fbuf_amt.format_finite(-amt).as_bytes());
+                        out_buf.extend_from_slice(b"\",\"price\":\"");
+                        out_buf.extend_from_slice(fbuf_price.format_finite(sp).as_bytes());
+                        out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\",\"flags\":4096}]");
+                        
+                        has_items = true;
                         total_sell_btc += amt;
                     }
                 } else if ghost_mode {
@@ -678,15 +720,11 @@ impl SovereignEngine for HydraEngine {
                 }
             }
 
-            if order_parts.is_empty() { return; }
-
-            use sniper_types::exchange::bitfinex_venue::BitfinexVenue;
-            BitfinexVenue::write_batch_open(out_buf);
-            out_buf.extend_from_slice(oc_payload.as_bytes());
-            for (i, part) in order_parts.iter().enumerate() {
-                if i > 0 || !oc_payload.is_empty() { out_buf.extend_from_slice(b","); }
-                out_buf.extend_from_slice(part.as_bytes());
+            if !has_items { 
+                out_buf.truncate(out_len_snap);
+                return; 
             }
+
             BitfinexVenue::write_batch_close(out_buf);
 
             engine.last_buy_price.store(buy_i, Ordering::Relaxed);
