@@ -61,11 +61,11 @@ def _init_mmap():
     os.makedirs(os.path.dirname(FEE_STATE_PATH), exist_ok=True)
     if not os.path.exists(FEE_STATE_PATH):
         with open(FEE_STATE_PATH, 'wb') as f:
-            # Write defaults: maker=1000 (10bps), taker=2000 (20bps)
-            f.write(struct.pack('<Q', 1000))   # maker
-            f.write(struct.pack('<Q', 2000))   # taker
-            f.write(struct.pack('<Q', 200))    # deriv maker
-            f.write(struct.pack('<Q', 650))    # deriv taker
+            # Defaults: BFX=0/0 (verified zero-fee tier), BNB=10/10 bps
+            f.write(struct.pack('<Q', 0))      # BFX maker (0 bps)
+            f.write(struct.pack('<Q', 0))      # BFX taker (0 bps)
+            f.write(struct.pack('<Q', 1000))   # BNB maker (10 bps)
+            f.write(struct.pack('<Q', 1000))   # BNB taker (10 bps)
             f.write(struct.pack('<Q', 0))      # last_updated
             f.write(struct.pack('<q', 0))      # monthly_volume
             f.write(struct.pack('<Q', 0))      # fee_tier

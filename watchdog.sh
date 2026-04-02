@@ -84,7 +84,7 @@ if ! is_alive "hydra-core"; then
 fi
 
 # Trading bots: auto-restart if mode is PAPER or LIVE
-for BOT_NAME in grid trigon nexus; do
+for BOT_NAME in moonshot grid trigon nexus; do
     CORE="${BOT_NAME}-core"
     if ! is_alive "$CORE"; then
         BOT_MODE=$(python3 -c "import json; print(json.load(open('$ARMADA_ROOT/state/armada_state.json')).get('$BOT_NAME',{}).get('mode','OFFLINE'))" 2>/dev/null || echo "OFFLINE")
@@ -92,7 +92,10 @@ for BOT_NAME in grid trigon nexus; do
             continue
         fi
         tg_alert "${BOT_NAME}_down" "🚨 WATCHDOG: ${CORE} CRASHED! (was $BOT_MODE) → restartuji"
+        # CPU assignment: moonshot=1, grid=2, trigon=3, nexus=3
         CPU=2
+        [ "$BOT_NAME" = "moonshot" ] && CPU=1
+        [ "$BOT_NAME" = "trigon" ] && CPU=3
         [ "$BOT_NAME" = "nexus" ] && CPU=3
         cd "$ARMADA_ROOT" && taskset -c $CPU ./target/release/$CORE >> "$LOG_DIR/${CORE}.log" 2>&1 &
         ALERTS=$((ALERTS + 1))
