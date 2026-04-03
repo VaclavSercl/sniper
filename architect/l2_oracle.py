@@ -1944,6 +1944,9 @@ Respond with EXACTLY one JSON object:
                 bot_name = bot['name']
                 if not bot.get('online'):
                     continue
+                    
+                if self._is_paper(bot_name):
+                    continue
                 
                 # ── Compute metrics ──
                 cutoff_6h = int((time.time() - 3600 * 6) * 1000)

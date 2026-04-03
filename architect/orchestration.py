@@ -220,11 +220,13 @@ def stop_bot(name: str) -> str:
     time.sleep(1)
 
     if not is_running(name):
+        save_bot_state(name, "STOPPED")
         msg = f"{info['emoji']} {name.upper()} zastaven ✅ (byl PID {pid})"
         log.info(msg)
         return msg
     else:
         subprocess.run(["pkill", "-9", "-f", f"{name}-core"], capture_output=True)
+        save_bot_state(name, "STOPPED")
         msg = f"{info['emoji']} {name.upper()} force-killed ✅"
         log.warning(msg)
         return msg
