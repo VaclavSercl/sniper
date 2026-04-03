@@ -30,6 +30,13 @@ STATE_FILE = os.path.join(PROJECT_ROOT, "state", "armada_state.json")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from orchestration import BOTS, RiskClass
 
+BOT_RISK_MAP = {
+    "hydra":    ("/dev/shm/beroun/risk_state.bin", 0),
+    "moonshot": ("/dev/shm/beroun/moonshot_risk.bin", 2560),
+    "grid":     ("/dev/shm/beroun/grid_risk.bin", 72),
+    "trigon":   ("/dev/shm/beroun/trigon_risk.bin", 3072),
+}
+
 class SafeBootPipeline:
     def __init__(self, bot_name: str):
         self.bot = bot_name
@@ -146,13 +153,6 @@ class SafeBootPipeline:
         #   Moonshot: moonshot_risk.bin, offset 2560 (20 × MoonshotPairRisk@128B)
         #   Grid:     grid_risk.bin, offset 72 (flat struct, after spacing/levels/qty/mode fields)
         #   Trigon:   trigon_risk.bin, offset 3072 (24 × TrigonTriangleRisk@128B)
-        BOT_RISK_MAP = {
-            "hydra":    ("/dev/shm/beroun/risk_state.bin", 0),
-            "moonshot": ("/dev/shm/beroun/moonshot_risk.bin", 2560),
-            "grid":     ("/dev/shm/beroun/grid_risk.bin", 72),
-            "trigon":   ("/dev/shm/beroun/trigon_risk.bin", 3072),
-        }
-        
         try:
             if os.path.exists(STATE_FILE):
                 with open(STATE_FILE, "r") as f:

@@ -59,20 +59,22 @@ CREATE TABLE IF NOT EXISTS fills (
     matched_entry_price REAL,
     gross_pnl REAL,
     net_pnl REAL,
-    numeraire_rate REAL DEFAULT 1.0
+    numeraire_rate REAL DEFAULT 1.0,
+    is_shadow INTEGER DEFAULT 0
 );
 
--- FIFO state per (bot, symbol)
+-- FIFO state per (bot, symbol, is_shadow)
 CREATE TABLE IF NOT EXISTS fifo_state (
     bot TEXT NOT NULL,
     symbol TEXT NOT NULL,
+    is_shadow INTEGER DEFAULT 0,
     queue_json TEXT DEFAULT '[]',
     total_realized REAL DEFAULT 0,
     total_fees REAL DEFAULT 0,
     total_closed_trades INTEGER DEFAULT 0,
     net_position REAL DEFAULT 0,
     last_fill_ts TEXT,
-    PRIMARY KEY (bot, symbol)
+    PRIMARY KEY (bot, symbol, is_shadow)
 );
 
 -- Hourly PnL snapshots for time-window queries
@@ -81,6 +83,7 @@ CREATE TABLE IF NOT EXISTS pnl_hourly (
     ts TEXT NOT NULL,
     ts_hour TEXT NOT NULL,
     bot TEXT NOT NULL,
+    is_shadow INTEGER DEFAULT 0,
     realized REAL DEFAULT 0,
     fees REAL DEFAULT 0,
     fills_count INTEGER DEFAULT 0,
@@ -118,9 +121,10 @@ class FIFOEngine:
     PnL is fixed to USD at the millisecond of the SELL execution.
     """
 
-    def __init__(self, bot: str, symbol: str, queue: Optional[list] = None):
+    def __init__(self, bot: str, symbol: str, is_shadow: bool = False, queue: Optional[list] = None):
         self.bot = bot
         self.symbol = symbol
+        self.is_shadow = is_shadow
         self.is_cross = symbol in CROSS_PAIRS
         # Queue entries: [qty_remaining, entry_price, entry_fee, entry_ts_ms]
         self.queue: deque = deque(queue or [])
@@ -252,18 +256,18 @@ class PnlDatabase:
 
     def insert_fill(self, bot, symbol, side, qty, price, fee, fee_currency,
                     trade_id, order_id, ts, ts_ms, is_closer, matched_price,
-                    gross_pnl, net_pnl, numeraire_rate):
+                    gross_pnl, net_pnl, numeraire_rate, is_shadow=False):
         """Insert a processed fill with FIFO results."""
         try:
             self.conn.execute("""
                 INSERT OR IGNORE INTO fills
                 (ts, ts_ms, bot, symbol, side, qty, price, fee, fee_currency,
                  trade_id, order_id, is_closer, matched_entry_price,
-                 gross_pnl, net_pnl, numeraire_rate)
-                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                 gross_pnl, net_pnl, numeraire_rate, is_shadow)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """, (ts, ts_ms, bot, symbol, side, qty, price, fee, fee_currency,
                   trade_id, order_id, is_closer, matched_price,
-                  gross_pnl, net_pnl, numeraire_rate))
+                  gross_pnl, net_pnl, numeraire_rate, int(is_shadow)))
             self.conn.commit()
             return True
         except sqlite3.IntegrityError:
@@ -273,23 +277,23 @@ class PnlDatabase:
         """Persist FIFO queue state."""
         self.conn.execute("""
             INSERT OR REPLACE INTO fifo_state
-            (bot, symbol, queue_json, total_realized, total_fees,
+            (bot, symbol, is_shadow, queue_json, total_realized, total_fees,
              total_closed_trades, net_position, last_fill_ts)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """, (engine.bot, engine.symbol, engine.get_queue_json(),
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (engine.bot, engine.symbol, int(engine.is_shadow), engine.get_queue_json(),
               engine.total_realized, engine.total_fees,
               engine.total_closed, engine.net_position,
               datetime.now(timezone.utc).isoformat()))
         self.conn.commit()
 
-    def load_fifo_state(self, bot: str, symbol: str) -> FIFOEngine:
+    def load_fifo_state(self, bot: str, symbol: str, is_shadow: bool = False) -> FIFOEngine:
         """Load FIFO state from SQLite."""
         row = self.conn.execute(
             "SELECT queue_json, total_realized, total_fees, total_closed_trades, net_position "
-            "FROM fifo_state WHERE bot=? AND symbol=?", (bot, symbol)
+            "FROM fifo_state WHERE bot=? AND symbol=? AND is_shadow=?", (bot, symbol, int(is_shadow))
         ).fetchone()
 
-        engine = FIFOEngine(bot, symbol)
+        engine = FIFOEngine(bot, symbol, is_shadow=is_shadow)
         if row:
             engine.queue = deque(json.loads(row[0]))
             engine.total_realized = row[1]
@@ -298,7 +302,7 @@ class PnlDatabase:
             engine.net_position = row[4]
         return engine
 
-    def get_realized_window(self, bot: str, hours: int) -> dict:
+    def get_realized_window(self, bot: str, hours: int, is_shadow: bool = False) -> dict:
         """Get aggregated PnL for a time window."""
         cutoff_ms = int((time.time() - hours * 3600) * 1000)
         row = self.conn.execute("""
@@ -310,13 +314,13 @@ class PnlDatabase:
                        ) ELSE fills.fee END), 0),
                    COUNT(*),
                    COALESCE(SUM(CASE WHEN is_closer=1 THEN 1 ELSE 0 END), 0)
-            FROM fills WHERE bot=? AND ts_ms>=?
-        """, (bot, cutoff_ms)).fetchone()
+            FROM fills WHERE bot=? AND is_shadow=? AND ts_ms>=?
+        """, (bot, int(is_shadow), cutoff_ms)).fetchone()
 
         # Simpler query for fees
         fee_row = self.conn.execute(
-            "SELECT COALESCE(SUM(fee), 0) FROM fills WHERE bot=? AND ts_ms>=?",
-            (bot, cutoff_ms)
+            "SELECT COALESCE(SUM(fee), 0) FROM fills WHERE bot=? AND is_shadow=? AND ts_ms>=?",
+            (bot, int(is_shadow), cutoff_ms)
         ).fetchone()
 
         return {
@@ -326,7 +330,7 @@ class PnlDatabase:
             "closed_trades": row[3] if row else 0,
         }
 
-    def get_all_bots_pnl(self) -> dict:
+    def get_all_bots_pnl(self, is_shadow: bool = False) -> dict:
         """Get PnL for all bots across all time windows."""
         windows = {"1h": 1, "24h": 24, "7d": 168, "30d": 720}
         result = {}
@@ -334,12 +338,12 @@ class PnlDatabase:
         for bot in BOT_INDEX:
             bot_data = {}
             for label, hours in windows.items():
-                bot_data[label] = self.get_realized_window(bot, hours)
+                bot_data[label] = self.get_realized_window(bot, hours, is_shadow=is_shadow)
             result[bot] = bot_data
 
         return result
 
-    def record_hourly(self, bot: str):
+    def record_hourly(self, bot: str, is_shadow: bool = False):
         """Aggregate last hour's fills into pnl_hourly."""
         now = datetime.now(timezone.utc)
         hour_key = now.strftime("%Y-%m-%dT%H")
@@ -351,15 +355,15 @@ class PnlDatabase:
                    COUNT(*),
                    COALESCE(SUM(CASE WHEN side='buy' THEN qty ELSE 0 END), 0),
                    COALESCE(SUM(CASE WHEN side='sell' THEN qty ELSE 0 END), 0)
-            FROM fills WHERE bot=? AND ts_ms>=?
-        """, (bot, cutoff_ms)).fetchone()
+            FROM fills WHERE bot=? AND is_shadow=? AND ts_ms>=?
+        """, (bot, int(is_shadow), cutoff_ms)).fetchone()
 
         if row and row[2] > 0:
             self.conn.execute("""
                 INSERT OR REPLACE INTO pnl_hourly
-                (ts, ts_hour, bot, realized, fees, fills_count, buy_volume, sell_volume)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (now.isoformat(), hour_key, bot, row[0], row[1], row[2], row[3], row[4]))
+                (ts, ts_hour, bot, is_shadow, realized, fees, fills_count, buy_volume, sell_volume)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (now.isoformat(), hour_key, bot, int(is_shadow), row[0], row[1], row[2], row[3], row[4]))
             self.conn.commit()
 
     def record_wallet(self, usd: float, btc: float, btc_price: float):
@@ -419,12 +423,12 @@ class PnlMmapWriter:
     #   avg_pnl(8) + avg_fee(8) + last_fill_ms(8) + name_hash(8) + pad(24) = 56
     # Total: 32+16+24+32+56 = 160 bytes → round to 192 (3×64 cache lines)
     BOT_STATE_SIZE = 192
-    GLOBAL_OFFSET = BOT_STATE_SIZE * 8  # after 8 bot states
+    GLOBAL_OFFSET = BOT_STATE_SIZE * 16  # after 16 bot states
 
     def __init__(self, path: str = PNL_MMAP_PATH):
         import mmap as mmap_module
         os.makedirs(os.path.dirname(path), exist_ok=True)
-        # Total size: 8 bots × 192 + global section (128 bytes) = 1664
+        # Total size: 16 bots × 192 + global section (128 bytes) = 3200
         total_size = self.GLOBAL_OFFSET + 128
         self.f = open(path, "r+b" if os.path.exists(path) else "w+b")
         self.f.seek(total_size - 1)

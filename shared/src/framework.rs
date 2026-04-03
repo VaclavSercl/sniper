@@ -30,6 +30,56 @@ pub trait SovereignEngine {
     
     /// Spuštěno před ukončením programu (SIGINT/SIGTERM) pro clean-up
     fn on_shutdown(&mut self, _out_buf: &mut bytes::BytesMut) {}
+    
+    /// Vrací TRUE, pokud je bot přesunut do Shadow režimu (generuje intent, ale neodešle ho na burzu)
+    fn is_shadow(&self) -> bool { false }
+    
+    /// Vrací nejlepší public Bid a Ask pro simulaci pesimistického plnění
+    fn best_bid_ask(&self) -> (f64, f64) { (0.0, 0.0) }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Shadow Execution Macro
+// ═══════════════════════════════════════════════════════════
+macro_rules! drain_out_buf {
+    ($runner:expr, $write:expr, $out_buf:expr) => {
+        if !$out_buf.is_empty() {
+            let text = unsafe { String::from_utf8_unchecked($out_buf.to_vec()) };
+            if $runner.engine.is_shadow() {
+                if text.contains("\"EXCHANGE LIMIT\"") || text.contains("\"EXCHANGE IOC\"") {
+                    let mut amount: f64 = 0.0;
+                    let mut price: f64 = 0.0;
+                    if let Some(mut a) = text.find("\"amount\":") {
+                        a += 9;
+                        let s = if text.as_bytes()[a] == b'"' { a+1 } else { a };
+                        if let Some(e) = text[s..].find(|c| c == '"' || c == ',' || c == '}') {
+                            amount = text[s..s+e].parse().unwrap_or(0.0);
+                        }
+                    }
+                    if let Some(mut p) = text.find("\"price\":") {
+                        p += 8;
+                        let s = if text.as_bytes()[p] == b'"' { p+1 } else { p };
+                        if let Some(e) = text[s..].find(|c| c == '"' || c == ',' || c == '}') {
+                            price = text[s..s+e].parse().unwrap_or(0.0);
+                        }
+                    }
+                    if amount != 0.0 && price != 0.0 {
+                        let side = if amount > 0.0 { "buy".to_string() } else { "sell".to_string() };
+                        $runner.shadow_queue.push(ShadowIntent {
+                            side, amount: amount.abs(), price, bot: $runner.name.clone(),
+                            ts: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_micros() as u64
+                        });
+                    }
+                } else if text.contains("\"oc\"") || text.contains("cancel") {
+                    $runner.shadow_queue.clear();
+                }
+            } else {
+                use futures_util::SinkExt;
+                let _ = $write.send(Message::Text(text.into())).await;
+            }
+            $out_buf.clear();
+        }
+    }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -40,15 +90,25 @@ pub trait SovereignEngine {
 ///
 /// Monomorphized: `SovereignRunner<GridEngine, BitfinexVenue>` gets
 /// fully inlined by the compiler. Zero-cost abstraction.
+#[derive(Debug, Clone)]
+pub struct ShadowIntent {
+    pub side: String,
+    pub amount: f64,
+    pub price: f64,
+    pub bot: String,
+    pub ts: u64,
+}
+
 pub struct SovereignRunner<E: SovereignEngine, V: VenueAdapter> {
     pub engine: E,
     pub venue: V,
     pub name: String,
+    pub shadow_queue: Vec<ShadowIntent>,
 }
 
 impl<E: SovereignEngine, V: VenueAdapter> SovereignRunner<E, V> {
     pub fn new(engine: E, venue: V, name: &str) -> Self {
-        Self { engine, venue, name: name.to_string() }
+        Self { engine, venue, name: name.to_string(), shadow_queue: Vec::new() }
     }
 
     pub async fn run(&mut self) -> Result<()> {
@@ -127,23 +187,44 @@ impl<E: SovereignEngine, V: VenueAdapter> SovereignRunner<E, V> {
                         }
                         
                         self.engine.on_loop(&mut out_buf);
-                        
-                        if !out_buf.is_empty() {
-                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
-                            let _ = write.send(Message::Text(text.into())).await;
-                        }
+                        drain_out_buf!(self, write, &mut out_buf);
                     }
                     _ = tokio::time::sleep(Duration::from_millis(1)) => {
                         out_buf.clear();
                         self.engine.on_loop(&mut out_buf);
-                        if !out_buf.is_empty() {
-                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
-                            let _ = write.send(Message::Text(text.into())).await;
-                        }
+                        drain_out_buf!(self, write, &mut out_buf);
                     }
                 }
+                self.process_shadow_matches();
             }
             warn!("Sovereign WS read loop ended for {}", self.name);
+        }
+    }
+
+    /// Odbaví pesimistické stínové exekuce podle aktuálního Orderbooku
+    fn process_shadow_matches(&mut self) {
+        if !self.engine.is_shadow() || self.shadow_queue.is_empty() { return; }
+        let (bid, ask) = self.engine.best_bid_ask();
+        if bid <= 0.0 || ask <= 0.0 { return; }
+        
+        let mut i = 0;
+        while i < self.shadow_queue.len() {
+            let order = &self.shadow_queue[i];
+            let is_filled = if order.side == "buy" { ask <= order.price } else { bid >= order.price };
+            if is_filled {
+                let fill_price = if order.side == "buy" { ask } else { bid };
+                let payload = format!(
+                    r#"{{"event":"shadow_fill","bot":"{}","symbol":"{}","side":"{}","qty":{},"price":{},"fee":0,"trade_id":"shadow_{}","ts":{}}}"#,
+                    order.bot, crate::types::TRADING_SYMBOL, order.side, order.amount, fill_price,
+                    order.ts, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
+                );
+                if let Ok(udp) = std::net::UdpSocket::bind("127.0.0.1:0") {
+                    let _ = udp.send_to(payload.as_bytes(), "127.0.0.1:8888");
+                }
+                self.shadow_queue.remove(i);
+            } else {
+                i += 1;
+            }
         }
     }
 }
@@ -159,11 +240,12 @@ pub struct SovereignDualRunner<E: SovereignEngine, V: VenueAdapter> {
     pub engine: E,
     pub venue: V,
     pub name: String,
+    pub shadow_queue: Vec<ShadowIntent>,
 }
 
 impl<E: SovereignEngine, V: VenueAdapter> SovereignDualRunner<E, V> {
     pub fn new(engine: E, venue: V, name: &str) -> Self {
-        Self { engine, venue, name: name.to_string() }
+        Self { engine, venue, name: name.to_string(), shadow_queue: Vec::new() }
     }
 
     pub async fn run(&mut self) -> Result<()> {
@@ -227,10 +309,7 @@ impl<E: SovereignEngine, V: VenueAdapter> SovereignDualRunner<E, V> {
                                 self.engine.on_market_message(&mut bytes, &mut out_buf);
                             }
                         }
-                        if !out_buf.is_empty() {
-                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
-                            let _ = exec_write.send(Message::Text(text.into())).await;
-                        }
+                        drain_out_buf!(self, exec_write, &mut out_buf);
                     }
                     msg = exec_read.next() => {
                         let msg = match msg {
@@ -257,32 +336,51 @@ impl<E: SovereignEngine, V: VenueAdapter> SovereignDualRunner<E, V> {
                                 self.engine.on_market_message(&mut mut_bytes, &mut out_buf);
                             }
                         }
-                        if !out_buf.is_empty() {
-                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
-                            let _ = exec_write.send(Message::Text(text.into())).await;
-                        }
+                        drain_out_buf!(self, exec_write, &mut out_buf);
                     }
                     _ = tokio::time::sleep(Duration::from_millis(1)) => {
                         // Background loop iteration
                         out_buf.clear();
                         self.engine.on_loop(&mut out_buf);
-                        if !out_buf.is_empty() {
-                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
-                            let _ = exec_write.send(Message::Text(text.into())).await;
-                        }
+                        drain_out_buf!(self, exec_write, &mut out_buf);
                     }
                     _ = tokio::signal::ctrl_c() => {
                         info!("Received Ctrl-C, initiating shutdown for {}", self.name);
                         out_buf.clear();
                         self.engine.on_shutdown(&mut out_buf);
-                        if !out_buf.is_empty() {
-                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
-                            let _ = exec_write.send(Message::Text(text.into())).await;
-                        }
+                        drain_out_buf!(self, exec_write, &mut out_buf);
                         return Ok(());
                     }
                 }
+                self.process_shadow_matches();
             } // end dual stream loop
+        }
+    }
+
+    /// Odbaví pesimistické stínové exekuce podle aktuálního Orderbooku
+    fn process_shadow_matches(&mut self) {
+        if !self.engine.is_shadow() || self.shadow_queue.is_empty() { return; }
+        let (bid, ask) = self.engine.best_bid_ask();
+        if bid <= 0.0 || ask <= 0.0 { return; }
+        
+        let mut i = 0;
+        while i < self.shadow_queue.len() {
+            let order = &self.shadow_queue[i];
+            let is_filled = if order.side == "buy" { ask <= order.price } else { bid >= order.price };
+            if is_filled {
+                let fill_price = if order.side == "buy" { ask } else { bid };
+                let payload = format!(
+                    r#"{{"event":"shadow_fill","bot":"{}","symbol":"{}","side":"{}","qty":{},"price":{},"fee":0,"trade_id":"shadow_{}","ts":{}}}"#,
+                    order.bot, crate::types::TRADING_SYMBOL, order.side, order.amount, fill_price,
+                    order.ts, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
+                );
+                if let Ok(udp) = std::net::UdpSocket::bind("127.0.0.1:0") {
+                    let _ = udp.send_to(payload.as_bytes(), "127.0.0.1:8888");
+                }
+                self.shadow_queue.remove(i);
+            } else {
+                i += 1;
+            }
         }
     }
 }

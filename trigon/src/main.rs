@@ -179,6 +179,20 @@ impl SovereignEngine for TrigonEngine {
         info!(event = "authenticated", bot = "trigon");
     }
 
+    fn is_shadow(&self) -> bool {
+        let risk = unsafe { &*self.risk };
+        risk.global_paused.load(Ordering::Acquire) != 0
+    }
+
+    fn best_bid_ask(&self) -> (f64, f64) {
+        let engine = unsafe { &*self.engine };
+        // We use the first leg of first triangle for a rough global price (for fake fill threshold)
+        (
+            engine.triangles[0].legs[0].best_bid.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64,
+            engine.triangles[0].legs[0].best_ask.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64
+        )
+    }
+
     fn on_market_message(&mut self, payload: &mut [u8], out_buf: &mut bytes::BytesMut) {
         let loop_start = Instant::now();
         if let Some((chan, bid, ask)) = sniper_types::exchange::fast_parse_ticker(payload) {
@@ -266,7 +280,7 @@ impl SovereignEngine for TrigonEngine {
                             if !flag.is_empty() && flag[0] == 1 { continue; }
                         }
 
-                        if !paused && profit > effective_min_profit
+                        if profit > effective_min_profit
                             && et.executing.load(Ordering::Acquire) == 0
                             && (now_ms - self.last_exec_ms[t]) > cooldown
                             && max_usd > 0

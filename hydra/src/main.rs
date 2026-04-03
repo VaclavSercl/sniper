@@ -137,6 +137,19 @@ impl SovereignEngine for HydraEngine {
         }
     }
 
+    fn is_shadow(&self) -> bool {
+        let risk = unsafe { &*self.risk };
+        risk.paused.load(std::sync::atomic::Ordering::Relaxed) != 0
+    }
+
+    fn best_bid_ask(&self) -> (f64, f64) {
+        let engine = unsafe { &*self.engine };
+        (
+            engine.best_bid.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64,
+            engine.best_ask.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64
+        )
+    }
+
     fn on_shutdown(&mut self, out_buf: &mut bytes::BytesMut) {
         self.notifier.alert("🛑 *Shutdown*: cancelling orders...".to_string());
         let eng = unsafe { &*self.engine };
@@ -410,15 +423,16 @@ impl SovereignEngine for HydraEngine {
         let anti_flicker = engine.ai_min_order_lifetime_ms.load(Ordering::Relaxed).clamp(50, 5000);
         let fire_interval = fire_ai.max(anti_flicker);
         
-        if now.duration_since(self.last_upd).as_millis() <= fire_interval as u128 || risk.paused.load(Ordering::Acquire) != 0 {
+        if now.duration_since(self.last_upd).as_millis() <= fire_interval as u128 {
             return;
         }
-
+        
         let freeze_until = engine.sweep_freeze_until.load(Ordering::Acquire);
         if freeze_until > 0 {
             let now_ms_check = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
             if now_ms_check < freeze_until {
                 self.last_upd = now; // prevent rapid retries
+                sniper_types::l2_command::record_latency(unsafe{&*self.l1ring}, now);
                 return;
             } else {
                 engine.sweep_freeze_until.store(0, Ordering::Release);
@@ -426,11 +440,10 @@ impl SovereignEngine for HydraEngine {
         }
 
         // ═══ HIVE MIND: Cross-Bot Toxic Storm (SIM v2.0) ═══
-        // 1-byte mmap written by ML Shield (50ms) + Rust Sentinel (5s)
-        // 0 = clear, 1 = TOXIC STORM → skip order placement
         if let Ok(flag) = std::fs::read("/dev/shm/beroun/toxic_storm.bin") {
             if !flag.is_empty() && flag[0] == 1 {
                 self.last_upd = now;
+                sniper_types::l2_command::record_latency(unsafe{&*self.l1ring}, now);
                 return; // All bots defensive — no new orders
             }
         }

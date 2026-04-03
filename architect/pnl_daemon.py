@@ -174,7 +174,8 @@ class FillProcessor:
     def _load_all_engines(self):
         for bot in BOT_INDEX:
             for symbol in self._get_symbols(bot):
-                self.engines[(bot, symbol)] = self.db.load_fifo_state(bot, symbol)
+                for is_shadow in (False, True):
+                    self.engines[(bot, symbol, is_shadow)] = self.db.load_fifo_state(bot, symbol, is_shadow=is_shadow)
 
     def _get_symbols(self, bot):
         return {"trigon": ["tBTCUSD", "tETHUSD", "tETHBTC"]}.get(bot, ["tBTCUSD"])
@@ -235,8 +236,8 @@ class FillProcessor:
         if fee_currency == "BTC": fee_usd = fee * self._get_btc_usd_spot()
         elif fee_currency == "ETH": fee_usd = fee * 2000.0
 
-        key = (bot, symbol)
-        if key not in self.engines: self.engines[key] = FIFOEngine(bot, symbol)
+        key = (bot, symbol, False)
+        if key not in self.engines: self.engines[key] = FIFOEngine(bot, symbol, is_shadow=False)
         
         usd_spot = self._get_btc_usd_spot() if symbol != "tBTCUSD" else 1.0
         
@@ -249,7 +250,7 @@ class FillProcessor:
             ts=ts_iso, ts_ms=ts_ms, is_closer=result["is_closer"],
             matched_price=result.get("matched_entry_price", 0),
             gross_pnl=result.get("gross_pnl", 0), net_pnl=result.get("net_pnl", 0),
-            numeraire_rate=usd_spot
+            numeraire_rate=usd_spot, is_shadow=False
         )
         self.db.save_fifo_state(self.engines[key])
         
@@ -259,6 +260,28 @@ class FillProcessor:
         
         if len(self.last_trade_ids[bot]) > 5000:
             self.last_trade_ids[bot] = set(sorted(self.last_trade_ids[bot])[-2000:])
+
+    def process_shadow_fill(self, bot: str, symbol: str, side: str, qty: float, price: float, fee: float, trade_id: str, ts_ms: int):
+        usd_spot = self._get_btc_usd_spot() if symbol != "tBTCUSD" else 1.0
+        key = (bot, symbol, True)
+        if key not in self.engines: self.engines[key] = FIFOEngine(bot, symbol, is_shadow=True)
+
+        result = self.engines[key].on_fill(side, qty, price, fee, ts_ms, usd_spot)
+        ts_iso = datetime.fromtimestamp(ts_ms / 1000, tz=timezone.utc).isoformat()
+
+        self.db.insert_fill(
+            bot=bot, symbol=symbol, side=side, qty=qty, price=price,
+            fee=fee, fee_currency="USD", trade_id=trade_id, order_id=trade_id,
+            ts=ts_iso, ts_ms=ts_ms, is_closer=result["is_closer"],
+            matched_price=result.get("matched_entry_price", 0),
+            gross_pnl=result.get("gross_pnl", 0), net_pnl=result.get("net_pnl", 0),
+            numeraire_rate=usd_spot, is_shadow=True
+        )
+        self.db.save_fifo_state(self.engines[key])
+        
+        log.info(f"🌑 SHADOW FILL: {bot}/{symbol} {side.upper()} {qty:.6f} @ ${price:.2f} " +
+                 (f"→ PnL: {format_pnl_short(result['net_pnl'])}" if result["is_closer"] else "(Open)"))
+        self.update_mmap()
 
     def _get_btc_usd_spot(self):
         try:
@@ -275,31 +298,36 @@ class FillProcessor:
         total_fills_24h = 0
         for bot, idx in BOT_INDEX.items():
             if idx >= 4: continue
-            bot_data = {}
-            for label, hours in windows.items():
-                w = self.db.get_realized_window(bot, hours)
-                bot_data[f"realized_{label}"] = w["realized"]
-                if label in ("1h", "24h"):
-                    bot_data[f"fees_{label}"] = w["fees"]
-                    bot_data[f"fills_{label}"] = w["fills"]
-                    if label == "24h":
-                        bot_data["closed_trades_24h"] = w["closed_trades"]
-                        total_fills_24h += w["fills"]
-                totals[f"total_realized_{label}"] += w["realized"]
-                if label == "24h": totals["total_fees_24h"] += w["fees"]
+            
+            for is_shadow in (False, True):
+                bot_data = {}
+                for label, hours in windows.items():
+                    w = self.db.get_realized_window(bot, hours, is_shadow=is_shadow)
+                    bot_data[f"realized_{label}"] = w["realized"]
+                    if label in ("1h", "24h"):
+                        bot_data[f"fees_{label}"] = w["fees"]
+                        bot_data[f"fills_{label}"] = w["fills"]
+                        if label == "24h":
+                            bot_data["closed_trades_24h"] = w["closed_trades"]
+                            if not is_shadow: total_fills_24h += w["fills"]
+                    
+                    if not is_shadow: totals[f"total_realized_{label}"] += w["realized"]
+                    if not is_shadow and label == "24h": totals["total_fees_24h"] += w["fees"]
 
-            key = (bot, "tBTCUSD")
-            if key in self.engines:
-                engine = self.engines[key]
-                bot_data["total_closed"] = engine.total_closed
-                bot_data["net_position"] = engine.net_position
-                bot_data["fifo_front_price"] = engine.fifo_front_price
-                bot_data["last_fill_ms"] = int(time.time() * 1000)
+                key = (bot, "tBTCUSD", is_shadow)
+                if key in self.engines:
+                    engine = self.engines[key]
+                    bot_data["total_closed"] = engine.total_closed
+                    bot_data["net_position"] = engine.net_position
+                    bot_data["fifo_front_price"] = engine.fifo_front_price
+                    bot_data["last_fill_ms"] = int(time.time() * 1000)
 
-                ct = bot_data.get("closed_trades_24h", 0)
-                bot_data["avg_pnl_per_trade"] = bot_data.get("realized_24h", 0) / ct if ct > 0 else 0
-                bot_data["avg_fee_per_fill"] = bot_data.get("fees_24h", 0) / max(bot_data.get("fills_24h", 0), 1)
-            self.mmap_writer.write_bot(idx, bot_data)
+                    ct = bot_data.get("closed_trades_24h", 0)
+                    bot_data["avg_pnl_per_trade"] = bot_data.get("realized_24h", 0) / ct if ct > 0 else 0
+                    bot_data["avg_fee_per_fill"] = bot_data.get("fees_24h", 0) / max(bot_data.get("fills_24h", 0), 1)
+                
+                target_idx = idx + (8 if is_shadow else 0)
+                self.mmap_writer.write_bot(target_idx, bot_data)
 
         totals["total_fills_24h"] = total_fills_24h
         self.mmap_writer.write_global(totals)
@@ -388,6 +416,23 @@ async def bitfinex_drop_copy_ws(processor):
             await asyncio.sleep(backoff)
             backoff = min(backoff * 2, 60)
 
+class ShadowDropCopyUDP(asyncio.DatagramProtocol):
+    def __init__(self, processor):
+        self.processor = processor
+    
+    def datagram_received(self, data, addr):
+        try:
+            payload = json.loads(data.decode("utf-8"))
+            if payload.get("event") == "shadow_fill":
+                self.processor.process_shadow_fill(
+                    bot=payload["bot"], symbol=payload.get("symbol", "tBTCUSD"),
+                    side=payload["side"], qty=float(payload["qty"]),
+                    price=float(payload["price"]), fee=float(payload.get("fee", 0.0)),
+                    trade_id=payload["trade_id"], ts_ms=payload["ts"]
+                )
+        except Exception as e:
+            log.error(f"UDP Shadow Drop Copy Error: {e}")
+
 async def periodic_jobs_loop(processor, fee_writer):
     """Runs periodic slow REST tasks via asyncio.to_thread"""
     cycle = 0
@@ -446,11 +491,19 @@ def main():
     signal.signal(signal.SIGINT, handle_sig)
     
     async def async_main():
+        loop = asyncio.get_running_loop()
+        transport, protocol = await loop.create_datagram_endpoint(
+            lambda: ShadowDropCopyUDP(processor),
+            local_addr=('127.0.0.1', 8888)
+        )
+        log.info("🌑 Shadow UDP Listener active on 127.0.0.1:8888")
+        
         tasks = [
             asyncio.create_task(bitfinex_drop_copy_ws(processor)),
             asyncio.create_task(periodic_jobs_loop(processor, fee_writer))
         ]
         await asyncio.gather(*tasks)
+        transport.close()
         
     asyncio.run(async_main())
     
