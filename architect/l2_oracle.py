@@ -452,6 +452,7 @@ Cycle: #{self.cycle} (every 5 min)
   "global_regime": "BEARISH_SHOCK|BULLISH_TREND|CHOPPING_RANGE",
   "vpin_toxicity": float,
   \"hydra\": {{
+    \"os_action\": \"START|STOP|IGNORE\",
     \"recommended_grid_step\": float,
     \"max_position_limit\": float,
     \"pause_trading\": boolean,
@@ -582,14 +583,24 @@ PARAMETER CONSTRAINTS:
 
         # ═══ HYDRA ═══
         hydra = decision.get("hydra", {})
+        
+        os_action = hydra.get("os_action")
+        if os_action == "STOP":
+            self._save_bot_state("hydra", "PAPER")
+            self.cortex.pause("hydra")
+            start_bot("hydra")
+            log.info("  🐍 Hydra shifted to PAPER (AI STOP bypass)")
+        elif os_action == "START":
+            self._save_bot_state("hydra", "LIVE")
+            start_bot("hydra")
+            self.cortex.unpause("hydra")
+            log.info("  🐍 Hydra shifted to LIVE by AI")
+
         if hydra.get("pause_trading") is True:
             r = self.cortex.pause("hydra")
             log.info(f"  ⏸️ HYDRA PAUSED: {r}")
-        elif hydra.get("pause_trading") is False:
-            if self._is_paper("hydra"):
-                log.info(f"  🛡️ HYDRA unpause BLOCKED — PAPER mode (AI cannot override)")
-            else:
-                self.cortex.unpause("hydra")
+        elif hydra.get("pause_trading") is False and os_action != "STOP":
+            self.cortex.unpause("hydra")
 
         grid = hydra.get("recommended_grid_step") or hydra.get("grid_step")
         if grid is not None:
