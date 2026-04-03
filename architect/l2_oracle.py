@@ -914,10 +914,14 @@ PARAMETER CONSTRAINTS:
             # OS level action
             os_action = cfg.get("os_action")
             if os_action == "STOP":
-                stop_bot("moonshot")
-                return
-            elif os_action == "START":
+                self._save_bot_state("moonshot", "PAPER")
+                self.cortex.pause("moonshot")
                 start_bot("moonshot")
+                log.info("  🌙 Moonshot shifted to PAPER (AI STOP bypass)")
+            elif os_action == "START":
+                self._save_bot_state("moonshot", "LIVE")
+                start_bot("moonshot")
+                self.cortex.unpause("moonshot")
 
             fd = os.open(MOONSHOT_RISK_PATH, os.O_RDWR)
             import mmap
@@ -974,10 +978,14 @@ PARAMETER CONSTRAINTS:
             
         os_action = cfg.get("os_action")
         if os_action == "STOP":
-            stop_bot("grid")
-            return
-        elif os_action == "START":
+            self._save_bot_state("grid", "PAPER")
+            self.cortex.pause("grid")
             start_bot("grid")
+            log.info("  📐 Grid shifted to PAPER (AI STOP bypass)")
+        elif os_action == "START":
+            self._save_bot_state("grid", "LIVE")
+            start_bot("grid")
+            self.cortex.unpause("grid")
             
         if cfg.get("pause_trading") is True:
             self.cortex.pause("grid")
@@ -1010,10 +1018,14 @@ PARAMETER CONSTRAINTS:
             
         os_action = cfg.get("os_action")
         if os_action == "STOP":
-            stop_bot("trigon")
-            return
-        elif os_action == "START":
+            self._save_bot_state("trigon", "PAPER")
+            self.cortex.pause("trigon")
             start_bot("trigon")
+            log.info("  🔺 Trigon shifted to PAPER (AI STOP bypass)")
+        elif os_action == "START":
+            self._save_bot_state("trigon", "LIVE")
+            start_bot("trigon")
+            self.cortex.unpause("trigon")
             
         try:
             import struct as _st
@@ -1081,12 +1093,15 @@ PARAMETER CONSTRAINTS:
 
         os_action = cfg.get("os_action")
         if os_action == "STOP":
-            stop_bot("nexus")
-            log.info("  🪐 Nexus STOPPED by AI")
-            return
-        elif os_action == "START":
+            self._save_bot_state("nexus", "PAPER")
+            self.cortex.pause("nexus")
             start_bot("nexus")
-            log.info("  🪐 Nexus STARTED by AI")
+            log.info("  🪐 Nexus shifted to PAPER (AI STOP bypass)")
+        elif os_action == "START":
+            self._save_bot_state("nexus", "LIVE")
+            start_bot("nexus")
+            self.cortex.unpause("nexus")
+            log.info("  🪐 Nexus shifted to LIVE by AI")
 
         try:
             import struct as _st

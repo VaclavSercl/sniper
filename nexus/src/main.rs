@@ -221,7 +221,9 @@ impl SovereignEngine for NexusEngine {
             self.total_signals += 1;
             info!(event = "arb_detected", pair = signal.pair_name, direction = %signal.direction, net_bps = format!("{:.1}", signal.net_bps));
 
-            let is_paper = cross_state.paper_mode.load(Ordering::Relaxed) == 1 || self.args.paper;
+            let is_paper = cross_state.paper_mode.load(Ordering::Relaxed) == 1 
+                || cross_state.emergency_pause.load(Ordering::Relaxed) == 1 
+                || self.args.paper;
             if is_paper {
                 self.last_exec_ms = now_ms;
                 return;
