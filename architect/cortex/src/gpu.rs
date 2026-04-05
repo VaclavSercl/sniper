@@ -43,11 +43,19 @@ pub struct L1GpuRequest {
 }
 
 /// Response from GPU inference — discrete action + confidence.
-#[derive(Debug, serde::Deserialize, Default)]
+#[derive(Debug, Clone, Copy, Default)]
+enum GpuAction {
+    #[default]
+    Hold,
+    SkewBid,
+    SkewAsk,
+    Pause,
+}
+
+#[derive(Debug, Default)]
 struct GpuDecision {
-    action: Option<String>,       // HOLD | SKEW_BID | SKEW_ASK | PAUSE_TRADING
-    confidence_pct: Option<u32>,  // 0-100
-    reason: Option<String>,       // Short explanation
+    action: GpuAction,
+    confidence_pct: u32,
 }
 
 // ── Telemetry: Ring Buffer + Evaluator ──
@@ -77,8 +85,9 @@ struct DecisionRecord {
 }
 
 /// Cumulative statistics — exposed via UDS GET_GPU_STATS.
-#[derive(Default)]
-pub struct GpuStats {
+use std::sync::atomic::{AtomicU64, AtomicI64};
+
+pub struct GpuStatsSnapshot {
     pub total_inferences: u64,
     pub skew_bid_total: u64,
     pub skew_bid_wins: u64,
@@ -91,13 +100,12 @@ pub struct GpuStats {
     pub hold_total: u64,
     pub total_pnl_delta: i64,
     pub start_ms: u64,
-    // L2-tunable params (written by UDS SET_L1_TUNING, read by GPU thread)
-    pub skew_max_usd: f64,          // default 3.0, range [0.5, 5.0]
-    pub obi_threshold: f64,         // default 0.0, range [0.0, 0.8]
-    pub inference_interval_ms: u64, // default 2000, range [500, 10000]
+    pub skew_max_usd: f64,
+    pub obi_threshold: f64,
+    pub inference_interval_ms: u64,
 }
 
-impl GpuStats {
+impl GpuStatsSnapshot {
     pub fn to_json(&self) -> serde_json::Value {
         let uptime_h = (epoch_ms().saturating_sub(self.start_ms)) as f64 / 3_600_000.0;
         let sb_wr = if self.skew_bid_total > 0 { self.skew_bid_wins as f64 / self.skew_bid_total as f64 * 100.0 } else { 0.0 };
@@ -124,40 +132,86 @@ impl GpuStats {
     }
 }
 
-fn action_to_id(action: &str) -> u8 {
-    match action {
-        "SKEW_BID" => 1,
-        "SKEW_ASK" => 2,
-        "PAUSE_TRADING" | "PAUSE" => 3,
-        _ => 0, // HOLD
+pub struct AtomicGpuStats {
+    pub total_inferences: AtomicU64,
+    pub skew_bid_total: AtomicU64,
+    pub skew_bid_wins: AtomicU64,
+    pub skew_bid_toxic: AtomicU64,
+    pub skew_ask_total: AtomicU64,
+    pub skew_ask_wins: AtomicU64,
+    pub skew_ask_toxic: AtomicU64,
+    pub pause_total: AtomicU64,
+    pub pause_correct: AtomicU64,
+    pub hold_total: AtomicU64,
+    pub total_pnl_delta: AtomicI64,
+    pub start_ms: AtomicU64,
+    pub skew_max_usd_bits: AtomicU64,
+    pub obi_threshold_bits: AtomicU64,
+    pub inference_interval_ms: AtomicU64,
+}
+
+impl AtomicGpuStats {
+    pub const fn new() -> Self {
+        Self {
+            total_inferences: AtomicU64::new(0),
+            skew_bid_total: AtomicU64::new(0),
+            skew_bid_wins: AtomicU64::new(0),
+            skew_bid_toxic: AtomicU64::new(0),
+            skew_ask_total: AtomicU64::new(0),
+            skew_ask_wins: AtomicU64::new(0),
+            skew_ask_toxic: AtomicU64::new(0),
+            pause_total: AtomicU64::new(0),
+            pause_correct: AtomicU64::new(0),
+            hold_total: AtomicU64::new(0),
+            total_pnl_delta: AtomicI64::new(0),
+            start_ms: AtomicU64::new(0),
+            skew_max_usd_bits: AtomicU64::new(0),
+            obi_threshold_bits: AtomicU64::new(0),
+            inference_interval_ms: AtomicU64::new(INFERENCE_INTERVAL_MS),
+        }
+    }
+
+    pub fn snapshot(&self) -> GpuStatsSnapshot {
+        GpuStatsSnapshot {
+            total_inferences: self.total_inferences.load(Ordering::Relaxed),
+            skew_bid_total: self.skew_bid_total.load(Ordering::Relaxed),
+            skew_bid_wins: self.skew_bid_wins.load(Ordering::Relaxed),
+            skew_bid_toxic: self.skew_bid_toxic.load(Ordering::Relaxed),
+            skew_ask_total: self.skew_ask_total.load(Ordering::Relaxed),
+            skew_ask_wins: self.skew_ask_wins.load(Ordering::Relaxed),
+            skew_ask_toxic: self.skew_ask_toxic.load(Ordering::Relaxed),
+            pause_total: self.pause_total.load(Ordering::Relaxed),
+            pause_correct: self.pause_correct.load(Ordering::Relaxed),
+            hold_total: self.hold_total.load(Ordering::Relaxed),
+            total_pnl_delta: self.total_pnl_delta.load(Ordering::Relaxed),
+            start_ms: self.start_ms.load(Ordering::Relaxed),
+            skew_max_usd: f64::from_bits(self.skew_max_usd_bits.load(Ordering::Relaxed)),
+            obi_threshold: f64::from_bits(self.obi_threshold_bits.load(Ordering::Relaxed)),
+            inference_interval_ms: self.inference_interval_ms.load(Ordering::Relaxed),
+        }
     }
 }
 
-/// Thread-safe stats accessible from UDS via Arc<Mutex>.
-use std::sync::{Arc, Mutex};
-static GPU_STATS: std::sync::LazyLock<Arc<Mutex<GpuStats>>> =
-    std::sync::LazyLock::new(|| Arc::new(Mutex::new(GpuStats::default())));
+static GPU_STATS: AtomicGpuStats = AtomicGpuStats::new();
 
-/// Get a clone of current GPU stats (called from UDS handler).
-pub fn get_gpu_stats() -> GpuStats {
-    GPU_STATS.lock().map(|s| GpuStats { ..*s }).unwrap_or_default()
+pub fn get_gpu_stats() -> GpuStatsSnapshot {
+    GPU_STATS.snapshot()
 }
 
-/// Set L1 tuning parameters (called from UDS SET_L1_TUNING).
 pub fn set_l1_tuning(skew_max: f64, obi_threshold: f64, interval_ms: u64) {
-    if let Ok(mut stats) = GPU_STATS.lock() {
-        stats.skew_max_usd = skew_max;
-        stats.obi_threshold = obi_threshold;
-        stats.inference_interval_ms = interval_ms;
-        println!("  🤖 [GPU] L2 tuning applied: skew_max=${skew_max:.1} obi_thr={obi_threshold:.2} interval={interval_ms}ms");
-    }
+    GPU_STATS.skew_max_usd_bits.store(skew_max.to_bits(), Ordering::Release);
+    GPU_STATS.obi_threshold_bits.store(obi_threshold.to_bits(), Ordering::Release);
+    GPU_STATS.inference_interval_ms.store(interval_ms, Ordering::Release);
+    println!("  🤖 [GPU] L2 tuning applied: skew_max=${skew_max:.1} obi_thr={obi_threshold:.2} interval={interval_ms}ms");
 }
 
-/// Read current L1 tuning (called by GPU consumer thread).
 fn read_l1_tuning() -> (f64, f64, u64) {
-    GPU_STATS.lock()
-        .map(|s| (s.skew_max_usd, s.obi_threshold, s.inference_interval_ms))
-        .unwrap_or((3.0, 0.0, INFERENCE_INTERVAL_MS))
+    let skew_max = f64::from_bits(GPU_STATS.skew_max_usd_bits.load(Ordering::Acquire));
+    let obi_thresh = f64::from_bits(GPU_STATS.obi_threshold_bits.load(Ordering::Acquire));
+    let interval = GPU_STATS.inference_interval_ms.load(Ordering::Acquire);
+    let skew_max = if skew_max == 0.0 { 3.0 } else { skew_max }; // defaults fallback
+    let interval = if interval == 0 { INFERENCE_INTERVAL_MS } else { interval };
+    (skew_max, obi_thresh, interval)
 }
 
 /// Create L1→GPU channel. Returns sender for L1 and spawns the GPU consumer thread.
@@ -189,13 +243,10 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
     let mut ring = vec![DecisionRecord::default(); RING_SIZE];
     let mut write_idx: usize = 0;
 
-    // Initialize stats start time + defaults
-    if let Ok(mut stats) = GPU_STATS.lock() {
-        stats.start_ms = epoch_ms();
-        stats.skew_max_usd = 3.0;
-        stats.obi_threshold = 0.0;
-        stats.inference_interval_ms = INFERENCE_INTERVAL_MS;
-    }
+    GPU_STATS.start_ms.store(epoch_ms(), Ordering::Release);
+    GPU_STATS.skew_max_usd_bits.store(3.0f64.to_bits(), Ordering::Release);
+    GPU_STATS.obi_threshold_bits.store(0.0f64.to_bits(), Ordering::Release);
+    GPU_STATS.inference_interval_ms.store(INFERENCE_INTERVAL_MS, Ordering::Release);
 
     loop {
         let req = match rx.recv() {
@@ -225,14 +276,6 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
             continue;
         }
 
-        // Compact one-line prompt
-        let fg_label = match latest.fear_greed {
-            0..=24 => "EXTREME_FEAR",
-            25..=49 => "FEAR",
-            50..=74 => "GREED",
-            _ => "EXTREME_GREED",
-        };
-
         let spread = latest.best_ask - latest.best_bid;
         let spread_bps = if latest.best_bid > 0.0 { spread / latest.best_bid * 10000.0 } else { 0.0 };
 
@@ -241,16 +284,15 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
         brain.reset_cache();
         let result = match brain.reflex_action(latest.obi, spread_bps, latest.macro_bias, tox.min(1.0)) {
             Ok((action, confidence)) => {
-                let (action_str, conf_pct) = match action {
-                    candle_brain::HftAction::Hold => ("HOLD", (confidence * 100.0) as u32),
-                    candle_brain::HftAction::Bid => ("SKEW_BID", (confidence * 100.0) as u32),
-                    candle_brain::HftAction::Ask => ("SKEW_ASK", (confidence * 100.0) as u32),
-                    candle_brain::HftAction::Kill => ("PAUSE_TRADING", (confidence * 100.0) as u32),
+                let (gpu_action, conf_pct) = match action {
+                    candle_brain::HftAction::Hold => (GpuAction::Hold, (confidence * 100.0) as u32),
+                    candle_brain::HftAction::Bid => (GpuAction::SkewBid, (confidence * 100.0) as u32),
+                    candle_brain::HftAction::Ask => (GpuAction::SkewAsk, (confidence * 100.0) as u32),
+                    candle_brain::HftAction::Kill => (GpuAction::Pause, (confidence * 100.0) as u32),
                 };
                 Ok(GpuDecision {
-                    action: Some(action_str.to_string()),
-                    confidence_pct: Some(conf_pct),
-                    reason: Some("candle".to_string()),
+                    action: gpu_action,
+                    confidence_pct: conf_pct,
                 })
             }
             Err(e) => Err(anyhow::anyhow!("Candle inference: {}", e)),
@@ -258,16 +300,25 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
 
         match result {
             Ok(decision) => {
-                // PRE-decision snapshot (before applying)
                 let now_ms = epoch_ms();
                 let pre_pnl = engine.realized_pnl.load(Ordering::Relaxed);
                 let pre_fills = engine.session_fill_count.load(Ordering::Relaxed);
                 let pre_toxic = engine.toxic_flow_hits.load(Ordering::Relaxed);
                 let pre_price = engine.micro_price.load(Ordering::Relaxed);
                 let pre_obi = engine.l2_imbalance.load(Ordering::Relaxed);
-                let action_str = decision.action.as_deref().unwrap_or("HOLD");
-                let action_id = action_to_id(action_str);
-                let conf = decision.confidence_pct.unwrap_or(0) as u8;
+                let action_id = match decision.action {
+                    GpuAction::Hold => 0u8,
+                    GpuAction::SkewBid => 1u8,
+                    GpuAction::SkewAsk => 2u8,
+                    GpuAction::Pause => 3u8,
+                };
+                let action_str = match decision.action {
+                    GpuAction::Hold => "HOLD",
+                    GpuAction::SkewBid => "SKEW_BID",
+                    GpuAction::SkewAsk => "SKEW_ASK",
+                    GpuAction::Pause => "PAUSE",
+                };
+                let conf = decision.confidence_pct as u8;
 
                 // Apply decision to mmap
                 apply_gpu_decision(&decision, engine);
@@ -294,16 +345,12 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
 
                 // Log every 30th inference (~1 min)
                 if inference_count % 30 == 1 {
-                    println!("  🤖 [GPU] #{inference_count}: {action_str} ({conf}%) — {}",
-                        decision.reason.as_deref().unwrap_or(""));
+                    println!("  🤖 [GPU] #{inference_count}: {action_str} ({conf}%)");
                 }
 
                 engine.ai_heartbeat_ms.store(now_ms, Ordering::Release);
 
-                // Update total inferences
-                if let Ok(mut stats) = GPU_STATS.lock() {
-                    stats.total_inferences = inference_count;
-                }
+                GPU_STATS.total_inferences.store(inference_count, Ordering::Relaxed);
 
                 // Reset failure counter on success
                 consecutive_failures = 0;
@@ -343,10 +390,7 @@ fn evaluate_ring(ring: &mut [DecisionRecord], engine: &EngineState) {
     let post_price = engine.micro_price.load(Ordering::Relaxed);
     let post_toxic = engine.toxic_flow_hits.load(Ordering::Relaxed);
 
-    let mut stats = match GPU_STATS.lock() {
-        Ok(s) => s,
-        Err(_) => return,
-    };
+
 
     for record in ring.iter_mut() {
         if record.evaluated || record.timestamp_ms == 0 {
@@ -368,33 +412,32 @@ fn evaluate_ring(ring: &mut [DecisionRecord], engine: &EngineState) {
 
         match record.action {
             1 => { // SKEW_BID
-                stats.skew_bid_total += 1;
-                if pnl_delta > 0 { stats.skew_bid_wins += 1; }
-                if new_toxic { stats.skew_bid_toxic += 1; }
+                GPU_STATS.skew_bid_total.fetch_add(1, Ordering::Relaxed);
+                if pnl_delta > 0 { GPU_STATS.skew_bid_wins.fetch_add(1, Ordering::Relaxed); }
+                if new_toxic { GPU_STATS.skew_bid_toxic.fetch_add(1, Ordering::Relaxed); }
             }
             2 => { // SKEW_ASK
-                stats.skew_ask_total += 1;
-                if pnl_delta > 0 { stats.skew_ask_wins += 1; }
-                if new_toxic { stats.skew_ask_toxic += 1; }
+                GPU_STATS.skew_ask_total.fetch_add(1, Ordering::Relaxed);
+                if pnl_delta > 0 { GPU_STATS.skew_ask_wins.fetch_add(1, Ordering::Relaxed); }
+                if new_toxic { GPU_STATS.skew_ask_toxic.fetch_add(1, Ordering::Relaxed); }
             }
             3 => { // PAUSE
-                stats.pause_total += 1;
+                GPU_STATS.pause_total.fetch_add(1, Ordering::Relaxed);
                 // Correct if price moved >$5 (we avoided a hit)
-                if price_move > 500_000_000 { stats.pause_correct += 1; }
+                if price_move > 500_000_000 { GPU_STATS.pause_correct.fetch_add(1, Ordering::Relaxed); }
             }
             _ => { // HOLD
-                stats.hold_total += 1;
+                GPU_STATS.hold_total.fetch_add(1, Ordering::Relaxed);
             }
         }
-        stats.total_pnl_delta += pnl_delta;
+        GPU_STATS.total_pnl_delta.fetch_add(pnl_delta, Ordering::Relaxed);
     }
 }
 
 /// Translate discrete GPU action into mmap writes.
 /// Reads L2-tuned parameters from GpuStats.
 fn apply_gpu_decision(decision: &GpuDecision, engine: &EngineState) {
-    let confidence = decision.confidence_pct.unwrap_or(0);
-    let action = decision.action.as_deref().unwrap_or("HOLD");
+    let confidence = decision.confidence_pct;
 
     // Read L2-tunable params
     let (skew_max_usd, obi_threshold, _) = read_l1_tuning();
@@ -406,25 +449,22 @@ fn apply_gpu_decision(decision: &GpuDecision, engine: &EngineState) {
     // Scale confidence → skew magnitude (0-100% → $0-$skew_max)
     let skew_magnitude = (confidence as f64 / 100.0) * skew_max_usd * PRICE_SCALE;
 
-    match action {
-        "SKEW_BID" if !obi_gated => {
-            // Skew quotes toward buy side (negative skew = cheaper bids)
+    match decision.action {
+        GpuAction::SkewBid if !obi_gated => {
             let skew = -(skew_magnitude as i64);
             blend_skew(engine, skew);
         }
-        "SKEW_ASK" if !obi_gated => {
-            // Skew quotes toward sell side (positive skew = cheaper asks)
+        GpuAction::SkewAsk if !obi_gated => {
             let skew = skew_magnitude as i64;
             blend_skew(engine, skew);
         }
-        "SKEW_BID" | "SKEW_ASK" => {
+        GpuAction::SkewBid | GpuAction::SkewAsk => {
             // OBI below threshold — treat as HOLD (decay)
             let current = engine.l1_skew_adjustment.load(Ordering::Relaxed);
             let decayed = (current as f64 * 0.95) as i64;
             engine.l1_skew_adjustment.store(decayed, Ordering::Release);
         }
-        "PAUSE_TRADING" => {
-            // Set freeze for 4 seconds
+        GpuAction::Pause => {
             let now_ms = epoch_ms();
             let current_freeze = engine.sweep_freeze_until.load(Ordering::Relaxed);
             if now_ms > current_freeze {
@@ -432,10 +472,10 @@ fn apply_gpu_decision(decision: &GpuDecision, engine: &EngineState) {
                 engine.ai_freeze_ms.store(4000, Ordering::Release);
             }
         }
-        _ => {
+        GpuAction::Hold => {
             // HOLD — gently decay skew toward zero
             let current = engine.l1_skew_adjustment.load(Ordering::Relaxed);
-            let decayed = (current as f64 * 0.95) as i64; // 5% decay per inference
+            let decayed = (current as f64 * 0.95) as i64;
             engine.l1_skew_adjustment.store(decayed, Ordering::Release);
         }
     }

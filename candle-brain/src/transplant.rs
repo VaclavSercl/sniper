@@ -15,8 +15,6 @@
 // ═══════════════════════════════════════════════════════════
 
 use crate::brain::{BrainConfig, CandleL1Brain};
-use crate::logit_sniper::HftAction;
-use anyhow::{Result, Context};
 use tracing::{info, warn};
 
 /// Result of a Brain Transplant operation.

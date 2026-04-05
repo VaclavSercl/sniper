@@ -222,7 +222,7 @@ impl SovereignEngine for TrigonEngine {
 
                 if self.last_scan.elapsed().as_millis() >= 100 {
                     let fee_bps = fee_state.taker_fee_bps.load(Ordering::Relaxed);
-                    let paused = risk.global_paused.load(Ordering::Acquire) != 0;
+                    let _paused = risk.global_paused.load(Ordering::Acquire) != 0;
                     
                     let mut best_profit = -1000000i64;
 

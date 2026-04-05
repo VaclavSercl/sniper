@@ -425,7 +425,7 @@ pub async fn run_sentinel(memory: Arc<ArmadaMemory>) {
 
 async fn check_system_resources(history: &mut SentinelHistory) {
     // ── GPU Temperature ──
-    if let Some((temp, mem_used, mem_total)) = gpu_stats() {
+    if let Some((temp, mem_used, mem_total)) = gpu_stats().await {
         if temp > 85 && history.should_alert("gpu_hot") {
             let msg = format!(
                 "🌡️ SENTINEL: GPU OVERHEATING\n\
@@ -560,11 +560,12 @@ async fn check_system_resources(history: &mut SentinelHistory) {
 
 // ── System helpers (pure Rust, no bash) ──
 
-fn gpu_stats() -> Option<(u64, u64, u64)> {
-    let output = std::process::Command::new("nvidia-smi")
+async fn gpu_stats() -> Option<(u64, u64, u64)> {
+    let output = tokio::process::Command::new("nvidia-smi")
         .args(["--query-gpu=temperature.gpu,memory.used,memory.total",
                "--format=csv,noheader,nounits"])
         .output()
+        .await
         .ok()?;
     if !output.status.success() { return None; }
     let s = String::from_utf8_lossy(&output.stdout);

@@ -17,7 +17,7 @@
 use super::types::*;
 use super::venue::*;
 use super::binance::{self, Binance};
-use crate::moonshot_types::str_to_symbol_hash;
+
 
 /// BinanceVenue — VenueAdapter for Binance Spot.
 ///

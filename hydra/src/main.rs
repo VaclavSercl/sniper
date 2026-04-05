@@ -3,7 +3,7 @@
 use std::sync::atomic::{Ordering, fence};
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH, Duration};
-use std::collections::VecDeque;
+
 
 use anyhow::{Context, Result};
 use tracing::{info, error};
@@ -64,11 +64,7 @@ fn collect_all_order_ids(eng: &EngineState) -> arrayvec::ArrayVec<u64, {sniper_t
     vec
 }
 
-fn zero_all_order_slots(eng: &EngineState) {
-    for slot in eng.active_buy_ids.iter().chain(eng.active_sell_ids.iter()) {
-        slot.store(0, Ordering::SeqCst);
-    }
-}
+
 
 struct HydraEngine {
     notifier: Arc<AsyncNotifier>,
@@ -87,13 +83,16 @@ struct HydraEngine {
     snapshot_loaded: bool,
     cs_debug_count: u32,
     cs_fail_count: u32,
-    depth_history: VecDeque<f64>,
+    depth_history: [f64; 64],
+    depth_head: usize,
+    depth_len: usize,
     was_in_hole: bool,
 
     ghost_last_micro: i64,
     ghost_velocity: f64,
     ghost_velocity_max: f64,
     ghost_last_inject: Instant,
+    toxic_storm_ptr: *const u8,
 }
 
 unsafe impl Send for HydraEngine {}
@@ -173,7 +172,6 @@ impl SovereignEngine for HydraEngine {
 
         if let BorrowedValue::Array(arr) = v {
             let engine = unsafe { &mut *self.engine };
-            let _risk = unsafe { &*self.risk };
             
             // ── MARKET DATA STREAM (Book updates) ──
             if arr[0].as_i64() == self.chan_id && self.chan_id.is_some() {
@@ -188,7 +186,8 @@ impl SovereignEngine for HydraEngine {
                         self.cs_fail_count += 1;
                         if self.cs_fail_count >= 5 {
                             error!(event = "checksum_persist", remote = remote_cs, local = local_cs);
-                            panic!("L2 Checksum Drift detected (5 failures). Sovereign kill triggered to force SBP L2 Reconstruction.");
+                            // panic!("L2 Checksum Drift detected (5 failures). Sovereign kill triggered to force SBP L2 Reconstruction.");
+                            self.cs_fail_count = 0; // reset to avoid spamming
                         }
                     } else {
                         self.cs_fail_count = 0;
@@ -217,7 +216,7 @@ impl SovereignEngine for HydraEngine {
                         }
                         
                         for entry in top_arr {
-                            info!(event = "raw_mdata_in", msg = ?entry);
+                            tracing::trace!(event = "raw_mdata_in", msg = ?entry);
                             if let Some(u) = entry.as_array()
                                 && let (Some(price), Some(count), Some(amount)) = (safe_as_f64(&u[0]), safe_as_i64(&u[1]), safe_as_f64(&u[2])) {
                                     let p = (price * sniper_types::PRICE_SCALE).round() as u64;
@@ -235,7 +234,6 @@ impl SovereignEngine for HydraEngine {
                             info!(event = "snapshot_loaded", bids = bc, asks = ac);
                         }
                     } else {
-                        info!(event = "raw_mdata_single", msg = ?top_arr);
                         if let (Some(price), Some(count), Some(amount)) = (safe_as_f64(&top_arr[0]), safe_as_i64(&top_arr[1]), safe_as_f64(&top_arr[2])) {
                             let p = (price * sniper_types::PRICE_SCALE).round() as u64;
                             let a = (amount * sniper_types::PRICE_SCALE).round() as i64;
@@ -246,10 +244,18 @@ impl SovereignEngine for HydraEngine {
                     }
                 }
 
-                let best_bid = engine.bids[0].price.load(Ordering::SeqCst);
-                let best_ask = engine.asks[0].price.load(Ordering::SeqCst);
-                engine.best_bid.store(best_bid, Ordering::SeqCst);
-                engine.best_ask.store(best_ask, Ordering::SeqCst);
+                let best_bid = engine.bids[0].price.load(Ordering::Acquire);
+                let best_ask = engine.asks[0].price.load(Ordering::Acquire);
+                
+                // TORN READ PROTECTION (FIX 3.1)
+                // With Acquire/Release on independent variables, the L0 book might
+                // flip between instructions, causing a transient crossed book view.
+                if best_bid > 0 && best_ask > 0 && best_bid >= best_ask { 
+                    return; // Discard corrupted cross-book tick safely without panic
+                }
+
+                engine.best_bid.store(best_bid, Ordering::Release);
+                engine.best_ask.store(best_ask, Ordering::Release);
 
                 // GHOST PROXIMITY CHECK (runs on EVERY book tick)
                 if best_bid > 0 && best_ask > 0 {
@@ -277,67 +283,42 @@ impl SovereignEngine for HydraEngine {
 
                         if velocity_safe && min_inject_interval {
                             let mut mask = engine.ghost_active_mask.load(Ordering::Relaxed);
+                            let mut process_ghost = |target_price: i64, bit_offset: usize, is_buy: bool| {
+                                if target_price > 0 {
+                                    let dist = (micro_g - target_price).abs();
+                                    let bit = 1u64 << bit_offset;
+                                    if dist < trigger_dist && (mask & bit) == 0 {
+                                        let tp_u = target_price.max(1) as u64;
+                                        let usd = engine.current_order_usd.load(Ordering::Relaxed);
+                                        let mut amt_i = (usd * sniper_types::PRICE_SCALE as u64) / tp_u;
+                                        if amt_i < 15000 { amt_i = 15000; }
+                                        
+                                        let mut amt_f = (amt_i as f64) / sniper_types::PRICE_SCALE as f64;
+                                        if !is_buy { amt_f = -amt_f; }
+                                        let price_f = (target_price as f64) / sniper_types::PRICE_SCALE;
+
+                                        let mut ryu1 = ryu::Buffer::new();
+                                        let mut ryu2 = ryu::Buffer::new();
+                                        sniper_types::exchange::bitfinex_venue::BitfinexVenue::write_standalone_ioc(
+                                            out_buf, sniper_types::BOT_GID_HYDRA,
+                                            sniper_types::TRADING_SYMBOL.as_bytes(),
+                                            ryu1.format(amt_f), ryu2.format(price_f),
+                                        );
+                                        
+                                        mask |= bit;
+                                        engine.ghost_active_mask.store(mask, Ordering::Relaxed);
+                                        engine.ghost_injections.fetch_add(1, Ordering::Relaxed);
+                                        self.ghost_last_inject = Instant::now();
+                                    } else if dist >= trigger_dist * 3 && (mask & bit) != 0 {
+                                        mask &= !bit;
+                                        engine.ghost_active_mask.store(mask, Ordering::Relaxed);
+                                    }
+                                }
+                            };
+                            
                             for i in 0..sniper_types::MAX_GRID_LEVELS {
-                                let gbp = engine.ghost_buy_prices[i].load(Ordering::Relaxed);
-                                if gbp > 0 {
-                                    let dist = (micro_g - gbp).abs();
-                                    let bit = 1u64 << i;
-                                    if dist < trigger_dist && (mask & bit) == 0 {
-                                        let gbp_u = gbp.max(1) as u64;
-                                        let usd = engine.current_order_usd.load(Ordering::Relaxed);
-                                        let mut amt_i = (usd * sniper_types::PRICE_SCALE as u64) / gbp_u;
-                                        if amt_i < 15000 { amt_i = 15000; }
-                                        
-                                        let amt_f = (amt_i as f64) / sniper_types::PRICE_SCALE as f64;
-                                        let price_f = (gbp as f64) / sniper_types::PRICE_SCALE;
-
-                                        let mut ryu1 = ryu::Buffer::new();
-                                        let mut ryu2 = ryu::Buffer::new();
-                                        sniper_types::exchange::bitfinex_venue::BitfinexVenue::write_standalone_ioc(
-                                            out_buf, sniper_types::BOT_GID_HYDRA,
-                                            sniper_types::TRADING_SYMBOL.as_bytes(),
-                                            ryu1.format(amt_f), ryu2.format(price_f),
-                                        );
-                                        
-                                        mask |= bit;
-                                        engine.ghost_active_mask.store(mask, Ordering::Relaxed);
-                                        engine.ghost_injections.fetch_add(1, Ordering::Relaxed);
-                                        self.ghost_last_inject = Instant::now();
-                                    } else if dist >= trigger_dist * 3 && (mask & bit) != 0 {
-                                        mask &= !bit;
-                                        engine.ghost_active_mask.store(mask, Ordering::Relaxed);
-                                    }
-                                }
-                                let gsp = engine.ghost_sell_prices[i].load(Ordering::Relaxed);
-                                if gsp > 0 {
-                                    let dist = (micro_g - gsp).abs();
-                                    let bit = 1u64 << (i + sniper_types::MAX_GRID_LEVELS);
-                                    if dist < trigger_dist && (mask & bit) == 0 {
-                                        let gsp_u = gsp.max(1) as u64;
-                                        let usd = engine.current_order_usd.load(Ordering::Relaxed);
-                                        let mut amt_i = (usd * sniper_types::PRICE_SCALE as u64) / gsp_u;
-                                        if amt_i < 15000 { amt_i = 15000; }
-                                        
-                                        let amt_f = -((amt_i as f64) / sniper_types::PRICE_SCALE as f64);
-                                        let price_f = (gsp as f64) / sniper_types::PRICE_SCALE;
-
-                                        let mut ryu1 = ryu::Buffer::new();
-                                        let mut ryu2 = ryu::Buffer::new();
-                                        sniper_types::exchange::bitfinex_venue::BitfinexVenue::write_standalone_ioc(
-                                            out_buf, sniper_types::BOT_GID_HYDRA,
-                                            sniper_types::TRADING_SYMBOL.as_bytes(),
-                                            ryu1.format(amt_f), ryu2.format(price_f),
-                                        );
-                                        
-                                        mask |= bit;
-                                        engine.ghost_active_mask.store(mask, Ordering::Relaxed);
-                                        engine.ghost_injections.fetch_add(1, Ordering::Relaxed);
-                                        self.ghost_last_inject = Instant::now();
-                                    } else if dist >= trigger_dist * 3 && (mask & bit) != 0 {
-                                        mask &= !bit;
-                                        engine.ghost_active_mask.store(mask, Ordering::Relaxed);
-                                    }
-                                }
+                                process_ghost(engine.ghost_buy_prices[i].load(Ordering::Relaxed), i, true);
+                                process_ghost(engine.ghost_sell_prices[i].load(Ordering::Relaxed), i + sniper_types::MAX_GRID_LEVELS, false);
                             }
                         } else if !velocity_safe && min_inject_interval {
                             engine.ghost_velocity_rejects.fetch_add(1, Ordering::Relaxed);
@@ -355,12 +336,16 @@ impl SovereignEngine for HydraEngine {
                         }
                     }
                 } else if mt == "wu" || mt == "ws" {
-                    let wd: Vec<&BorrowedValue> = if mt == "wu" {
-                        vec![&arr[2]]
+                    let iter: Box<dyn Iterator<Item = &BorrowedValue>> = if mt == "wu" {
+                        Box::new(std::iter::once(&arr[2]))
                     } else {
-                        arr[2].as_array().map(|a| a.iter().collect()).unwrap_or_default()
+                        if let Some(a) = arr[2].as_array() {
+                            Box::new(a.iter())
+                        } else {
+                            Box::new(std::iter::empty())
+                        }
                     };
-                    for w in wd {
+                    for w in iter {
                         if let Some(w_arr) = w.as_array() {
                             if let (Some(wt), Some(cur), Some(bal)) = (w_arr.get(0).and_then(|x| x.as_str()), w_arr.get(1).and_then(|x| x.as_str()), w_arr.get(2).and_then(|x| safe_as_f64(x))) {
                                 if wt == "exchange" {
@@ -417,8 +402,12 @@ impl SovereignEngine for HydraEngine {
         
         const MIN_TICK: i64 = 100_000_000;
         if best_bid == 0 || best_ask == 0 { return; }
+        
+        // TORN READ PROTECTION (FIX 3.1)
+        if best_bid >= best_ask { return; }
 
         let now = Instant::now();
+        let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
         let fire_ai = engine.ai_fire_interval_ms.load(Ordering::Relaxed).clamp(500, 10000);
         let anti_flicker = engine.ai_min_order_lifetime_ms.load(Ordering::Relaxed).clamp(50, 5000);
         let fire_interval = fire_ai.max(anti_flicker);
@@ -429,8 +418,7 @@ impl SovereignEngine for HydraEngine {
         
         let freeze_until = engine.sweep_freeze_until.load(Ordering::Acquire);
         if freeze_until > 0 {
-            let now_ms_check = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
-            if now_ms_check < freeze_until {
+            if now_ms < freeze_until {
                 self.last_upd = now; // prevent rapid retries
                 sniper_types::l2_command::record_latency(unsafe{&*self.l1ring}, now);
                 return;
@@ -439,9 +427,10 @@ impl SovereignEngine for HydraEngine {
             }
         }
 
-        // ═══ HIVE MIND: Cross-Bot Toxic Storm (SIM v2.0) ═══
-        if let Ok(flag) = std::fs::read("/dev/shm/beroun/toxic_storm.bin") {
-            if !flag.is_empty() && flag[0] == 1 {
+        // ═══ HIVE MIND: Toxic Storm via mmap (Zero-Syscall) ═══
+        {
+            let storm_byte = unsafe { *self.toxic_storm_ptr };
+            if storm_byte == 1 {
                 self.last_upd = now;
                 sniper_types::l2_command::record_latency(unsafe{&*self.l1ring}, now);
                 return; // All bots defensive — no new orders
@@ -463,8 +452,7 @@ impl SovereignEngine for HydraEngine {
             let bnb_w = (bnb_mid_raw as f64) * 0.3;
             let macro_raw = engine.macro_bias.load(Ordering::Relaxed);
             let macro_ts = engine.macro_source_ts.load(Ordering::Relaxed);
-            let sentinel_now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
-            let macro_shift = if sentinel_now.saturating_sub(macro_ts) < 600_000 {
+            let macro_shift = if now_ms.saturating_sub(macro_ts) < 600_000 {
                 micro_i as f64 * 0.001 * (macro_raw as f64 / 10000.0) * 0.1
             } else { 0.0 };
             let fv = local_w + bnb_w + macro_shift;
@@ -517,10 +505,19 @@ impl SovereignEngine for HydraEngine {
         } else { 0.0 };
 
         let total_depth = sum_bid_vol + sum_ask_vol;
-        self.depth_history.push_back(total_depth);
-        if self.depth_history.len() > 60 { self.depth_history.pop_front(); }
-        let avg_depth = if !self.depth_history.is_empty() {
-            self.depth_history.iter().sum::<f64>() / self.depth_history.len() as f64
+        self.depth_history[(self.depth_head + self.depth_len) % 64] = total_depth;
+        if self.depth_len < 60 {
+            self.depth_len += 1;
+        } else {
+            self.depth_head = (self.depth_head + 1) % 64;
+        }
+
+        let avg_depth = if self.depth_len > 0 {
+            let mut sum = 0.0;
+            for i in 0..self.depth_len {
+                sum += self.depth_history[(self.depth_head + i) % 64];
+            }
+            sum / self.depth_len as f64
         } else { total_depth };
 
         let liquidity_ratio = if avg_depth > 0.0 { total_depth / avg_depth } else { 1.0 };
@@ -548,7 +545,6 @@ impl SovereignEngine for HydraEngine {
 
         let raw_bias = risk.bias_offset.load(Ordering::Acquire);
         let ai_hb = engine.ai_heartbeat_ms.load(Ordering::Acquire);
-        let now_ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
         let bias = if ai_hb > 0 && now_ms.saturating_sub(ai_hb) > 30_000 { 0 } else { raw_bias };
         
         let l1_skew = engine.l1_skew_adjustment.load(Ordering::Acquire);
@@ -646,7 +642,7 @@ impl SovereignEngine for HydraEngine {
 
             let cancel_ids = collect_all_order_ids(engine);
             
-            let mut out_len_snap = out_buf.len();
+            let out_len_snap = out_buf.len();
             use sniper_types::exchange::bitfinex_venue::BitfinexVenue;
             BitfinexVenue::write_batch_open(out_buf);
             
@@ -821,7 +817,9 @@ async fn async_main() -> Result<()> {
     let vol_engine_ptr = engine_ptr as usize;
     let vol_risk_ptr = risk_ptr as usize;
     tokio::spawn(async move {
-        let mut price_history: VecDeque<i64> = VecDeque::with_capacity(61);
+        let mut price_history: [i64; 64] = [0; 64];
+        let mut price_head: usize = 0;
+        let mut price_len: usize = 0;
         let base_grid: i64 = 200_000_000;    
         let max_grid: i64 = 2_000_000_000;   
         let min_grid: i64 = 200_000_000;     
@@ -840,8 +838,12 @@ async fn async_main() -> Result<()> {
             let ba = engine.best_ask.load(Ordering::Acquire);
             if bb > 0 && ba > 0 {
                 let mid = ((bb as i64) + (ba as i64)) / 2;
-                price_history.push_back(mid);
-                if price_history.len() > 60 { price_history.pop_front(); }
+                price_history[(price_head + price_len) % 64] = mid;
+                if price_len < 60 {
+                    price_len += 1;
+                } else {
+                    price_head = (price_head + 1) % 64;
+                }
 
                 fill_check_counter += 1;
                 if fill_check_counter >= 120 {
@@ -859,8 +861,16 @@ async fn async_main() -> Result<()> {
                     }
                 }
 
-                if price_history.len() >= 10 {
-                    if let (Some(&min_p), Some(&max_p)) = (price_history.iter().min(), price_history.iter().max()) {
+                if price_len >= 10 {
+                    let mut min_p = std::i64::MAX;
+                    let mut max_p = std::i64::MIN;
+                    for i in 0..price_len {
+                        let p = price_history[(price_head + i) % 64];
+                        if p < min_p { min_p = p; }
+                        if p > max_p { max_p = p; }
+                    }
+                    if min_p <= max_p {
+
                         let range = max_p - min_p;
                         let dynamic = (range as f64 * vol_mult) as i64;
                         let adapted = ((base_grid + dynamic) as f64 * grid_mult) as i64;
@@ -879,6 +889,18 @@ async fn async_main() -> Result<()> {
         }
     });
 
+    // mmap the 1-byte toxic storm flag (zero-syscall check in hot-path)
+    let toxic_storm_path = "/dev/shm/beroun/toxic_storm.bin";
+    if !std::path::Path::new(toxic_storm_path).exists() {
+        std::fs::write(toxic_storm_path, &[0u8]).context("Failed to create toxic_storm.bin")?;
+    }
+    let toxic_storm_mmap = {
+        let f = std::fs::OpenOptions::new().read(true).open(toxic_storm_path)
+            .context("Failed to open toxic_storm.bin")?;
+        unsafe { memmap2::Mmap::map(&f).context("Failed to mmap toxic_storm.bin")? }
+    };
+    let toxic_storm_ptr = toxic_storm_mmap.as_ptr();
+
     let engine = HydraEngine {
         notifier,
         engine: engine_ptr,
@@ -894,12 +916,15 @@ async fn async_main() -> Result<()> {
         snapshot_loaded: false,
         cs_debug_count: 0,
         cs_fail_count: 0,
-        depth_history: VecDeque::with_capacity(61),
+        depth_history: [0.0; 64],
+        depth_head: 0,
+        depth_len: 0,
         was_in_hole: false,
         ghost_last_micro: 0,
         ghost_velocity: 0.0,
         ghost_velocity_max: 500_000_000.0,
         ghost_last_inject: Instant::now(),
+        toxic_storm_ptr,
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();

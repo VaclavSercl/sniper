@@ -151,7 +151,7 @@ def start_bot(name: str) -> str:
 
     # Build args
     args = ["taskset", "-c", str(info["cpu"]), info["core"]]
-    if is_paper and name == "nexus":
+    if is_paper:
         args.append("--paper")
 
     # Start core

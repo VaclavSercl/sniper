@@ -105,7 +105,7 @@ impl CandleL1Brain {
     /// and we snipe the logits at that exact position.
     ///
     /// TOX = toxicity score [0.0, 1.0] from toxic flow detector.
-    fn build_prompt(obi: f64, spread_bps: f64, delta: f64, tox: f64) -> String {
+    fn build_prompt(obi: f64, spread_bps: f64, _delta: f64, tox: f64) -> String {
         format!(
             "ROLE: Ultra-low latency HFT Reflex Core.\n\
              TASK: Classify L2 microstructure to predict next 100ms price tick.\n\
