@@ -34,7 +34,7 @@
 │  Trigon ──┤         │     │    HOLD/KILL             │     │  RAG memory (SQLite)     │
 │  Nexus  ──┘         │     │  CPU mode (GTX 1060)    │     │  Telegram alerts         │
 │                     │     │                         │     │  Quota Watchdog (5min)   │
-│  VenueAdapter trait  │     │  LMS HTTP (fallback)    │     │                          │
+│  VenueAdapter trait  │     │                         │     │                          │
 │  Bitfinex + Binance  │     │                         │     │  Hard Guardrails:        │
 │                     │     │  ChatTemplate Resolver   │     │  FAIL-FAST / MAX EXPO /  │
 │                     │     │  (Phi3/Llama3/Qwen2/    │     │  ANTI-JITTER             │
@@ -145,7 +145,7 @@ cp .env.example .env
 # Edit: BITFINEX_API_KEY, BINANCE_API_KEY, TELEGRAM_BOT_TOKEN, GEMINI_API_KEY
 
 # ZeroClaw onboarding
-zeroclaw onboard --quick --provider gemini --model gemini-3.1-pro-preview
+zeroclaw onboard --quick --provider gemini --model gemini-2.5-pro
 
 # Verify
 sudo systemctl status sniper-armada

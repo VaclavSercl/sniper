@@ -68,7 +68,7 @@ The Cortex is a dedicated Rust daemon running 5 concurrent subsystems:
 ### L1 Shield (50ms cycle)
 - Reads order book from `engine_state.bin` via mmap
 - Computes OBI (Order Book Imbalance) and toxic flow detection
-- Sends OBI tensor to local **Phi-3.5 Mini** GPU model (LM Studio :1234, 10s timeout)
+- Sends OBI tensor to in-process **Candle L1 Brain** (Phi-3.5 Q4_K_M GGUF, Logit Sniping, <20ms)
 - Writes `l1_skew_adjustment`, `toxic_flow_hits`, `l1_confidence_score` back to mmap
 - **Zero-alloc**: All computation uses stack buffers and incremental hashing
 
@@ -77,7 +77,7 @@ The Cortex is a dedicated Rust daemon running 5 concurrent subsystems:
 - **Layer 2:** AI timeout tracking (L1/L2 responsiveness)
 - **Layer 3:** Business logic (PnL crash, toxic rate, position drift, spread explosion)
 - **Layer 4:** Network liveness (async TCP connect to api.bitfinex.com:443)
-- **Layer 5:** System resources (CPU, RAM, GPU temp, VRAM, disk, LM Studio)
+- **Layer 5:** System resources (CPU, RAM, GPU temp, VRAM, disk, network)
 - **Layer 6:** Regime Sentinel — flash crash (>0.5% in 30s), sweep storm (3+ spread explosions)
   - Writes `1` to `/dev/shm/beroun/toxic_storm.bin` (shared with ML Shield Hive Mind)
 

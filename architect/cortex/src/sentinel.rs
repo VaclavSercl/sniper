@@ -411,31 +411,13 @@ pub async fn run_sentinel(memory: Arc<ArmadaMemory>) {
 }
 
 // ═══════════════════════════════════════════════════════════
-// LAYER 2: AI Timeout Guard (integrated into gpu.rs/l2.rs)
-// GPU call timeout is enforced in gpu.rs via ureq timeout.
-// L2 Gemini timeout via subprocess with 30s limit.
-// This function checks LM Studio liveness from Sentinel.
+// LAYER 2: AI Timeout Guard
+// Candle inference is in-process (no HTTP). Timeout enforced
+// in gpu.rs via mpsc channel drain. L2 ZeroClaw timeout via
+// subprocess with 30s limit.
 // ═══════════════════════════════════════════════════════════
 
-async fn check_lm_studio(history: &mut SentinelHistory) {
-    let result = tokio::task::spawn_blocking(|| {
-        let agent = ureq::Agent::config_builder()
-            .timeout_global(Some(std::time::Duration::from_secs(3)))
-            .build()
-            .new_agent();
-        agent.get("http://localhost:1234/v1/models")
-            .call()
-            .is_ok()
-    }).await;
 
-    let alive = result.unwrap_or(false);
-    if !alive && history.should_alert("lms_down") {
-        let msg = "⚠️ SENTINEL: LM Studio OFFLINE\n\
-                   GPU inference na :1234 neodpovida\n\
-                   L1 bezi v fallback modu (bez AI)";
-        push_alert("WARNING", msg).await;
-    }
-}
 
 // ═══════════════════════════════════════════════════════════
 // LAYER 5: System Resources (GPU temp, VRAM, disk, RAM, net)
@@ -560,8 +542,7 @@ async fn check_system_resources(history: &mut SentinelHistory) {
         }
     }
 
-    // ── LM Studio ──
-    check_lm_studio(history).await;
+
 
     // ── Network (Bitfinex) — async TCP connect, no fork ──
     let net_ok = tokio::time::timeout(

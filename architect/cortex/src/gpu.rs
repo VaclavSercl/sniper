@@ -1,18 +1,14 @@
 // ═══════════════════════════════════════════════════════════
 // 🤖 SOVEREIGN CORTEX — L1 AI Inference Module
-// v21.0 Pure Rust Hive: Candle In-Process + LMS HTTP Fallback
+// v21.1 Pure Rust Hive: Candle In-Process Logit Sniping
 //
 // Architecture:
-//   Primary:  Candle in-process (zero HTTP, <20ms CPU mode)
-//   Fallback: LM Studio HTTP (localhost:1234, ~50ms)
+//   Candle in-process (zero HTTP, <20ms CPU mode)
+//   Phi-3.5 Q4_K_M GGUF — 1 forward pass → 4 logits → action
 //
 //   L1 loop (50ms) → pushes snapshots to channel (every 2s)
 //   GPU thread → pops from channel, infers, writes result to mmap
 //   L1 NEVER waits for GPU — fire-and-forget
-//
-// v21.0: Candle Logit Sniping replaces JSON generation.
-//   1 forward pass → 3 logits (HOLD/BID/ASK) → action in <20ms.
-//   LM Studio kept as fallback for richer reasoning (SKEW/PAUSE).
 // ═══════════════════════════════════════════════════════════
 
 use sniper_types::{EngineState, PRICE_SCALE};
@@ -20,37 +16,9 @@ use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
-const LMS_URL: &str = "http://localhost:1234/v1/chat/completions";
-const LMS_MODEL: &str = "phi-3.5-mini-instruct";
 const INFERENCE_INTERVAL_MS: u64 = 2000;
-const MAX_TOKENS: u32 = 80;
 
-/// L1 inference backend selection (set at thread startup).
-enum L1Backend {
-    /// Candle in-process (zero HTTP, Logit Sniping)
-    Candle(candle_brain::CandleL1Brain),
-    /// LM Studio HTTP fallback
-    LmStudio,
-}
 
-// System prompt: strict, no-nonsense, JSON-only.
-// Optimized for small models that tend to "chat" and wrap JSON in markdown.
-const SYSTEM_PROMPT: &str = "\
-<role>You are SNIPER-L1, a deterministic HFT tactical micro-controller for BTC-USD.</role>\
-<task>Map market microstructure data to exactly ONE tactical action.</task>\
-<rules>\
-1. OUTPUT STRICTLY VALID JSON. No markdown, no text outside JSON.\
-2. VPIN and Portfolio Hedging are handled by L2 Oracle. You control ONLY short-term quote skew.\
-3. confidence_pct: 0-100. Below 50 = uncertain noise. Above 80 = strong divergence only.\
-4. reason: max 8 words.\
-</rules>\
-<logic>\
-ACTION: SKEW_BID  | WHEN: OBI > +0.3 AND depth GROWING\
-ACTION: SKEW_ASK  | WHEN: OBI < -0.3 AND depth THINNING\
-ACTION: PAUSE_TRADING | WHEN: sweeps > 5 OR toxic > 500\
-ACTION: HOLD      | WHEN: neutral, conflicting, or momentum reversal in OBI prev\
-</logic>\
-<example>{\"action\":\"HOLD\",\"confidence_pct\":65,\"reason\":\"OBI neutral depth stable\"}</example>";
 
 /// Snapshot sent from L1 to GPU thread.
 #[allow(dead_code)]
@@ -203,7 +171,7 @@ pub fn spawn_gpu_thread(engine: &'static EngineState) -> mpsc::SyncSender<L1GpuR
         })
         .expect("Failed to spawn GPU thread");
 
-    println!("  🤖 [GPU] Inference thread started (Phi-3.5 Mini @ localhost:1234)");
+    println!("  🧠 [GPU] Inference thread started (Candle Logit Sniping)");
     tx
 }
 
@@ -213,18 +181,9 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
     let mut inference_count: u64 = 0;
     let mut consecutive_failures: u64 = 0;
 
-    // ── Boot L1 Backend: Candle (primary) or LMS (fallback) ──
-    let mut backend = match candle_brain::CandleL1Brain::boot_default() {
-        Ok(brain) => {
-            println!("  🧠 [L1] Candle in-process brain ONLINE (Logit Sniping)");
-            L1Backend::Candle(brain)
-        }
-        Err(e) => {
-            eprintln!("  ⚠️ [L1] Candle boot failed: {e}");
-            println!("  🤖 [L1] Falling back to LM Studio HTTP (localhost:1234)");
-            L1Backend::LmStudio
-        }
-    };
+    // ── Boot Candle L1 Brain ──
+    let mut brain = candle_brain::CandleL1Brain::boot_default()
+        .expect("🔴 FATAL: Candle L1 Brain boot failed. Cannot run without AI inference.");
 
     // Telemetry ring buffer (thread-local, zero I/O)
     let mut ring = vec![DecisionRecord::default(); RING_SIZE];
@@ -277,45 +236,24 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
         let spread = latest.best_ask - latest.best_bid;
         let spread_bps = if latest.best_bid > 0.0 { spread / latest.best_bid * 10000.0 } else { 0.0 };
 
-        // ── Dual-Backend Inference ──
-        let result = match &mut backend {
-            L1Backend::Candle(brain) => {
-                // Candle: Logit Sniping (in-process, <20ms)
-                // 4th param = toxicity score (normalized 0.0-1.0)
-                let tox = latest.toxic_hits as f64 / 1000.0_f64.max(1.0);
-                brain.reset_cache();
-                match brain.reflex_action(latest.obi, spread_bps, latest.macro_bias, tox.min(1.0)) {
-                    Ok((action, confidence)) => {
-                        let (action_str, conf_pct) = match action {
-                            candle_brain::HftAction::Hold => ("HOLD", (confidence * 100.0) as u32),
-                            candle_brain::HftAction::Bid => ("SKEW_BID", (confidence * 100.0) as u32),
-                            candle_brain::HftAction::Ask => ("SKEW_ASK", (confidence * 100.0) as u32),
-                            candle_brain::HftAction::Kill => ("PAUSE_TRADING", (confidence * 100.0) as u32),
-                        };
-                        Ok(GpuDecision {
-                            action: Some(action_str.to_string()),
-                            confidence_pct: Some(conf_pct),
-                            reason: Some("candle".to_string()),
-                        })
-                    }
-                    Err(e) => Err(anyhow::anyhow!("Candle inference: {}", e)),
-                }
+        // ── Candle Logit Sniping Inference ──
+        let tox = latest.toxic_hits as f64 / 1000.0_f64.max(1.0);
+        brain.reset_cache();
+        let result = match brain.reflex_action(latest.obi, spread_bps, latest.macro_bias, tox.min(1.0)) {
+            Ok((action, confidence)) => {
+                let (action_str, conf_pct) = match action {
+                    candle_brain::HftAction::Hold => ("HOLD", (confidence * 100.0) as u32),
+                    candle_brain::HftAction::Bid => ("SKEW_BID", (confidence * 100.0) as u32),
+                    candle_brain::HftAction::Ask => ("SKEW_ASK", (confidence * 100.0) as u32),
+                    candle_brain::HftAction::Kill => ("PAUSE_TRADING", (confidence * 100.0) as u32),
+                };
+                Ok(GpuDecision {
+                    action: Some(action_str.to_string()),
+                    confidence_pct: Some(conf_pct),
+                    reason: Some("candle".to_string()),
+                })
             }
-            L1Backend::LmStudio => {
-                // LM Studio HTTP fallback (JSON generation, ~50ms)
-                let prompt_str = format!(
-                    "[BTC bid:{:.0} ask:{:.0} spr:{:.1}] [OBI:{:+.2} prev:{:+.2},{:+.2}] \
-                     [LOB:{} {:.0}/{:.0}] [RISK tox:{} swp:{}] \
-                     [POS {:.5}] [MACRO reg:{} F&G:{}({}) bias:{:+.2}]",
-                    latest.best_bid, latest.best_ask, spread,
-                    latest.obi, latest.obi_prev[0], latest.obi_prev[1],
-                    latest.depth_trend, latest.bid_depth, latest.ask_depth,
-                    latest.toxic_hits, latest.sweeps_recent,
-                    latest.net_position,
-                    latest.regime, latest.fear_greed, fg_label, latest.macro_bias,
-                );
-                call_lms(&prompt_str)
-            }
+            Err(e) => Err(anyhow::anyhow!("Candle inference: {}", e)),
         };
 
         match result {
@@ -519,53 +457,3 @@ fn epoch_ms() -> u64 {
 
 fn round2(v: f64) -> f64 { (v * 100.0).round() / 100.0 }
 fn round4(v: f64) -> f64 { (v * 10000.0).round() / 10000.0 }
-fn call_lms(user_prompt: &str) -> anyhow::Result<GpuDecision> {
-    let body = serde_json::json!({
-        "model": LMS_MODEL,
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt}
-        ],
-        "temperature": 0.1,
-        "max_tokens": MAX_TOKENS,
-    });
-
-    let json_body = serde_json::to_string(&body)?;
-
-    let agent = ureq::Agent::config_builder()
-        .timeout_global(Some(std::time::Duration::from_millis(10000)))
-        .build()
-        .new_agent();
-
-    let resp_body: String = agent.post(LMS_URL)
-        .header("Content-Type", "application/json")
-        .send(&json_body)?
-        .body_mut()
-        .read_to_string()?;
-
-    let resp: serde_json::Value = serde_json::from_str(&resp_body)?;
-
-    let content = resp["choices"][0]["message"]["content"]
-        .as_str()
-        .unwrap_or("{}");
-
-    // Sanitizer: find first { and last }, strip everything else
-    parse_gpu_json(content)
-}
-
-fn parse_gpu_json(raw: &str) -> anyhow::Result<GpuDecision> {
-    if let Ok(d) = serde_json::from_str::<GpuDecision>(raw.trim()) {
-        return Ok(d);
-    }
-
-    // Sanitizer for models that wrap JSON in markdown or prose
-    if let Some(start) = raw.find('{') {
-        if let Some(end) = raw.rfind('}') {
-            if let Ok(d) = serde_json::from_str::<GpuDecision>(&raw[start..=end]) {
-                return Ok(d);
-            }
-        }
-    }
-
-    anyhow::bail!("Cannot parse GPU response: {}", &raw[..raw.len().min(100)])
-}

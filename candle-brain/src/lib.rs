@@ -2,7 +2,7 @@
 // 🧠 candle-brain — In-Process L1 AI for Sniper Armada HFT
 // v21.0 Pure Rust Hive
 //
-// Replaces LM Studio HTTP inference with zero-copy Candle.
+// Pure Rust in-process GGUF inference via Candle.
 // Phi-3.5 Q4_K_M (2.39GB) runs in-process on GTX 1060.
 //
 // Key innovation: Logit Sniping

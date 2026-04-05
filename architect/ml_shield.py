@@ -15,7 +15,7 @@ Architecture:
   - Cycle: 50ms inference loop (~20 inferences/sec)
 
 Why NumPy instead of PyTorch:
-  - GTX 1060 VRAM nearly full (LM Studio uses ~3.7GB/6GB)
+  - GTX 1060 VRAM nearly full (Candle in-process uses ~2.4GB/6GB)
   - Linear model inference is <1μs on CPU vs ~100μs GPU kernel launch
   - Online learning updates weights every cycle (no batch training)
   - Zero dependencies beyond NumPy
