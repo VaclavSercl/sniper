@@ -128,7 +128,7 @@ impl BotManifest {
             json.push_str(&format!("\"{}\"", match v {
                 ExchangeId::Bitfinex => "bitfinex",
                 ExchangeId::Binance => "binance",
-                _ => "unknown",
+
             }));
         }
         json.push_str("],\n");

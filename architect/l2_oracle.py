@@ -125,7 +125,7 @@ class L2OracleAsync:
             return  # Skip normal cycle — recovery IS the first cycle
 
         # ── PAPER TRIAL CHECK: Phase 4-6 evaluation after 66 min ──
-        self._check_paper_trials()
+        await self._check_paper_trials()
 
         # ── SBP v3.1: GRADUATED LIVE — Phase 5 tier escalation ──
         self._check_graduated_live()
@@ -452,6 +452,7 @@ Cycle: #{self.cycle} (every 5 min)
   "global_regime": "BEARISH_SHOCK|BULLISH_TREND|CHOPPING_RANGE",
   "vpin_toxicity": float,
   \"hydra\": {{
+    \"os_action\": \"START|STOP|IGNORE\",
     \"recommended_grid_step\": float,
     \"max_position_limit\": float,
     \"pause_trading\": boolean,
@@ -582,14 +583,24 @@ PARAMETER CONSTRAINTS:
 
         # ═══ HYDRA ═══
         hydra = decision.get("hydra", {})
+        
+        os_action = hydra.get("os_action")
+        if os_action == "STOP":
+            self._save_bot_state("hydra", "PAPER")
+            self.cortex.pause("hydra")
+            start_bot("hydra")
+            log.info("  🐍 Hydra shifted to PAPER (AI STOP bypass)")
+        elif os_action == "START":
+            self._save_bot_state("hydra", "LIVE")
+            start_bot("hydra")
+            self.cortex.unpause("hydra")
+            log.info("  🐍 Hydra shifted to LIVE by AI")
+
         if hydra.get("pause_trading") is True:
             r = self.cortex.pause("hydra")
             log.info(f"  ⏸️ HYDRA PAUSED: {r}")
-        elif hydra.get("pause_trading") is False:
-            if self._is_paper("hydra"):
-                log.info(f"  🛡️ HYDRA unpause BLOCKED — PAPER mode (AI cannot override)")
-            else:
-                self.cortex.unpause("hydra")
+        elif hydra.get("pause_trading") is False and os_action != "STOP":
+            log.info("  🔒 [SHADOW LOCK] Refusing to unpause Hydra (Zátěžový test)")
 
         grid = hydra.get("recommended_grid_step") or hydra.get("grid_step")
         if grid is not None:
@@ -619,18 +630,22 @@ PARAMETER CONSTRAINTS:
         # ═══ MOONSHOT ═══
         moonshot = decision.get("moonshot", {})
         self._apply_moonshot(moonshot)
+        log.info("  🔒 [SHADOW LOCK] Refusing to unpause Moonshot")
 
         # ═══ GRID ═══
         grid_bot = decision.get("grid", {})
         self._apply_grid(grid_bot)
+        log.info("  🔒 [SHADOW LOCK] Refusing to unpause Grid")
 
         # ═══ TRIGON ═══
         trigon = decision.get("trigon", {})
         self._apply_trigon(trigon)
+        log.info("  🔒 [SHADOW LOCK] Refusing to unpause Trigon")
 
         # ═══ NEXUS ═══
         nexus = decision.get("nexus", {})
         self._apply_nexus(nexus)
+        log.info("  🔒 [SHADOW LOCK] Refusing to unpause Nexus")
 
         # ═══ L2 COMMAND MATRIX (Issue #18 Quick Wins) ═══
         self._write_l2_command(decision, bots=None)
@@ -914,10 +929,14 @@ PARAMETER CONSTRAINTS:
             # OS level action
             os_action = cfg.get("os_action")
             if os_action == "STOP":
-                stop_bot("moonshot")
-                return
-            elif os_action == "START":
+                self._save_bot_state("moonshot", "PAPER")
+                self.cortex.pause("moonshot")
                 start_bot("moonshot")
+                log.info("  🌙 Moonshot shifted to PAPER (AI STOP bypass)")
+            elif os_action == "START":
+                self._save_bot_state("moonshot", "LIVE")
+                start_bot("moonshot")
+                self.cortex.unpause("moonshot")
 
             fd = os.open(MOONSHOT_RISK_PATH, os.O_RDWR)
             import mmap
@@ -974,10 +993,14 @@ PARAMETER CONSTRAINTS:
             
         os_action = cfg.get("os_action")
         if os_action == "STOP":
-            stop_bot("grid")
-            return
-        elif os_action == "START":
+            self._save_bot_state("grid", "PAPER")
+            self.cortex.pause("grid")
             start_bot("grid")
+            log.info("  📐 Grid shifted to PAPER (AI STOP bypass)")
+        elif os_action == "START":
+            self._save_bot_state("grid", "LIVE")
+            start_bot("grid")
+            self.cortex.unpause("grid")
             
         if cfg.get("pause_trading") is True:
             self.cortex.pause("grid")
@@ -1010,10 +1033,14 @@ PARAMETER CONSTRAINTS:
             
         os_action = cfg.get("os_action")
         if os_action == "STOP":
-            stop_bot("trigon")
-            return
-        elif os_action == "START":
+            self._save_bot_state("trigon", "PAPER")
+            self.cortex.pause("trigon")
             start_bot("trigon")
+            log.info("  🔺 Trigon shifted to PAPER (AI STOP bypass)")
+        elif os_action == "START":
+            self._save_bot_state("trigon", "LIVE")
+            start_bot("trigon")
+            self.cortex.unpause("trigon")
             
         try:
             import struct as _st
@@ -1081,12 +1108,15 @@ PARAMETER CONSTRAINTS:
 
         os_action = cfg.get("os_action")
         if os_action == "STOP":
-            stop_bot("nexus")
-            log.info("  🪐 Nexus STOPPED by AI")
-            return
-        elif os_action == "START":
+            self._save_bot_state("nexus", "PAPER")
+            self.cortex.pause("nexus")
             start_bot("nexus")
-            log.info("  🪐 Nexus STARTED by AI")
+            log.info("  🪐 Nexus shifted to PAPER (AI STOP bypass)")
+        elif os_action == "START":
+            self._save_bot_state("nexus", "LIVE")
+            start_bot("nexus")
+            self.cortex.unpause("nexus")
+            log.info("  🪐 Nexus shifted to LIVE by AI")
 
         try:
             import struct as _st
@@ -1452,7 +1482,7 @@ PARAMETER CONSTRAINTS:
         }
         log.info(f"🧪 [TRIAL] {bot_name}: Paper Trial STARTED (66 min gate, fills baseline={fills_snapshot})")
 
-    def _check_paper_trials(self):
+    async def _check_paper_trials(self):
         """Called every L2 cycle (5 min). Check if any paper trial is ready.
         
         SBP v3.1: Uses EVENT-TIME gate, not just clock-time.
@@ -1492,10 +1522,10 @@ PARAMETER CONSTRAINTS:
                          f"({remaining:.0f} min remaining, {trial_fills} fills)")
 
         for bot_name in ready:
-            self._evaluate_paper_trial(bot_name)
+            await self._evaluate_paper_trial(bot_name)
 
-    def _evaluate_paper_trial(self, bot_name):
-        """Phase 5: AI evaluates paper trial results.
+    async def _evaluate_paper_trial(self, bot_name):
+        """Phase 5: AI evaluates paper trial results via ZeroClaw.
         
         Collects metrics from the trial period:
         - Fill count delta
@@ -1503,7 +1533,7 @@ PARAMETER CONSTRAINTS:
         - Toxic fill rate
         - Market volatility
         
-        Sends to Gemini for decision: PROMOTE (→ LIVE) or KEEP_PAPER.
+        Sends to ZeroClaw for decision: PROMOTE (→ LIVE) or KEEP_PAPER.
         """
         trial = self._paper_trials.get(bot_name)
         if not trial:
@@ -1535,7 +1565,7 @@ PARAMETER CONSTRAINTS:
         # Get market volatility from market_data.db
         vol_info = self._get_trial_volatility()
 
-        # Build Gemini evaluation prompt
+        # Build ZeroClaw evaluation prompt
         prompt = f"""═══ SBP PHASE 5: PAPER TRIAL EVALUATION ═══
 Bot: {bot_name.upper()}
 Pre-crash mode: {trial['pre_crash_mode']}
@@ -1560,32 +1590,37 @@ Respond with EXACTLY one JSON object:
 {{"decision": "PROMOTE" or "KEEP_PAPER", "reasoning": "brief explanation"}}
 """
         
-        log.info(f"  🤖 Calling Gemini for {bot_name} trial evaluation...")
+        log.info(f"  🤖 Calling ZeroClaw for {bot_name} trial evaluation...")
         
         try:
-            result = subprocess.run(
-                ["gemini", "-m", "gemini-3.1-pro-preview", "-p", prompt],
-                capture_output=True, text=True, timeout=GEMINI_TIMEOUT,
+            process = await asyncio.create_subprocess_exec(
+                "/home/wwwenda/.cargo/bin/zeroclaw", "agent", "-m", prompt,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
             )
-            if result.returncode != 0:
-                log.error(f"  Gemini failed for trial eval: {result.stderr[:200]}")
-                self._trial_fallback(bot_name, "Gemini error")
+            stdout, stderr = await asyncio.wait_for(
+                process.communicate(), timeout=GEMINI_TIMEOUT
+            )
+            if process.returncode != 0:
+                err_text = stderr.decode()[:200]
+                log.error(f"  ZeroClaw failed for trial eval: {err_text}")
+                self._trial_fallback(bot_name, "ZeroClaw error")
                 return
-            raw = result.stdout.strip()
-            log.info(f"  ✅ Gemini trial response ({len(raw)} bytes)")
-        except subprocess.TimeoutExpired:
-            log.error("  Gemini timeout for trial eval")
-            self._trial_fallback(bot_name, "Gemini timeout")
+            raw = stdout.decode().strip()
+            log.info(f"  ✅ ZeroClaw trial response ({len(raw)} bytes)")
+        except asyncio.TimeoutError:
+            log.error("  ZeroClaw timeout for trial eval")
+            self._trial_fallback(bot_name, "ZeroClaw timeout")
             return
         except Exception as e:
-            log.error(f"  Gemini error for trial eval: {e}")
+            log.error(f"  ZeroClaw error for trial eval: {e}")
             self._trial_fallback(bot_name, str(e))
             return
 
-        # Parse Gemini decision
+        # Parse ZeroClaw decision
         decision = self._parse_decision(raw)
         if not decision:
-            self._trial_fallback(bot_name, "Invalid Gemini response")
+            self._trial_fallback(bot_name, "Invalid ZeroClaw response")
             return
 
         ai_decision = decision.get("decision", "KEEP_PAPER").upper()
@@ -1943,6 +1978,9 @@ Respond with EXACTLY one JSON object:
             for bot in bots:
                 bot_name = bot['name']
                 if not bot.get('online'):
+                    continue
+                    
+                if self._is_paper(bot_name):
                     continue
                 
                 # ── Compute metrics ──

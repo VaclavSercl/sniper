@@ -181,6 +181,22 @@ impl SovereignEngine for NexusEngine {
         info!(event = "authenticated", bot = "nexus");
     }
 
+    fn is_shadow(&self) -> bool {
+        let cross_state = unsafe { &*self.cross };
+        cross_state.paper_mode.load(Ordering::Relaxed) == 1 
+            || cross_state.emergency_pause.load(Ordering::Relaxed) == 1 
+            || self.args.paper
+    }
+
+    fn best_bid_ask(&self) -> (f64, f64) {
+        let cross_state = unsafe { &*self.cross };
+        let bfx = &cross_state.pairs[0].bitfinex;
+        (
+            bfx.bid.load(Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64,
+            bfx.ask.load(Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64
+        )
+    }
+
     fn on_market_message(&mut self, _payload: &mut [u8], _out_buf: &mut bytes::BytesMut) {
         // Ignored, data comes from mmap
     }
@@ -220,12 +236,6 @@ impl SovereignEngine for NexusEngine {
         if let Some(signal) = scan_for_arb(cross_state, &self.args, latency_pad) {
             self.total_signals += 1;
             info!(event = "arb_detected", pair = signal.pair_name, direction = %signal.direction, net_bps = format!("{:.1}", signal.net_bps));
-
-            let is_paper = cross_state.paper_mode.load(Ordering::Relaxed) == 1 || self.args.paper;
-            if is_paper {
-                self.last_exec_ms = now_ms;
-                return;
-            }
 
             let qty = if signal.bfx_price > 0.0 { signal.size_usd / signal.bfx_price } else { return };
 

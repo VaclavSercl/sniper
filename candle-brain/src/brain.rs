@@ -2,7 +2,7 @@
 // 🧠 CandleL1Brain — In-Process GGUF Inference Engine
 // v21.0 Pure Rust Hive
 //
-// Replaces LM Studio HTTP with zero-copy Candle.
+// Pure Rust in-process GGUF inference via Candle.
 // Phi-3.5 Q4_K_M (2.39GB) in-process on GTX 1060.
 // ═══════════════════════════════════════════════════════════
 
@@ -105,7 +105,7 @@ impl CandleL1Brain {
     /// and we snipe the logits at that exact position.
     ///
     /// TOX = toxicity score [0.0, 1.0] from toxic flow detector.
-    fn build_prompt(obi: f64, spread_bps: f64, delta: f64, tox: f64) -> String {
+    fn build_prompt(obi: f64, spread_bps: f64, _delta: f64, tox: f64) -> String {
         format!(
             "ROLE: Ultra-low latency HFT Reflex Core.\n\
              TASK: Classify L2 microstructure to predict next 100ms price tick.\n\

@@ -30,6 +30,67 @@ pub trait SovereignEngine {
     
     /// Spuštěno před ukončením programu (SIGINT/SIGTERM) pro clean-up
     fn on_shutdown(&mut self, _out_buf: &mut bytes::BytesMut) {}
+    
+    /// Vrací TRUE, pokud je bot přesunut do Shadow režimu (generuje intent, ale neodešle ho na burzu)
+    fn is_shadow(&self) -> bool { false }
+    
+    /// Vrací nejlepší public Bid a Ask pro simulaci pesimistického plnění
+    fn best_bid_ask(&self) -> (f64, f64) { (0.0, 0.0) }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Shadow Execution Macro
+// ═══════════════════════════════════════════════════════════
+macro_rules! drain_out_buf {
+    ($runner:expr, $write:expr, $out_buf:expr) => {
+        if !$out_buf.is_empty() {
+            let text = unsafe { String::from_utf8_unchecked($out_buf.to_vec()) };
+            if $runner.engine.is_shadow() {
+                if text.contains("\"oc\"") || text.contains("cancel") || text.contains("ox_multi") {
+                    $runner.shadow_queue.clear();
+                }
+                
+                if text.contains("\"EXCHANGE LIMIT\"") || text.contains("\"EXCHANGE IOC\"") {
+                    let mut search_idx = 0;
+                    while let Some(rel_a) = text[search_idx..].find("\"amount\":") {
+                        let a = search_idx + rel_a + 9;
+                        let s_a = if text.as_bytes()[a] == b'"' { a+1 } else { a };
+                        let mut amount: f64 = 0.0;
+                        if let Some(e) = text[s_a..].find(|c| c == '"' || c == ',' || c == '}') {
+                            amount = text[s_a..s_a+e].parse().unwrap_or(0.0);
+                        }
+                        
+                        let mut price: f64 = 0.0;
+                        if let Some(rel_p) = text[a..].find("\"price\":") {
+                            let p = a + rel_p + 8;
+                            let s_p = if text.as_bytes()[p] == b'"' { p+1 } else { p };
+                            if let Some(e) = text[s_p..].find(|c| c == '"' || c == ',' || c == '}') {
+                                price = text[s_p..s_p+e].parse().unwrap_or(0.0);
+                                search_idx = s_p + e; // advance search
+                            } else {
+                                search_idx = s_p;
+                            }
+                        } else {
+                            break;
+                        }
+                        
+                        if amount != 0.0 && price != 0.0 {
+                            let is_buy = amount > 0.0;
+                            $runner.shadow_queue.push(ShadowIntent {
+                                side: is_buy, amount: amount.abs(), price, bot: $runner.name,
+                                ts: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_micros() as u64
+                            });
+                            tracing::info!(event = "shadow_intent_created", bot = ?$runner.name, side = ?if is_buy { "buy" } else { "sell" }, amount = amount.abs(), price = price);
+                        }
+                    }
+                }
+            } else {
+                use futures_util::SinkExt;
+                let _ = $write.send(Message::Text(text.into())).await;
+            }
+            $out_buf.clear();
+        }
+    }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -40,15 +101,25 @@ pub trait SovereignEngine {
 ///
 /// Monomorphized: `SovereignRunner<GridEngine, BitfinexVenue>` gets
 /// fully inlined by the compiler. Zero-cost abstraction.
+#[derive(Debug, Clone)]
+pub struct ShadowIntent {
+    pub side: bool, // true = BUY, false = SELL
+    pub amount: f64,
+    pub price: f64,
+    pub bot: &'static str,
+    pub ts: u64,
+}
+
 pub struct SovereignRunner<E: SovereignEngine, V: VenueAdapter> {
     pub engine: E,
     pub venue: V,
-    pub name: String,
+    pub name: &'static str,
+    pub shadow_queue: Vec<ShadowIntent>,
 }
 
 impl<E: SovereignEngine, V: VenueAdapter> SovereignRunner<E, V> {
-    pub fn new(engine: E, venue: V, name: &str) -> Self {
-        Self { engine, venue, name: name.to_string() }
+    pub fn new(engine: E, venue: V, name: &'static str) -> Self {
+        Self { engine, venue, name, shadow_queue: Vec::new() }
     }
 
     pub async fn run(&mut self) -> Result<()> {
@@ -85,52 +156,87 @@ impl<E: SovereignEngine, V: VenueAdapter> SovereignRunner<E, V> {
                 }
             }
 
-            let mut authed = false;
+            let mut _authed = false;
 
-            while let Some(msg) = read.next().await {
-                let msg = match msg {
-                    Ok(m) => m,
-                    Err(e) => { warn!("WS read err: {}", e); break; }
-                };
+            loop {
+                tokio::select! {
+                    msg_res = read.next() => {
+                        let msg = match msg_res {
+                            Some(Ok(m)) => m,
+                            Some(Err(e)) => { warn!("WS read err: {}", e); break; }
+                            None => { warn!("WS disconnected"); break; }
+                        };
 
-                out_buf.clear();
+                        out_buf.clear();
 
-                if let Message::Text(text) = msg {
-                    let bytes = text.as_bytes();
+                        if let Message::Text(text) = msg {
+                            let bytes = text.as_bytes();
 
-                    if bytes.first() == Some(&b'{') { 
-                        let v: serde_json::Value = serde_json::from_slice(bytes).unwrap_or_default();
-                        
-                        if v["event"] == "auth" {
-                            if v["status"] == "OK" {
-                                authed = true;
-                                self.engine.on_auth();
+                            if bytes.first() == Some(&b'{') { 
+                                let v: serde_json::Value = serde_json::from_slice(bytes).unwrap_or_default();
                                 
-                                let subs = self.engine.subscriptions();
-                                for sub in subs {
-                                    let _ = write.send(Message::Text(sub.into())).await;
+                                if v["event"] == "auth" {
+                                    if v["status"] == "OK" {
+                                        _authed = true;
+                                        self.engine.on_auth();
+                                        
+                                        let subs = self.engine.subscriptions();
+                                        for sub in subs {
+                                            let _ = write.send(Message::Text(sub.into())).await;
+                                        }
+                                    } else {
+                                        error!(event = "auth_failed", status = %v["status"], msg = %v["msg"]);
+                                    }
+                                } else {
+                                    self.engine.on_system_event(&v, &mut out_buf);
                                 }
-                            } else {
-                                error!(event = "auth_failed", status = %v["status"], msg = %v["msg"]);
+                            } else if bytes.first() == Some(&b'[') {
+                                // Market Data Array (Fast-path)
+                                let mut mut_bytes = bytes.to_vec();
+                                self.engine.on_market_message(&mut mut_bytes, &mut out_buf);
                             }
-                        } else {
-                            self.engine.on_system_event(&v, &mut out_buf);
                         }
-                    } else if bytes.first() == Some(&b'[') {
-                        // Market Data Array (Fast-path)
-                        let mut mut_bytes = bytes.to_vec();
-                        self.engine.on_market_message(&mut mut_bytes, &mut out_buf);
+                        
+                        self.engine.on_loop(&mut out_buf);
+                        drain_out_buf!(self, write, &mut out_buf);
+                    }
+                    _ = tokio::time::sleep(Duration::from_millis(1)) => {
+                        out_buf.clear();
+                        self.engine.on_loop(&mut out_buf);
+                        drain_out_buf!(self, write, &mut out_buf);
                     }
                 }
-                
-                self.engine.on_loop(&mut out_buf);
-                
-                if !out_buf.is_empty() {
-                    let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
-                    let _ = write.send(Message::Text(text.into())).await;
-                }
+                self.process_shadow_matches();
             }
             warn!("Sovereign WS read loop ended for {}", self.name);
+        }
+    }
+
+    /// Odbaví pesimistické stínové exekuce podle aktuálního Orderbooku
+    fn process_shadow_matches(&mut self) {
+        if !self.engine.is_shadow() || self.shadow_queue.is_empty() { return; }
+        let (bid, ask) = self.engine.best_bid_ask();
+        if bid <= 0.0 || ask <= 0.0 { return; }
+        
+        let mut i = 0;
+        while i < self.shadow_queue.len() {
+            let order = &self.shadow_queue[i];
+            let is_buy = order.side;
+            let is_filled = if is_buy { ask <= order.price } else { bid >= order.price };
+            if is_filled {
+                let fill_price = if is_buy { ask } else { bid };
+                let payload = format!(
+                    r#"{{"event":"shadow_fill","bot":"{}","symbol":"{}","side":"{}","qty":{},"price":{},"fee":0,"trade_id":"shadow_{}","ts":{}}}"#,
+                    order.bot, crate::types::TRADING_SYMBOL, if is_buy { "buy" } else { "sell" }, order.amount, fill_price,
+                    order.ts, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
+                );
+                if let Ok(udp) = std::net::UdpSocket::bind("127.0.0.1:0") {
+                    let _ = udp.send_to(payload.as_bytes(), "127.0.0.1:8888");
+                }
+                self.shadow_queue.swap_remove(i);
+            } else {
+                i += 1;
+            }
         }
     }
 }
@@ -145,12 +251,13 @@ impl<E: SovereignEngine, V: VenueAdapter> SovereignRunner<E, V> {
 pub struct SovereignDualRunner<E: SovereignEngine, V: VenueAdapter> {
     pub engine: E,
     pub venue: V,
-    pub name: String,
+    pub name: &'static str,
+    pub shadow_queue: Vec<ShadowIntent>,
 }
 
 impl<E: SovereignEngine, V: VenueAdapter> SovereignDualRunner<E, V> {
-    pub fn new(engine: E, venue: V, name: &str) -> Self {
-        Self { engine, venue, name: name.to_string() }
+    pub fn new(engine: E, venue: V, name: &'static str) -> Self {
+        Self { engine, venue, name, shadow_queue: Vec::new() }
     }
 
     pub async fn run(&mut self) -> Result<()> {
@@ -194,7 +301,7 @@ impl<E: SovereignEngine, V: VenueAdapter> SovereignDualRunner<E, V> {
                 }
             }
 
-            let mut authed = false;
+            let mut _authed = false;
 
             // Dual polling loop
             loop {
@@ -214,10 +321,7 @@ impl<E: SovereignEngine, V: VenueAdapter> SovereignDualRunner<E, V> {
                                 self.engine.on_market_message(&mut bytes, &mut out_buf);
                             }
                         }
-                        if !out_buf.is_empty() {
-                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
-                            let _ = exec_write.send(Message::Text(text.into())).await;
-                        }
+                        drain_out_buf!(self, exec_write, &mut out_buf);
                     }
                     msg = exec_read.next() => {
                         let msg = match msg {
@@ -231,7 +335,7 @@ impl<E: SovereignEngine, V: VenueAdapter> SovereignDualRunner<E, V> {
                                 let v: serde_json::Value = serde_json::from_slice(bytes).unwrap_or_default();
                                 if v["event"] == "auth" {
                                     if v["status"] == "OK" {
-                                        authed = true;
+                                        _authed = true;
                                         self.engine.on_auth();
                                     } else {
                                         error!(event = "auth_failed", status = %v["status"], msg = %v["msg"]);
@@ -244,32 +348,54 @@ impl<E: SovereignEngine, V: VenueAdapter> SovereignDualRunner<E, V> {
                                 self.engine.on_market_message(&mut mut_bytes, &mut out_buf);
                             }
                         }
-                        if !out_buf.is_empty() {
-                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
-                            let _ = exec_write.send(Message::Text(text.into())).await;
-                        }
+                        drain_out_buf!(self, exec_write, &mut out_buf);
                     }
                     _ = tokio::time::sleep(Duration::from_millis(1)) => {
                         // Background loop iteration
                         out_buf.clear();
                         self.engine.on_loop(&mut out_buf);
-                        if !out_buf.is_empty() {
-                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
-                            let _ = exec_write.send(Message::Text(text.into())).await;
-                        }
+                        drain_out_buf!(self, exec_write, &mut out_buf);
                     }
                     _ = tokio::signal::ctrl_c() => {
                         info!("Received Ctrl-C, initiating shutdown for {}", self.name);
                         out_buf.clear();
                         self.engine.on_shutdown(&mut out_buf);
-                        if !out_buf.is_empty() {
-                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
-                            let _ = exec_write.send(Message::Text(text.into())).await;
-                        }
+                        drain_out_buf!(self, exec_write, &mut out_buf);
                         return Ok(());
                     }
                 }
+                self.process_shadow_matches();
             } // end dual stream loop
+        }
+    }
+
+    /// Odbaví pesimistické stínové exekuce podle aktuálního Orderbooku
+    fn process_shadow_matches(&mut self) {
+        if !self.engine.is_shadow() || self.shadow_queue.is_empty() { return; }
+        let (bid, ask) = self.engine.best_bid_ask();
+        if bid <= 0.0 || ask <= 0.0 { return; }
+        
+        tracing::info!(event = "process_shadow_matches", shadow_q_len = self.shadow_queue.len(), bid = bid, ask = ask);
+
+        let mut i = 0;
+        while i < self.shadow_queue.len() {
+            let order = &self.shadow_queue[i];
+            let is_buy = order.side;
+            let is_filled = if is_buy { ask <= order.price } else { bid >= order.price };
+            if is_filled {
+                let fill_price = if is_buy { ask } else { bid };
+                let payload = format!(
+                    r#"{{"event":"shadow_fill","bot":"{}","symbol":"{}","side":"{}","qty":{},"price":{},"fee":0,"trade_id":"shadow_{}","ts":{}}}"#,
+                    order.bot, crate::types::TRADING_SYMBOL, if is_buy { "buy" } else { "sell" }, order.amount, fill_price,
+                    order.ts, std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()
+                );
+                if let Ok(udp) = std::net::UdpSocket::bind("127.0.0.1:0") {
+                    let _ = udp.send_to(payload.as_bytes(), "127.0.0.1:8888");
+                }
+                self.shadow_queue.swap_remove(i);
+            } else {
+                i += 1;
+            }
         }
     }
 }
@@ -297,12 +423,12 @@ pub struct SovereignCrossVenueRunner<E: CrossVenueEngine, V1: VenueAdapter, V2: 
     pub engine: E,
     pub primary: V1,
     pub secondary: V2,
-    pub name: String,
+    pub name: &'static str,
 }
 
 impl<E: CrossVenueEngine, V1: VenueAdapter, V2: VenueAdapter> SovereignCrossVenueRunner<E, V1, V2> {
-    pub fn new(engine: E, primary: V1, secondary: V2, name: &str) -> Self {
-        Self { engine, primary, secondary, name: name.to_string() }
+    pub fn new(engine: E, primary: V1, secondary: V2, name: &'static str) -> Self {
+        Self { engine, primary, secondary, name }
     }
 
     pub async fn run(&mut self) -> Result<()> {
@@ -329,15 +455,6 @@ impl<E: CrossVenueEngine, V1: VenueAdapter, V2: VenueAdapter> SovereignCrossVenu
                 }
             };
 
-            // Connect secondary venue (market data only)
-            let ws_secondary_res = connect_async(self.secondary.ws_url()).await;
-            let (ws_secondary, _) = match ws_secondary_res {
-                Ok(v) => v, Err(e) => {
-                    warn!(event = "secondary_ws_fail", venue = self.secondary.name(), error = %e);
-                    tokio::time::sleep(Duration::from_secs(5)).await;
-                    continue;
-                }
-            };
 
             let (mut primary_write, mut primary_read) = ws_primary.split();
 

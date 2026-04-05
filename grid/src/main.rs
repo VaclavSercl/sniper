@@ -90,6 +90,19 @@ impl SovereignEngine for GridEngine {
         info!(event = "authenticated", bot = "grid");
     }
 
+    fn is_shadow(&self) -> bool {
+        let risk = unsafe { &*self.risk };
+        risk.global_paused.load(Ordering::Acquire) != 0
+    }
+
+    fn best_bid_ask(&self) -> (f64, f64) {
+        let engine = unsafe { &*self.engine };
+        (
+            engine.best_bid.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64,
+            engine.best_ask.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64
+        )
+    }
+
     fn on_market_message(&mut self, payload: &mut [u8], out_buf: &mut bytes::BytesMut) {
         let loop_start = Instant::now();
         if let Some((chan, bid, ask)) = sniper_types::exchange::fast_parse_ticker(payload) {
@@ -106,13 +119,12 @@ impl SovereignEngine for GridEngine {
                 e.mid_price.store(mid as u64, Ordering::Release);
                 e.latency_ns.store(loop_start.elapsed().as_nanos() as u64, Ordering::Release);
 
-                let paused = r.global_paused.load(Ordering::Acquire) != 0;
                 let grid_inv = e.net_position.load(Ordering::Relaxed);
                 l2p.grid_inventory.store(grid_inv, Ordering::Relaxed);
                 
                 let hedge_active = !sniper_types::l2_command::should_grid_place_bid(l2r);
 
-                if !paused && self.last_grid_calc.elapsed().as_secs() >= 3 {
+                if self.last_grid_calc.elapsed().as_secs() >= 3 {
                     // ═══ HIVE MIND: Cross-Bot Toxic Storm (SIM v2.0) ═══
                     if let Ok(flag) = std::fs::read("/dev/shm/beroun/toxic_storm.bin") {
                         if !flag.is_empty() && flag[0] == 1 { return; }

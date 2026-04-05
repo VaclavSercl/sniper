@@ -15,7 +15,7 @@ Architecture:
   - Cycle: 50ms inference loop (~20 inferences/sec)
 
 Why NumPy instead of PyTorch:
-  - GTX 1060 VRAM nearly full (LM Studio uses ~3.7GB/6GB)
+  - GTX 1060 VRAM nearly full (Candle in-process uses ~2.4GB/6GB)
   - Linear model inference is <1μs on CPU vs ~100μs GPU kernel launch
   - Online learning updates weights every cycle (no batch training)
   - Zero dependencies beyond NumPy
@@ -491,9 +491,9 @@ def run_inference():
                 # Check 3 conditions: VPIN, spread z-score, OBI momentum
                 try:
                     n_feat = features.shape[0] if hasattr(features, 'shape') else len(features)
-                    vpin_val = float(features[3]) if n_feat > 3 else 0.0
-                    spread_z_val = float(features[7]) if n_feat > 7 else 0.0
-                    obi_mom_val = abs(float(features[4])) if n_feat > 4 else 0.0
+                    obi_mom_val = abs(float(features[2])) if n_feat > 2 else 0.0
+                    spread_z_val = float(features[4]) if n_feat > 4 else 0.0
+                    vpin_val = float(features[5]) if n_feat > 5 else 0.0
 
                     is_storm = (
                         vpin_val > STORM_VPIN_THRESHOLD or

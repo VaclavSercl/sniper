@@ -23,6 +23,7 @@ pub enum BotRisk<'a> {
     Nexus(&'a CrossExchangeState),
 }
 
+#[allow(dead_code)]
 pub enum BotEngine<'a> {
     Hydra(&'a EngineState),
     Moonshot(&'a MoonshotEngineState),
@@ -152,7 +153,7 @@ impl ArmadaMemory {
     }
 
     /// Get RiskState for any bot by name. Returns None if bot's mmap is offline.
-    pub fn risk_for_bot(&self, name: &str) -> Option<BotRisk> {
+    pub fn risk_for_bot(&self, name: &str) -> Option<BotRisk<'_>> {
         match name {
             "hydra" => Some(BotRisk::Hydra(self.hydra_risk())),
             "moonshot" => self.moonshot_risk.as_ref()
@@ -168,7 +169,7 @@ impl ArmadaMemory {
     }
 
     /// Get EngineState for any bot by name. Returns None if bot's mmap is offline.
-    pub fn engine_for_bot(&self, name: &str) -> Option<BotEngine> {
+    pub fn engine_for_bot(&self, name: &str) -> Option<BotEngine<'_>> {
         match name {
             "hydra" => Some(BotEngine::Hydra(self.hydra_engine())),
             "moonshot" => self.moonshot_engine.as_ref()

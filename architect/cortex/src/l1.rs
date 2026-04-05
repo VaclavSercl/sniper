@@ -274,12 +274,22 @@ fn detect_flickering(history: &VecDeque<FixedPrice>, window: usize) -> (bool, Fi
 
 fn compute_iceberg_score(levels: &[BookLevel]) -> FixedPrice {
     if levels.len() < 3 { return FixedPrice::zero(); }
-    let mut price_counts = std::collections::HashMap::new();
-    for l in levels {
-        let p = l.price.0;
-        *price_counts.entry(p).or_insert(0u32) += 1;
+    // Zero-alloc O(n²) scan: n≤10 → max 100 comparisons vs HashMap alloc+hash
+    let mut repeated = 0usize;
+    for i in 0..levels.len() {
+        let mut count = 0u32;
+        for j in 0..levels.len() {
+            if levels[j].price.0 == levels[i].price.0 { count += 1; }
+        }
+        // Count each unique repeated price only once
+        if count > 1 {
+            let mut already_counted = false;
+            for k in 0..i {
+                if levels[k].price.0 == levels[i].price.0 { already_counted = true; break; }
+            }
+            if !already_counted { repeated += 1; }
+        }
     }
-    let repeated = price_counts.values().filter(|&&c| c > 1).count();
     let mut score = FixedPrice::new((repeated as i64 * PRICE_SCALE_I) / 3);
     if score > FixedPrice::new(PRICE_SCALE_I) { score = FixedPrice::new(PRICE_SCALE_I); }
     score

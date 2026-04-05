@@ -1,7 +1,7 @@
 //! Standalone test binary for Candle L1 Brain.
 //! Run: cargo run --bin candle-brain-test --release
 
-use candle_brain::{CandleL1Brain, HftAction};
+use candle_brain::CandleL1Brain;
 use std::time::Instant;
 
 fn main() -> anyhow::Result<()> {

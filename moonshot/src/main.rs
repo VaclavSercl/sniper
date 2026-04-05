@@ -66,6 +66,19 @@ impl SovereignEngine for MoonshotEngine {
         info!(event = "authenticated", bot = "moonshot");
     }
 
+    fn is_shadow(&self) -> bool {
+        let risk = unsafe { &*self.risk };
+        risk.global_paused.load(Ordering::Acquire) != 0
+    }
+
+    fn best_bid_ask(&self) -> (f64, f64) {
+        let e = unsafe { &(*self.engine).pairs[0] }; // Using index 0 for global price estimate
+        (
+            e.best_bid.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64,
+            e.best_ask.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64
+        )
+    }
+
     fn on_market_message(&mut self, payload: &mut [u8], out_buf: &mut bytes::BytesMut) {
         let loop_start = Instant::now();
         if let Some((chan, bid, ask)) = sniper_types::exchange::fast_parse_ticker(payload) {
@@ -78,70 +91,66 @@ impl SovereignEngine for MoonshotEngine {
                 e.last_trade.store(((bid + ask) / 2) as u64, Ordering::Release);
                 e.latency_ns.store(loop_start.elapsed().as_nanos() as u64, Ordering::Release);
 
-                let paused = unsafe { &*self.risk }.global_paused.load(Ordering::Acquire) != 0;
-                
-                if !paused {
-                    // ═══ HIVE MIND: Cross-Bot Toxic Storm (SIM v2.0) ═══
-                    if let Ok(flag) = std::fs::read("/dev/shm/beroun/toxic_storm.bin") {
-                        if !flag.is_empty() && flag[0] == 1 { return; }
-                    }
-                    let mid_price = (bid + ask) / 2;
-                    let l2cmd = unsafe { &*self.l2cmd };
-                    let l2_risk = unsafe { &*self.l2_risk };
+                // ═══ HIVE MIND: Cross-Bot Toxic Storm (SIM v2.0) ═══
+                if let Ok(flag) = std::fs::read("/dev/shm/beroun/toxic_storm.bin") {
+                    if !flag.is_empty() && flag[0] == 1 { return; }
+                }
+                let mid_price = (bid + ask) / 2;
+                let l2cmd = unsafe { &*self.l2cmd };
+                let l2_risk = unsafe { &*self.l2_risk };
 
-                    if let Some(trigger) = sniper_types::l2_command::moonshot_check_and_disarm(
-                        l2cmd, mid_price as i64, 1, 0
-                    ) {
-                        let order_usd = r.order_usd.load(Ordering::Acquire) as f64 / sniper_types::PRICE_SCALE;
-                        let mid_f64 = mid_price as f64 / PRICE_SCALE_I as f64;
-                        
-                        if order_usd > 0.0 && mid_f64 > 0.0 {
-                            let coin_amount = (order_usd / mid_f64).max(0.00015);
-                            if let Some(symbol) = self.idx_to_symbol.get(&idx) {
-                                sniper_types::exchange::bitfinex_venue::BitfinexVenue::write_standalone_ioc(
-                                    out_buf, 2001, symbol.as_bytes(),
-                                    self.ryu1.format(coin_amount), self.ryu2.format(mid_f64),
-                                );
+                if let Some(trigger) = sniper_types::l2_command::moonshot_check_and_disarm(
+                    l2cmd, mid_price as i64, 1, 0
+                ) {
+                    let order_usd = r.order_usd.load(Ordering::Acquire) as f64 / sniper_types::PRICE_SCALE;
+                    let mid_f64 = mid_price as f64 / PRICE_SCALE_I as f64;
+                    
+                    if order_usd > 0.0 && mid_f64 > 0.0 {
+                        let coin_amount = (order_usd / mid_f64).max(0.00015);
+                        if let Some(symbol) = self.idx_to_symbol.get(&idx) {
+                            sniper_types::exchange::bitfinex_venue::BitfinexVenue::write_standalone_ioc(
+                                out_buf, 2001, symbol.as_bytes(),
+                                self.ryu1.format(coin_amount), self.ryu2.format(mid_f64),
+                            );
 
-                                warn!(event = "moonshot_fired", symbol = %symbol, price = mid_f64);
-                                self.notifier.send(format!("🚀 MOONSHOT FIRED! {} @ ${:.2} (trigger ${:.2})", 
-                                    symbol, mid_f64, trigger as f64 / PRICE_SCALE_I as f64));
+                            warn!(event = "moonshot_fired", symbol = %symbol, price = mid_f64);
+                            self.notifier.send(format!("🚀 MOONSHOT FIRED! {} @ ${:.2} (trigger ${:.2})", 
+                                symbol, mid_f64, trigger as f64 / PRICE_SCALE_I as f64));
 
-                                let drop_bps = ((mid_f64 - (trigger as f64 / PRICE_SCALE_I as f64)) / mid_f64 * 10_000.0) as i64;
-                                sniper_types::l2_command::signal_flash_crash(l2_risk, drop_bps);
-                                self.last_order_ts[idx] = Instant::now();
-                            }
+                            let drop_bps = ((mid_f64 - (trigger as f64 / PRICE_SCALE_I as f64)) / mid_f64 * 10_000.0) as i64;
+                            sniper_types::l2_command::signal_flash_crash(l2_risk, drop_bps);
+                            self.last_order_ts[idx] = Instant::now();
                         }
-                    } else if self.last_order_ts[idx].elapsed().as_millis() > 50 {
-                        // Passive limit orders logic
-                        let drop_pct = r.m_shot_price_pct.load(Ordering::Acquire) as f64 / sniper_types::PRICE_SCALE;
-                        let tp_pct = r.tp_pct.load(Ordering::Acquire) as f64 / sniper_types::PRICE_SCALE;
-                        let order_usd = r.order_usd.load(Ordering::Acquire) as f64 / sniper_types::PRICE_SCALE;
+                    }
+                } else if self.last_order_ts[idx].elapsed().as_millis() > 50 {
+                    // Passive limit orders logic
+                    let drop_pct = r.m_shot_price_pct.load(Ordering::Acquire) as f64 / sniper_types::PRICE_SCALE;
+                    let tp_pct = r.tp_pct.load(Ordering::Acquire) as f64 / sniper_types::PRICE_SCALE;
+                    let order_usd = r.order_usd.load(Ordering::Acquire) as f64 / sniper_types::PRICE_SCALE;
 
-                        let mid_f64 = mid_price as f64 / PRICE_SCALE_I as f64;
-                        if drop_pct > 0.0 && order_usd > 0.0 && mid_f64 > 0.0 {
-                            let buy_p = mid_f64 * (1.0 - (drop_pct / 100.0));
-                            let sell_p = buy_p * (1.0 + (tp_pct / 100.0));
-                            let coin_amount = (order_usd / buy_p).max(0.00015);
-                            let ask_f64 = ask as f64 / PRICE_SCALE_I as f64;
+                    let mid_f64 = mid_price as f64 / PRICE_SCALE_I as f64;
+                    if drop_pct > 0.0 && order_usd > 0.0 && mid_f64 > 0.0 {
+                        let buy_p = mid_f64 * (1.0 - (drop_pct / 100.0));
+                        let sell_p = buy_p * (1.0 + (tp_pct / 100.0));
+                        let coin_amount = (order_usd / buy_p).max(0.00015);
+                        let ask_f64 = ask as f64 / PRICE_SCALE_I as f64;
 
-                            if buy_p < ask_f64 {
-                                if let Some(symbol) = self.idx_to_symbol.get(&idx) {
-                                    use sniper_types::exchange::bitfinex_venue::BitfinexVenue;
-                                    BitfinexVenue::write_batch_open_cancel_sym(out_buf, symbol.as_bytes());
-                                    BitfinexVenue::write_limit_order(
-                                        out_buf, 2000, symbol.as_bytes(),
-                                        self.ryu1.format(coin_amount), self.ryu2.format(buy_p),
-                                    );
-                                    BitfinexVenue::write_limit_order(
-                                        out_buf, 2000, symbol.as_bytes(),
-                                        self.ryu1.format(-coin_amount), self.ryu2.format(sell_p),
-                                    );
-                                    BitfinexVenue::write_batch_close(out_buf);
-                                    
-                                    e.buy_order_price.store((buy_p * PRICE_SCALE_I as f64) as u64, Ordering::Release);
-                                    self.last_order_ts[idx] = Instant::now();
-                                }
+                        if buy_p < ask_f64 {
+                            if let Some(symbol) = self.idx_to_symbol.get(&idx) {
+                                use sniper_types::exchange::bitfinex_venue::BitfinexVenue;
+                                BitfinexVenue::write_batch_open_cancel_sym(out_buf, symbol.as_bytes());
+                                BitfinexVenue::write_limit_order(
+                                    out_buf, 2000, symbol.as_bytes(),
+                                    self.ryu1.format(coin_amount), self.ryu2.format(buy_p),
+                                );
+                                BitfinexVenue::write_limit_order(
+                                    out_buf, 2000, symbol.as_bytes(),
+                                    self.ryu1.format(-coin_amount), self.ryu2.format(sell_p),
+                                );
+                                BitfinexVenue::write_batch_close(out_buf);
+                                
+                                e.buy_order_price.store((buy_p * PRICE_SCALE_I as f64) as u64, Ordering::Release);
+                                self.last_order_ts[idx] = Instant::now();
                             }
                         }
                     }
