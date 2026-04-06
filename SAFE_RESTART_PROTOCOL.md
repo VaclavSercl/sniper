@@ -1,44 +1,61 @@
-# SAFE RESTART PROTOCOL
+# Sovereign HFT 2026: Safe Restart Protocol
 
-**CRITICAL WARNING:** This protocol must be executed strictly as written. We have performed a forensic refactor of the underlying L0 Memory Architecture. The `mmap` IPC structs have been physically mutated (`VecDeque` removed, `Mutex` destroyed in favor of lock-free Atomics, padding dimensions altered). 
+Tento dokument definuje bezpečný protokol pro sestřelení staré architektury (která spoléhá na f64 a heap-aligned struktury) a nahození nové `Zero-Allocation/Zero-f64` Sovereign Flotily. 
 
-Attempting to boot the new binaries against the old memory files will trigger an immediate **Segmentation Fault** due to struct alignment and offset corruption. You must annihilate the shared memory region before starting the Sovereign Boot Protocol.
+Vzhledem k masivním změnám v inicializaci Zero-Cost pointerů a MMap souborů hrozí při "hot-plug" restartu *Segmentation Faults* a *Memory Leaks*, pokud staré procesy neuvolní /dev/shm správně, nebo pokud staré memory mmap registry obsadí nové binárky bez přepsání default hodnot.
 
-## Execution Sequence
-
-Paste the following block into your terminal on the production server:
+## Fáze 1: Graceful Fleet Shutdown (Sestřelení staré armády)
+Zcela zásadní je neodstřelit procesy bez varování typu SIGKILL (`kill -9`), pokud nechceme zanechat otevřené handly vůči burze. 
 
 ```bash
-# 1. Engage complete shutdown of the entire Sniper Armada fleet and L2 Intelligence routines
-echo "🛑 Initiating Global Fleet Shutdown..."
-sudo systemctl stop beroun-sniper.service || true
-pkill -9 -f "hydra-core"
-pkill -9 -f "moonshot-core"
-pkill -9 -f "grid-core"
-pkill -9 -f "trigon-core"
-pkill -9 -f "nexus-core"
-pkill -9 -f "sovereign-cortex"
-pkill -f "watchdog.sh"
-pkill -f "python.*l2_oracle.py"
-pkill -f "python.*dashboard_server.py"
+# 1. Uzamčení HFT operací - Simulace Toxic Storm
+echo -ne '\x01' > /dev/shm/beroun/toxic_storm.bin
 
-# 2. PURGE THE IPC MEMORY (CRITICAL)
-# This destroys all legacy structs mapping to obsolete layouts
-echo "🔥 Purging Lock-Contended IPC Memory (/dev/shm/beroun)..."
-rm -f /dev/shm/beroun/*
+# 2. Bezpečný SIGTERM pro všechny tradery (flotila je zamknuta v Toxic Storm)
+pkill -15 -f hydra-core
+pkill -15 -f moonshot-core
+pkill -15 -f grid-core
+pkill -15 -f trigon-core
+pkill -15 -f nexus-core
 
-# 3. Clean Build to verify strict zero-warning artifacts
-echo "⚙️ Compiling V20 Sovereign Architecture..."
-cd /home/wwwenda/sniper
-cargo clean -p hydra -p sovereign-cortex -p sniper-shared
-cargo build --release
-
-# 4. Initiate the Sovereign Boot Protocol
-echo "🚀 Booting Apex Zero-Latency System via SBP..."
-sudo systemctl start beroun-sniper.service
+# 3. Zastavení Sovereign Cortex a L2 Oracle (Zeroclaw)
+systemctl stop beroun-sniper.service
+pkill -15 -f zeroclaw
 ```
 
-### Verification Checklist:
-1. Confirm zero panics in `journalctl -fu beroun-sniper`.
-2. Monitor the Dashboard for instant hardware telemetry reads (Powered by the new Python asynchronous subprocess loop).
-3. Confirm in the database that all 0-warning Rust binaries have successfully reconnected to the zero-copy lock-free `mmap` instances.
+## Fáze 2: SHM State Purge (Očištění /dev/shm)
+Staré binárky mohly definovat mmap s odlišnými typy alignmentu nebo chybějícími proměnnými, obzvláště u `L1` datových souborů. Restart musí probíhat čistě (Clear State).
+
+```bash
+# Smazání paměťového bloku mmap. Následná spuštění inicializují mmap čistě přes init_mmap pomocí T::default().
+rm -rf /dev/shm/beroun/*
+
+# Inicializace čistého Toxic Storm se staženou vlajkou (Zero lock byte)
+mkdir -p /dev/shm/beroun
+echo -ne '\x00' > /dev/shm/beroun/toxic_storm.bin
+```
+
+## Fáze 3: Sovereign Fleet Boot (Nahození čisté, vydestilované paměti)
+Start musí proběhnout ve striktním pořadí za plného logování a v PAPER módu pro první validaci z Oracle.
+
+```bash
+# 1. Nahrazení binárek
+export SNIPER_ROOT="/home/wwwenda/sniper"
+cd $SNIPER_ROOT
+cargo build --release
+
+# 2. Spuštění L2 Orchestrace
+systemctl start beroun-sniper.service
+
+# 3. Aktivace Zeroclaw (pokud není pod systemctl)
+# Zkontroluj .env, zda obsahuje správný GEMINI_API_KEY
+nohup ./deploy_armada.sh > logs/deploy.log 2>&1 &
+
+# 4. Sledování boot procesu (Sovereign Boot Phase)
+tail -f /home/wwwenda/sniper/logs/zeroclaw.log
+```
+
+## Fáze 4: HFT Validation (Verifikace latence z HW)
+Po spuštění nové infrastruktury v systému L2 musíš provést kontrolu zátěže `L2LatencyRing` - nové zero-f64 smyčky a přímý the pointer de-reference `std::ptr::read_volatile` na Toxic Storm by měly srazit idle L0 overhead do nižších jednotek microsekund.
+
+Ve chvíli potvrzení čistých ticků zaslat PING do telegram bota pro přepsání PAPER do LIVE produkce přes Sovereign AI mechanism.

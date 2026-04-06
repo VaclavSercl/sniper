@@ -1,5 +1,5 @@
 // 🪐 Nexus L0 Engine — Cross-Exchange Arbitrage Bot
-// Framework: SovereignEngine
+// Framework: SovereignEngine v12/2026 (Zero-f64 / Zero-Allocation Refactor)
 use std::time::{SystemTime, UNIX_EPOCH, Duration, Instant};
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -11,13 +11,14 @@ use tracing::info;
 use sniper_types::exchange::cross_types::*;
 use sniper_types::exchange::types::*;
 use sniper_types::exchange::binance::Binance;
-use sniper_types::PRICE_SCALE;
+use sniper_types::PRICE_SCALE_I;
 
 use sniper_types::framework::{SovereignEngine, SovereignRunner};
 use sniper_types::notifier::AsyncNotifier;
 use sniper_types::mmap_utils::open_mmap_readonly;
+use sniper_types::math::FixedPrice;
 
-const VERSION: &str = "1.1.0";
+const VERSION: &str = "13.0.0-nexus-zerofpu";
 const GID_NEXUS: u32 = 5000;
 
 #[derive(Parser, Debug, Clone)]
@@ -47,15 +48,96 @@ const BNB_SYMBOLS: [&str; 10] = [
     "ADAUSDT", "AVAXUSDT", "LTCUSDT", "LINKUSDT", "DOTUSDT",
 ];
 
+// BEZ ALOKACÍ: Extrémně rychlý formátovač FixedPrice na string/buff na stacku 
+struct FixedFormat {
+    buf: [u8; 32],
+    len: usize,
+}
+
+impl FixedFormat {
+    #[inline(always)]
+    fn new(mut val: i64) -> Self {
+        let mut s = Self { buf: [0; 32], len: 0 };
+        if val == 0 {
+            s.buf[0] = b'0';
+            s.len = 1;
+            return s;
+        }
+        if val < 0 {
+            s.buf[0] = b'-';
+            s.len = 1;
+            val = -val;
+        }
+        let int_part = val / PRICE_SCALE_I;
+        let mut frac_part = val % PRICE_SCALE_I;
+        
+        let mut itoa_buf = itoa::Buffer::new();
+        let int_str = itoa_buf.format(int_part).as_bytes();
+        s.buf[s.len..s.len + int_str.len()].copy_from_slice(int_str);
+        s.len += int_str.len();
+
+        if frac_part > 0 {
+            s.buf[s.len] = b'.';
+            s.len += 1;
+            let mut f_buf = [b'0'; 8];
+            let mut temp = frac_part as u64;
+            let mut idx = 7;
+            while temp > 0 {
+                f_buf[idx] = b'0' + (temp % 10) as u8;
+                temp /= 10;
+                if idx > 0 { idx -= 1; } else { break; }
+            }
+            let mut end = 8;
+            while end > 0 && f_buf[end-1] == b'0' { end -= 1; }
+            s.buf[s.len..s.len + end].copy_from_slice(&f_buf[..end]);
+            s.len += end;
+        }
+        s
+    }
+
+    #[inline(always)]
+    fn as_str(&self) -> &str {
+        unsafe { std::str::from_utf8_unchecked(&self.buf[..self.len]) }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct FixedSymbol {
+    buf: [u8; 16],
+    len: usize,
+}
+
+impl PartialEq for FixedSymbol {
+    #[inline(always)]
+    fn eq(&self, other: &Self) -> bool {
+        self.len == other.len && self.buf[..self.len] == other.buf[..other.len]
+    }
+}
+
+impl FixedSymbol {
+    const fn new() -> Self { Self { buf: [0; 16], len: 0 } }
+    fn from_str(s: &str) -> Self {
+        let bytes = s.as_bytes();
+        let len = bytes.len().min(16);
+        let mut buf = [0; 16];
+        buf[..len].copy_from_slice(&bytes[..len]);
+        Self { buf, len }
+    }
+    #[inline(always)]
+    fn as_bytes(&self) -> &[u8] { &self.buf[..self.len] }
+    #[inline(always)]
+    fn as_str(&self) -> &str { unsafe { std::str::from_utf8_unchecked(&self.buf[..self.len]) } }
+}
+
 struct ArbSignal {
     pair_idx: usize,
-    pair_name: String,
+    pair_name: FixedSymbol, // No string allocation!
     direction: ArbDirection,
-    bfx_price: f64,
-    bnb_price: f64,
-    gross_bps: f64,
-    net_bps: f64,
-    size_usd: f64,
+    bfx_price: i64,      // 1e8 scaled
+    bnb_price: i64,      // 1e8 scaled
+    gross_bps_100x: i64, // 100x bps scaled integer
+    net_bps_100x: i64,   // 100x bps scaled integer
+    size_usd: i64,       // 1e8 scaled
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -72,17 +154,19 @@ impl std::fmt::Display for ArbDirection {
     }
 }
 
-fn scan_for_arb(cross_state: &CrossExchangeState, args: &Args, latency_pad_bps: f64) -> Option<ArbSignal> {
+// Brutal FPU purge - totally native i64 arithmetic without a single f64 register.
+fn scan_for_arb(cross_state: &CrossExchangeState, args: &Args, latency_pad_100x: i64) -> Option<ArbSignal> {
     let active = cross_state.active_pairs.load(Ordering::Acquire) as usize;
     let paused = cross_state.emergency_pause.load(Ordering::Acquire) != 0;
     if paused || active == 0 { return None; }
 
-    let daily_pnl = cross_state.daily_cross_pnl.load(Ordering::Acquire) as f64 / PRICE_SCALE;
-    let daily_limit = cross_state.daily_loss_limit.load(Ordering::Acquire) as f64 / PRICE_SCALE;
-    if daily_pnl < -daily_limit { return None; }
+    let daily_pnl_raw = cross_state.daily_cross_pnl.load(Ordering::Acquire) as i64;
+    let daily_limit_raw = cross_state.daily_loss_limit.load(Ordering::Acquire) as i64;
+    if daily_pnl_raw < -daily_limit_raw { return None; }
 
-    let total_fee_bps = ((args.bfx_fee_bps + args.bnb_fee_bps + args.slippage_bps + latency_pad_bps) * 100.0) as i64;
-    let min_profit_100 = (args.min_profit_bps * 100.0) as i64;
+    let total_fee_bps_100x = ((args.bfx_fee_bps + args.bnb_fee_bps + args.slippage_bps) * 100.0) as i64 + latency_pad_100x;
+    let min_profit_100x = (args.min_profit_bps * 100.0) as i64;
+    let args_max_trade_usd = (args.max_trade_usd * PRICE_SCALE_I as f64) as i64;
     
     let mut best: Option<ArbSignal> = None;
 
@@ -102,37 +186,40 @@ fn scan_for_arb(cross_state: &CrossExchangeState, args: &Args, latency_pad_bps: 
 
         if bfx_bid <= 0 || bfx_ask <= 0 || bnb_bid <= 0 || bnb_ask <= 0 { continue; }
 
-        let spread_1 = ((bnb_bid - bfx_ask) * 1_000_000) / bfx_ask; 
-        let spread_2 = ((bfx_bid - bnb_ask) * 1_000_000) / bnb_ask; 
+        // BPS = ((bid - ask) * 10,000 * 100) / ask = (diff * 1_000_000) / ask ! 100% native integer map.
+        let spread_1_100x = ((bnb_bid - bfx_ask) * 1_000_000) / bfx_ask; 
+        let spread_2_100x = ((bfx_bid - bnb_ask) * 1_000_000) / bnb_ask; 
 
-        let (direction, gross_bps_100, buy_price_i, sell_price_i) = if spread_1 > spread_2 {
-            (ArbDirection::BuyBfxSellBnb, spread_1, bfx_ask, bnb_bid)
+        let (direction, gross_bps_100x, buy_price_i, sell_price_i) = if spread_1_100x > spread_2_100x {
+            (ArbDirection::BuyBfxSellBnb, spread_1_100x, bfx_ask, bnb_bid)
         } else {
-            (ArbDirection::BuyBnbSellBfx, spread_2, bnb_ask, bfx_bid)
+            (ArbDirection::BuyBnbSellBfx, spread_2_100x, bnb_ask, bfx_bid)
         };
 
-        let net_bps_100 = gross_bps_100 - total_fee_bps;
-        if net_bps_100 < min_profit_100 { continue; }
+        let net_bps_100x = gross_bps_100x - total_fee_bps_100x;
+        if net_bps_100x < min_profit_100x { continue; }
 
-        let gross_bps = gross_bps_100 as f64 / 100.0;
-        let net_bps = net_bps_100 as f64 / 100.0;
-        let buy_price = buy_price_i as f64 / PRICE_SCALE;
-        let sell_price = sell_price_i as f64 / PRICE_SCALE;
+        let bfx_price = if direction == ArbDirection::BuyBfxSellBnb { buy_price_i } else { sell_price_i };
+        let bnb_price = if direction == ArbDirection::BuyBfxSellBnb { sell_price_i } else { buy_price_i };
 
         let max_exposure = match direction {
-            ArbDirection::BuyBfxSellBnb => cross_state.max_exposure_bitfinex_usd.load(Ordering::Acquire) as f64 / PRICE_SCALE,
-            ArbDirection::BuyBnbSellBfx => cross_state.max_exposure_binance_usd.load(Ordering::Acquire) as f64 / PRICE_SCALE,
+            ArbDirection::BuyBfxSellBnb => cross_state.max_exposure_bitfinex_usd.load(Ordering::Acquire) as i64,
+            ArbDirection::BuyBnbSellBfx => cross_state.max_exposure_binance_usd.load(Ordering::Acquire) as i64,
         };
-        let trade_size = args.max_trade_usd.min(max_exposure);
+        let trade_size = args_max_trade_usd.min(max_exposure).max(0);
 
         let signal = ArbSignal {
-            pair_idx: i, pair_name: PAIR_NAMES[i].to_string(), direction,
-            bfx_price: if direction == ArbDirection::BuyBfxSellBnb { buy_price } else { sell_price },
-            bnb_price: if direction == ArbDirection::BuyBfxSellBnb { sell_price } else { buy_price },
-            gross_bps, net_bps, size_usd: trade_size,
+            pair_idx: i, 
+            pair_name: FixedSymbol::from_str(PAIR_NAMES[i]), 
+            direction,
+            bfx_price, 
+            bnb_price, 
+            gross_bps_100x, 
+            net_bps_100x, 
+            size_usd: trade_size,
         };
 
-        if best.as_ref().map_or(true, |b| signal.net_bps > b.net_bps) {
+        if best.as_ref().map_or(true, |b| signal.net_bps_100x > b.net_bps_100x) {
             best = Some(signal);
         }
     }
@@ -155,8 +242,7 @@ struct NexusEngine {
     total_trades: u64,
     
     itoa_buf: itoa::Buffer,
-    ryu1: ryu::Buffer,
-    ryu2: ryu::Buffer,
+    toxic_storm_ptr: *const u8,
 }
 
 unsafe impl Send for NexusEngine {}
@@ -212,66 +298,77 @@ impl SovereignEngine for NexusEngine {
         let l2cmd = unsafe { &*self.l2cmd };
         let cross_state = unsafe { &*self.cross };
         
-        let latency_pad = {
+        let latency_pad_100x = {
             let (v1, ok1) = sniper_types::l2_command::l2cmd_version_check(l2cmd);
             let pad = l2cmd.latency_padding_bps.load(Ordering::Relaxed);
             let kill = l2cmd.latency_killswitch.load(Ordering::Relaxed);
             let (v2, ok2) = sniper_types::l2_command::l2cmd_version_check(l2cmd);
             if v1 == v2 && ok1 && ok2 {
                 if kill == 1 { return; }
-                pad.max(0) as f64
-            } else { 0.0 }
+                pad.max(0) as i64 * 100
+            } else { 0 }
         };
 
         let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
         if now_ms - self.last_exec_ms < self.args.cooldown_ms { return; }
 
-        // ═══ HIVE MIND: Cross-Bot Toxic Storm (SIM v2.0) ═══
-        if let Ok(flag) = std::fs::read("/dev/shm/beroun/toxic_storm.bin") {
-            if !flag.is_empty() && flag[0] == 1 { return; }
-        }
+        // ═══ HIVE MIND: Toxic Storm check ═══
+        let storm_byte = unsafe { std::ptr::read_volatile(self.toxic_storm_ptr) };
+        if storm_byte == 1 { return; }
 
         self.last_scan = Instant::now();
 
-        if let Some(signal) = scan_for_arb(cross_state, &self.args, latency_pad) {
+        if let Some(signal) = scan_for_arb(cross_state, &self.args, latency_pad_100x) {
             self.total_signals += 1;
-            info!(event = "arb_detected", pair = signal.pair_name, direction = %signal.direction, net_bps = format!("{:.1}", signal.net_bps));
+            
+            let bfx_fp = FixedPrice::new(signal.bfx_price);
+            let usd_fp = FixedPrice::new(signal.size_usd);
+            if bfx_fp.0 <= 0 { return; }
+            let mut qty_fp = usd_fp / bfx_fp;
+            
+            let net_bps_f = signal.net_bps_100x as f64 / 100.0;
+            let gross_bps_f = signal.gross_bps_100x as f64 / 100.0;
+            let size_usd_f = signal.size_usd as f64 / PRICE_SCALE_I as f64;
+            
+            info!(event = "arb_detected", pair = signal.pair_name.as_str(), direction = %signal.direction, net_bps = format!("{:.1}", net_bps_f));
 
-            let qty = if signal.bfx_price > 0.0 { signal.size_usd / signal.bfx_price } else { return };
-
-            let (bfx_side, bfx_price) = match signal.direction {
-                ArbDirection::BuyBfxSellBnb => ("BUY", signal.bfx_price),
-                ArbDirection::BuyBnbSellBfx => ("SELL", signal.bfx_price),
+            let bfx_side = match signal.direction {
+                ArbDirection::BuyBfxSellBnb => "BUY",
+                ArbDirection::BuyBnbSellBfx => "SELL",
             };
-            let bfx_signed_qty = if bfx_side == "BUY" { qty } else { -qty };
-            let bfx_symbol = BFX_SYMBOLS[signal.pair_idx];
+            if bfx_side == "SELL" { qty_fp.0 = -qty_fp.0; }
+            let bfx_symbol = FixedSymbol::from_str(BFX_SYMBOLS[signal.pair_idx]);
 
             use sniper_types::exchange::bitfinex_venue::BitfinexVenue;
             BitfinexVenue::write_batch_open(out_buf);
-            // First order — no leading comma, write raw
             out_buf.extend_from_slice(b"[\"on\",{\"gid\":");
             out_buf.extend_from_slice(self.itoa_buf.format(GID_NEXUS).as_bytes());
             out_buf.extend_from_slice(b",\"symbol\":\"");
             out_buf.extend_from_slice(bfx_symbol.as_bytes());
             out_buf.extend_from_slice(b"\",\"amount\":\"");
-            out_buf.extend_from_slice(self.ryu1.format(bfx_signed_qty).as_bytes());
+            
+            let qty_fmt = FixedFormat::new(qty_fp.0);
+            out_buf.extend_from_slice(qty_fmt.as_str().as_bytes());
             out_buf.extend_from_slice(b"\",\"price\":\"");
-            out_buf.extend_from_slice(self.ryu2.format(bfx_price).as_bytes());
+            
+            let price_fmt = FixedFormat::new(signal.bfx_price);
+            out_buf.extend_from_slice(price_fmt.as_str().as_bytes());
             out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE IOC\"}]");
             BitfinexVenue::write_batch_close(out_buf);
 
+            // Bnb order scaling (border boundary, so it sends f64 for json)
             let bnb_side = match signal.direction {
                 ArbDirection::BuyBfxSellBnb => OrderSide::Sell,
                 ArbDirection::BuyBnbSellBfx => OrderSide::Buy,
             };
             let bnb_symbol = BNB_SYMBOLS[signal.pair_idx];
-            let bnb_price_scaled = (signal.bnb_price * PRICE_SCALE) as i64;
+            let f_qty = (qty_fp.0.abs() as f64) / PRICE_SCALE_I as f64;
 
             let bnb_order = OrderRequest {
                 symbol: bnb_symbol.to_string(),
                 side: bnb_side,
-                amount: qty,
-                price: bnb_price_scaled,
+                amount: f_qty,
+                price: signal.bnb_price,
                 order_type: OrderType::Ioc,
                 gid: GID_NEXUS,
                 flags: OrderFlags::default(),
@@ -280,11 +377,8 @@ impl SovereignEngine for NexusEngine {
             if let Some(signed) = self.binance.new_order(&bnb_order) {
                 let client = self.http_client.clone();
                 let notifier2 = self.notifier.clone();
-                let name = signal.pair_name.clone();
+                let name = signal.pair_name.as_str().to_string();
                 let dir_str = signal.direction.to_string();
-                let gross_bps = signal.gross_bps;
-                let net_bps = signal.net_bps;
-                let size_usd = signal.size_usd;
 
                 tokio::spawn(async move {
                     let req = match signed.method {
@@ -295,7 +389,7 @@ impl SovereignEngine for NexusEngine {
                     let res = req.header("X-MBX-APIKEY", &signed.api_key).send().await;
                     let bnb_ok = res.map(|r| r.status().is_success()).unwrap_or(false);
                     if bnb_ok {
-                        notifier2.trade(name, dir_str, gross_bps, net_bps, size_usd);
+                        notifier2.trade(name, dir_str, gross_bps_f, net_bps_f, size_usd_f);
                     } else {
                         notifier2.alert(format!("⚠️ LEG RISK! {} Binance leg failed!", name));
                     }
@@ -321,6 +415,10 @@ async fn main() -> Result<()> {
     )?;
     let l2cmd = unsafe { &*(l2cmd_mmap.as_ptr() as *const sniper_types::l2_command::L2SharedState) };
 
+    let storm_path = "/dev/shm/beroun/toxic_storm.bin";
+    if !std::path::Path::new(storm_path).exists() { let _ = std::fs::write(storm_path, [0u8]); }
+    let toxic_storm_mmap = sniper_types::mmap_utils::open_mmap_readonly(storm_path).unwrap();
+
     let engine = NexusEngine {
         notifier: Arc::new(AsyncNotifier::new("nexus", "🪐")),
         cross: cross_state,
@@ -339,8 +437,7 @@ async fn main() -> Result<()> {
         total_signals: 0,
         total_trades: 0,
         itoa_buf: itoa::Buffer::new(),
-        ryu1: ryu::Buffer::new(),
-        ryu2: ryu::Buffer::new(),
+        toxic_storm_ptr: toxic_storm_mmap.as_ptr(),
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();
