@@ -73,7 +73,7 @@ echo "🧹 Cleaning ALL old instances..."
 echo "$(date +%s)" > /tmp/sniper_boot.lock
 # First pass: SIGTERM (graceful)
 for proc in tg_commander.py pnl_daemon.py sovereign-cortex hydra-core hydra-dashboard \
-            moonshot-core grid-core trigon-core nexus-core price_bridge.py market_recorder.py; do
+            moonshot-core grid-core trigon-core nexus-core price_bridge.py market_recorder.py zeroclaw; do
     pkill -f "$proc" 2>/dev/null || true
 done
 fuser -k 3004/tcp 2>/dev/null || true
@@ -81,7 +81,7 @@ sleep 2
 
 # Second pass: SIGKILL (force) — catch anything that survived SIGTERM
 for proc in tg_commander.py pnl_daemon.py sovereign-cortex hydra-core hydra-dashboard \
-            moonshot-core grid-core trigon-core nexus-core price_bridge.py market_recorder.py; do
+            moonshot-core grid-core trigon-core nexus-core price_bridge.py market_recorder.py zeroclaw; do
     pkill -9 -f "$proc" 2>/dev/null || true
 done
 
