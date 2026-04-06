@@ -40,9 +40,9 @@ def _sparkline(values, width=12):
 
 # Safety clamps (must match Cortex UDS server)
 GRID_FLOOR = 2.0
-GRID_CEIL = 50.0
+GRID_CEIL = 1000.0
 MAX_POS_FLOOR = 0.001
-MAX_POS_CEIL = 0.02
+MAX_POS_CEIL = 1.0
 
 L2_INTERVAL = 300  # 5 minutes
 GEMINI_TIMEOUT = 122  # seconds (raised to prevent frequent timeouts)
@@ -275,28 +275,35 @@ class L2OracleAsync:
             # Pokud jsme překonali další stovku, AI přebírá velení!
             if new_limit > current_limit:
                 
-                # Výpočet nových proporčních risk parametrů (základ byl $400 a 0.005 BTC)
-                scaling_factor = new_limit / 400.0
-                new_max_pos = 0.005 * scaling_factor
-                
                 # Uložíme nový povolený strop do permanentní paměti AI
                 state["global_capital_limit"] = new_limit
                 with open(STATE_FILE, 'w') as f:
                     json.dump(state, f, indent=2)
 
-                # Provedeme brutální plošný zápis do MMap pamětí všech botů
-                tier = {"capital_usd": new_limit, "max_pos_btc": new_max_pos, "grid_step": 3.0}
+                # Mřížka proporcí: 100% total (capital_usd), 50% max order size (order_usd)
+                bot_total_usd = new_limit
+                bot_order_usd = new_limit * 0.50
+                bot_max_btc = bot_total_usd / current_price if current_price > 0 else 0.01
+
+                tier = {
+                    "capital_usd": bot_total_usd,
+                    "order_usd": bot_order_usd,
+                    "max_pos_btc": bot_max_btc,
+                    "grid_step": 3.0
+                }
+
+                # Provedeme plošný zápis do MMap pamětí všech botů
                 for bot_name in ["hydra", "grid", "moonshot", "trigon", "nexus"]:
                     self._write_risk_params(bot_name, tier)
 
-                # Odvysíláme tvé požadované Telegram hlášení
+                # Odvysíláme Telegram hlášení
                 msg = (
                     f"🏛️ *KAPITÁLOVÁ EXPANZE (Auto-Compounding)*\n"
                     f"━━━━━━━━━━━━━━━━━━━━━\n"
                     f"📈 Zůstatek na burze dosáhl ${total_equity:.2f}\n"
                     f"🔓 Povoluji všem botům obchodovat s limitem: *${new_limit:.0f}*\n"
-                    f"📦 Nová Max Expozice: {new_max_pos:.5f} BTC\n"
-                    f"🤖 L2 Oracle plně přepočítal risk parametry flotily."
+                    f"📦 Nová Max Expozice: {bot_max_btc:.5f} BTC\n"
+                    f"🤖 L2 Oracle plně přepočítal risk parametry flotily na základě Fractional Kelly."
                 )
                 self.send_telegram(msg)
                 log.info(f"🚀 AUTO-COMPOUNDING EXECUTED: Limit raised to ${new_limit:.0f}")
@@ -417,7 +424,7 @@ class L2OracleAsync:
                 # Equity proxy: Realistický HFT baseline pro Market Making
                 EQUITY_USD = 2000.0  # Zvýšeno z 500 na 2000 USD
                 RISK_PCT = 0.15      # Povolujeme 15% alokaci místo 5%
-                HARD_MAX_BTC = 0.05  # Rust kill-switch absolute limit
+                HARD_MAX_BTC = 1.0  # Rust kill-switch absolute limit
                 dynamic_max_usd = (EQUITY_USD * RISK_PCT) / vol_multiplier
                 dynamic_max_btc = dynamic_max_usd / current_price if current_price > 0 else HARD_MAX_BTC
                 dynamic_max_btc = min(dynamic_max_btc, HARD_MAX_BTC)
@@ -605,17 +612,17 @@ PARAMETER CONSTRAINTS:
   hydra.avellaneda_stoikov.target_inventory_btc: -1.0 to +1.0 (0=neutral, +0.3=bull ride, -0.1=bear hedge)
   hydra.avellaneda_stoikov.rolling_volatility_bps: 10-200 (from recent price variance)
   hydra.avellaneda_stoikov.gamma: 0.01-0.5 (risk aversion: 0.05=normal, 0.2=aggressive rebalancing)
-  moonshot.order_usd: 0-100 USD (0=scanner only)
+  moonshot.order_usd: 0-10000 USD (0=scanner only)
   moonshot.trigger_price: absolute USD (pre-compute: current_price - 3*sigma)
   moonshot.armed: true only if OI/volume conditions indicate real crash
-  grid.grid_spacing: 5-200 USD
-  grid.order_qty: 0.0001-0.01 BTC
+  grid.grid_spacing: 5-10000 USD
+  grid.order_qty: 0.0001-0.1 BTC
   trigon.min_profit_bps: 5-50 bps (after 3×taker fee)
-  trigon.max_order_usd: 0-50 USD (0=scanner only)
+  trigon.max_order_usd: 0-10000 USD (0=scanner only)
   trigon.latency_padding_bps: 0-30 (added to min_profit as slippage buffer)
   trigon.latency_killswitch: 0 or 1 (L2 auto-sets from p95 > 250ms)
   nexus.min_profit_bps: 3-30 bps (net after both exchanges' taker fees + slippage)
-  nexus.max_trade_usd: 10-200 USD per arb trade
+  nexus.max_trade_usd: 10-10000 USD per arb trade
   nexus.cooldown_ms: 1000-30000 (ms between trades, lower=more aggressive)
   l1_tuning.skew_max_usd: 0.5-5.0
   l1_tuning.obi_threshold: 0.0-0.8
@@ -1917,20 +1924,38 @@ Respond with EXACTLY one JSON object:
         except Exception:
             current_limit = 400.0
 
-        scaling_factor = current_limit / 400.0
-        new_max_pos = 0.005 * scaling_factor
+        # Mřížka proporcí: 100% total (capital_usd), 50% max order size (order_usd)
+        current_price = 69000.0
+        try:
+            snap = self.cortex.get_snapshot()
+            if snap.get("ok"):
+                for b in snap["data"].get("bots", []):
+                    if b.get("price", 0) > 0:
+                        current_price = b["price"]
+                        break
+        except Exception:
+            pass
+            
+        bot_total_usd = current_limit
+        bot_order_usd = current_limit * 0.50
+        bot_max_btc = bot_total_usd / current_price if current_price > 0 else 0.01
         
         # Write full dynamic capital
-        full_tier = {"capital_usd": current_limit, "max_pos_btc": new_max_pos, "grid_step": 3.0}
+        full_tier = {
+            "capital_usd": bot_total_usd,
+            "order_usd": bot_order_usd,
+            "max_pos_btc": bot_max_btc,
+            "grid_step": 3.0
+        }
         self._write_risk_params(bot_name, full_tier)
         
         msg = (
             f"🟢 *SBP v3.1: {bot_name.upper()} → FULL AUTONOMY*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"✅ All 3 graduated tiers PASSED\n"
-            f"💰 Capital: ${current_limit:.0f} | Max: {new_max_pos:.5f} BTC\n"
+            f"💰 Capital: ${bot_total_usd:.0f} | Max: {bot_max_btc:.5f} BTC\n"
             f"🤖 AI: {state_grad.get('reasoning', 'N/A')}\n"
-            f"🛡️ Continuous governance active"
+            f"🛡️ Continuous governance active (Fractional Kelly)"
         )
         try:
             self.send_telegram(msg)
