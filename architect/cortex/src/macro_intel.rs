@@ -72,6 +72,22 @@ fn parse_fixed(s: &str) -> FixedPrice {
     FixedPrice::new(int_part * PRICE_SCALE_I + frac_part)
 }
 
+/// Zero-allocation custom parser for Binance aggTrade
+fn fast_parse_agg_trade(data: &[u8]) -> Option<(FixedPrice, FixedPrice, bool)> {
+    let p_start = data.windows(5).position(|w| w == b"\"p\":\"")? + 5;
+    let p_end = p_start + data[p_start..].iter().position(|&b| b == b'"')?;
+    let price_str = std::str::from_utf8(&data[p_start..p_end]).ok()?;
+
+    let q_start = data.windows(5).position(|w| w == b"\"q\":\"")? + 5;
+    let q_end = q_start + data[q_start..].iter().position(|&b| b == b'"')?;
+    let qty_str = std::str::from_utf8(&data[q_start..q_end]).ok()?;
+
+    let m_start = data.windows(4).position(|w| w == b"\"m\":")? + 4;
+    let is_sell = data[m_start..].starts_with(b"true");
+
+    Some((parse_fixed(price_str), parse_fixed(qty_str), is_sell))
+}
+
 // ═══ MODULE 1: BINANCE CROSS-EXCHANGE WEBSOCKET ═══
 
 pub async fn run_binance_ws(engine: &EngineState) {
@@ -99,14 +115,7 @@ async fn run_binance_ws_inner(engine: &EngineState) -> anyhow::Result<()> {
     while let Some(msg_res) = socket.next().await {
         let msg = msg_res?;
         if let Message::Text(text) = msg {
-            if let Ok(trade) = serde_json::from_str::<serde_json::Value>(&text) {
-                let price_str = trade["p"].as_str().unwrap_or("0");
-                let qty_str = trade["q"].as_str().unwrap_or("0");
-                
-                let price = parse_fixed(price_str);
-                let qty = parse_fixed(qty_str);
-                let is_sell = trade["m"].as_bool().unwrap_or(false);
-
+            if let Some((price, qty, is_sell)) = fast_parse_agg_trade(text.as_bytes()) {
                 // Track Binance mid-price (VWAP)
                 price_buffer.push_back((price, qty));
                 if price_buffer.len() > 100 { price_buffer.pop_front(); }
