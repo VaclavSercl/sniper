@@ -162,6 +162,8 @@ sleep 2
 echo "  [T+25s] Starting ZeroClaw L2 Oracle..."
 [ -f "$ARMADA_ROOT/.env" ] && export $(grep -v '^#' "$ARMADA_ROOT/.env" | grep GEMINI_API_KEY | xargs)
 if command -v zeroclaw &>/dev/null && [ -n "${GEMINI_API_KEY:-}" ]; then
+    # Čisté řešení: Synchronizace API klíče z .env do zabezpečené SQLite vrstvy zeroclaw při každém startu.
+    zeroclaw onboard --api-key "$GEMINI_API_KEY" --provider gemini --model gemini-3.1-pro-preview --quick --force >/dev/null 2>&1
     zeroclaw daemon >> "$LOG_DIR/zeroclaw.log" 2>&1 &
     ZEROCLAW_PID=$!
     echo "  ✅ ZeroClaw L2: PID $ZEROCLAW_PID (Gemini 3.1 Pro)"
