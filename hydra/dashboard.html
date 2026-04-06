@@ -108,8 +108,10 @@
 <div style="display: flex; gap: 24px; padding-bottom: 20px; font-size: 0.85rem; color: var(--muted);" class="mono">
     <div>🖥️ CPU LOAD: <span id="hw-cpu" style="color: #fff">--</span></div>
     <div>💾 RAM: <span id="hw-ram" style="color: #fff">--%</span></div>
-    <div>🔥 GPU TEMP: <span id="hw-gpu" style="color: #fff">--°C</span></div>
+    <div>🔥 GPU: <span id="hw-gpu-util" style="color: #fff">--%</span> <span style="color: var(--muted)">|</span> <span id="hw-gpu" style="color: #fff">--°C</span></div>
     <div>🎮 VRAM: <span id="hw-vram" style="color: #fff">-- MB</span></div>
+    <div>💽 SYS: <span id="hw-disk-root" style="color: #fff">--%</span></div>
+    <div>⚡ SHM: <span id="hw-disk-shm" style="color: #fff">--%</span></div>
 </div>
 
 <div id="fleet-view"></div>
@@ -427,7 +429,10 @@
             gpuEl.textContent = lastData.hardware.gpu_temp + '°C';
             gpuEl.style.color = lastData.hardware.gpu_temp >= 75 ? 'var(--red)' : 'var(--green)';
             
+            document.getElementById('hw-gpu-util').textContent = lastData.hardware.gpu_load + '%';
             document.getElementById('hw-vram').textContent = lastData.hardware.vram_mb + ' MB';
+            document.getElementById('hw-disk-root').textContent = lastData.hardware.disk_root_pct.toFixed(0) + '%';
+            document.getElementById('hw-disk-shm').textContent = lastData.hardware.disk_shm_pct.toFixed(0) + '%';
         }
 
         if (currentBot) renderTactical(lastData);

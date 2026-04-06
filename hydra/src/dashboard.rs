@@ -18,7 +18,10 @@ pub struct ServerHealth {
     pub cpu_load: String,
     pub ram_pct: f64,
     pub gpu_temp: i32,
+    pub gpu_load: i32,
     pub vram_mb: i32,
+    pub disk_root_pct: f64,
+    pub disk_shm_pct: f64,
 }
 
 static SERVER_HEALTH: LazyLock<Arc<RwLock<ServerHealth>>> = LazyLock::new(|| {
@@ -51,14 +54,30 @@ pub fn spawn_hardware_monitor() {
             }
 
             if let Ok(output) = Command::new("nvidia-smi")
-                .args(&["--query-gpu=temperature.gpu,memory.used", "--format=csv,noheader,nounits"])
+                .args(&["--query-gpu=temperature.gpu,memory.used,utilization.gpu", "--format=csv,noheader,nounits"])
                 .output()
             {
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let vals: Vec<&str> = stdout.trim().split(", ").collect();
-                if vals.len() == 2 {
+                if vals.len() >= 3 {
                     new_state.gpu_temp = vals[0].parse().unwrap_or(0);
                     new_state.vram_mb = vals[1].parse().unwrap_or(0);
+                    new_state.gpu_load = vals[2].parse().unwrap_or(0);
+                }
+            }
+
+            if let Ok(output) = Command::new("df").args(&["-P", "/", "/dev/shm"]).output() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines().skip(1) {
+                    let parts: Vec<&str> = line.split_whitespace().collect();
+                    if parts.len() >= 6 {
+                        let pct = parts[4].trim_end_matches('%').parse().unwrap_or(0.0);
+                        if parts[5] == "/" {
+                            new_state.disk_root_pct = pct;
+                        } else if parts[5] == "/dev/shm" {
+                            new_state.disk_shm_pct = pct;
+                        }
+                    }
                 }
             }
 
