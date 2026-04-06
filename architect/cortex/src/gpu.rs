@@ -14,6 +14,7 @@
 use sniper_types::{EngineState, PRICE_SCALE};
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
+use sniper_types::math::FixedPrice;
 use std::time::{Duration, Instant};
 
 const INFERENCE_INTERVAL_MS: u64 = 2000;
@@ -24,21 +25,21 @@ const INFERENCE_INTERVAL_MS: u64 = 2000;
 #[allow(dead_code)]
 #[derive(Clone)]
 pub struct L1GpuRequest {
-    pub price: f64,
-    pub best_bid: f64,
-    pub best_ask: f64,
-    pub obi: f64,
-    pub obi_prev: [f64; 2],        // 2 previous OBI values for momentum
-    pub bid_depth: f64,
-    pub ask_depth: f64,
+    pub price: FixedPrice,
+    pub best_bid: FixedPrice,
+    pub best_ask: FixedPrice,
+    pub obi: FixedPrice,
+    pub obi_prev: [FixedPrice; 2],        // 2 previous OBI values for momentum
+    pub bid_depth: FixedPrice,
+    pub ask_depth: FixedPrice,
     pub depth_trend: &'static str, // "THINNING" | "STABLE" | "GROWING"
     pub toxic_hits: u64,
     pub sweeps_recent: u64,        // sweep count in last 5 min
-    pub confidence: f64,
-    pub net_position: f64,
+    pub confidence: FixedPrice,
+    pub net_position: FixedPrice,
     pub regime: &'static str,
     pub fear_greed: u64,
-    pub macro_bias: f64,
+    pub macro_bias: FixedPrice,
     pub portfolio_hedged: bool,  // CL4: Aegis shield active → skip inference
 }
 
@@ -276,13 +277,15 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
             continue;
         }
 
-        let spread = latest.best_ask - latest.best_bid;
-        let spread_bps = if latest.best_bid > 0.0 { spread / latest.best_bid * 10000.0 } else { 0.0 };
+        let ask_f64 = latest.best_ask.as_f64();
+        let bid_f64 = latest.best_bid.as_f64();
+        let spread = ask_f64 - bid_f64;
+        let spread_bps = if bid_f64 > 0.0 { spread / bid_f64 * 10000.0 } else { 0.0 };
 
         // ── Candle Logit Sniping Inference ──
         let tox = latest.toxic_hits as f64 / 1000.0_f64.max(1.0);
         brain.reset_cache();
-        let result = match brain.reflex_action(latest.obi, spread_bps, latest.macro_bias, tox.min(1.0)) {
+        let result = match brain.reflex_action(latest.obi.as_f64(), spread_bps, latest.macro_bias.as_f64(), tox.min(1.0)) {
             Ok((action, confidence)) => {
                 let (gpu_action, conf_pct) = match action {
                     candle_brain::HftAction::Hold => (GpuAction::Hold, (confidence * 100.0) as u32),

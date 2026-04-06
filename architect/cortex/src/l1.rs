@@ -433,8 +433,8 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
                 };
 
                 let obi_prev = [
-                    brain.obi_history.iter().rev().nth(1).copied().unwrap_or(FixedPrice::zero()).as_f64(),
-                    brain.obi_history.iter().rev().nth(2).copied().unwrap_or(FixedPrice::zero()).as_f64(),
+                    brain.obi_history.iter().rev().nth(1).copied().unwrap_or(FixedPrice::zero()),
+                    brain.obi_history.iter().rev().nth(2).copied().unwrap_or(FixedPrice::zero()),
                 ];
 
                 let depth_trend = if brain.depth_history.len() >= 10 {
@@ -450,24 +450,23 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
                     "STABLE"
                 };
 
-                // For GPU request, fallback to floats as external libraries (Python, PyTorch) need standard f64
-                // but our L1 logic is f64-free!
+                // Type-safe FixedPrice compiler barrier to prevent FPU instructions in Hot-Path!
                 let _ = tx.try_send(L1GpuRequest {
-                    price: engine.micro_price.load(Ordering::Relaxed) as f64 / PRICE_SCALE_I as f64,
-                    best_bid: engine.best_bid.load(Ordering::Relaxed) as f64 / PRICE_SCALE_I as f64,
-                    best_ask: engine.best_ask.load(Ordering::Relaxed) as f64 / PRICE_SCALE_I as f64,
-                    obi: obi.as_f64(),
+                    price: FixedPrice::new(engine.micro_price.load(Ordering::Relaxed) as i64),
+                    best_bid: FixedPrice::new(engine.best_bid.load(Ordering::Relaxed) as i64),
+                    best_ask: FixedPrice::new(engine.best_ask.load(Ordering::Relaxed) as i64),
+                    obi,
                     obi_prev,
-                    bid_depth: bid_depth.as_f64(),
-                    ask_depth: ask_depth.as_f64(),
+                    bid_depth,
+                    ask_depth,
                     depth_trend,
                     toxic_hits: engine.toxic_flow_hits.load(Ordering::Relaxed),
                     sweeps_recent: brain.total_sweeps as u64,
-                    confidence: confidence.as_f64(),
-                    net_position: engine.net_position.load(Ordering::Relaxed) as f64 / PRICE_SCALE_I as f64,
+                    confidence,
+                    net_position: FixedPrice::new(engine.net_position.load(Ordering::Relaxed) as i64),
                     regime,
                     fear_greed: engine.macro_fear_greed.load(Ordering::Relaxed),
-                    macro_bias: engine.macro_bias.load(Ordering::Relaxed) as f64 / 10000.0,
+                    macro_bias: FixedPrice::new((engine.macro_bias.load(Ordering::Relaxed) as i64) * (PRICE_SCALE_I / 10000)),
                     portfolio_hedged: global_risk.portfolio_is_hedged.load(Ordering::Relaxed) == 1,
                 });
             }
