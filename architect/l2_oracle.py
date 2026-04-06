@@ -217,6 +217,10 @@ class L2OracleAsync:
             except Exception as e:
                 log.error(f"Telegram send failed: {e}")
 
+            # 🚀 NOVÉ: Kontrola peněženky při denním reportu
+            if report_type == "daily":
+                self._evaluate_auto_compounding(bots)
+
         # 7. Update feedback history
         hydra = next((b for b in bots if b["name"] == "hydra"), None)
         if hydra:
@@ -226,6 +230,79 @@ class L2OracleAsync:
         self.prev_decision = decision
 
         log.info(f"═══ L2 CYCLE #{self.cycle} COMPLETE ═══")
+
+    def _evaluate_auto_compounding(self, bots):
+        """
+        Dynamický Auto-Compounding protokol.
+        Spouští se při denním hlášení. Zkontroluje celkovou equity a pokud
+        překoná další stomarkovou hranici, uvolní kapitál všem botům.
+        """
+        try:
+            import struct as _st
+            import mmap as _mmap
+            import os
+            PRICE_SCALE = 100_000_000.0
+
+            # 1. Přečtení reálného fyzického zůstatku z L0 paměti Hydry
+            eng_path = "/dev/shm/beroun/engine_state.bin"
+            if not os.path.exists(eng_path): return
+
+            with open(eng_path, 'rb') as f:
+                mm = _mmap.mmap(f.fileno(), 0, access=_mmap.ACCESS_READ)
+                # Offsety 1424 a 1432 odpovídají přesně wallet_btc a wallet_usd v L0 Rustu
+                wallet_btc = _st.unpack_from('<Q', mm, 1424)[0] / PRICE_SCALE
+                wallet_usd = _st.unpack_from('<Q', mm, 1432)[0] / PRICE_SCALE
+                mm.close()
+
+            # 2. Výpočet celkové tržní Equity v USD
+            current_price = next((b.get("price", 0) for b in bots if b.get("price", 0) > 0), 69000.0)
+            total_equity = wallet_usd + (wallet_btc * current_price)
+
+            if total_equity < 100: return # Bezpečnostní pojistka proti chybnému čtení
+
+            # 3. Načtení aktuálně schváleného limitu z mozku L2
+            try:
+                with open(STATE_FILE, 'r') as f:
+                    state = json.load(f)
+            except Exception:
+                state = {}
+
+            current_limit = state.get("global_capital_limit", 400.0)
+
+            # 4. Detekce průrazu nové úrovně (zarovnáme equity na stovky dolů, např. $645 -> $600)
+            new_limit = float(int(total_equity // 100) * 100)
+
+            # Pokud jsme překonali další stovku, AI přebírá velení!
+            if new_limit > current_limit:
+                
+                # Výpočet nových proporčních risk parametrů (základ byl $400 a 0.005 BTC)
+                scaling_factor = new_limit / 400.0
+                new_max_pos = 0.005 * scaling_factor
+                
+                # Uložíme nový povolený strop do permanentní paměti AI
+                state["global_capital_limit"] = new_limit
+                with open(STATE_FILE, 'w') as f:
+                    json.dump(state, f, indent=2)
+
+                # Provedeme brutální plošný zápis do MMap pamětí všech botů
+                tier = {"capital_usd": new_limit, "max_pos_btc": new_max_pos, "grid_step": 3.0}
+                for bot_name in ["hydra", "grid", "moonshot", "trigon", "nexus"]:
+                    self._write_risk_params(bot_name, tier)
+
+                # Odvysíláme tvé požadované Telegram hlášení
+                msg = (
+                    f"🏛️ *KAPITÁLOVÁ EXPANZE (Auto-Compounding)*\n"
+                    f"━━━━━━━━━━━━━━━━━━━━━\n"
+                    f"📈 Zůstatek na burze dosáhl ${total_equity:.2f}\n"
+                    f"🔓 Povoluji všem botům obchodovat s limitem: *${new_limit:.0f}*\n"
+                    f"📦 Nová Max Expozice: {new_max_pos:.5f} BTC\n"
+                    f"🤖 L2 Oracle plně přepočítal risk parametry flotily."
+                )
+                self.send_telegram(msg)
+                log.info(f"🚀 AUTO-COMPOUNDING EXECUTED: Limit raised to ${new_limit:.0f}")
+
+        except Exception as e:
+            log.error(f"Auto-Compounding error: {e}")
 
     def _build_prompt(self, bots, gpu_data=None):
         """Build the Gemini prompt with macro context, feedback loop, and GPU telemetry."""
@@ -1830,18 +1907,29 @@ Respond with EXACTLY one JSON object:
         log.info(f"🟢 [SBP3] Phase 6: {bot_name} → FULL AUTONOMY")
         
         # Remove from graduated tracking
-        state = self._graduated_live.pop(bot_name, {})
+        state_grad = self._graduated_live.pop(bot_name, {})
         
-        # Write full capital (from default config)
-        full_tier = {"capital_usd": 400, "max_pos_btc": 0.005, "grid_step": 3.0}
+        # Načtení dynamického celkového limitu
+        try:
+            with open(STATE_FILE, 'r') as f:
+                state = json.load(f)
+            current_limit = state.get("global_capital_limit", 400.0)
+        except Exception:
+            current_limit = 400.0
+
+        scaling_factor = current_limit / 400.0
+        new_max_pos = 0.005 * scaling_factor
+        
+        # Write full dynamic capital
+        full_tier = {"capital_usd": current_limit, "max_pos_btc": new_max_pos, "grid_step": 3.0}
         self._write_risk_params(bot_name, full_tier)
         
         msg = (
             f"🟢 *SBP v3.1: {bot_name.upper()} → FULL AUTONOMY*\n"
             f"━━━━━━━━━━━━━━━━━━━━━\n"
             f"✅ All 3 graduated tiers PASSED\n"
-            f"💰 Capital: $400 | Max: 0.005 BTC\n"
-            f"🤖 AI: {state.get('reasoning', 'N/A')}\n"
+            f"💰 Capital: ${current_limit:.0f} | Max: {new_max_pos:.5f} BTC\n"
+            f"🤖 AI: {state_grad.get('reasoning', 'N/A')}\n"
             f"🛡️ Continuous governance active"
         )
         try:
