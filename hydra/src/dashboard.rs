@@ -7,105 +7,235 @@ use axum::{
 use tower_http::cors::CorsLayer;
 use serde::Serialize;
 use serde_json::Value;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+use std::sync::atomic::Ordering;
+use std::path::Path;
+
+use sniper_types::{
+    EngineState, RiskState, ENGINE_STATE_PATH, RISK_STATE_PATH, PRICE_SCALE,
+};
+use sniper_types::moonshot_types::{MoonshotEngineState, MOONSHOT_ENGINE_PATH, MOONSHOT_RISK_PATH, MoonshotRiskState};
+use sniper_types::grid_types::{GridEngineState, GRID_ENGINE_PATH, GRID_RISK_PATH, GridRiskState};
+use sniper_types::trigon_types::{TrigonEngineState, TRIGON_ENGINE_PATH, TRIGON_RISK_PATH, TrigonRiskState};
+use sniper_types::exchange::cross_types::{CrossExchangeState, CROSS_EXCHANGE_PATH};
+use sniper_types::mmap_utils::open_mmap_readonly;
 
 pub trait BotSnapshot {
     fn name(&self) -> &'static str;
-    fn mode(&self) -> String; // "LIVE", "PAPER", "PAUSED"
+    fn mode(&self) -> String; // "LIVE", "PAPER", "PAUSED", "OFFLINE"
     fn pnl(&self) -> f64;
     fn position(&self) -> f64;
     fn detail(&self) -> Value;
 }
 
 // ═══════════════════════════════════════════════════════════
-// DUMMY PROBES 
-// Note: In Phase 9C, these will read the actual MMap structs
+// MMap Loader Helper
 // ═══════════════════════════════════════════════════════════
+fn load_mmap<T>(path: &str) -> Option<&'static T> {
+    if !Path::new(path).exists() {
+        return None;
+    }
+    match open_mmap_readonly(path) {
+        Ok(mmap) => {
+            let leaked = Box::leak(Box::new(mmap));
+            Some(unsafe { &*(leaked.as_ptr() as *const T) })
+        }
+        Err(_) => None,
+    }
+}
 
-struct HydraProbe;
+// ═══════════════════════════════════════════════════════════
+// HYDRA PROBE
+// ═══════════════════════════════════════════════════════════
+struct HydraProbe {
+    engine: Option<&'static EngineState>,
+    risk: Option<&'static RiskState>,
+}
 impl BotSnapshot for HydraProbe {
     fn name(&self) -> &'static str { "Hydra" }
-    fn mode(&self) -> String { "LIVE".to_string() }
-    fn pnl(&self) -> f64 { 150.25 }
-    fn position(&self) -> f64 { 0.5 }
+    fn mode(&self) -> String {
+        let (Some(_e), Some(r)) = (self.engine, self.risk) else { return "OFFLINE".to_string() };
+        if r.paused.load(Ordering::Relaxed) != 0 { "PAUSED".to_string() } else { "LIVE".to_string() }
+    }
+    fn pnl(&self) -> f64 {
+        self.engine.map(|e| e.realized_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE).unwrap_or(0.0)
+    }
+    fn position(&self) -> f64 {
+        self.engine.map(|e| e.net_position.load(Ordering::Relaxed) as f64 / PRICE_SCALE).unwrap_or(0.0)
+    }
     fn detail(&self) -> Value {
-        serde_json::json!({
-            "obi": rand::random::<f64>() * 2.0 - 1.0, // Kinetic OBI simulation
-            "grid_levels": [
-                {"price": 65000.0, "qty": 0.1, "side": "sell"},
-                {"price": 64000.0, "qty": 0.1, "side": "buy"}
-            ]
-        })
+        if let Some(e) = self.engine {
+            let obi = e.l2_imbalance.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+            
+            let mut levels = Vec::new();
+            for i in 0..5.min(e.asks.len()) {
+                let p = e.asks[i].price.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+                let a = e.asks[i].amount.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+                if p > 0.0 { levels.push(serde_json::json!({"price": p, "qty": a.abs(), "side": "sell"})); }
+            }
+            for i in 0..5.min(e.bids.len()) {
+                let p = e.bids[i].price.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+                let a = e.bids[i].amount.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+                if p > 0.0 { levels.push(serde_json::json!({"price": p, "qty": a.abs(), "side": "buy"})); }
+            }
+
+            serde_json::json!({
+                "obi": obi,
+                "grid_levels": levels
+            })
+        } else {
+            serde_json::json!({"obi": 0.0, "grid_levels": []})
+        }
     }
 }
 
-struct MoonshotProbe;
+// ═══════════════════════════════════════════════════════════
+// MOONSHOT PROBE
+// ═══════════════════════════════════════════════════════════
+struct MoonshotProbe {
+    engine: Option<&'static MoonshotEngineState>,
+    risk: Option<&'static MoonshotRiskState>,
+}
 impl BotSnapshot for MoonshotProbe {
     fn name(&self) -> &'static str { "Moonshot" }
-    fn mode(&self) -> String { "LIVE".to_string() }
-    fn pnl(&self) -> f64 { 42.10 }
-    fn position(&self) -> f64 { 0.0 }
+    fn mode(&self) -> String {
+        let (Some(_e), Some(r)) = (self.engine, self.risk) else { return "OFFLINE".to_string() };
+        if r.global_paused.load(Ordering::Relaxed) != 0 { "PAUSED".to_string() } else { "LIVE".to_string() }
+    }
+    fn pnl(&self) -> f64 {
+        self.engine.map(|e| e.daily_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE).unwrap_or(0.0)
+    }
+    fn position(&self) -> f64 { 0.0 } // Aggregate position isn't meaningful here
     fn detail(&self) -> Value {
-        let pairs: Vec<_> = (0..20).map(|i| {
-            serde_json::json!({
-                "id": i, 
-                "pnl": (i as f64 - 10.0) + (rand::random::<f64>() * 5.0), 
-                "status": if i % 3 == 0 || i % 5 == 0 { "active" } else { "inactive" }
-            })
-        }).collect();
-        serde_json::json!({ "pairs": pairs })
+        if let Some(e) = self.engine {
+            let pairs: Vec<_> = e.pairs.iter().enumerate().map(|(i, p)| {
+                let active = p.active.load(Ordering::Relaxed);
+                let pnl = p.realized_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+                serde_json::json!({
+                    "id": i + 1,
+                    "pnl": pnl,
+                    "status": if active == 1 { "active" } else { "inactive" }
+                })
+            }).collect();
+            serde_json::json!({ "pairs": pairs })
+        } else {
+            serde_json::json!({ "pairs": [] })
+        }
     }
 }
 
-struct GridProbe;
+// ═══════════════════════════════════════════════════════════
+// GRID PROBE
+// ═══════════════════════════════════════════════════════════
+struct GridProbe {
+    engine: Option<&'static GridEngineState>,
+    risk: Option<&'static GridRiskState>,
+}
 impl BotSnapshot for GridProbe {
     fn name(&self) -> &'static str { "Grid" }
-    fn mode(&self) -> String { "PAPER".to_string() }
-    fn pnl(&self) -> f64 { -12.50 }
-    fn position(&self) -> f64 { 0.25 }
+    fn mode(&self) -> String {
+        let (Some(_e), Some(r)) = (self.engine, self.risk) else { return "OFFLINE".to_string() };
+        if r.global_paused.load(Ordering::Relaxed) != 0 { "PAUSED".to_string() } else { "LIVE".to_string() }
+    }
+    fn pnl(&self) -> f64 {
+        self.engine.map(|e| e.realized_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE).unwrap_or(0.0)
+    }
+    fn position(&self) -> f64 {
+        self.engine.map(|e| e.net_position.load(Ordering::Relaxed) as f64 / PRICE_SCALE).unwrap_or(0.0)
+    }
     fn detail(&self) -> Value {
-        let mid = 64500.0 + (rand::random::<f64>() * 100.0 - 50.0);
-        serde_json::json!({
-            "buy_levels": [(mid-100.0).trunc(), (mid-200.0).trunc(), (mid-300.0).trunc()],
-            "sell_levels": [(mid+100.0).trunc(), (mid+200.0).trunc(), (mid+300.0).trunc()]
-        })
+        if let Some(e) = self.engine {
+            let buy_levels: Vec<f64> = e.buy_levels.iter()
+                .map(|l| l.price.load(Ordering::Relaxed) as f64 / PRICE_SCALE).filter(|&p| p > 0.0).collect();
+            let sell_levels: Vec<f64> = e.sell_levels.iter()
+                .map(|l| l.price.load(Ordering::Relaxed) as f64 / PRICE_SCALE).filter(|&p| p > 0.0).collect();
+            
+            serde_json::json!({
+                "buy_levels": buy_levels,
+                "sell_levels": sell_levels
+            })
+        } else {
+            serde_json::json!({"buy_levels": [], "sell_levels": []})
+        }
     }
 }
 
-struct TrigonProbe;
+// ═══════════════════════════════════════════════════════════
+// TRIGON PROBE
+// ═══════════════════════════════════════════════════════════
+struct TrigonProbe {
+    engine: Option<&'static TrigonEngineState>,
+    risk: Option<&'static TrigonRiskState>,
+}
 impl BotSnapshot for TrigonProbe {
     fn name(&self) -> &'static str { "Trigon" }
-    fn mode(&self) -> String { "PAUSED".to_string() }
-    fn pnl(&self) -> f64 { 0.0 }
+    fn mode(&self) -> String {
+        let (Some(_e), Some(r)) = (self.engine, self.risk) else { return "OFFLINE".to_string() };
+        if r.global_paused.load(Ordering::Relaxed) != 0 { "PAUSED".to_string() } else { "LIVE".to_string() }
+    }
+    fn pnl(&self) -> f64 {
+        self.engine.map(|e| e.total_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE).unwrap_or(0.0)
+    }
     fn position(&self) -> f64 { 0.0 }
     fn detail(&self) -> Value {
-        let triangles: Vec<_> = (0..24).map(|i| {
-            serde_json::json!({
-                "id": i, 
-                "profit_bps": (i as f64 - 12.0) * 2.0 + (rand::random::<f64>() * 4.0 - 2.0)
-            })
-        }).collect();
-        serde_json::json!({ "triangles": triangles })
+        if let Some(e) = self.engine {
+            let triangles: Vec<_> = e.triangles.iter().enumerate().map(|(i, t)| {
+                // assume profit_bps is bps * 10 or similar; let's divide by 100.0 to get direct format visually.
+                let bps = t.profit_bps.load(Ordering::Relaxed) as f64 / 100.0;
+                serde_json::json!({
+                    "id": i + 1,
+                    "profit_bps": bps
+                })
+            }).collect();
+            serde_json::json!({ "triangles": triangles })
+        } else {
+            serde_json::json!({ "triangles": [] })
+        }
     }
 }
 
-struct NexusProbe;
+// ═══════════════════════════════════════════════════════════
+// NEXUS PROBE (Cross Exchange Bridge)
+// ═══════════════════════════════════════════════════════════
+struct NexusProbe {
+    cross: Option<&'static CrossExchangeState>,
+}
 impl BotSnapshot for NexusProbe {
     fn name(&self) -> &'static str { "Nexus" }
-    fn mode(&self) -> String { "PAPER".to_string() }
-    fn pnl(&self) -> f64 { 8.4 }
+    fn mode(&self) -> String {
+        let Some(c) = self.cross else { return "OFFLINE".to_string() };
+        if c.emergency_pause.load(Ordering::Relaxed) != 0 { "PAUSED".to_string() }
+        else if c.paper_mode.load(Ordering::Relaxed) != 0 { "PAPER".to_string() }
+        else { "LIVE".to_string() }
+    }
+    fn pnl(&self) -> f64 {
+        self.cross.map(|c| c.daily_cross_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE).unwrap_or(0.0)
+    }
     fn position(&self) -> f64 { 0.0 }
     fn detail(&self) -> Value {
-        let bfx = 64500.0 + (rand::random::<f64>() * 10.0);
-        let bnb = 64510.0 + (rand::random::<f64>() * 10.0);
-        serde_json::json!({
-            "bfx_mid": bfx,
-            "bnb_mid": bnb,
-            "spread": bnb - bfx
-        })
+        if let Some(c) = self.cross {
+            let p = &c.pairs[0];
+            let bfx_bid = p.bitfinex.bid.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+            let bfx_ask = p.bitfinex.ask.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+            let bnb_bid = p.binance.bid.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+            let bnb_ask = p.binance.ask.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+            
+            let bfx_mid = if bfx_bid > 0.0 && bfx_ask > 0.0 { (bfx_bid + bfx_ask) / 2.0 } else { 0.0 };
+            let bnb_mid = if bnb_bid > 0.0 && bnb_ask > 0.0 { (bnb_bid + bnb_ask) / 2.0 } else { 0.0 };
+            
+            serde_json::json!({
+                "bfx_mid": bfx_mid,
+                "bnb_mid": bnb_mid,
+                "spread": bnb_mid - bfx_mid
+            })
+        } else {
+            serde_json::json!({ "bfx_mid": 0.0, "bnb_mid": 0.0, "spread": 0.0 })
+        }
     }
 }
 
+// ═══════════════════════════════════════════════════════════
+// HIVE MIND CORE
 // ═══════════════════════════════════════════════════════════
 
 #[derive(Serialize)]
@@ -135,12 +265,32 @@ async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
 }
 
 async fn handle_socket(mut socket: WebSocket) {
+    // 1. Initialize Probes directly mapping MMaps from /dev/shm
+    let h_engine = load_mmap::<EngineState>(ENGINE_STATE_PATH);
+    let h_risk = load_mmap::<RiskState>(RISK_STATE_PATH);
+    let hydra = HydraProbe { engine: h_engine, risk: h_risk };
+
+    let m_engine = load_mmap::<MoonshotEngineState>(MOONSHOT_ENGINE_PATH);
+    let m_risk = load_mmap::<MoonshotRiskState>(MOONSHOT_RISK_PATH);
+    let moonshot = MoonshotProbe { engine: m_engine, risk: m_risk };
+
+    let g_engine = load_mmap::<GridEngineState>(GRID_ENGINE_PATH);
+    let g_risk = load_mmap::<GridRiskState>(GRID_RISK_PATH);
+    let grid = GridProbe { engine: g_engine, risk: g_risk };
+
+    let t_engine = load_mmap::<TrigonEngineState>(TRIGON_ENGINE_PATH);
+    let t_risk = load_mmap::<TrigonRiskState>(TRIGON_RISK_PATH);
+    let trigon = TrigonProbe { engine: t_engine, risk: t_risk };
+
+    let n_cross = load_mmap::<CrossExchangeState>(CROSS_EXCHANGE_PATH);
+    let nexus = NexusProbe { cross: n_cross };
+
     let probes: Vec<Box<dyn BotSnapshot + Send + Sync>> = vec![
-        Box::new(HydraProbe),
-        Box::new(MoonshotProbe),
-        Box::new(GridProbe),
-        Box::new(TrigonProbe),
-        Box::new(NexusProbe),
+        Box::new(hydra),
+        Box::new(moonshot),
+        Box::new(grid),
+        Box::new(trigon),
+        Box::new(nexus),
     ];
     
     // Fractional Kelly Weights
@@ -166,6 +316,7 @@ async fn handle_socket(mut socket: WebSocket) {
             let name = probe.name();
             let weight = weights.iter().find(|(n, _)| *n == name).map(|(_, w)| *w).unwrap_or(0.0);
             let kelly_limit = global_capital_limit * weight;
+            
             let pnl = probe.pnl();
             total_pnl += pnl;
             
@@ -181,7 +332,7 @@ async fn handle_socket(mut socket: WebSocket) {
         
         let state = PanopticonState {
             global_capital: global_capital_limit,
-            total_equity: 15420.0 + total_pnl,
+            total_equity: 15420.0 + total_pnl, // Example static baseline + real PnL
             armada_pnl: total_pnl,
             bots: bots_data,
         };
@@ -192,14 +343,14 @@ async fn handle_socket(mut socket: WebSocket) {
             }
         }
         
-        tokio::time::sleep(Duration::from_millis(50)).await; // 20 FPS
+        tokio::time::sleep(Duration::from_millis(50)).await; // 20 FPS real-time rendering
     }
 }
 
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
-    println!("--- 👁️ SOVEREIGN PANOPTICON v2.0 (Hive Mind Multiplexer) ---");
+    println!("--- 👁️ SOVEREIGN PANOPTICON v2.0 (LIVE KINETIC MMap STREAM) ---");
     let app = Router::new()
         .route("/", get(index_handler))
         .route("/ws", get(ws_handler))
