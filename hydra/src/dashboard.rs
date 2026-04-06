@@ -10,6 +10,66 @@ use serde_json::Value;
 use std::time::{Duration, Instant};
 use std::sync::atomic::Ordering;
 use std::path::Path;
+use std::process::Command;
+use std::sync::{Arc, RwLock, LazyLock};
+
+#[derive(Clone, Serialize, Default)]
+pub struct ServerHealth {
+    pub cpu_load: String,
+    pub ram_pct: f64,
+    pub gpu_temp: i32,
+    pub vram_mb: i32,
+}
+
+static SERVER_HEALTH: LazyLock<Arc<RwLock<ServerHealth>>> = LazyLock::new(|| {
+    Arc::new(RwLock::new(ServerHealth::default()))
+});
+
+pub fn spawn_hardware_monitor() {
+    tokio::spawn(async move {
+        loop {
+            let mut new_state = ServerHealth::default();
+
+            if let Ok(load) = std::fs::read_to_string("/proc/loadavg") {
+                new_state.cpu_load = load.split_whitespace().next().unwrap_or("0.0").to_string();
+            }
+
+            if let Ok(meminfo) = std::fs::read_to_string("/proc/meminfo") {
+                let mut total = 0.0;
+                let mut avail = 0.0;
+                for line in meminfo.lines() {
+                    if line.starts_with("MemTotal:") {
+                        total = line.split_whitespace().nth(1).unwrap_or("0").parse().unwrap_or(0.0);
+                    }
+                    if line.starts_with("MemAvailable:") {
+                        avail = line.split_whitespace().nth(1).unwrap_or("0").parse().unwrap_or(0.0);
+                    }
+                }
+                if total > 0.0 {
+                    new_state.ram_pct = ((total - avail) / total) * 100.0;
+                }
+            }
+
+            if let Ok(output) = Command::new("nvidia-smi")
+                .args(&["--query-gpu=temperature.gpu,memory.used", "--format=csv,noheader,nounits"])
+                .output()
+            {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                let vals: Vec<&str> = stdout.trim().split(", ").collect();
+                if vals.len() == 2 {
+                    new_state.gpu_temp = vals[0].parse().unwrap_or(0);
+                    new_state.vram_mb = vals[1].parse().unwrap_or(0);
+                }
+            }
+
+            if let Ok(mut lock) = SERVER_HEALTH.write() {
+                *lock = new_state;
+            }
+
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    });
+}
 
 use sniper_types::{
     EngineState, RiskState, ENGINE_STATE_PATH, RISK_STATE_PATH, PRICE_SCALE,
@@ -254,6 +314,7 @@ struct PanopticonState {
     total_equity: f64,
     armada_pnl: f64,
     bots: Vec<BotData>,
+    hardware: ServerHealth,
 }
 
 async fn index_handler() -> Html<&'static str> {
@@ -330,11 +391,14 @@ async fn handle_socket(mut socket: WebSocket) {
             });
         }
         
+        let hw_stats = SERVER_HEALTH.read().unwrap().clone();
+        
         let state = PanopticonState {
             global_capital: global_capital_limit,
             total_equity: 15420.0 + total_pnl, // Example static baseline + real PnL
             armada_pnl: total_pnl,
             bots: bots_data,
+            hardware: hw_stats,
         };
         
         if let Ok(json) = serde_json::to_string(&state) {
@@ -350,6 +414,7 @@ async fn handle_socket(mut socket: WebSocket) {
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
+    spawn_hardware_monitor();
     println!("--- 👁️ SOVEREIGN PANOPTICON v2.0 (LIVE KINETIC MMap STREAM) ---");
     let app = Router::new()
         .route("/", get(index_handler))

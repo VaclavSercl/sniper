@@ -105,6 +105,13 @@
     </div>
 </div>
 
+<div style="display: flex; gap: 24px; padding-bottom: 20px; font-size: 0.85rem; color: var(--muted);" class="mono">
+    <div>🖥️ CPU LOAD: <span id="hw-cpu" style="color: #fff">--</span></div>
+    <div>💾 RAM: <span id="hw-ram" style="color: #fff">--%</span></div>
+    <div>🔥 GPU TEMP: <span id="hw-gpu" style="color: #fff">--°C</span></div>
+    <div>🎮 VRAM: <span id="hw-vram" style="color: #fff">-- MB</span></div>
+</div>
+
 <div id="fleet-view"></div>
 
 <div id="tactical-view">
@@ -411,6 +418,18 @@
     
     ws.onmessage = (e) => {
         lastData = JSON.parse(e.data);
+        
+        if (lastData.hardware) {
+            document.getElementById('hw-cpu').textContent = lastData.hardware.cpu_load;
+            document.getElementById('hw-ram').textContent = lastData.hardware.ram_pct.toFixed(1) + '%';
+            
+            const gpuEl = document.getElementById('hw-gpu');
+            gpuEl.textContent = lastData.hardware.gpu_temp + '°C';
+            gpuEl.style.color = lastData.hardware.gpu_temp >= 75 ? 'var(--red)' : 'var(--green)';
+            
+            document.getElementById('hw-vram').textContent = lastData.hardware.vram_mb + ' MB';
+        }
+
         if (currentBot) renderTactical(lastData);
         else renderFleet(lastData);
     };
