@@ -595,9 +595,8 @@ impl SovereignEngine for HydraEngine {
         let current_exposure = FixedPrice::new(current_pos_abs) * micro;
         let cap_95 = auth_cap_total * FixedPrice::new(95_000_000);
         let available_margin = cap_95 - current_exposure;
-        let max_theoretical_usd = if available_margin.0 > 0 { available_margin } else { FixedPrice::zero() };
         let total_expected_levels = (risk.grid_size.load(Ordering::Acquire) as i64).max(1);
-        let base_usd = max_theoretical_usd / FixedPrice::new(total_expected_levels * PRICE_SCALE_I as i64);
+        let base_usd = auth_cap_total / FixedPrice::new(total_expected_levels * PRICE_SCALE_I as i64);
         let micro_bias = micro_i - mid_i;
         
         let fp_0_5 = FixedPrice::new(50_000_000);

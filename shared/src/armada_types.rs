@@ -86,3 +86,20 @@ pub fn load_armada_state_ro() -> &'static ArmadaState {
     let state_ptr = mmap_ref.as_ptr() as *const ArmadaState;
     unsafe { &*state_ptr }
 }
+
+#[repr(C, align(64))]
+pub struct OracleState {
+    pub sentiment_score_fp: std::sync::atomic::AtomicI64,
+    pub mempool_whale_warning: std::sync::atomic::AtomicI64,
+    pub market_regime: std::sync::atomic::AtomicI64,
+    pub oracle_heartbeat_ms: std::sync::atomic::AtomicU64,
+}
+
+pub fn load_oracle_state_ro() -> &'static OracleState {
+    let path = "/dev/shm/beroun/oracle_state.bin";
+    let file = File::open(path).expect("🔥 Oracle State neexistuje. Spusťte oracle_daemon.py");
+    let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };
+    let mmap_ref = Box::leak(Box::new(mmap));
+    let state_ptr = mmap_ref.as_ptr() as *const OracleState;
+    unsafe { &*state_ptr }
+}

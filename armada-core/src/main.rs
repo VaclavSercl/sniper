@@ -2,7 +2,7 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 use tokio::time::interval;
 use anyhow::{Context, Result};
-use sniper_types::armada_types::ArmadaState;
+use sniper_types::armada_types::{ArmadaState, load_oracle_state_ro};
 use sniper_types::mmap_utils::init_mmap;
 
 const ARMADA_STATE_PATH: &str = "/dev/shm/beroun/armada_state.bin";
@@ -16,6 +16,9 @@ async fn main() -> Result<()> {
         .context("Failed to initialize armada state mmap")?;
     let armada_state = unsafe { &mut *(armada_mmap.as_mut_ptr() as *mut ArmadaState) };
 
+    // Nové L3 Orákulum (Read-Only)
+    let oracle_state = load_oracle_state_ro();
+
     // 2. Nastavení 10 Hz Heartbeatu (100 ms)
     let mut ticker = interval(Duration::from_millis(100));
 
@@ -23,7 +26,7 @@ async fn main() -> Result<()> {
         ticker.tick().await;
         
         // 3. Výpočet Kelly Matici
-        recalculate_kelly_matrix(armada_state);
+        recalculate_kelly_matrix(armada_state, oracle_state);
     }
 }
 
@@ -51,7 +54,7 @@ fn zero_all_capital(state: &mut ArmadaState) {
     state.version.store(current_v + 1, Ordering::Release);
 }
 
-fn recalculate_kelly_matrix(state: &mut ArmadaState) {
+fn recalculate_kelly_matrix(state: &mut ArmadaState, oracle: &sniper_types::armada_types::OracleState) {
     // Pokud je Kill-Switch nahoře, vše nulujeme!
     if state.is_kill_switch_active() {
         zero_all_capital(state);
@@ -62,8 +65,38 @@ fn recalculate_kelly_matrix(state: &mut ArmadaState) {
     // Jako safety fall-back nastavíme minimum na $1k (kdyby náhodou total_equity bylo 0)
     let active_equity = if total_equity < 1000.0 { 1000.0 } else { total_equity };
     
-    // Globální tlumič. Získáme z ML Shieldu / Gemini (zatím hardcoded na 0.5 = Half-Kelly)
-    let fractional_dampener = 0.5; 
+    // Čtení Oracle stavu (zkontrolujeme heartbeat staleness, max 5 vteřin tolerance)
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+        
+    let hb = oracle.oracle_heartbeat_ms.load(Ordering::Acquire);
+    let mut fractional_dampener = 0.5; // Zvýchozí Half-Kelly
+    
+    if hb == 0 || now_ms.saturating_sub(hb) > 5000 {
+        // Blind mode (Orákulum nekomunikuje)
+        // Zůstává 0.5 jako neutrální obrana
+    } else {
+        // Oracle je živé! Analyzujeme data
+        let whale_warn = oracle.mempool_whale_warning.load(Ordering::Acquire);
+        let sentiment = oracle.sentiment_score_fp.load(Ordering::Acquire) as f64 / 1e8;
+        
+        if whale_warn == 1 {
+            // WHALE DUMP DETECTED z L3! Okamžitě srazíme tlumič na 1/10 (Crush long botů)
+            fractional_dampener = 0.05; 
+        } else if sentiment < -0.5 {
+            fractional_dampener = 0.2; // Extrémní strach, jedeme čtvrtinový Kelly
+        } else if sentiment > 0.5 {
+            fractional_dampener = 0.8; // Bull run
+        }
+        
+        static mut LAST_PRINT: u64 = 0;
+        if now_ms - unsafe { LAST_PRINT } > 2000 {
+            println!("[ARMADA] L3 ORACLE ACTIVE | Sent: {:.2} | Whale: {} | Dampener: {:.2}", sentiment, whale_warn, fractional_dampener);
+            unsafe { LAST_PRINT = now_ms };
+        }
+    }
     
     let mut raw_k = [0.0f32; 5];
     let mut sum_k = 0.0;
