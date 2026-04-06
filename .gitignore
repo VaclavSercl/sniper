@@ -33,3 +33,6 @@ __pycache__/
 
 # mmap state files (never track binary IPC)
 *.bin
+
+# Runtime state files
+state/armada_state.json
