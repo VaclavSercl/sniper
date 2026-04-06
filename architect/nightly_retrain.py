@@ -28,6 +28,8 @@ import json
 import time
 import sqlite3
 import logging
+import mmap
+import struct
 import numpy as np
 from datetime import datetime, timezone
 
@@ -295,6 +297,41 @@ def save_model(weights):
     log.info(f"Model saved to {MODEL_PATH}")
 
 
+MMAP_FILE = "/dev/shm/beroun/ml_weights.bin"
+FILE_SIZE = 192
+
+def inject_weights_to_rust(w_fast, w_slow, r_mean, r_var):
+    """
+    Provede Hot-Swap ML vah za behu bez zablokovani HFT L0 botu.
+    """
+    os.makedirs(os.path.dirname(MMAP_FILE), exist_ok=True)
+    if not os.path.exists(MMAP_FILE):
+        with open(MMAP_FILE, "wb") as f:
+            f.write(b'\x00' * FILE_SIZE)
+
+    with open(MMAP_FILE, "r+b") as f:
+        mm = mmap.mmap(f.fileno(), FILE_SIZE)
+
+        current_version = struct.unpack("<Q", mm[:8])[0]
+        new_version = current_version + 1
+
+        floats_format = "<11f 11f 10f 10f"
+        packed_floats = struct.pack(floats_format, *w_fast, *w_slow, *r_mean, *r_var)
+        
+        mm.seek(8)
+        mm.write(packed_floats)
+
+        mm.flush()
+
+        packed_version = struct.pack("<Q", new_version)
+        mm.seek(0)
+        mm.write(packed_version)
+
+        log.info(f"Mozek prepsan. Hot-Swap uspesny. Nova verze: {new_version}")
+
+        mm.close()
+
+
 def save_history(entry):
     """Append retrain result to history JSON."""
     history = []
@@ -360,6 +397,12 @@ def main():
         if swap:
             log.info("✅ v_new WINS — executing hot-swap")
             save_model(v_new)
+            inject_weights_to_rust(
+                w_fast=v_new['w_fast'].tolist(),
+                w_slow=v_new['w_slow'].tolist(),
+                r_mean=v_new['running_mean'].tolist(),
+                r_var=v_new['running_var'].tolist()
+            )
             verdict = "SWAP"
         else:
             log.info("❌ v_new LOSES — discarding (catastrophic forgetting prevention)")
@@ -368,6 +411,12 @@ def main():
         # No old model exists → always save v_new
         log.info("📦 No previous model — saving v_new as baseline")
         save_model(v_new)
+        inject_weights_to_rust(
+            w_fast=v_new['w_fast'].tolist(),
+            w_slow=v_new['w_slow'].tolist(),
+            r_mean=v_new['running_mean'].tolist(),
+            r_var=v_new['running_var'].tolist()
+        )
         old_hr, old_pnl = 0.5, 0.0
         verdict = "INITIAL"
     

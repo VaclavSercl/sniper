@@ -152,6 +152,7 @@ struct HydraEngine {
     ghost_velocity_max: FixedPrice,
     ghost_last_inject: Instant,
     toxic_storm_ptr: *const u8,
+    ml_shield: sniper_types::ml_shield::MlShield,
 }
 
 unsafe impl Send for HydraEngine {}
@@ -229,6 +230,8 @@ impl SovereignEngine for HydraEngine {
     }
 
     fn on_market_message(&mut self, payload: &mut [u8], out_buf: &mut bytes::BytesMut) {
+        self.ml_shield.sync_weights_if_needed();
+
         let v = match simd_json::to_borrowed_value(payload) {
             Ok(v) => v,
             Err(_) => return,
@@ -875,6 +878,9 @@ async fn async_main() -> Result<()> {
     let engine_ptr = engine_mmap.as_mut_ptr() as *mut EngineState;
     let risk_ptr = risk_mmap.as_ptr() as *const RiskState;
 
+    let ml_weights_ro = sniper_types::ml_shield::load_ml_weights_ro();
+    let ml_shield = sniper_types::ml_shield::MlShield::new(ml_weights_ro);
+
     tokio::spawn(async move {
         let mut report_interval = tokio::time::interval(Duration::from_secs(3600));
         loop {
@@ -915,6 +921,7 @@ async fn async_main() -> Result<()> {
         ghost_velocity_max: FixedPrice::new(100_000), 
         ghost_last_inject: Instant::now(),
         toxic_storm_ptr: toxic_storm_mmap.as_ptr(),
+        ml_shield,
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();
