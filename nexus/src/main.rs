@@ -154,7 +154,7 @@ impl std::fmt::Display for ArbDirection {
 }
 
 // Brutal FPU purge - totally native i64 arithmetic without a single f64 register.
-fn scan_for_arb(cross_state: &CrossExchangeState, args: &Args, latency_pad_100x: i64) -> Option<ArbSignal> {
+fn scan_for_arb(cross_state: &CrossExchangeState, args: &Args, latency_pad_100x: i64, armada_cap: i64) -> Option<ArbSignal> {
     let active = cross_state.active_pairs.load(Ordering::Acquire) as usize;
     let paused = cross_state.emergency_pause.load(Ordering::Acquire) != 0;
     if paused || active == 0 { return None; }
@@ -168,7 +168,7 @@ fn scan_for_arb(cross_state: &CrossExchangeState, args: &Args, latency_pad_100x:
     let bnb_fee = fee_matrix_ref.venues[sniper_types::fee_types::VENUE_BINANCE].taker_fee_bps.load(Ordering::Relaxed) as i64;
     let total_fee_bps_100x = bfx_fee + bnb_fee + (args.slippage_bps * 100.0) as i64 + latency_pad_100x;
     let min_profit_100x = (args.min_profit_bps * 100.0) as i64;
-    let args_max_trade_usd = (args.max_trade_usd * PRICE_SCALE_I as f64) as i64;
+    let armada_trade_usd = armada_cap;
     
     let mut best: Option<ArbSignal> = None;
 
@@ -208,7 +208,7 @@ fn scan_for_arb(cross_state: &CrossExchangeState, args: &Args, latency_pad_100x:
             ArbDirection::BuyBfxSellBnb => cross_state.max_exposure_bitfinex_usd.load(Ordering::Acquire) as i64,
             ArbDirection::BuyBnbSellBfx => cross_state.max_exposure_binance_usd.load(Ordering::Acquire) as i64,
         };
-        let trade_size = args_max_trade_usd.min(max_exposure).max(0);
+        let trade_size = armada_trade_usd.min(max_exposure).max(0);
 
         let signal = ArbSignal {
             pair_idx: i, 
@@ -245,6 +245,7 @@ struct NexusEngine {
     
     itoa_buf: itoa::Buffer,
     toxic_storm_ptr: *const u8,
+    armada_state: &'static sniper_types::armada_types::ArmadaState,
 }
 
 unsafe impl Send for NexusEngine {}
@@ -317,10 +318,15 @@ impl SovereignEngine for NexusEngine {
         // ═══ HIVE MIND: Toxic Storm check ═══
         let storm_byte = unsafe { std::ptr::read_volatile(self.toxic_storm_ptr) };
         if storm_byte == 1 { return; }
+        
+        // ARMADA KŘEMÍKOVÁ ZEĎ 🛡️
+        if self.armada_state.is_kill_switch_active() { return; }
 
         self.last_scan = Instant::now();
+        
+        let armada_cap = self.armada_state.authorized_capital[4].load(Ordering::Acquire) as i64;
 
-        if let Some(signal) = scan_for_arb(cross_state, &self.args, latency_pad_100x) {
+        if let Some(signal) = scan_for_arb(cross_state, &self.args, latency_pad_100x, armada_cap) {
             self.total_signals += 1;
             
             let bfx_fp = FixedPrice::new(signal.bfx_price);
@@ -443,6 +449,7 @@ async fn main() -> Result<()> {
         total_trades: 0,
         itoa_buf: itoa::Buffer::new(),
         toxic_storm_ptr: toxic_storm_mmap.as_ptr(),
+        armada_state: sniper_types::armada_types::load_armada_state_ro(),
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();

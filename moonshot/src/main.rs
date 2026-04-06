@@ -140,6 +140,7 @@ struct MoonshotEngine {
     chan_to_idx: FlatMapI64,
     idx_to_symbol: [FixedSymbol; MOONSHOT_MAX_PAIRS],
     last_order_ts: [Instant; MOONSHOT_MAX_PAIRS],
+    armada_state: &'static sniper_types::armada_types::ArmadaState,
 }
 
 unsafe impl Send for MoonshotEngine {}
@@ -205,6 +206,11 @@ impl SovereignEngine for MoonshotEngine {
                 if storm_byte == 1 {
                     return;
                 }
+                
+                // ARMADA KŘEMÍKOVÁ ZEĎ 🛡️
+                if self.armada_state.is_kill_switch_active() {
+                    return;
+                }
 
                 let l2cmd = unsafe { &*self.l2cmd };
                 let l2_risk = unsafe { &*self.l2_risk };
@@ -216,7 +222,7 @@ impl SovereignEngine for MoonshotEngine {
                 if let Some(trigger) = sniper_types::l2_command::moonshot_check_and_disarm(
                     l2cmd, mid_price as i64, 1, 0
                 ) {
-                    let order_usd_fp = FixedPrice::new(r.order_usd.load(Ordering::Acquire) as i64 * PRICE_SCALE_I);
+                    let order_usd_fp = FixedPrice::new(self.armada_state.authorized_capital[1].load(Ordering::Acquire) as i64);
                     let trigger_fp = FixedPrice::new(trigger as i64);
                     
                     if order_usd_fp.0 > 0 && mid_fp.0 > 0 {
@@ -248,7 +254,7 @@ impl SovereignEngine for MoonshotEngine {
                     let f_100 = FixedPrice::new(100 * PRICE_SCALE_I);
                     let drop_fp = FixedPrice::new(r.m_shot_price_pct.load(Ordering::Acquire) as i64);
                     let tp_fp = FixedPrice::new(r.tp_pct.load(Ordering::Acquire) as i64);
-                    let order_usd_fp = FixedPrice::new(r.order_usd.load(Ordering::Acquire) as i64 * PRICE_SCALE_I);
+                    let order_usd_fp = FixedPrice::new(self.armada_state.authorized_capital[1].load(Ordering::Acquire) as i64);
 
                     if drop_fp.0 > 0 && order_usd_fp.0 > 0 && mid_fp.0 > 0 {
                         let multiplier_fp = FixedPrice::new(PRICE_SCALE_I) - (drop_fp / f_100);
@@ -346,6 +352,7 @@ async fn main() -> Result<()> {
         chan_to_idx: FlatMapI64::new(),
         idx_to_symbol: core::array::from_fn(|_| FixedSymbol::new()),
         last_order_ts: core::array::from_fn(|_| Instant::now()),
+        armada_state: sniper_types::armada_types::load_armada_state_ro(),
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();

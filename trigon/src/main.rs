@@ -210,6 +210,7 @@ struct TrigonEngine {
     last_scan: Instant,
     last_exec_ms: [u64; TRIGON_MAX_TRIANGLES],
     toxic_storm_ptr: *const u8,
+    armada_state: &'static sniper_types::armada_types::ArmadaState,
 }
 
 unsafe impl Send for TrigonEngine {}
@@ -352,9 +353,6 @@ impl SovereignEngine for TrigonEngine {
                         if profit > best_profit { best_profit = profit; }
 
                         let min_profit = (tr.min_profit_bps.load(Ordering::Acquire) * 100) as i64;
-                        let cooldown = tr.cooldown_ms.load(Ordering::Acquire);
-                        let max_usd = tr.max_order_usd.load(Ordering::Acquire) as i64;
-
                         let latency_pad = {
                             let l2_cmd = unsafe { &*self.l2_cmd };
                             let (v1, ok1) = sniper_types::l2_command::l2cmd_version_check(l2_cmd);
@@ -371,6 +369,15 @@ impl SovereignEngine for TrigonEngine {
                         // ═══ HIVE MIND: Toxic Storm check ═══
                         let storm_byte = unsafe { std::ptr::read_volatile(self.toxic_storm_ptr) };
                         if storm_byte == 1 { continue; }
+                        
+                        // ARMADA KŘEMÍKOVÁ ZEĎ 🛡️
+                        if self.armada_state.is_kill_switch_active() {
+                            continue;
+                        }
+                        
+                        let armada_cap = self.armada_state.authorized_capital[3].load(Ordering::Acquire) as i64;
+                        let max_usd = armada_cap / PRICE_SCALE_I;
+                        let cooldown = tr.cooldown_ms.load(Ordering::Acquire);
 
                         if profit > effective_min_profit
                             && et.executing.load(Ordering::Acquire) == 0
@@ -381,7 +388,7 @@ impl SovereignEngine for TrigonEngine {
                             use sniper_types::exchange::bitfinex_venue::BitfinexVenue;
                             BitfinexVenue::write_batch_open(out_buf);
 
-                            let max_usd_fp = FixedPrice::new(max_usd * PRICE_SCALE_I);
+                            let max_usd_fp = FixedPrice::new(armada_cap);
 
                             for l in 0..TRIGON_LEGS {
                                 let sym_hash = tr.leg_symbols[l].load(Ordering::Acquire);
@@ -487,6 +494,7 @@ async fn main() -> Result<()> {
         last_scan: Instant::now() - core::time::Duration::from_secs(10),
         last_exec_ms: [0; TRIGON_MAX_TRIANGLES],
         toxic_storm_ptr: toxic_storm_mmap.as_ptr(),
+        armada_state: sniper_types::armada_types::load_armada_state_ro(),
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();

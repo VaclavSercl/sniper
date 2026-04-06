@@ -124,6 +124,7 @@ struct GridEngine {
     ticker_chan: Option<i64>,
     last_grid_calc: Instant,
     toxic_storm_ptr: *const u8,
+    armada_state: &'static sniper_types::armada_types::ArmadaState,
 }
 
 unsafe impl Send for GridEngine {}
@@ -183,18 +184,35 @@ impl SovereignEngine for GridEngine {
                     let storm_byte = unsafe { std::ptr::read_volatile(self.toxic_storm_ptr) };
                     if storm_byte == 1 { return; }
                     
+                    // ARMADA KŘEMÍKOVÁ ZEĎ 🛡️
+                    if self.armada_state.is_kill_switch_active() {
+                        return;
+                    }
+                    
                     let spacing = FixedPrice::new(r.grid_spacing.load(Ordering::Acquire) as i64);
                     let num_buy = r.num_buy_levels.load(Ordering::Acquire);
                     let num_sell = r.num_sell_levels.load(Ordering::Acquire);
                     let mode = r.grid_mode.load(Ordering::Acquire);
                     let geo_pct = FixedPrice::new(r.geometric_step_pct.load(Ordering::Acquire) as i64);
-                    let qty = FixedPrice::new(r.order_qty.load(Ordering::Acquire) as i64);
+                    
+                    let mut qty = FixedPrice::new(r.order_qty.load(Ordering::Acquire) as i64);
                     let center_override_fp = FixedPrice::new(r.center_price_override.load(Ordering::Acquire) as i64);
 
                     let mid_fp = FixedPrice::new(mid as i64);
                     let center = if center_override_fp.0 > 0 { center_override_fp } else { mid_fp };
+                    
+                    // Graceful shrink through Armada Limit
+                    let armada_cap = self.armada_state.authorized_capital[2].load(Ordering::Acquire) as i64;
+                    let total_orders = (num_buy + num_sell) as i64;
+                    if total_orders > 0 {
+                        let max_total_qty = FixedPrice::new(armada_cap) / mid_fp;
+                        let max_qty_per_order = max_total_qty / FixedPrice::new(total_orders * sniper_types::PRICE_SCALE_I as i64);
+                        if qty > max_qty_per_order {
+                            qty = max_qty_per_order;
+                        }
+                    }
 
-                    if spacing.0 > 0 && qty.0 > 0 && center.0 > 0 {
+                    if spacing.0 > 0 && qty.0 >= 15000 && center.0 > 0 {
                         let anchor = l2w.grid_dynamic_anchor.load(Ordering::Relaxed);
                         let (mut buys, mut sells) = if anchor > 0 {
                             let mut warp_buys = GridLevels::new();
@@ -309,6 +327,7 @@ async fn main() -> Result<()> {
         ticker_chan: None,
         last_grid_calc: Instant::now() - core::time::Duration::from_secs(10), // force init run
         toxic_storm_ptr: toxic_storm_mmap.as_ptr(),
+        armada_state: sniper_types::armada_types::load_armada_state_ro(),
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();
