@@ -151,25 +151,47 @@
         pnl.innerText = formatUsd(data.armada_pnl);
         pnl.className = data.armada_pnl >= 0 ? 'pos' : 'neg';
 
-        let html = '';
-        data.bots.forEach(b => {
-            const statusCls = b.mode.toLowerCase();
-            const pnlCls = b.pnl >= 0 ? 'pos' : 'neg';
-            html += `
-                <div class="bot-card" onclick="showBotView('${b.name}')">
-                    <div class="name-row">
-                        <div class="name">${b.name}</div>
-                        <div class="status ${statusCls}">${b.mode}</div>
+        let cards = fleetView.children;
+        if (cards.length === 0) {
+            let html = '';
+            data.bots.forEach(b => {
+                const statusCls = b.mode.toLowerCase();
+                const pnlCls = b.pnl >= 0 ? 'pos' : 'neg';
+                html += `
+                    <div class="bot-card" id="card-${b.name}" onclick="showBotView('${b.name}')">
+                        <div class="name-row">
+                            <div class="name">${b.name}</div>
+                            <div id="status-${b.name}" class="status ${statusCls}">${b.mode}</div>
+                        </div>
+                        <div class="bot-metrics mono">
+                            <div class="metric"><span class="metric-lbl">PnL:</span><span id="pnl-${b.name}" class="${pnlCls}">${formatUsd(b.pnl)}</span></div>
+                            <div class="metric"><span class="metric-lbl">Position:</span><span id="pos-${b.name}" style="color:#fff">${b.position.toFixed(4)}</span></div>
+                            <div class="metric"><span class="metric-lbl">Kelly:</span><span id="kelly-${b.name}" style="color:var(--accent)">$${b.kelly_limit.toFixed(0)}</span></div>
+                        </div>
                     </div>
-                    <div class="bot-metrics mono">
-                        <div class="metric"><span class="metric-lbl">PnL:</span><span class="${pnlCls}">${formatUsd(b.pnl)}</span></div>
-                        <div class="metric"><span class="metric-lbl">Position:</span><span style="color:#fff">${b.position.toFixed(4)}</span></div>
-                        <div class="metric"><span class="metric-lbl">Kelly Limit:</span><span style="color:var(--accent)">$${b.kelly_limit.toFixed(0)}</span></div>
-                    </div>
-                </div>
-            `;
-        });
-        fleetView.innerHTML = html;
+                `;
+            });
+            fleetView.innerHTML = html;
+        } else {
+            // Update without DOM thrashing
+            data.bots.forEach(b => {
+                const statusEl = document.getElementById(`status-${b.name}`);
+                if (statusEl) {
+                    statusEl.innerText = b.mode;
+                    statusEl.className = `status ${b.mode.toLowerCase()}`;
+                }
+                const pnlEl = document.getElementById(`pnl-${b.name}`);
+                if (pnlEl) {
+                    pnlEl.innerText = formatUsd(b.pnl);
+                    pnlEl.className = b.pnl >= 0 ? 'pos' : 'neg';
+                }
+                const posEl = document.getElementById(`pos-${b.name}`);
+                if (posEl) posEl.innerText = b.position.toFixed(4);
+                
+                const kellyEl = document.getElementById(`kelly-${b.name}`);
+                if (kellyEl) kellyEl.innerText = `$${b.kelly_limit.toFixed(0)}`;
+            });
+        }
     }
 
     function renderTactical(data) {
