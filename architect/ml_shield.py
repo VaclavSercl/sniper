@@ -77,7 +77,7 @@ WARMUP_TICKS = 100  # Collect this many ticks before inference
 # 1-byte mmap file read by ALL Rust bots before every order.
 # 0 = clear, 1 = TOXIC STORM active → bots go defensive.
 HIVE_MIND_PATH = "/dev/shm/beroun/toxic_storm.bin"
-STORM_VPIN_THRESHOLD = 0.7      # VPIN toxicity threshold
+STORM_VPIN_THRESHOLD = 0.60  # VPIN toxicity threshold
 STORM_SPREAD_Z_THRESHOLD = 3.0  # Spread z-score threshold
 STORM_OBI_MOMENTUM = 0.4        # OBI momentum extreme
 STORM_CALM_CYCLES = 10          # Consecutive calm cycles to deactivate
@@ -162,10 +162,38 @@ class FeatureExtractor:
         # 3. Spread in bps
         spread_bps = (spread / mid) * 10000 if mid > 0 else 0
 
-        # 4. VPIN approximation (Volume-synchronized Probability of Informed Trading)
-        # Simplified: ratio of directional volume to total
-        read_obi = struct.unpack_from('<q', mm, OFF_OBI)[0] / PRICE_SCALE
-        vpin = abs(read_obi) if abs(read_obi) < 1.0 else 0.5
+        # --- SOVEREIGN VPIN ENGINE v2.0 (L1 Momentum & Toxicity) ---
+        # 1. Čtení surového OBI (Order Book Imbalance) z L0
+        current_obi = struct.unpack_from('<q', mm, OFF_OBI)[0] / PRICE_SCALE
+
+        # 2. Výpočet rychlosti změny (OBI Momentum)
+        if not hasattr(self, 'last_obi'):
+            self.last_obi = current_obi
+        delta_obi = current_obi - self.last_obi
+        self.last_obi = current_obi
+
+        # 3. EMA vyhlazení pro Delta OBI (vyrušení mikro-šumu)
+        if not hasattr(self, 'ema_delta_obi'):
+            self.ema_delta_obi = 0.0
+        self.ema_delta_obi = (self.ema_delta_obi * 0.8) + (delta_obi * 0.2)
+
+        # 4. Kinetický VPIN: Kombinace statické knihy a její hybnosti
+        # Zohledňujeme rychlost mizení likvidity (7.5x multiplikátor pro citlivost)
+        raw_vpin = current_obi + (self.ema_delta_obi * 7.5) 
+
+        # 5. Integrace reálné Trade Toxicity z L0
+        try:
+            from l2_rust_offsets import OFF_L1_TOXIC
+            trade_toxicity = struct.unpack_from('<Q', mm, OFF_L1_TOXIC)[0] / 1000.0  # Normalized hitting intensity
+        except ImportError:
+            trade_toxicity = 0.0
+            
+        # Směrová akcelerace: Znásobíme VPIN v aktuálním směru podle toxicity
+        direction_multiplier = 1.0 + (trade_toxicity * 2.0)
+        vpin_score = raw_vpin * direction_multiplier
+
+        # 6. Hard-Clamp do povolených hranic L2 Oracla (-1.0 až 1.0)
+        vpin = max(-1.0, min(1.0, vpin_score))
 
         # Store history linearly in ring buffer
         self.obi_history[self.ptr] = obi
@@ -255,7 +283,7 @@ class OnlineLinearModel:
       - Non-obvious cross-feature interactions (via polynomial expansion)
     """
 
-    def __init__(self, n_features=10, learning_rate=0.001, l2_reg=0.01):
+    def __init__(self, n_features=10, learning_rate=0.0015, l2_reg=0.01):
         self.n_features = n_features
         self.lr = learning_rate
         self.l2_reg = l2_reg

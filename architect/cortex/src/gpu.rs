@@ -19,8 +19,6 @@ use std::time::{Duration, Instant};
 
 const INFERENCE_INTERVAL_MS: u64 = 2000;
 
-
-
 /// Snapshot sent from L1 to GPU thread.
 #[allow(dead_code)]
 #[derive(Clone)]
@@ -29,21 +27,20 @@ pub struct L1GpuRequest {
     pub best_bid: FixedPrice,
     pub best_ask: FixedPrice,
     pub obi: FixedPrice,
-    pub obi_prev: [FixedPrice; 2],        // 2 previous OBI values for momentum
+    pub obi_prev: [FixedPrice; 2],
     pub bid_depth: FixedPrice,
     pub ask_depth: FixedPrice,
-    pub depth_trend: &'static str, // "THINNING" | "STABLE" | "GROWING"
+    pub depth_trend: &'static str, 
     pub toxic_hits: u64,
-    pub sweeps_recent: u64,        // sweep count in last 5 min
+    pub sweeps_recent: u64,
     pub confidence: FixedPrice,
     pub net_position: FixedPrice,
     pub regime: &'static str,
     pub fear_greed: u64,
     pub macro_bias: FixedPrice,
-    pub portfolio_hedged: bool,  // CL4: Aegis shield active → skip inference
+    pub portfolio_hedged: bool,
 }
 
-/// Response from GPU inference — discrete action + confidence.
 #[derive(Debug, Clone, Copy, Default)]
 enum GpuAction {
     #[default]
@@ -59,33 +56,27 @@ struct GpuDecision {
     confidence_pct: u32,
 }
 
-// ── Telemetry: Ring Buffer + Evaluator ──
+const RING_SIZE: usize = 10_000; 
+const EVAL_WINDOW_MS: u64 = 60_000; 
+const EVAL_INTERVAL_MS: u64 = 60_000; 
 
-const RING_SIZE: usize = 10_000; // ~5.5h at 2s intervals
-const EVAL_WINDOW_MS: u64 = 60_000; // Evaluate 60s after decision
-const EVAL_INTERVAL_MS: u64 = 60_000; // Run evaluator every 60s
-
-/// One record of a GPU decision + pre/post market snapshot.
 #[allow(dead_code)]
 #[derive(Clone, Copy, Default)]
 struct DecisionRecord {
     timestamp_ms: u64,
-    action: u8,          // 0=HOLD, 1=SKEW_BID, 2=SKEW_ASK, 3=PAUSE
+    action: u8,
     confidence: u8,
-    // PRE-decision snapshot
     pre_pnl: i64,
     pre_fills: u64,
     pre_toxic: u64,
     pre_price: u64,
     pre_obi: i64,
-    // POST-decision (filled by evaluator)
     post_pnl: i64,
     post_price: u64,
     post_toxic: u64,
     evaluated: bool,
 }
 
-/// Cumulative statistics — exposed via UDS GET_GPU_STATS.
 use std::sync::atomic::{AtomicU64, AtomicI64};
 
 pub struct GpuStatsSnapshot {
@@ -215,7 +206,6 @@ fn read_l1_tuning() -> (f64, f64, u64) {
     (skew_max, obi_thresh, interval)
 }
 
-/// Create L1→GPU channel. Returns sender for L1 and spawns the GPU consumer thread.
 pub fn spawn_gpu_thread(engine: &'static EngineState) -> mpsc::SyncSender<L1GpuRequest> {
     let (tx, rx) = mpsc::sync_channel::<L1GpuRequest>(1);
 
@@ -236,11 +226,9 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
     let mut inference_count: u64 = 0;
     let mut consecutive_failures: u64 = 0;
 
-    // ── Boot Candle L1 Brain ──
     let mut brain = candle_brain::CandleL1Brain::boot_default()
         .expect("🔴 FATAL: Candle L1 Brain boot failed. Cannot run without AI inference.");
 
-    // Telemetry ring buffer (thread-local, zero I/O)
     let mut ring = vec![DecisionRecord::default(); RING_SIZE];
     let mut write_idx: usize = 0;
 
@@ -255,34 +243,28 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
             Err(_) => break,
         };
 
-        // Read L2-tunable inference interval
         let (_, _, tuned_interval) = read_l1_tuning();
         if last_inference.elapsed().as_millis() < tuned_interval as u128 {
             continue;
         }
 
-        // Drain channel — keep only latest
         let mut latest = req;
         while let Ok(newer) = rx.try_recv() {
             latest = newer;
         }
 
-        // ── HEDGE GATE: Skip inference if Aegis shield active ──
-        // When portfolio_is_hedged=1, Hydra already applies VPIN shift in L1,
-        // Grid blocks all bids. LLM inference would just return HOLD anyway.
-        // Save 10-50ms GPU cycles + thermal.
         if latest.portfolio_hedged {
             engine.ai_heartbeat_ms.store(epoch_ms(), Ordering::Release);
             last_inference = Instant::now();
             continue;
         }
 
+        // Float konverze povolena pouze zde – těsně před výpočtem modelu!
         let ask_f64 = latest.best_ask.as_f64();
         let bid_f64 = latest.best_bid.as_f64();
         let spread = ask_f64 - bid_f64;
         let spread_bps = if bid_f64 > 0.0 { spread / bid_f64 * 10000.0 } else { 0.0 };
 
-        // ── Candle Logit Sniping Inference ──
         let tox = latest.toxic_hits as f64 / 1000.0_f64.max(1.0);
         brain.reset_cache();
         let result = match brain.reflex_action(latest.obi.as_f64(), spread_bps, latest.macro_bias.as_f64(), tox.min(1.0)) {
@@ -323,10 +305,8 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
                 };
                 let conf = decision.confidence_pct as u8;
 
-                // Apply decision to mmap
                 apply_gpu_decision(&decision, engine);
 
-                // Record in ring buffer (~50ns)
                 ring[write_idx % RING_SIZE] = DecisionRecord {
                     timestamp_ms: now_ms,
                     action: action_id,
@@ -346,23 +326,18 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
                 inference_count += 1;
                 last_inference = Instant::now();
 
-                // Log every 30th inference (~1 min)
                 if inference_count % 30 == 1 {
                     println!("  🤖 [GPU] #{inference_count}: {action_str} ({conf}%)");
                 }
 
                 engine.ai_heartbeat_ms.store(now_ms, Ordering::Release);
-
                 GPU_STATS.total_inferences.store(inference_count, Ordering::Relaxed);
-
-                // Reset failure counter on success
                 consecutive_failures = 0;
             }
             Err(e) => {
                 eprintln!("  ⚠️ [GPU] Inference failed: {e}");
                 consecutive_failures += 1;
 
-                // Alert after 30 consecutive failures (~2.5 min of dead GPU)
                 if consecutive_failures == 30 {
                     eprintln!("  🚨 [GPU] 30 consecutive failures — sending Sentinel alert");
                     let alert_msg = format!(
@@ -378,7 +353,6 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
             }
         }
 
-        // Run evaluator every 60s
         if last_eval.elapsed().as_millis() >= EVAL_INTERVAL_MS as u128 {
             evaluate_ring(&mut ring, engine);
             last_eval = Instant::now();
@@ -386,20 +360,16 @@ fn run_gpu_consumer(rx: mpsc::Receiver<L1GpuRequest>, engine: &EngineState) {
     }
 }
 
-/// Counterfactual evaluator: fills POST snapshots and classifies outcomes.
 fn evaluate_ring(ring: &mut [DecisionRecord], engine: &EngineState) {
     let now_ms = epoch_ms();
     let post_pnl = engine.realized_pnl.load(Ordering::Relaxed);
     let post_price = engine.micro_price.load(Ordering::Relaxed);
     let post_toxic = engine.toxic_flow_hits.load(Ordering::Relaxed);
 
-
-
     for record in ring.iter_mut() {
         if record.evaluated || record.timestamp_ms == 0 {
             continue;
         }
-        // Only evaluate records older than 60s
         if now_ms.saturating_sub(record.timestamp_ms) < EVAL_WINDOW_MS {
             continue;
         }
@@ -414,22 +384,21 @@ fn evaluate_ring(ring: &mut [DecisionRecord], engine: &EngineState) {
         let price_move = (record.post_price as i64 - record.pre_price as i64).unsigned_abs();
 
         match record.action {
-            1 => { // SKEW_BID
+            1 => { 
                 GPU_STATS.skew_bid_total.fetch_add(1, Ordering::Relaxed);
                 if pnl_delta > 0 { GPU_STATS.skew_bid_wins.fetch_add(1, Ordering::Relaxed); }
                 if new_toxic { GPU_STATS.skew_bid_toxic.fetch_add(1, Ordering::Relaxed); }
             }
-            2 => { // SKEW_ASK
+            2 => { 
                 GPU_STATS.skew_ask_total.fetch_add(1, Ordering::Relaxed);
                 if pnl_delta > 0 { GPU_STATS.skew_ask_wins.fetch_add(1, Ordering::Relaxed); }
                 if new_toxic { GPU_STATS.skew_ask_toxic.fetch_add(1, Ordering::Relaxed); }
             }
-            3 => { // PAUSE
+            3 => { 
                 GPU_STATS.pause_total.fetch_add(1, Ordering::Relaxed);
-                // Correct if price moved >$5 (we avoided a hit)
                 if price_move > 500_000_000 { GPU_STATS.pause_correct.fetch_add(1, Ordering::Relaxed); }
             }
-            _ => { // HOLD
+            _ => { 
                 GPU_STATS.hold_total.fetch_add(1, Ordering::Relaxed);
             }
         }
@@ -437,19 +406,13 @@ fn evaluate_ring(ring: &mut [DecisionRecord], engine: &EngineState) {
     }
 }
 
-/// Translate discrete GPU action into mmap writes.
-/// Reads L2-tuned parameters from GpuStats.
 fn apply_gpu_decision(decision: &GpuDecision, engine: &EngineState) {
     let confidence = decision.confidence_pct;
-
-    // Read L2-tunable params
     let (skew_max_usd, obi_threshold, _) = read_l1_tuning();
 
-    // OBI gate: skip SKEW actions if OBI below threshold
     let current_obi = (engine.l2_imbalance.load(Ordering::Relaxed) as f64 / PRICE_SCALE).abs();
     let obi_gated = current_obi < obi_threshold;
 
-    // Scale confidence → skew magnitude (0-100% → $0-$skew_max)
     let skew_magnitude = (confidence as f64 / 100.0) * skew_max_usd * PRICE_SCALE;
 
     match decision.action {
@@ -462,7 +425,6 @@ fn apply_gpu_decision(decision: &GpuDecision, engine: &EngineState) {
             blend_skew(engine, skew);
         }
         GpuAction::SkewBid | GpuAction::SkewAsk => {
-            // OBI below threshold — treat as HOLD (decay)
             let current = engine.l1_skew_adjustment.load(Ordering::Relaxed);
             let decayed = (current as f64 * 0.95) as i64;
             engine.l1_skew_adjustment.store(decayed, Ordering::Release);
@@ -476,7 +438,6 @@ fn apply_gpu_decision(decision: &GpuDecision, engine: &EngineState) {
             }
         }
         GpuAction::Hold => {
-            // HOLD — gently decay skew toward zero
             let current = engine.l1_skew_adjustment.load(Ordering::Relaxed);
             let decayed = (current as f64 * 0.95) as i64;
             engine.l1_skew_adjustment.store(decayed, Ordering::Release);
@@ -484,7 +445,6 @@ fn apply_gpu_decision(decision: &GpuDecision, engine: &EngineState) {
     }
 }
 
-/// Blend GPU skew with existing OBI skew (30% GPU, 70% OBI).
 fn blend_skew(engine: &EngineState, gpu_skew: i64) {
     let current_skew = engine.l1_skew_adjustment.load(Ordering::Relaxed);
     let blended = (current_skew as f64 * 0.7 + gpu_skew as f64 * 0.3) as i64;

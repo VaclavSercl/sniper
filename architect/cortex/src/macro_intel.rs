@@ -4,6 +4,7 @@
 //
 // Writes SHARED macro data to ALL bot engine_state.bin files.
 // FixedPrice refactor: NO f64 keywords allowed!
+// ZERO-ALLOCATION PARSER INCLUDED
 // ═══════════════════════════════════════════════════════════
 
 use sniper_types::{EngineState, PRICE_SCALE_I};
@@ -59,33 +60,53 @@ fn safe_truncate(s: &str, max_bytes: usize) -> &str {
     &s[..end]
 }
 
-/// Helper to parse string directly into FixedPrice without floats.
-fn parse_fixed(s: &str) -> FixedPrice {
-    let mut parts = s.split('.');
-    let int_part: i64 = parts.next().unwrap_or("0").parse().unwrap_or(0);
-    let mut frac_part: i64 = 0;
-    if let Some(f) = parts.next() {
-        let f = &f[..std::cmp::min(f.len(), 8)];
-        let padded = format!("{:0<8}", f);
-        frac_part = padded.parse().unwrap_or(0);
-    }
-    FixedPrice::new(int_part * PRICE_SCALE_I + frac_part)
+// ── ZERO-ALLOCATION BINANCE PARSER ──
+// Rychlý ruční parser, který najde "p":"...", "q":"..." a "m":true/false
+// Převádí ASCII bajty přímo na i64 (FixedPrice) bez alokace Stringů.
+#[inline(always)]
+fn fast_parse_binance_trade(data: &[u8]) -> Option<(FixedPrice, FixedPrice, bool)> {
+    if data.len() < 30 || data[0] != b'{' { return None; }
+
+    let p_pos = data.windows(5).position(|w| w == b"\"p\":\"")? + 5;
+    let q_pos = data.windows(5).position(|w| w == b"\"q\":\"")? + 5;
+    let m_pos = data.windows(4).position(|w| w == b"\"m\":")? + 4;
+
+    let price = parse_fixed_bytes(&data[p_pos..])?;
+    let qty = parse_fixed_bytes(&data[q_pos..])?;
+    let is_sell = data.get(m_pos).copied() == Some(b't');
+
+    Some((price, qty, is_sell))
 }
 
-/// Zero-allocation custom parser for Binance aggTrade
-fn fast_parse_agg_trade(data: &[u8]) -> Option<(FixedPrice, FixedPrice, bool)> {
-    let p_start = data.windows(5).position(|w| w == b"\"p\":\"")? + 5;
-    let p_end = p_start + data[p_start..].iter().position(|&b| b == b'"')?;
-    let price_str = std::str::from_utf8(&data[p_start..p_end]).ok()?;
+#[inline(always)]
+fn parse_fixed_bytes(data: &[u8]) -> Option<FixedPrice> {
+    let mut int_part: i64 = 0;
+    let mut frac_part: i64 = 0;
+    let mut i = 0;
 
-    let q_start = data.windows(5).position(|w| w == b"\"q\":\"")? + 5;
-    let q_end = q_start + data[q_start..].iter().position(|&b| b == b'"')?;
-    let qty_str = std::str::from_utf8(&data[q_start..q_end]).ok()?;
+    // Parse integer part
+    while i < data.len() && data[i].is_ascii_digit() {
+        int_part = int_part * 10 + (data[i] - b'0') as i64;
+        i += 1;
+    }
 
-    let m_start = data.windows(4).position(|w| w == b"\"m\":")? + 4;
-    let is_sell = data[m_start..].starts_with(b"true");
+    // Parse fractional part if dot exists
+    if i < data.len() && data[i] == b'.' {
+        i += 1;
+        let mut digits = 0;
+        while i < data.len() && data[i].is_ascii_digit() && digits < 8 {
+            frac_part = frac_part * 10 + (data[i] - b'0') as i64;
+            i += 1;
+            digits += 1;
+        }
+        // Pad with zeros to reach PRICE_SCALE (1e8)
+        while digits < 8 {
+            frac_part *= 10;
+            digits += 1;
+        }
+    }
 
-    Some((parse_fixed(price_str), parse_fixed(qty_str), is_sell))
+    Some(FixedPrice::new(int_part * PRICE_SCALE_I + frac_part))
 }
 
 // ═══ MODULE 1: BINANCE CROSS-EXCHANGE WEBSOCKET ═══
@@ -115,7 +136,8 @@ async fn run_binance_ws_inner(engine: &EngineState) -> anyhow::Result<()> {
     while let Some(msg_res) = socket.next().await {
         let msg = msg_res?;
         if let Message::Text(text) = msg {
-            if let Some((price, qty, is_sell)) = fast_parse_agg_trade(text.as_bytes()) {
+            // ZERO-ALLOCATION FAST PARSE
+            if let Some((price, qty, is_sell)) = fast_parse_binance_trade(text.as_bytes()) {
                 // Track Binance mid-price (VWAP)
                 price_buffer.push_back((price, qty));
                 if price_buffer.len() > 100 { price_buffer.pop_front(); }
@@ -164,7 +186,7 @@ async fn run_binance_ws_inner(engine: &EngineState) -> anyhow::Result<()> {
 // ═══ MODULE 2: FEAR & GREED INDEX ═══
 
 pub async fn run_fear_greed(engine: &EngineState) {
-    println!("  �� [MACRO] Fear & Greed monitor starting ({}s interval)...", FEAR_GREED_INTERVAL_S);
+    println!("  🧠 [MACRO] Fear & Greed monitor starting ({}s interval)...", FEAR_GREED_INTERVAL_S);
 
     loop {
         match fetch_fear_greed(engine).await {
@@ -178,12 +200,13 @@ pub async fn run_fear_greed(engine: &EngineState) {
 async fn fetch_fear_greed(engine: &EngineState) -> anyhow::Result<u64> {
     let client = reqwest::Client::new();
     let body: String = client.get(FEAR_GREED_URL)
-        .header("User-Agent", "SniperCortex/13.0")
+        .header("User-Agent", "SniperCortex/14.0")
         .send()
         .await?
         .text()
         .await?;
 
+    // Zde je JSON alokace v pořádku (běží 1x za 5 minut, ne v hot-pathu)
     let data: serde_json::Value = serde_json::from_str(&body)?;
     let value = data["data"][0]["value"]
         .as_str()
@@ -224,7 +247,7 @@ async fn scan_rss_feeds(engine: &EngineState, seen: &mut HashSet<String>) -> any
 
     for &feed_url in RSS_FEEDS {
         let body = match client.get(feed_url)
-            .header("User-Agent", "SniperCortex/13.0")
+            .header("User-Agent", "SniperCortex/14.0")
             .send()
             .await
         {

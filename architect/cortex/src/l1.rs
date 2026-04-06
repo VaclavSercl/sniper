@@ -1,16 +1,15 @@
 // ═══════════════════════════════════════════════════════════
-// ��️ SOVEREIGN CORTEX — L1 Tactical Module
+// 🛡️ SOVEREIGN CORTEX — L1 Tactical Module
 // 50ms cycle: OBI skewing, sweep detection, ghost mode,
 // adaptive learning, confidence scoring
 //
 // Phase 3: Pure FixedPrice hot-path (Zero-Cost Abstraction)
-// Zero-copy mmap access via sniper_types
+// ZERO-ALLOCATION & ZERO-f64 ENFORCED!
 // ═══════════════════════════════════════════════════════════
 
 use crate::gpu::L1GpuRequest;
 use sniper_types::{EngineState, PRICE_SCALE_I, BOOK_LEVELS};
 use sniper_types::math::FixedPrice;
-use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -48,15 +47,49 @@ struct BookLevel {
     amount: FixedPrice,
 }
 
+// ── ZERO ALLOCATION RING BUFFER ──
+#[derive(Clone, Copy)]
+struct RingBuffer<const N: usize> {
+    data: [FixedPrice; N],
+    head: usize,
+    len: usize,
+}
+
+impl<const N: usize> RingBuffer<N> {
+    fn new() -> Self {
+        Self { data: [FixedPrice::zero(); N], head: 0, len: 0 }
+    }
+    
+    #[inline(always)]
+    fn push(&mut self, val: FixedPrice) {
+        self.data[(self.head + self.len) % N] = val;
+        if self.len < N { self.len += 1; }
+        else { self.head = (self.head + 1) % N; }
+    }
+    
+    #[inline(always)]
+    fn get_rev(&self, nth: usize) -> Option<FixedPrice> {
+        if nth >= self.len { return None; }
+        let idx = (self.head + self.len - 1 - nth) % N;
+        Some(self.data[idx])
+    }
+    
+    #[inline(always)]
+    fn is_empty(&self) -> bool { self.len == 0 }
+    
+    #[inline(always)]
+    fn len(&self) -> usize { self.len }
+}
+
 pub struct AdaptiveL1Brain {
     sweep_threshold: FixedPrice,
     true_positives: u32,
     false_positives: u32,
     total_sweeps: u32,
     last_adaptation: Instant,
-    obi_history: VecDeque<FixedPrice>,
-    depth_history: VecDeque<FixedPrice>,
-    bid_price_history: VecDeque<FixedPrice>,
+    obi_history: RingBuffer<120>,
+    depth_history: RingBuffer<120>,
+    bid_price_history: RingBuffer<50>,
     // Anti-paralysis
     freeze_time_ms: u64,
     active_time_ms: u64,
@@ -75,9 +108,9 @@ impl AdaptiveL1Brain {
             false_positives: 0,
             total_sweeps: 0,
             last_adaptation: Instant::now(),
-            obi_history: VecDeque::with_capacity(120),
-            depth_history: VecDeque::with_capacity(120),
-            bid_price_history: VecDeque::with_capacity(50),
+            obi_history: RingBuffer::new(),
+            depth_history: RingBuffer::new(),
+            bid_price_history: RingBuffer::new(),
             freeze_time_ms: 0,
             active_time_ms: 0,
             uptime_window_start: Instant::now(),
@@ -123,10 +156,11 @@ impl AdaptiveL1Brain {
         if uptime < half && (self.freeze_time_ms + self.active_time_ms) > 10_000 {
             let next_thresh = self.sweep_threshold + FixedPrice::new(PARALYSIS_DESENSITIZE_STEP);
             self.sweep_threshold = std::cmp::min(next_thresh, FixedPrice::new(MAX_SWEEP_THRESHOLD));
-            // Log with pseudo floats for convenience by integer arithmetic
+            
+            // Zero-f64 print formatting
             let u_pct = (uptime.0 * 100) / PRICE_SCALE_I;
-            let t_val = self.sweep_threshold.0;
-            println!("  🆘 L1 ANTI-FLAP: uptime {u_pct}% → threshold raised to {t_val}");
+            let t_val = (self.sweep_threshold.0 * 100) / PRICE_SCALE_I;
+            println!("  🆘 L1 ANTI-FLAP: uptime {u_pct}% → threshold raised to {t_val}%");
             
             self.freeze_time_ms = 0;
             self.active_time_ms = 0;
@@ -185,7 +219,8 @@ impl AdaptiveL1Brain {
             if obi < FixedPrice::new(GHOST_OBI_ACTIVATE) {
                 self.ghost_active = true;
                 self.ghost_last_change = now;
-                println!("  👻 GHOST MODE ON: obi={}", obi.0);
+                let o_pct = (obi.0 * 100) / PRICE_SCALE_I;
+                println!("  👻 GHOST MODE ON: obi={o_pct}%");
                 return Some(GHOST_TRANSPARENCY_STEALTH);
             }
         } else if toxic_hits < GHOST_CALM_DEACTIVATE && l2_regime == 2 {
@@ -264,24 +299,32 @@ fn detect_sweep(prev: &[BookLevel], curr: &[BookLevel], threshold: FixedPrice) -
     drop > threshold
 }
 
-fn detect_flickering(history: &VecDeque<FixedPrice>, window: usize) -> (bool, FixedPrice) {
-    if history.len() < window { return (false, FixedPrice::zero()); }
-    let recent: Vec<FixedPrice> = history.iter().rev().take(window).copied().collect();
-    let changes = recent.windows(2).filter(|w| w[0] != w[1]).count();
-    let rate = FixedPrice::new((changes as i64 * PRICE_SCALE_I) / window as i64);
+// ZERO-ALLOCATION IN-PLACE ALGORITHM
+fn detect_flickering(history: &RingBuffer<50>, window: usize) -> (bool, FixedPrice) {
+    let n = std::cmp::min(history.len(), window);
+    if n < 2 { return (false, FixedPrice::zero()); }
+    
+    let mut changes = 0;
+    let mut prev = history.get_rev(0).unwrap();
+    
+    for i in 1..n {
+        let curr = history.get_rev(i).unwrap();
+        if curr.0 != prev.0 { changes += 1; }
+        prev = curr;
+    }
+    
+    let rate = FixedPrice::new((changes as i64 * PRICE_SCALE_I) / n as i64);
     (rate > FixedPrice::new(70_000_000), rate)
 }
 
 fn compute_iceberg_score(levels: &[BookLevel]) -> FixedPrice {
     if levels.len() < 3 { return FixedPrice::zero(); }
-    // Zero-alloc O(n²) scan: n≤10 → max 100 comparisons vs HashMap alloc+hash
     let mut repeated = 0usize;
     for i in 0..levels.len() {
         let mut count = 0u32;
         for j in 0..levels.len() {
             if levels[j].price.0 == levels[i].price.0 { count += 1; }
         }
-        // Count each unique repeated price only once
         if count > 1 {
             let mut already_counted = false;
             for k in 0..i {
@@ -303,8 +346,6 @@ fn epoch_secs() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
 }
 
-/// Run the L1 tactical loop for Hydra (50ms cycle).
-/// gpu_tx: Optional channel to fire snapshots for GPU inference (non-blocking).
 pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuRequest>>) {
     println!("🛡️ [L1] Hydra tactical shield starting ({}ms cycle)...", CYCLE_MS);
 
@@ -336,8 +377,7 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
 
         // ── OBI MICRO-SKEWING ──
         let obi = compute_obi(&bids, &asks, 3);
-        if brain.obi_history.len() == 120 { brain.obi_history.pop_front(); }
-        brain.obi_history.push_back(obi);
+        brain.obi_history.push(obi);
 
         let mut skew = obi * FixedPrice::new(OBI_SKEW_FACTOR) * FixedPrice::new(MAX_SKEW_USD);
         let max_skew = FixedPrice::new(MAX_SKEW_USD * PRICE_SCALE_I);
@@ -350,14 +390,15 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
         let ask_depth = asks.iter().fold(FixedPrice::zero(), |acc, l| acc + l.amount);
         let total_depth = bid_depth + ask_depth;
         
-        if brain.depth_history.len() == 120 { brain.depth_history.pop_front(); }
-        brain.depth_history.push_back(total_depth);
+        brain.depth_history.push(total_depth);
 
         let avg_depth = if brain.depth_history.is_empty() {
             total_depth
         } else {
-            let sum = brain.depth_history.iter().fold(FixedPrice::zero(), |acc, d| acc + *d);
-            FixedPrice::new(sum.0 / brain.depth_history.len() as i64)
+            let mut sum = FixedPrice::zero();
+            let len = brain.depth_history.len();
+            for i in 0..len { sum += brain.depth_history.get_rev(i).unwrap(); }
+            FixedPrice::new(sum.0 / len as i64)
         };
         
         let depth_ratio = if avg_depth.0 > 100_000 {
@@ -368,8 +409,7 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
 
         // ── FLICKERING DETECTION ──
         if let Some(first_bid) = bids.first() {
-            if brain.bid_price_history.len() == 50 { brain.bid_price_history.pop_front(); }
-            brain.bid_price_history.push_back(first_bid.price);
+            brain.bid_price_history.push(first_bid.price);
         }
         let (_is_flickering, flicker_rate) = detect_flickering(&brain.bid_price_history, 20);
 
@@ -403,8 +443,9 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
                     brain.record_consecutive_freeze();
                     brain.record_freeze_time(freeze_ms);
 
-                    let qty = engine.net_position.load(Ordering::Relaxed);
-                    println!("  [L1] 🧹 SWEEP: Toxic surge detected! Panic selling {} BTC", qty);
+                    let qty_fp = FixedPrice::new(engine.net_position.load(Ordering::Relaxed) as i64);
+                    let qty_int = qty_fp.0 / PRICE_SCALE_I;
+                    println!("  [L1] 🧹 SWEEP: Toxic surge detected! Panic selling {} BTC", qty_int);
                     
                     let toxic = engine.toxic_flow_hits.load(Ordering::Relaxed);
                     let new_toxic = if toxic > 1_000_000 { 1 } else { toxic + 1 };
@@ -433,16 +474,18 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
                 };
 
                 let obi_prev = [
-                    brain.obi_history.iter().rev().nth(1).copied().unwrap_or(FixedPrice::zero()),
-                    brain.obi_history.iter().rev().nth(2).copied().unwrap_or(FixedPrice::zero()),
+                    brain.obi_history.get_rev(1).unwrap_or(FixedPrice::zero()),
+                    brain.obi_history.get_rev(2).unwrap_or(FixedPrice::zero()),
                 ];
 
                 let depth_trend = if brain.depth_history.len() >= 10 {
-                    let recent_sum = brain.depth_history.iter().rev().take(5).fold(FixedPrice::zero(), |acc, x| acc + *x);
-                    let older_sum = brain.depth_history.iter().rev().skip(5).take(5).fold(FixedPrice::zero(), |acc, x| acc + *x);
+                    let mut recent_sum = FixedPrice::zero();
+                    for i in 0..5 { recent_sum += brain.depth_history.get_rev(i).unwrap(); }
+                    
+                    let mut older_sum = FixedPrice::zero();
+                    for i in 5..10 { older_sum += brain.depth_history.get_rev(i).unwrap(); }
                     
                     if older_sum.0 < 100_000 { "STABLE" }
-                    // 0.7 = 70_000_000, 1.3 = 130_000_000
                     else if (recent_sum * FixedPrice::new(PRICE_SCALE_I)) / older_sum < FixedPrice::new(70_000_000) { "THINNING" }
                     else if (recent_sum * FixedPrice::new(PRICE_SCALE_I)) / older_sum > FixedPrice::new(130_000_000) { "GROWING" }
                     else { "STABLE" }
@@ -450,7 +493,6 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
                     "STABLE"
                 };
 
-                // Type-safe FixedPrice compiler barrier to prevent FPU instructions in Hot-Path!
                 let _ = tx.try_send(L1GpuRequest {
                     price: FixedPrice::new(engine.micro_price.load(Ordering::Relaxed) as i64),
                     best_bid: FixedPrice::new(engine.best_bid.load(Ordering::Relaxed) as i64),
@@ -484,7 +526,7 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
             brain.check_paralysis();
         }
 
-        // ── PERIODIC STATUS + GHOST MODE (every ~60s = 1200 cycles) ──
+        // ── ZERO-f64 LOGGING (every ~60s = 1200 cycles) ──
         if cycle % 1200 == 0 {
             let toxic = engine.toxic_flow_hits.load(Ordering::Relaxed);
             let l2_regime = engine.l2_regime_id.load(Ordering::Relaxed);
@@ -508,13 +550,19 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
             }
 
             let mid = engine.micro_price.load(Ordering::Relaxed) / PRICE_SCALE_I as u64;
-            println!("  🛡️ L1[{cycle}]: OBI={:+.3} Skew=${:+.2} \
-                Mid=${} Toxic={} Conf={:.2} \
-                Thresh={:.2} Up={:.0}% Ghost={}",
-                obi.as_f64(), skew.as_f64() / PRICE_SCALE_I as f64,
-                mid, toxic, confidence.as_f64(),
-                brain.sweep_threshold.as_f64(), brain.get_uptime_pct().as_f64() * 100.0,
-                if brain.ghost_active { "ON" } else { "OFF" });
+            
+            // FPU-FREE Int Math pro Log Formatování:
+            let obi_i = obi.0 / (PRICE_SCALE_I / 1000); 
+            let skew_i = skew.0 / PRICE_SCALE_I;
+            let skew_f = (skew.0.abs() % PRICE_SCALE_I) / (PRICE_SCALE_I / 100);
+            let conf_i = (confidence.0 * 100) / PRICE_SCALE_I;
+            let thr_i = (brain.sweep_threshold.0 * 100) / PRICE_SCALE_I;
+            let up_i = (brain.get_uptime_pct().0 * 100) / PRICE_SCALE_I;
+            let ghost_str = if brain.ghost_active { "ON" } else { "OFF" };
+
+            println!("  🛡️ L1[{cycle}]: OBI={obi_i}e-3 Skew=${skew_i}.{skew_f:02} \
+                Mid=${mid} Toxic={toxic} Conf={conf_i}% \
+                Thresh={thr_i}% Up={up_i}% Ghost={ghost_str}");
         }
 
         // ── SLEEP ──

@@ -337,9 +337,9 @@ class L2OracleAsync:
                 vol_multiplier = max(1.0, spread_val / 2.0)  # norm: spread $2 = 1x
                 
                 # Dynamic max exposure: 5% of equity / vol_multiplier
-                # Equity proxy: $500 (total account)
-                EQUITY_USD = 500.0
-                RISK_PCT = 0.05
+                # Equity proxy: Realistický HFT baseline pro Market Making
+                EQUITY_USD = 2000.0  # Zvýšeno z 500 na 2000 USD
+                RISK_PCT = 0.15      # Povolujeme 15% alokaci místo 5%
                 HARD_MAX_BTC = 0.05  # Rust kill-switch absolute limit
                 dynamic_max_usd = (EQUITY_USD * RISK_PCT) / vol_multiplier
                 dynamic_max_btc = dynamic_max_usd / current_price if current_price > 0 else HARD_MAX_BTC
@@ -457,7 +457,7 @@ RULES:
 - PERFORMANCE GOVERNANCE (7d PnL check):
   * If a bot has consistently negative 7d PnL (e.g., < -$0.50), you MUST intervene.
   * Intervention 1 (Bleeding): Expand grid_spacing, shrink max_position, increase defensive parameters.
-  * Intervention 2 (Severe Loss): If the strategy fundamentally fails the macro environment, set os_action="STOP" to forcibly archive it.
+  * Intervention 2 (Severe Loss): If a bot fundamentally fails the macro environment, DO NOT STOP primary market makers like Hydra. Instead, set pause_trading: true (Scanner Mode) or significantly increase bid_fade_bps/ask_fade_bps to become highly defensive. Only use 'STOP' for experimental bots.
 
 ═══ MACRO INTELLIGENCE ═══
 Fear & Greed Index: {fg} ({fg_text})
@@ -924,26 +924,35 @@ PARAMETER CONSTRAINTS:
             total_spot = hydra_inv + grid_inv + moonshot_inv
             net_exposure = total_spot + aegis_delta  # Hedged = near 0
 
-            # VPIN-based toxicity (computed from Gemini's assessment or defaults)
+            # VPIN-based toxicity (z L1 ML Shieldu)
             vpin_score = float(decision.get("vpin_toxicity", 0.0))  # -1.0 to +1.0
             vpin_scaled = int(max(-1.0, min(1.0, vpin_score)) * PRICE_SCALE)
             _st.pack_into('<q', mm, CL4 + 8, vpin_scaled)
 
-            # Cross-Bot Hedging Logic
-            max_unhedged = 1.0  # Max 1 BTC unhedged spot exposure
-            is_crisis = vpin_score < -0.75
+            # Cross-Bot Hedging Logic (Kinetická kalibrace)
+            max_unhedged = 0.5  # ZPŘÍSNĚNO: Max 0.5 BTC unhedged spot exposure (dříve 1.0)
+            
+            # ZOSTŘENÁ PREDÁTORSKÁ DETEKCE
+            is_crisis = vpin_score < -0.50      # Dříve -0.75. Reagujeme mnohem dříve!
+            is_buying_frenzy = vpin_score > 0.60 # Detekce FOMO nákupů
+            
             portfolio_hedged = 0
             aegis_target = 0
             urgency = 0
 
             if is_crisis and total_spot > max_unhedged:
-                # SHIELD ACTIVE: short perps to neutralize spot
-                aegis_target = int(-total_spot * PRICE_SCALE)
-                urgency = 1
+                # SHIELD ACTIVE: Masivní short perps k neutralizaci spot delta
+                # Pokud je VPIN pod -0.80, jdeme do 120% over-hedge (profitujeme na pádu)
+                hedge_ratio = 1.2 if vpin_score < -0.80 else 1.0
+                aegis_target = int(-total_spot * hedge_ratio * PRICE_SCALE)
+                
+                # Urgency 2 znamená, že bot bude agresivně brát likviditu (Taker) k záchraně
+                urgency = 2 if vpin_score < -0.80 else 1 
                 portfolio_hedged = 1
-                log.warning(f"  🚨 AEGIS SHIELD! Short {total_spot:.2f} BTC perps (VPIN={vpin_score:.2f})")
+                log.warning(f"  🚨 AEGIS KINETIC SHIELD! Shorting {total_spot * hedge_ratio:.2f} BTC (VPIN={vpin_score:.2f}, Urgency={urgency})")
+                
             elif not is_crisis and vpin_score > -0.2:
-                # All clear: unwind hedge
+                # All clear: unwind hedge postupně
                 aegis_target = 0
                 urgency = 0
                 portfolio_hedged = 0
