@@ -3,555 +3,396 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>👁️ Panopticon v1.0 — Beroun Sniper</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700;800&family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <title>👁️ Sovereign Panopticon v2.0</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
         :root {
-            --bg: #050910;
-            --card: rgba(10, 15, 28, 0.92);
-            --border: rgba(40, 60, 100, 0.2);
-            --text: #e2e8f0;
-            --muted: #4a5568;
-            --green: #10b981;
-            --red: #ef4444;
-            --blue: #3b82f6;
-            --yellow: #f59e0b;
-            --purple: #a855f7;
-            --cyan: #06b6d4;
-            --glow-green: 0 0 20px rgba(16,185,129,0.3);
-            --glow-red: 0 0 20px rgba(239,68,68,0.3);
+            --bg: #0a0a0a;
+            --card: rgba(20, 20, 25, 0.95);
+            --border: rgba(50, 50, 60, 0.5);
+            --text: #e0e0e0;
+            --green: #00ff88;
+            --red: #ff3366;
+            --accent: #00c3ff;
+            --muted: #888;
         }
-
         body {
-            font-family: 'Inter', system-ui, sans-serif;
-            background: var(--bg);
+            font-family: 'Inter', sans-serif;
+            background: radial-gradient(circle at 50% 0%, #151a25 0%, #0a0a0a 100%);
             color: var(--text);
+            padding: 24px;
+            margin: 0;
             min-height: 100vh;
-            padding: 12px;
-            background-image:
-                radial-gradient(ellipse at 10% 15%, rgba(59,130,246,0.04) 0%, transparent 50%),
-                radial-gradient(ellipse at 90% 85%, rgba(168,85,247,0.03) 0%, transparent 50%);
         }
-
-        .container { max-width: 1480px; margin: 0 auto; }
-
-        /* ═══ HEADER ═══ */
-        .hdr {
-            display: flex; justify-content: space-between; align-items: center;
-            padding: 8px 18px;
-            background: var(--card); border: 1px solid var(--border);
-            border-radius: 14px; backdrop-filter: blur(24px);
-            margin-bottom: 12px; position: relative;
+        .mono { font-family: 'JetBrains Mono', monospace; }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 16px;
+            margin-bottom: 24px;
         }
-        .hdr::before {
-            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(59,130,246,0.4), rgba(168,85,247,0.4), transparent);
-        }
-        .hdr-l { display: flex; align-items: center; gap: 10px; }
-        .hdr-r { display: flex; align-items: center; gap: 10px; }
-        .logo { font-family: 'JetBrains Mono', monospace; font-size: 1rem; font-weight: 700; }
-        .logo .eye { font-size: 1.2rem; }
-        .logo .b { background: linear-gradient(135deg, #ef4444, #f97316); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .logo .s { color: #8892a8; font-weight: 400; }
-        .ver { font-size: 0.55rem; padding: 2px 7px; border-radius: 5px; background: rgba(6,182,212,0.12); color: var(--cyan); border: 1px solid rgba(6,182,212,0.2); font-family: 'JetBrains Mono', monospace; }
-        .mono { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: #8892a8; }
-        .ws-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); transition: all 0.3s; }
-        .ws-dot.connected { background: var(--green); box-shadow: var(--glow-green); animation: glow 2s ease-in-out infinite; }
-        .regime-badge { font-size: 0.55rem; font-family: 'JetBrains Mono', monospace; font-weight: 600; padding: 2px 8px; border-radius: 5px; letter-spacing: 0.05em; }
-        .pause-badge { font-size: 0.55rem; font-family: 'JetBrains Mono', monospace; font-weight: 700; color: var(--red); padding: 2px 8px; border-radius: 4px; background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.3); animation: pulse 1.5s ease-in-out infinite; }
-        .freeze-ind { position: fixed; top: 10px; right: 10px; padding: 6px 14px; border-radius: 8px; background: rgba(239,68,68,0.2); border: 1px solid rgba(239,68,68,0.5); font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: #f87171; font-weight: 600; animation: pulse 1s ease-in-out infinite; z-index: 100; display: none; }
-
-        /* ═══ GRID ═══ */
-        .row6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; margin-bottom: 12px; }
-        .row3 { display: grid; grid-template-columns: 280px 1fr 260px; gap: 12px; margin-bottom: 12px; }
-        .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        @media (max-width: 1200px) { .row6 { grid-template-columns: repeat(3, 1fr); } .row3 { grid-template-columns: 1fr; } .row2 { grid-template-columns: 1fr; } }
-
-        /* ═══ CARDS ═══ */
-        .card {
-            background: var(--card); border: 1px solid var(--border);
-            border-radius: 12px; padding: 10px 14px;
-            backdrop-filter: blur(16px);
-            transition: border-color 0.2s, transform 0.12s;
-        }
-        .card:hover { border-color: rgba(59,130,246,0.35); transform: translateY(-1px); }
-        .cl { font-size: 0.5rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 3px; }
-        .cv { font-family: 'JetBrains Mono', monospace; font-size: 1.05rem; font-weight: 700; transition: color 0.15s; }
+        .header h2 { margin: 0; font-size: 1.5rem; letter-spacing: 0.1em; text-transform: uppercase; }
+        .header-stats { display: flex; gap: 24px; font-size: 1.1rem; }
         .pos { color: var(--green); }
         .neg { color: var(--red); }
 
-        /* Equity hero */
-        .eq-card {
-            grid-column: span 2;
-            background: linear-gradient(135deg, rgba(10,15,28,0.95), rgba(16,22,42,0.98));
-            border: 1px solid var(--border); border-radius: 14px; padding: 14px 18px;
-            position: relative; overflow: hidden;
+        /* Fleet View */
+        #fleet-view {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 16px;
         }
-        .eq-card::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--green), var(--blue), var(--purple)); opacity: 0.7; }
-        .eq-val { font-family: 'JetBrains Mono', monospace; font-size: 1.9rem; font-weight: 800; background: linear-gradient(135deg, #e8edf5, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        .eq-sub { font-size: 0.55rem; color: var(--muted); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
-
-        /* ═══ AI PANEL ═══ */
-        .ai-panel {
-            background: rgba(14, 20, 38, 0.95); border: 1px solid var(--border);
-            border-radius: 14px; padding: 12px 14px;
-            position: relative; overflow: hidden;
+        .bot-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
         }
-        .ai-panel::before { content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 3px; background: linear-gradient(180deg, var(--blue), var(--purple)); }
-        .ai-title { font-size: 0.55rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin-bottom: 8px; }
-        .ai-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-        .ai-stat { background: rgba(255,255,255,0.025); border-radius: 7px; padding: 6px 8px; }
-        .ai-sl { font-size: 0.42rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
-        .ai-sv { font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; font-weight: 700; }
+        .bot-card::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--border); transition: 0.2s;
+        }
+        .bot-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0, 195, 255, 0.1); }
+        .bot-card:hover::before { background: var(--accent); }
+        
+        .bot-card .name-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .bot-card .name { font-weight: 700; font-size: 1.2rem; }
+        .status { font-size: 0.65rem; font-weight: 700; padding: 4px 8px; border-radius: 4px; letter-spacing: 0.05em; text-transform: uppercase; }
+        .status.live { background: rgba(0, 255, 136, 0.15); color: var(--green); border: 1px solid rgba(0, 255, 136, 0.3); }
+        .status.paper { background: rgba(0, 195, 255, 0.15); color: var(--accent); border: 1px solid rgba(0, 195, 255, 0.3); }
+        .status.paused { background: rgba(255, 51, 102, 0.15); color: var(--red); border: 1px solid rgba(255, 51, 102, 0.3); }
+        
+        .bot-metrics { display: flex; flex-direction: column; gap: 8px; font-size: 0.9rem; }
+        .metric { display: flex; justify-content: space-between; }
+        .metric-lbl { color: var(--muted); }
 
-        /* ═══ CANVAS PANELS ═══ */
-        .canvas-panel { display: flex; flex-direction: column; align-items: center; gap: 4px; }
-        .canvas-panel canvas { border-radius: 8px; }
-        .chart-title { font-size: 0.53rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
-
-        /* ═══ ORDER BOOK ═══ */
-        .book { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; }
-        .book th { font-size: 0.45rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); padding: 3px 6px; text-align: right; border-bottom: 1px solid var(--border); }
-        .book td { padding: 2px 6px; text-align: right; position: relative; }
-        .book .bp { color: var(--green); }
-        .book .ap { color: var(--red); }
-        .book .bar { position: absolute; top: 0; right: 0; bottom: 0; opacity: 0.08; border-radius: 2px; }
-        .book .spread-row td { text-align: center; color: var(--yellow); font-size: 0.48rem; padding: 2px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-
-        /* ═══ ANIMATIONS ═══ */
-        @keyframes glow { 0%, 100% { box-shadow: 0 0 8px var(--green); } 50% { box-shadow: 0 0 20px var(--green); } }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-
-        ::-webkit-scrollbar { width: 3px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        /* Tactical View */
+        #tactical-view { display: none; }
+        .back-btn {
+            background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: #fff;
+            padding: 8px 16px; cursor: pointer; border-radius: 6px; margin-bottom: 20px;
+            font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; transition: 0.2s;
+        }
+        .back-btn:hover { background: rgba(255,255,255,0.1); border-color: #555; }
+        
+        .tactical-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
+        .tactical-header h3 { margin: 0; color: var(--accent); font-size: 1.8rem; }
+        
+        .canvas-container {
+            background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+            padding: 24px; display: flex; justify-content: center; align-items: center;
+        }
+        #tactical-canvas { display: block; max-width: 100%; height: auto; }
+        
     </style>
 </head>
 <body>
-<div class="container">
-    <!-- HEADER -->
-    <header class="hdr">
-        <div class="hdr-l">
-            <div class="logo"><span class="eye">👁️</span> <span class="b">PANOPTICON</span><span class="s"> SNIPER</span></div>
-            <span class="ver">v1.0</span>
-            <span id="regime" class="regime-badge"></span>
-            <span id="pause-badge" class="pause-badge" style="display:none">⏸ PAUSED</span>
-        </div>
-        <div class="hdr-r">
-            <div class="ws-dot" id="ws-dot"></div>
-            <span class="mono" id="ws-status">OFFLINE</span>
-            <span class="mono" id="uptime">00:00:00</span>
-        </div>
-    </header>
-    <div id="freeze-ind" class="freeze-ind">🚨 SWEEP FREEZE</div>
 
-    <!-- ROW 1: Equity + Prices -->
-    <div class="row6">
-        <div class="eq-card">
-            <div class="cl">💎 Total Equity</div>
-            <div class="eq-val" id="equity">$0.00</div>
-            <div class="eq-sub"><span id="w-usd">$0.00</span> USD + <span id="w-btc">0.00000</span> ₿</div>
-        </div>
-        <div class="card"><div class="cl">Best Bid</div><div class="cv pos" id="bid">$0.00</div></div>
-        <div class="card"><div class="cl">Best Ask</div><div class="cv neg" id="ask">$0.00</div></div>
-        <div class="card"><div class="cl">Micro-Price</div><div class="cv" style="color:var(--purple)" id="micro">$0.00</div></div>
-        <div class="card"><div class="cl">Spread</div><div class="cv" style="color:var(--yellow)" id="spread">$0.00</div></div>
+<div class="header">
+    <div>
+        <h2>👁️ PANOPTICON v2.0</h2>
     </div>
-
-    <!-- ROW 2: Trading Metrics -->
-    <div class="row6">
-        <div class="card"><div class="cl">Position (BTC)</div><div class="cv" id="pos" style="color:var(--blue)">0.00000</div></div>
-        <div class="card"><div class="cl">Realized PnL</div><div class="cv" id="pnl">$0.0000</div></div>
-        <div class="card"><div class="cl">Dynamic Grid</div><div class="cv" style="color:var(--cyan)" id="grid">$0.00</div></div>
-        <div class="card"><div class="cl">T2T Latence</div><div class="cv" id="t2t">--- µs</div></div>
-        <div class="card"><div class="cl">Session Fills</div><div class="cv" id="fills">0</div></div>
-        <div class="card"><div class="cl">Auth. Capital</div><div class="cv" style="color:var(--cyan)" id="auth-cap">$0</div></div>
+    <div class="header-stats mono">
+        <div>Equity: <span id="tot-eq" style="color: #fff">---</span></div>
+        <div>Armada PnL: <span id="arm-pnl">---</span></div>
+        <div style="margin-left: 20px">WS: <span id="ws-status" style="color:var(--red)">OFFLINE</span></div>
     </div>
+</div>
 
-    <!-- ROW 3: AI Panel | VPIN Gauge + Price Chart | Order Book -->
-    <div class="row3">
-        <!-- AI Intelligence -->
-        <div class="ai-panel">
-            <div class="ai-title">🧠 AI Intelligence</div>
-            <div style="margin-bottom:8px">
-                <div style="display:flex;justify-content:space-between;font-size:0.48rem;margin-bottom:2px">
-                    <span style="color:var(--muted);text-transform:uppercase;letter-spacing:0.05em">L1 Confidence</span>
-                    <span id="conf-val" style="font-family:'JetBrains Mono',monospace;font-weight:600">0%</span>
-                </div>
-                <div style="width:100%;height:6px;background:rgba(255,255,255,0.04);border-radius:3px;overflow:hidden">
-                    <div id="conf-bar" style="height:100%;border-radius:3px;width:0%;background:linear-gradient(90deg,var(--green),#34d399);transition:width 0.15s"></div>
-                </div>
-            </div>
-            <div class="ai-grid">
-                <div class="ai-stat"><div class="ai-sl">OBI</div><div class="ai-sv" id="ai-obi" style="color:var(--text)">0.0000</div></div>
-                <div class="ai-stat"><div class="ai-sl">L1 Skew</div><div class="ai-sv" id="ai-skew">$0.00</div></div>
-                <div class="ai-stat"><div class="ai-sl">Toxic Hits</div><div class="ai-sv neg" id="ai-toxic">0</div></div>
-                <div class="ai-stat"><div class="ai-sl">👻 Ghost</div><div class="ai-sv" id="ai-ghost" style="color:var(--purple)">100%</div></div>
-                <div class="ai-stat"><div class="ai-sl">🌍 Macro</div><div class="ai-sv" id="ai-macro">0.00</div></div>
-                <div class="ai-stat"><div class="ai-sl">F&G</div><div class="ai-sv" id="ai-fng">50</div></div>
-                <div class="ai-stat"><div class="ai-sl">Δ Lead</div><div class="ai-sv" id="ai-delta" style="color:var(--cyan)">0.0 bps</div></div>
-                <div class="ai-stat"><div class="ai-sl">BNB Mid</div><div class="ai-sv" id="ai-bnb">---</div></div>
-                <div class="ai-stat"><div class="ai-sl">Maker Fee</div><div class="ai-sv pos" id="ai-maker">FREE</div></div>
-                <div class="ai-stat"><div class="ai-sl">Taker Fee</div><div class="ai-sv" id="ai-taker">FREE</div></div>
-            </div>
-        </div>
+<div id="fleet-view"></div>
 
-        <!-- Center: VPIN Gauge + Price Sparkline -->
-        <div class="card" style="display:flex;flex-direction:column;gap:8px;align-items:center">
-            <div class="canvas-panel">
-                <div class="chart-title">⚡ VPIN / OBI Gauge</div>
-                <canvas id="gauge" width="320" height="180"></canvas>
-            </div>
-            <div class="canvas-panel" style="width:100%">
-                <div class="chart-title">📈 Price (60s)</div>
-                <canvas id="spark" width="600" height="140" style="width:100%"></canvas>
-            </div>
-        </div>
-
-        <!-- Order Book -->
-        <div class="card" style="overflow:auto;max-height:380px">
-            <div class="chart-title" style="margin-bottom:6px">📊 Order Book (Top 5)</div>
-            <table class="book" id="book-table">
-                <thead><tr><th>Price</th><th>Amount</th><th style="width:35%">Depth</th></tr></thead>
-                <tbody id="book-body"></tbody>
-            </table>
-        </div>
+<div id="tactical-view">
+    <button class="back-btn" onclick="showFleetView()">← FLEET OVERVIEW</button>
+    <div class="tactical-header">
+        <h3 id="tactical-title">Bot Detail</h3>
+        <span id="tactical-status" class="status"></span>
     </div>
-
-    <!-- ROW 4: PnL Chart -->
-    <div class="row2">
-        <div class="card">
-            <div class="chart-title" style="margin-bottom:6px">💰 PnL Curve</div>
-            <canvas id="pnl-chart" width="600" height="140" style="width:100%"></canvas>
-        </div>
-        <div class="card">
-            <div class="chart-title" style="margin-bottom:6px">📊 OBI History</div>
-            <canvas id="obi-chart" width="600" height="140" style="width:100%"></canvas>
-        </div>
+    <div class="canvas-container">
+        <canvas id="tactical-canvas" width="800" height="400"></canvas>
     </div>
 </div>
 
 <script>
-// ═══════════════════════════════════════════════════════════
-// 👁️ PANOPTICON WebSocket Client — Zero Dependencies
-// ═══════════════════════════════════════════════════════════
+    const fleetView = document.getElementById('fleet-view');
+    const tacticalView = document.getElementById('tactical-view');
+    const canvas = document.getElementById('tactical-canvas');
+    const ctx = canvas.getContext('2d');
+    
+    let currentBot = null;
+    let lastData = null;
 
-const $ = id => document.getElementById(id);
-const MAX_HIST = 360; // 360 × 50ms = 18s of sparkline data
+    function formatUsd(val) {
+        return (val >= 0 ? '+$' : '-$') + Math.abs(val).toFixed(2);
+    }
+    
+    function showFleetView() {
+        currentBot = null;
+        fleetView.style.display = 'grid';
+        tacticalView.style.display = 'none';
+        if (lastData) renderFleet(lastData);
+    }
+    
+    function showBotView(botName) {
+        currentBot = botName;
+        fleetView.style.display = 'none';
+        tacticalView.style.display = 'block';
+        if (lastData) renderTactical(lastData);
+    }
 
-// History buffers (ring)
-const priceHist = [];
-const pnlHist = [];
-const obiHist = [];
+    function renderFleet(data) {
+        document.getElementById('tot-eq').innerText = `$${data.total_equity.toFixed(2)}`;
+        const pnl = document.getElementById('arm-pnl');
+        pnl.innerText = formatUsd(data.armada_pnl);
+        pnl.className = data.armada_pnl >= 0 ? 'pos' : 'neg';
 
-// ═══ WEBSOCKET ═══
-let ws = null;
-let reconnectMs = 1000;
-
-function connect() {
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    ws = new WebSocket(`${proto}//${location.host}/ws`);
-
-    ws.onopen = () => {
-        $('ws-dot').classList.add('connected');
-        $('ws-status').textContent = 'LIVE';
-        reconnectMs = 1000;
-    };
-
-    ws.onclose = () => {
-        $('ws-dot').classList.remove('connected');
-        $('ws-status').textContent = 'RECONNECTING...';
-        setTimeout(connect, reconnectMs);
-        reconnectMs = Math.min(reconnectMs * 1.5, 10000);
-    };
-
-    ws.onerror = () => ws.close();
-
-    ws.onmessage = (evt) => {
-        const d = JSON.parse(evt.data);
-        updateDOM(d);
-        updateGauge(d.obi);
-        pushHistory(d);
-        drawSparkline();
-        drawPnlChart();
-        drawObiChart();
-    };
-}
-
-// ═══ DOM UPDATE (textContent only — zero innerHTML, zero thrashing) ═══
-function updateDOM(d) {
-    $('equity').textContent = `$${d.equity.toFixed(2)}`;
-    $('w-usd').textContent = `$${d.w_usd.toFixed(2)}`;
-    $('w-btc').textContent = d.w_btc.toFixed(5);
-    $('bid').textContent = `$${d.bid.toFixed(2)}`;
-    $('ask').textContent = `$${d.ask.toFixed(2)}`;
-    $('micro').textContent = `$${d.micro.toFixed(2)}`;
-    $('spread').textContent = `$${d.spread.toFixed(1)}`;
-    $('pos').textContent = d.pos.toFixed(5);
-    const pnlEl = $('pnl');
-    pnlEl.textContent = (d.pnl >= 0 ? '+$' : '-$') + Math.abs(d.pnl).toFixed(4);
-    pnlEl.className = 'cv ' + (d.pnl >= 0 ? 'pos' : 'neg');
-    $('grid').textContent = `$${d.grid_step.toFixed(2)}`;
-    const t2tEl = $('t2t');
-    t2tEl.textContent = d.t2t > 0 ? `${d.t2t} µs` : '---';
-    t2tEl.className = 'cv ' + (d.t2t > 500 ? 'neg' : d.t2t > 100 ? '' : 'pos');
-    $('fills').textContent = d.fills;
-    $('auth-cap').textContent = `$${d.auth_capital.toFixed(0)}`;
-
-    // Uptime
-    const h = Math.floor(d.uptime_s / 3600);
-    const m = Math.floor((d.uptime_s % 3600) / 60);
-    const s = d.uptime_s % 60;
-    $('uptime').textContent = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-
-    // Regime
-    const rEl = $('regime');
-    const regimes = {0:'⏳ INIT', 1:'📈 TRENDING', 2:'↔️ RANGING', 3:'🌪️ CHAOS'};
-    const regimeColors = {0:['#4a5568','rgba(100,100,120,0.12)'], 1:['#60a5fa','rgba(59,130,246,0.15)'], 2:['#f59e0b','rgba(245,158,11,0.12)'], 3:['#f87171','rgba(239,68,68,0.15)']};
-    rEl.textContent = regimes[d.regime] || regimes[0];
-    rEl.style.color = (regimeColors[d.regime]||regimeColors[0])[0];
-    rEl.style.background = (regimeColors[d.regime]||regimeColors[0])[1];
-    rEl.style.border = `1px solid ${(regimeColors[d.regime]||regimeColors[0])[0]}33`;
-
-    // Pause / Freeze
-    $('pause-badge').style.display = d.paused ? '' : 'none';
-    $('freeze-ind').style.display = d.freeze ? '' : 'none';
-
-    // AI
-    const confPct = (d.l1_conf * 100).toFixed(0);
-    $('conf-val').textContent = confPct + '%';
-    $('conf-bar').style.width = confPct + '%';
-    const confColor = d.l1_conf > 0.7 ? 'linear-gradient(90deg,#f97316,var(--red))' : d.l1_conf > 0.4 ? 'linear-gradient(90deg,var(--yellow),#f97316)' : 'linear-gradient(90deg,var(--green),#34d399)';
-    $('conf-bar').style.background = confColor;
-    $('conf-val').style.color = d.l1_conf > 0.7 ? '#ef4444' : d.l1_conf > 0.4 ? '#f59e0b' : '#10b981';
-
-    const obiEl = $('ai-obi');
-    obiEl.textContent = d.obi.toFixed(4);
-    obiEl.style.color = d.obi > 0.3 ? '#10b981' : d.obi < -0.3 ? '#ef4444' : '#8892a8';
-    $('ai-skew').textContent = (d.l1_skew >= 0 ? '+$' : '-$') + Math.abs(d.l1_skew).toFixed(4);
-    $('ai-toxic').textContent = d.toxic;
-    $('ai-ghost').textContent = (d.ghost_pct * 100).toFixed(0) + '%';
-    const macEl = $('ai-macro');
-    macEl.textContent = d.macro_bias.toFixed(2);
-    macEl.style.color = d.macro_bias > 0.3 ? '#10b981' : d.macro_bias < -0.3 ? '#ef4444' : '#8892a8';
-    $('ai-fng').textContent = d.fng;
-    $('ai-delta').textContent = d.delta_bps.toFixed(1) + ' bps';
-    $('ai-bnb').textContent = d.bnb_mid > 0 ? `$${d.bnb_mid.toFixed(0)}` : '---';
-    $('ai-maker').textContent = d.maker_fee === 0 ? 'FREE' : d.maker_fee.toFixed(2) + '%';
-    $('ai-taker').textContent = d.taker_fee === 0 ? 'FREE' : d.taker_fee.toFixed(2) + '%';
-
-    // Order Book
-    updateBook(d);
-}
-
-// ═══ ORDER BOOK (innerHTML once, reuse cells) ═══
-let bookCells = null;
-
-function updateBook(d) {
-    if (!bookCells) {
         let html = '';
-        for (let i = 4; i >= 0; i--) html += `<tr><td class="ap" id="ap${i}">-</td><td id="aa${i}">-</td><td><div class="bar" id="ab${i}" style="background:var(--red)"></div><span id="apct${i}"></span></td></tr>`;
-        html += `<tr class="spread-row"><td colspan="3" id="book-spread">▲ SPREAD $0 ▼</td></tr>`;
-        for (let i = 0; i < 5; i++) html += `<tr><td class="bp" id="bp${i}">-</td><td id="ba${i}">-</td><td><div class="bar" id="bb${i}" style="background:var(--green)"></div><span id="bpct${i}"></span></td></tr>`;
-        $('book-body').innerHTML = html;
-        bookCells = true;
+        data.bots.forEach(b => {
+            const statusCls = b.mode.toLowerCase();
+            const pnlCls = b.pnl >= 0 ? 'pos' : 'neg';
+            html += `
+                <div class="bot-card" onclick="showBotView('${b.name}')">
+                    <div class="name-row">
+                        <div class="name">${b.name}</div>
+                        <div class="status ${statusCls}">${b.mode}</div>
+                    </div>
+                    <div class="bot-metrics mono">
+                        <div class="metric"><span class="metric-lbl">PnL:</span><span class="${pnlCls}">${formatUsd(b.pnl)}</span></div>
+                        <div class="metric"><span class="metric-lbl">Position:</span><span style="color:#fff">${b.position.toFixed(4)}</span></div>
+                        <div class="metric"><span class="metric-lbl">Kelly Limit:</span><span style="color:var(--accent)">$${b.kelly_limit.toFixed(0)}</span></div>
+                    </div>
+                </div>
+            `;
+        });
+        fleetView.innerHTML = html;
     }
 
-    const allVol = [...d.bids.map(b=>b[1]), ...d.asks.map(a=>a[1])];
-    const maxVol = Math.max(...allVol, 0.00001);
-
-    for (let i = 0; i < 5; i++) {
-        if (d.asks[i]) {
-            $('ap'+i).textContent = d.asks[i][0].toFixed(2);
-            $('aa'+i).textContent = d.asks[i][1].toFixed(5);
-            const pct = Math.round(d.asks[i][1] / maxVol * 100);
-            $('ab'+i).style.width = pct + '%';
-            $('apct'+i).textContent = pct + '%';
-        }
-        if (d.bids[i]) {
-            $('bp'+i).textContent = d.bids[i][0].toFixed(2);
-            $('ba'+i).textContent = d.bids[i][1].toFixed(5);
-            const pct = Math.round(d.bids[i][1] / maxVol * 100);
-            $('bb'+i).style.width = pct + '%';
-            $('bpct'+i).textContent = pct + '%';
-        }
+    function renderTactical(data) {
+        const bot = data.bots.find(b => b.name === currentBot);
+        if (!bot) return;
+        
+        document.getElementById('tactical-title').innerText = bot.name;
+        const statEl = document.getElementById('tactical-status');
+        statEl.innerText = bot.mode;
+        statEl.className = `status ${bot.mode.toLowerCase()}`;
+        
+        // Draw using Canvas API
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        if (bot.name === 'Hydra') renderHydra(ctx, bot.detail);
+        else if (bot.name === 'Moonshot') renderMoonshot(ctx, bot.detail);
+        else if (bot.name === 'Grid') renderGrid(ctx, bot.detail);
+        else if (bot.name === 'Trigon') renderTrigon(ctx, bot.detail);
+        else if (bot.name === 'Nexus') renderNexus(ctx, bot.detail);
     }
-    $('book-spread').textContent = `▲ SPREAD $${d.spread.toFixed(1)} ▼`;
-}
 
-// ═══ VPIN GAUGE (Canvas 2D — hardware-accelerated) ═══
-function updateGauge(value) {
-    const c = $('gauge');
-    const ctx = c.getContext('2d');
-    const W = c.width, H = c.height;
-    const cx = W / 2, cy = H - 20;
-    const r = Math.min(cx, cy) - 15;
-
-    ctx.clearRect(0, 0, W, H);
-
-    // Background arc
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, Math.PI, 0);
-    ctx.lineWidth = 18;
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-    ctx.stroke();
-
-    // Gradient arc segments
-    const steps = 60;
-    for (let i = 0; i < steps; i++) {
-        const t = i / steps;
-        const angle = Math.PI + t * Math.PI;
-        const hue = (1 - t) * 140; // 140=green → 0=red
+    function renderHydra(ctx, det) {
+        const W = canvas.width, H = canvas.height;
+        const cx = W/2, cy = H - 80, r = 180;
+        
+        // Background track
         ctx.beginPath();
-        ctx.arc(cx, cy, r, angle, angle + Math.PI / steps + 0.02);
-        ctx.lineWidth = 16;
-        ctx.strokeStyle = `hsla(${hue}, 85%, 50%, 0.12)`;
+        ctx.arc(cx, cy, r, Math.PI, 0);
+        ctx.lineWidth = 24;
+        ctx.strokeStyle = '#222';
         ctx.stroke();
-    }
-
-    // Active arc (value fill)
-    const norm = (value + 1) / 2; // -1..1 → 0..1
-    const endAngle = Math.PI + norm * Math.PI;
-    const hue = (1 - norm) * 140;
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, Math.PI, endAngle);
-    ctx.lineWidth = 16;
-    ctx.strokeStyle = `hsl(${hue}, 85%, 55%)`;
-    ctx.lineCap = 'round';
-    ctx.stroke();
-
-    // Glow
-    ctx.beginPath();
-    ctx.arc(cx, cy, r, Math.PI, endAngle);
-    ctx.lineWidth = 22;
-    ctx.strokeStyle = `hsla(${hue}, 85%, 55%, 0.15)`;
-    ctx.stroke();
-
-    // Needle
-    const needleAngle = Math.PI + norm * Math.PI;
-    const nx = cx + Math.cos(needleAngle) * (r - 30);
-    const ny = cy + Math.sin(needleAngle) * (r - 30);
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(nx, ny);
-    ctx.lineWidth = 2.5;
-    ctx.strokeStyle = `hsl(${hue}, 85%, 65%)`;
-    ctx.lineCap = 'round';
-    ctx.stroke();
-
-    // Center dot
-    ctx.beginPath();
-    ctx.arc(cx, cy, 5, 0, Math.PI * 2);
-    ctx.fillStyle = '#e2e8f0';
-    ctx.fill();
-
-    // Value text
-    ctx.font = '700 22px "JetBrains Mono", monospace';
-    ctx.fillStyle = `hsl(${hue}, 85%, 65%)`;
-    ctx.textAlign = 'center';
-    ctx.fillText(value.toFixed(4), cx, cy - r + 35);
-
-    // Labels
-    ctx.font = '500 10px "JetBrains Mono", monospace';
-    ctx.fillStyle = '#10b981';
-    ctx.textAlign = 'left';
-    ctx.fillText('BIDS', 15, cy + 5);
-    ctx.fillStyle = '#ef4444';
-    ctx.textAlign = 'right';
-    ctx.fillText('ASKS', W - 15, cy + 5);
-
-    ctx.fillStyle = '#4a5568';
-    ctx.textAlign = 'center';
-    ctx.font = '600 9px "JetBrains Mono", monospace';
-    ctx.fillText('OBI', cx, cy + 14);
-}
-
-// ═══ SPARKLINE CHARTS ═══
-function pushHistory(d) {
-    if (d.mid > 0) priceHist.push(d.mid);
-    pnlHist.push(d.pnl);
-    obiHist.push(d.obi);
-    if (priceHist.length > MAX_HIST) priceHist.shift();
-    if (pnlHist.length > MAX_HIST) pnlHist.shift();
-    if (obiHist.length > MAX_HIST) obiHist.shift();
-}
-
-function drawLine(canvasId, data, color, fillAlpha) {
-    const c = $(canvasId);
-    const ctx = c.getContext('2d');
-    const W = c.width, H = c.height;
-    ctx.clearRect(0, 0, W, H);
-
-    if (data.length < 3) {
-        ctx.font = '500 12px Inter, sans-serif';
-        ctx.fillStyle = '#4a5568';
+        
+        let obi = det.obi; // -1 to 1
+        let val = (obi + 1) / 2; 
+        let angle = Math.PI + val * Math.PI;
+        
+        // Value Arc
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, Math.PI, angle);
+        ctx.strokeStyle = obi >= 0 ? '#00ff88' : '#ff3366';
+        ctx.stroke();
+        
+        // Info text
+        ctx.fillStyle = '#fff';
+        ctx.font = '700 32px JetBrains Mono';
         ctx.textAlign = 'center';
-        ctx.fillText('Collecting data...', W/2, H/2);
-        return;
+        ctx.fillText(`OBI: ${obi.toFixed(3)}`, cx, cy - 40);
+        
+        ctx.font = '14px Inter';
+        ctx.fillStyle = '#888';
+        ctx.fillText('ORDER BOOK IMBALANCE', cx, cy - 10);
+        
+        // Draw grid levels snippet
+        ctx.font = '12px JetBrains Mono';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = '#00c3ff';
+        ctx.fillText('Grid Levels:', 20, 30);
+        det.grid_levels.forEach((lvl, i) => {
+            ctx.fillStyle = lvl.side === 'buy' ? '#00ff88' : '#ff3366';
+            ctx.fillText(`${lvl.side.toUpperCase()} @ $${lvl.price.toFixed(2)} [${lvl.qty}]`, 20, 50 + i*20);
+        });
     }
 
-    const min = Math.min(...data);
-    const max = Math.max(...data);
-    const range = Math.max(max - min, 0.0001);
-    const m = 4;
-    const pw = W - 2*m, ph = H - 2*m;
-    const n = data.length - 1;
-
-    // Grid lines
-    ctx.strokeStyle = 'rgba(255,255,255,0.03)';
-    ctx.lineWidth = 0.5;
-    for (let i = 1; i < 4; i++) {
-        const gy = m + (i/4) * ph;
-        ctx.beginPath(); ctx.moveTo(m, gy); ctx.lineTo(m+pw, gy); ctx.stroke();
+    function renderMoonshot(ctx, det) {
+        const W = canvas.width, H = canvas.height;
+        const cols = 5, rows = 4;
+        const gap = 15;
+        const w = (W - (cols+1)*gap) / cols;
+        const h = (H - (rows+1)*gap) / rows;
+        
+        det.pairs.forEach((p, i) => {
+            const row = Math.floor(i / cols);
+            const col = i % cols;
+            const x = gap + col * (w + gap);
+            const y = gap + row * (h + gap);
+            
+            // Box
+            if (p.status === 'active') {
+                ctx.fillStyle = p.pnl >= 0 ? 'rgba(0, 255, 136, 0.2)' : 'rgba(255, 51, 102, 0.2)';
+                ctx.strokeStyle = p.pnl >= 0 ? '#00ff88' : '#ff3366';
+            } else {
+                ctx.fillStyle = '#1a1a20';
+                ctx.strokeStyle = '#333';
+            }
+            ctx.fillRect(x, y, w, h);
+            ctx.strokeRect(x, y, w, h);
+            
+            // Text
+            ctx.fillStyle = p.status === 'active' ? '#fff' : '#666';
+            ctx.font = '600 14px Inter';
+            ctx.textAlign = 'center';
+            ctx.fillText(`PAIR ${p.id}`, x + w/2, y + h/2 - 5);
+            
+            ctx.font = '12px JetBrains Mono';
+            ctx.fillStyle = p.status === 'active' ? (p.pnl >= 0 ? '#00ff88' : '#ff3366') : '#555';
+            ctx.fillText(formatUsd(p.pnl), x + w/2, y + h/2 + 15);
+        });
     }
 
-    // Fill
-    ctx.beginPath();
-    ctx.moveTo(m, m + ph);
-    for (let i = 0; i <= n; i++) {
-        const x = m + (i/n) * pw;
-        const y = m + ph - ((data[i] - min) / range) * ph;
-        ctx.lineTo(x, y);
+    function renderGrid(ctx, det) {
+        const W = canvas.width, H = canvas.height;
+        const cx = W/2;
+        ctx.font = '14px JetBrains Mono';
+        ctx.textAlign = 'center';
+        
+        // Center line
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(cx - 200, H/2); ctx.lineTo(cx + 200, H/2); ctx.stroke();
+        ctx.fillStyle = '#fff';
+        ctx.fillText('MID PRICE', cx, H/2 - 5);
+        
+        const rowH = 35;
+        // Asks (above mid) - displayed going up
+        det.sell_levels.forEach((lvl, i) => {
+            const y = H/2 - 30 - i*rowH;
+            ctx.fillStyle = '#ff3366';
+            ctx.globalAlpha = 0.2;
+            ctx.fillRect(cx - 150, y-15, 300, 20);
+            ctx.globalAlpha = 1;
+            ctx.fillText(`ASK $${lvl.toFixed(2)}`, cx, y);
+        });
+        // Bids (below mid) - displayed going down
+        det.buy_levels.forEach((lvl, i) => {
+            const y = H/2 + 30 + i*rowH;
+            ctx.fillStyle = '#00ff88';
+            ctx.globalAlpha = 0.2;
+            ctx.fillRect(cx - 150, y-15, 300, 20);
+            ctx.globalAlpha = 1;
+            ctx.fillText(`BID $${lvl.toFixed(2)}`, cx, y);
+        });
     }
-    ctx.lineTo(m + pw, m + ph);
-    ctx.closePath();
-    const grad = ctx.createLinearGradient(0, 0, 0, H);
-    grad.addColorStop(0, color.replace(')', `,${fillAlpha})`).replace('rgb', 'rgba'));
-    grad.addColorStop(1, 'transparent');
-    ctx.fillStyle = grad;
-    ctx.fill();
 
-    // Line
-    ctx.beginPath();
-    for (let i = 0; i <= n; i++) {
-        const x = m + (i/n) * pw;
-        const y = m + ph - ((data[i] - min) / range) * ph;
-        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    function renderTrigon(ctx, det) {
+        const W = canvas.width, H = canvas.height;
+        const cols = 6, rows = 4;
+        const gap = 12;
+        const w = (W - (cols+1)*gap) / cols;
+        const h = (H - (rows+1)*gap) / rows;
+        
+        det.triangles.forEach((t, i) => {
+            const row = Math.floor(i / cols);
+            const col = i % cols;
+            const x = gap + col * (w + gap);
+            const y = gap + row * (h + gap);
+            
+            // Calculate color intensity based on profit bps
+            let intensity = Math.min(Math.abs(t.profit_bps) / 30, 1) * 0.8 + 0.2;
+            if (t.profit_bps > 0) {
+                ctx.fillStyle = `rgba(0, 255, 136, ${intensity})`;
+                ctx.strokeStyle = '#00ff88';
+            } else {
+                ctx.fillStyle = `rgba(255, 51, 102, ${intensity})`;
+                ctx.strokeStyle = '#ff3366';
+            }
+            
+            ctx.fillRect(x, y, w, h);
+            ctx.strokeRect(x, y, w, h);
+            
+            ctx.fillStyle = '#fff';
+            ctx.font = '600 13px Inter';
+            ctx.textAlign = 'center';
+            ctx.fillText(`TRI-${t.id}`, x + w/2, y + h/2 - 5);
+            ctx.font = '12px JetBrains Mono';
+            ctx.fillText(`${t.profit_bps.toFixed(2)} bps`, x + w/2, y + h/2 + 15);
+        });
     }
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
-    ctx.lineJoin = 'round';
-    ctx.stroke();
 
-    // Last value label
-    const last = data[data.length - 1];
-    const label = Math.abs(last) > 100 ? `$${last.toFixed(0)}` : last.toFixed(4);
-    ctx.font = '600 10px "JetBrains Mono", monospace';
-    ctx.fillStyle = color;
-    ctx.textAlign = 'right';
-    ctx.fillText(label, W - 6, m + 12);
-}
+    function renderNexus(ctx, det) {
+        const W = canvas.width, H = canvas.height;
+        const cx = W/2, cy = H/2;
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = '18px JetBrains Mono';
+        ctx.textAlign = 'center';
+        
+        // Bitfinex price line
+        ctx.strokeStyle = '#00c3ff';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(100, cy - 40); ctx.lineTo(W-100, cy - 40); ctx.stroke();
+        ctx.fillStyle = '#00c3ff';
+        ctx.fillText(`Bitfinex Mid: $${det.bfx_mid.toFixed(2)}`, cx, cy - 55);
+        
+        // Binance price line
+        ctx.strokeStyle = '#f5b041';
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(100, cy + 40); ctx.lineTo(W-100, cy + 40); ctx.stroke();
+        ctx.fillStyle = '#f5b041';
+        ctx.fillText(`Binance Mid: $${det.bnb_mid.toFixed(2)}`, cx, cy + 70);
+        
+        // Spread logic
+        ctx.fillStyle = '#00ff88';
+        ctx.font = '700 24px Inter';
+        ctx.fillText(`SPREAD: $${det.spread.toFixed(2)}`, cx, cy + 8);
+        
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.setLineDash([5, 5]);
+        ctx.beginPath(); ctx.moveTo(cx, cy - 40); ctx.lineTo(cx, cy + 40); ctx.stroke();
+        ctx.setLineDash([]);
+    }
 
-function drawSparkline() { drawLine('spark', priceHist, 'rgb(226, 232, 240)', 0.08); }
-function drawPnlChart() { drawLine('pnl-chart', pnlHist, 'rgb(16, 185, 129)', 0.15); }
-function drawObiChart() { drawLine('obi-chart', obiHist, 'rgb(59, 130, 246)', 0.12); }
+    // Connect WebSocket
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const ws = new WebSocket(`${proto}//${location.host}/ws`);
+    
+    ws.onopen = () => {
+        const st = document.getElementById('ws-status');
+        st.innerText = 'ONLINE'; 
+        st.style.color = 'var(--green)';
+    };
+    
+    ws.onclose = () => {
+        const st = document.getElementById('ws-status');
+        st.innerText = 'OFFLINE'; 
+        st.style.color = 'var(--red)';
+    };
+    
+    ws.onmessage = (e) => {
+        lastData = JSON.parse(e.data);
+        if (currentBot) renderTactical(lastData);
+        else renderFleet(lastData);
+    };
 
-// ═══ BOOT ═══
-connect();
-updateGauge(0);
 </script>
 </body>
 </html>

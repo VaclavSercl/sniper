@@ -1,291 +1,211 @@
-/// 👁️ PANOPTICON v1.0 — WebSocket Hyper-Bridge
-///
-/// Architecture: MMap → Rust (60 FPS poll) → WebSocket → Browser Canvas
-///
-/// Zero HTML rendering. Zero DOM thrashing. Pure data pipeline.
-/// Reads EngineState + RiskState via zero-copy mmap pointer cast,
-/// serializes to compact JSON, pushes over axum WebSocket.
-///
-/// Frontend: Vanilla JS + Canvas 2D (hardware-accelerated gauges).
-
-use memmap2::MmapMut;
-use std::fs::OpenOptions;
-use std::time::{Duration, Instant};
-use std::sync::atomic::Ordering;
 use axum::{
-    extract::{State, ws::{WebSocketUpgrade, WebSocket, Message}},
+    extract::ws::{WebSocketUpgrade, WebSocket, Message},
     response::{Html, IntoResponse},
     routing::get,
     Router,
 };
 use tower_http::cors::CorsLayer;
-use dotenvy::dotenv;
-use anyhow::Result;
 use serde::Serialize;
+use serde_json::Value;
+use std::time::Duration;
 
-use sniper_types::{EngineState, RiskState, ENGINE_STATE_PATH, RISK_STATE_PATH, PRICE_SCALE, PRICE_SCALE_I};
-
-const WS_TICK_MS: u64 = 50; // 20 FPS baseline (sweet spot: fast enough for gauges, light on CPU)
-
-fn init_mmap_ptr<T: Default>(path: &str) -> Result<MmapMut> {
-    let file = OpenOptions::new().read(true).write(true).create(true).truncate(false).open(path)?;
-    file.set_len(std::mem::size_of::<T>() as u64)?;
-    Ok(unsafe { MmapMut::map_mut(&file)? })
+pub trait BotSnapshot {
+    fn name(&self) -> &'static str;
+    fn mode(&self) -> String; // "LIVE", "PAPER", "PAUSED"
+    fn pnl(&self) -> f64;
+    fn position(&self) -> f64;
+    fn detail(&self) -> Value;
 }
 
-// ═══ PAYLOAD — The only data we send over the wire ═══
+// ═══════════════════════════════════════════════════════════
+// DUMMY PROBES 
+// Note: In Phase 9C, these will read the actual MMap structs
+// ═══════════════════════════════════════════════════════════
+
+struct HydraProbe;
+impl BotSnapshot for HydraProbe {
+    fn name(&self) -> &'static str { "Hydra" }
+    fn mode(&self) -> String { "LIVE".to_string() }
+    fn pnl(&self) -> f64 { 150.25 }
+    fn position(&self) -> f64 { 0.5 }
+    fn detail(&self) -> Value {
+        serde_json::json!({
+            "obi": rand::random::<f64>() * 2.0 - 1.0, // Kinetic OBI simulation
+            "grid_levels": [
+                {"price": 65000.0, "qty": 0.1, "side": "sell"},
+                {"price": 64000.0, "qty": 0.1, "side": "buy"}
+            ]
+        })
+    }
+}
+
+struct MoonshotProbe;
+impl BotSnapshot for MoonshotProbe {
+    fn name(&self) -> &'static str { "Moonshot" }
+    fn mode(&self) -> String { "LIVE".to_string() }
+    fn pnl(&self) -> f64 { 42.10 }
+    fn position(&self) -> f64 { 0.0 }
+    fn detail(&self) -> Value {
+        let pairs: Vec<_> = (0..20).map(|i| {
+            serde_json::json!({
+                "id": i, 
+                "pnl": (i as f64 - 10.0) + (rand::random::<f64>() * 5.0), 
+                "status": if i % 3 == 0 || i % 5 == 0 { "active" } else { "inactive" }
+            })
+        }).collect();
+        serde_json::json!({ "pairs": pairs })
+    }
+}
+
+struct GridProbe;
+impl BotSnapshot for GridProbe {
+    fn name(&self) -> &'static str { "Grid" }
+    fn mode(&self) -> String { "PAPER".to_string() }
+    fn pnl(&self) -> f64 { -12.50 }
+    fn position(&self) -> f64 { 0.25 }
+    fn detail(&self) -> Value {
+        let mid = 64500.0 + (rand::random::<f64>() * 100.0 - 50.0);
+        serde_json::json!({
+            "buy_levels": [(mid-100.0).trunc(), (mid-200.0).trunc(), (mid-300.0).trunc()],
+            "sell_levels": [(mid+100.0).trunc(), (mid+200.0).trunc(), (mid+300.0).trunc()]
+        })
+    }
+}
+
+struct TrigonProbe;
+impl BotSnapshot for TrigonProbe {
+    fn name(&self) -> &'static str { "Trigon" }
+    fn mode(&self) -> String { "PAUSED".to_string() }
+    fn pnl(&self) -> f64 { 0.0 }
+    fn position(&self) -> f64 { 0.0 }
+    fn detail(&self) -> Value {
+        let triangles: Vec<_> = (0..24).map(|i| {
+            serde_json::json!({
+                "id": i, 
+                "profit_bps": (i as f64 - 12.0) * 2.0 + (rand::random::<f64>() * 4.0 - 2.0)
+            })
+        }).collect();
+        serde_json::json!({ "triangles": triangles })
+    }
+}
+
+struct NexusProbe;
+impl BotSnapshot for NexusProbe {
+    fn name(&self) -> &'static str { "Nexus" }
+    fn mode(&self) -> String { "PAPER".to_string() }
+    fn pnl(&self) -> f64 { 8.4 }
+    fn position(&self) -> f64 { 0.0 }
+    fn detail(&self) -> Value {
+        let bfx = 64500.0 + (rand::random::<f64>() * 10.0);
+        let bnb = 64510.0 + (rand::random::<f64>() * 10.0);
+        serde_json::json!({
+            "bfx_mid": bfx,
+            "bnb_mid": bnb,
+            "spread": bnb - bfx
+        })
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+
 #[derive(Serialize)]
-struct Payload {
-    // Core prices
-    ts: u64,
-    bid: f64,
-    ask: f64,
-    mid: f64,
-    spread: f64,
-    micro: f64,
-
-    // Wallets & equity
-    w_usd: f64,
-    w_btc: f64,
-    equity: f64,
-
-    // Position
-    pos: f64,
+struct BotData {
+    name: &'static str,
+    mode: String,
     pnl: f64,
-    fills: u64,
-
-    // Grid
-    grid_step: f64,
-    grid_size: u64,
-
-    // Latency
-    t2t: u64,
-    uptime_s: u64,
-
-    // AI Intelligence
-    obi: f64,
-    l1_conf: f64,
-    l1_skew: f64,
-    regime: u64,
-    toxic: u64,
-    freeze: bool,
-    paused: bool,
-    shadow: bool,
-    shadow_pnl: f64,
-
-    // Ghost
-    ghost_pct: f64,
-    ghost_inj: u64,
-
-    // Macro
-    macro_bias: f64,
-    fng: u64,
-
-    // Delta Lead
-    bnb_mid: f64,
-    delta_bps: f64,
-    delta_sig: i64,
-
-    // Fee
-    maker_fee: f64,
-    taker_fee: f64,
-
-    // Kelly / Risk
-    max_pos: f64,
-    auth_capital: f64,
-    daily_loss_limit: f64,
-
-    // Order book (top 5)
-    bids: Vec<[f64; 2]>,
-    asks: Vec<[f64; 2]>,
-
-    // Sparkline (last price for accumulation on client)
-    last_buy: f64,
-    last_sell: f64,
+    position: f64,
+    kelly_limit: f64,
+    detail: Value,
 }
 
-// ═══ HANDLERS ═══
+#[derive(Serialize)]
+struct PanopticonState {
+    global_capital: f64,
+    total_equity: f64,
+    armada_pnl: f64,
+    bots: Vec<BotData>,
+}
+
 async fn index_handler() -> Html<&'static str> {
     Html(include_str!("../dashboard.html"))
 }
 
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<WsState>,
-) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_socket(socket, state))
+async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
+    ws.on_upgrade(handle_socket)
 }
 
-async fn handle_socket(mut socket: WebSocket, state: WsState) {
-    let scale = PRICE_SCALE;
-    let scale_i = PRICE_SCALE_I as f64;
-    let engine = state.engine;
-    let risk = state.risk;
-    let start = state.start_time;
+async fn handle_socket(mut socket: WebSocket) {
+    let probes: Vec<Box<dyn BotSnapshot + Send + Sync>> = vec![
+        Box::new(HydraProbe),
+        Box::new(MoonshotProbe),
+        Box::new(GridProbe),
+        Box::new(TrigonProbe),
+        Box::new(NexusProbe),
+    ];
+    
+    // Fractional Kelly Weights
+    let weights = vec![
+        ("Nexus", 0.25),
+        ("Trigon", 0.25),
+        ("Hydra", 0.20),
+        ("Moonshot", 0.10),
+        ("Grid", 0.10),
+    ];
 
     loop {
-        // Read MMap atomically
-        let bb = engine.best_bid.load(Ordering::Relaxed) as f64 / scale;
-        let ba = engine.best_ask.load(Ordering::Relaxed) as f64 / scale;
-        let mid = (bb + ba) / 2.0;
-        let pos = engine.net_position.load(Ordering::Relaxed) as f64 / scale;
-        let pnl = engine.realized_pnl.load(Ordering::Relaxed) as f64 / scale;
-        let w_btc = engine.wallet_btc.load(Ordering::Relaxed) as f64 / scale;
-        let w_usd = engine.wallet_usd.load(Ordering::Relaxed) as f64 / scale;
-        let micro = engine.micro_price.load(Ordering::Relaxed) as f64 / scale;
-        let g_step = risk.grid_step.load(Ordering::Relaxed) as f64 / scale;
-        let g_size = risk.grid_size.load(Ordering::Relaxed);
-        let max_pos_raw = risk.max_inv_delta.load(Ordering::Relaxed) as f64 / scale;
-        let t2t = engine.t2t_micros.load(Ordering::Relaxed);
-        let fills = engine.session_fill_count.load(Ordering::Relaxed);
-
-        let obi = engine.l2_imbalance.load(Ordering::Relaxed) as f64 / scale;
-        let l1_conf = engine.l1_confidence_score.load(Ordering::Relaxed) as f64 / 10000.0;
-        let l1_skew = engine.l1_skew_adjustment.load(Ordering::Relaxed) as f64 / scale;
-        let regime = engine.l2_regime_id.load(Ordering::Relaxed);
-        let toxic = engine.toxic_flow_hits.load(Ordering::Relaxed);
-        let freeze_until = engine.sweep_freeze_until.load(Ordering::Relaxed);
-        let now_ms = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_millis() as u64;
-        let freeze = freeze_until > now_ms;
-        let paused = risk.paused.load(Ordering::Relaxed) != 0;
-        let shadow = engine.is_shadow_mode.load(Ordering::Relaxed) == 1;
-        let shadow_pnl_v = engine.shadow_pnl.load(Ordering::Relaxed) as f64 / scale;
-        let ghost_pct = engine.ghost_transparency.load(Ordering::Relaxed) as f64 / 10000.0;
-        let ghost_inj = engine.ghost_injections.load(Ordering::Relaxed);
-        let macro_bias = engine.macro_bias.load(Ordering::Relaxed) as f64 / 10000.0;
-        let fng = engine.macro_fear_greed.load(Ordering::Relaxed);
-        let bnb_mid = engine.binance_mid_price.load(Ordering::Relaxed) as f64 / scale;
-        let delta_bps_raw = engine.delta_lead_raw_bps.load(Ordering::Relaxed) as f64 / 100.0;
-        let delta_sig = engine.delta_lead_signal.load(Ordering::Relaxed);
-        let maker_f = engine.maker_fee_bps.load(Ordering::Relaxed) as f64 / 10000.0 * 100.0;
-        let taker_f = engine.taker_fee_bps.load(Ordering::Relaxed) as f64 / 10000.0 * 100.0;
-        let auth_cap = risk.authorized_capital.load(Ordering::Relaxed) as f64 / scale;
-        let daily_ll = risk.daily_loss_limit.load(Ordering::Relaxed) as f64 / scale;
-        let last_buy = engine.last_buy_price.load(Ordering::Relaxed) as f64 / scale;
-        let last_sell = engine.last_sell_price.load(Ordering::Relaxed) as f64 / scale;
-
-        // Order book top 5
-        let mut bid_levels = Vec::with_capacity(5);
-        let mut ask_levels = Vec::with_capacity(5);
-        for i in 0..5 {
-            let p = engine.bids[i].price.load(Ordering::Relaxed) as f64 / scale;
-            let a = (engine.bids[i].amount.load(Ordering::Relaxed) as f64 / scale).abs();
-            if p > 0.0 { bid_levels.push([p, a]); }
-            let p = engine.asks[i].price.load(Ordering::Relaxed) as f64 / scale;
-            let a = (engine.asks[i].amount.load(Ordering::Relaxed) as f64 / scale).abs();
-            if p > 0.0 { ask_levels.push([p, a]); }
+        let global_capital_limit = std::fs::read_to_string("/home/wwwenda/sniper/state/armada_state.json")
+            .ok()
+            .and_then(|data| serde_json::from_str::<Value>(&data).ok())
+            .and_then(|v| v["global_capital_limit"].as_f64())
+            .unwrap_or(10000.0);
+        
+        let mut bots_data = Vec::new();
+        let mut total_pnl = 0.0;
+        
+        for probe in &probes {
+            let name = probe.name();
+            let weight = weights.iter().find(|(n, _)| *n == name).map(|(_, w)| *w).unwrap_or(0.0);
+            let kelly_limit = global_capital_limit * weight;
+            let pnl = probe.pnl();
+            total_pnl += pnl;
+            
+            bots_data.push(BotData {
+                name,
+                mode: probe.mode(),
+                pnl,
+                position: probe.position(),
+                kelly_limit,
+                detail: probe.detail(),
+            });
         }
-
-        let payload = Payload {
-            ts: now_ms,
-            bid: bb, ask: ba, mid, spread: ba - bb, micro,
-            w_usd, w_btc, equity: w_usd + (w_btc * mid),
-            pos, pnl, fills,
-            grid_step: g_step, grid_size: g_size,
-            t2t, uptime_s: start.elapsed().as_secs(),
-            obi, l1_conf, l1_skew, regime,
-            toxic, freeze, paused, shadow, shadow_pnl: shadow_pnl_v,
-            ghost_pct, ghost_inj,
-            macro_bias, fng,
-            bnb_mid, delta_bps: delta_bps_raw, delta_sig,
-            maker_fee: maker_f, taker_fee: taker_f,
-            max_pos: max_pos_raw, auth_capital: auth_cap, daily_loss_limit: daily_ll,
-            bids: bid_levels, asks: ask_levels,
-            last_buy, last_sell,
+        
+        let state = PanopticonState {
+            global_capital: global_capital_limit,
+            total_equity: 15420.0 + total_pnl,
+            armada_pnl: total_pnl,
+            bots: bots_data,
         };
-
-        let json = match serde_json::to_string(&payload) {
-            Ok(j) => j,
-            Err(_) => continue,
-        };
-
-        if socket.send(Message::Text(json.into())).await.is_err() {
-            break; // Client disconnected
+        
+        if let Ok(json) = serde_json::to_string(&state) {
+            if socket.send(Message::Text(json.into())).await.is_err() {
+                break;
+            }
         }
-
-        tokio::time::sleep(Duration::from_millis(WS_TICK_MS)).await;
+        
+        tokio::time::sleep(Duration::from_millis(50)).await; // 20 FPS
     }
 }
 
-// ═══ SHARED STATE (passed to WS handler) ═══
-#[derive(Clone)]
-struct WsState {
-    engine: &'static EngineState,
-    risk: &'static RiskState,
-    start_time: Instant,
-}
-
-// SAFETY: EngineState/RiskState use only atomics — safe to share across threads
-unsafe impl Send for WsState {}
-unsafe impl Sync for WsState {}
-
-// ═══ MAIN ═══
 #[tokio::main]
-async fn main() -> Result<()> {
-    dotenv().ok();
-
-    // Single-instance lock
-    let lock_file = std::fs::File::create("/tmp/beroun-dashboard.lock")
-        .expect("Failed to create dashboard lock file");
-    use fs2::FileExt as Fs2FileExt;
-    if lock_file.try_lock_exclusive().is_err() {
-        eprintln!("[PANOPTICON] Another instance already running — aborting.");
-        std::process::exit(1);
-    }
-    let _lock_guard = lock_file;
-
-    println!("--- 👁️ PANOPTICON v1.0 (WebSocket Hyper-Bridge) ---");
-
-    // MMap setup — leak to get 'static lifetime (process-lifetime mapping)
-    let e_mmap = Box::leak(Box::new(init_mmap_ptr::<EngineState>(ENGINE_STATE_PATH)?));
-    let r_mmap = Box::leak(Box::new(init_mmap_ptr::<RiskState>(RISK_STATE_PATH)?));
-    let engine: &'static EngineState = unsafe { &*(e_mmap.as_ptr() as *const EngineState) };
-    let risk: &'static RiskState = unsafe { &*(r_mmap.as_ptr() as *const RiskState) };
-
-    let state = WsState {
-        engine,
-        risk,
-        start_time: Instant::now(),
-    };
-
+async fn main() {
+    dotenvy::dotenv().ok();
+    println!("--- 👁️ SOVEREIGN PANOPTICON v2.0 (Hive Mind Multiplexer) ---");
     let app = Router::new()
         .route("/", get(index_handler))
         .route("/ws", get(ws_handler))
-        .with_state(state)
         .layer(CorsLayer::permissive());
 
-    let listener = {
-        let mut bound = None;
-        for attempt in 1..=15 {
-            let socket = match tokio::net::TcpSocket::new_v4() {
-                Ok(s) => s,
-                Err(e) => {
-                    eprintln!("[PANOPTICON] Socket creation failed: {e}");
-                    tokio::time::sleep(Duration::from_secs(3)).await;
-                    continue;
-                }
-            };
-            let _ = socket.set_reuseaddr(true);
-            #[cfg(unix)]
-            { let _ = socket.set_reuseport(true); }
-            match socket
-                .bind("0.0.0.0:3000".parse().unwrap())
-                .and_then(|()| socket.listen(1024))
-            {
-                Ok(l) => { bound = Some(l); break; }
-                Err(e) => {
-                    eprintln!("[PANOPTICON] Bind attempt {}/15 failed: {} — retrying in 3s", attempt, e);
-                    tokio::time::sleep(Duration::from_secs(3)).await;
-                }
-            }
-        }
-        bound.expect("[PANOPTICON] FATAL: Cannot bind :3000")
-    };
-
-    println!("[PANOPTICON] Online at http://0.0.0.0:3000 (WebSocket Hyper-Bridge, 20 FPS)");
-    axum::serve(listener, app).await?;
-    Ok(())
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    println!("[PANOPTICON] Online at http://0.0.0.0:3000");
+    axum::serve(listener, app).await.unwrap();
 }
