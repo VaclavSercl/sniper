@@ -142,19 +142,25 @@ impl CandleL1Brain {
             .map_err(|e| anyhow::anyhow!("Tokenize: {}", e))?;
         let tokens = encoding.get_ids();
 
-        // 3. Create input tensor on CUDA
+        // 3. Input MUSÍ mít batch dimenzi [1, seq_len] —
+        //    quantized_llama interně vyžaduje 2D pro RoPE/Attention
         let input = Tensor::new(tokens, &self.device)?.unsqueeze(0)?;
 
-        // 4. Forward pass
-        // POZNÁMKA: Protože posíláme kompletní prompt zbrusu nový, 
-        // začínáme vždy na pozici 0. Nepřičítáme počet tokenů.
+        // 4. Forward pass (stateless, pos=0)
         let logits = self.model.forward(&input, 0)?;
 
-        // 5. Extract last token logits
-        let last_logits = logits.squeeze(0)?;
-        let seq_len = last_logits.dim(0)?;
-        let last_token_logits = last_logits.get(seq_len - 1)?;
-        let logits_vec: Vec<f32> = last_token_logits.to_vec1()?;
+        // 5. Bezpečná extrakce výstupních logitů:
+        //    Pattern matching na tvar dimenzí (slice)
+        let logits_vec: Vec<f32> = match logits.dims() {
+            // Varianta A (Optimalizováno): Model vrátil jen poslední token [1, vocab_size]
+            [1, _vocab_size] => logits.squeeze(0)?.to_vec1()?,
+
+            // Varianta B (Standard): Model vrátil celou sekvenci [1, seq_len, vocab_size]
+            [1, seq, _vocab] => logits.squeeze(0)?.get(seq - 1)?.to_vec1()?,
+
+            // Pojistka proti změně API v budoucích verzích Candle
+            other => anyhow::bail!("Neznámý tvar logits: {:?}", other),
+        };
 
         // 6. Logit Snipe → HftAction
         let (action, confidence) = self.sniper.snipe(&logits_vec);
