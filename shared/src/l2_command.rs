@@ -66,15 +66,13 @@ pub struct L2GlobalRiskMatrix {
     pub global_vpin_toxicity: AtomicI64,
     /// Aegis target delta × PRICE_SCALE (negative = short perps)
     pub aegis_target_delta: AtomicI64,
-    /// 0 = passive TWAP, 1 = market FOK (emergency)
-    pub aegis_urgency_flag: AtomicI64,
     /// 1 = portfolio hedged via perps, Grid stops buying
     pub portfolio_is_hedged: AtomicI64,
     /// Cross-bot: epoch ms when flash crash detected by Moonshot (0 = clear)
     pub flash_crash_epoch_ms: AtomicU64,
     /// Cross-bot: magnitude of drop in bps (e.g., -300 = -3%)
     pub flash_crash_drop_bps: AtomicI64,
-    _pad_cl4: [u8; 8],
+    _pad_cl4: [u8; 16],
 }
 
 // ═══ CL5: Portfolio Telemetry (L1 → L2, Phase 3) ═══
@@ -158,11 +156,10 @@ impl Default for L2GlobalRiskMatrix {
             risk_config_version: AtomicU64::new(0),
             global_vpin_toxicity: AtomicI64::new(0),
             aegis_target_delta: AtomicI64::new(0),
-            aegis_urgency_flag: AtomicI64::new(0),
             portfolio_is_hedged: AtomicI64::new(0),
             flash_crash_epoch_ms: AtomicU64::new(0),
             flash_crash_drop_bps: AtomicI64::new(0),
-            _pad_cl4: [0u8; 8],
+            _pad_cl4: [0u8; 16],
         }
     }
 }

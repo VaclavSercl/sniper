@@ -438,24 +438,31 @@ _gpu_cache = {
     'gpu_util': 0, 'gpu_vram_pct': 0.0
 }
 
+import pynvml
+
+def _init_nvml():
+    try:
+        pynvml.nvmlInit()
+        return True
+    except Exception:
+        return False
+
+_nvml_inited = _init_nvml()
+
 async def _gpu_updater_task():
     while True:
         try:
-            proc = await asyncio.create_subprocess_exec(
-                'nvidia-smi', '--query-gpu=temperature.gpu,memory.used,memory.total,utilization.gpu',
-                '--format=csv,noheader,nounits',
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5.0)
-            if proc.returncode == 0:
-                parts = stdout.decode().strip().split(',')
-                if len(parts) >= 4:
-                    _gpu_cache['gpu_temp'] = int(parts[0].strip())
-                    _gpu_cache['gpu_vram_used'] = int(parts[1].strip())
-                    _gpu_cache['gpu_vram_total'] = int(parts[2].strip())
-                    _gpu_cache['gpu_util'] = int(parts[3].strip())
-                    _gpu_cache['gpu_vram_pct'] = round(100.0 * _gpu_cache['gpu_vram_used'] / max(_gpu_cache['gpu_vram_total'], 1), 1)
+            if _nvml_inited:
+                handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+                temp = pynvml.nvmlDeviceGetTemperature(handle, pynvml.NVML_TEMPERATURE_GPU)
+                memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
+                util = pynvml.nvmlDeviceGetUtilizationRates(handle).gpu
+                
+                _gpu_cache['gpu_temp'] = temp
+                _gpu_cache['gpu_vram_used'] = memory.used // (1024 * 1024)
+                _gpu_cache['gpu_vram_total'] = memory.total // (1024 * 1024)
+                _gpu_cache['gpu_util'] = util
+                _gpu_cache['gpu_vram_pct'] = round(100.0 * memory.used / max(memory.total, 1), 1)
         except Exception:
             pass
         await asyncio.sleep(10.0)
