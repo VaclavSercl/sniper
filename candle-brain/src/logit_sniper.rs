@@ -66,24 +66,37 @@ impl LogitSniper {
     }
 
     /// Resolve a token ID dynamically. Tries multiple variants:
-    /// "HOLD", "Hold", "hold", " HOLD", "▁HOLD" (SentencePiece)
+    /// "HOLD", "Hold", "hold", " HOLD", "▁HOLD", "\u{2581}HOLD" (SentencePiece)
     fn resolve_token(tokenizer: &tokenizers::Tokenizer, word: &str) -> Result<u32> {
-        // Try exact match first
+        // 1. Exact match: "HOLD"
         if let Some(id) = tokenizer.token_to_id(word) {
             return Ok(id);
         }
-        // Try lowercase
+        // 2. Capitalized: "Hold"
+        let mut cap = word.to_lowercase();
+        if let Some(first) = cap.get_mut(0..1) {
+            first.make_ascii_uppercase();
+        }
+        if let Some(id) = tokenizer.token_to_id(&cap) {
+            return Ok(id);
+        }
+        // 3. Lowercase: "hold"
         if let Some(id) = tokenizer.token_to_id(&word.to_lowercase()) {
             return Ok(id);
         }
-        // Try with leading space (common in BPE tokenizers)
+        // 4. BPE space prefix: " HOLD" (GPT-style tokenizers)
         let spaced = format!(" {}", word);
         if let Some(id) = tokenizer.token_to_id(&spaced) {
             return Ok(id);
         }
-        // Try SentencePiece prefix (▁)
+        // 5. SentencePiece prefix U+2581: "▁HOLD" (Llama/Phi standard)
         let sp = format!("▁{}", word);
         if let Some(id) = tokenizer.token_to_id(&sp) {
+            return Ok(id);
+        }
+        // 6. SentencePiece alternate U+2581 encoding (some tokenizers emit this)
+        let sp_alt = format!("\u{2581}{}", word);
+        if let Some(id) = tokenizer.token_to_id(&sp_alt) {
             return Ok(id);
         }
 

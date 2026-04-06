@@ -15,9 +15,9 @@ use tracing::info;
 
 use crate::logit_sniper::{HftAction, LogitSniper};
 
-pub const DEFAULT_MODEL_REPO: &str = "microsoft/Phi-3.5-mini-instruct-GGUF";
-pub const DEFAULT_MODEL_FILE: &str = "Phi-3.5-mini-instruct-q4_k_m.gguf";
-pub const DEFAULT_TOKENIZER_REPO: &str = "microsoft/Phi-3.5-mini-instruct";
+pub const DEFAULT_MODEL_REPO: &str = "bartowski/Llama-3.2-1B-Instruct-GGUF";
+pub const DEFAULT_MODEL_FILE: &str = "Llama-3.2-1B-Instruct-Q4_K_M.gguf";
+pub const DEFAULT_TOKENIZER_REPO: &str = "unsloth/Llama-3.2-1B-Instruct";
 
 pub struct CandleL1Brain {
     model: ModelWeights,
@@ -141,14 +141,14 @@ impl CandleL1Brain {
         let encoding = self.tokenizer.encode(prompt.as_str(), true)
             .map_err(|e| anyhow::anyhow!("Tokenize: {}", e))?;
         let tokens = encoding.get_ids();
-        let n_tokens = tokens.len();
 
         // 3. Create input tensor on CUDA
         let input = Tensor::new(tokens, &self.device)?.unsqueeze(0)?;
 
-        // 4. Forward pass (1-3ms on GTX 1060 with Q4_K_M)
-        let logits = self.model.forward(&input, self.token_pos)?;
-        self.token_pos += n_tokens;
+        // 4. Forward pass
+        // POZNÁMKA: Protože posíláme kompletní prompt zbrusu nový, 
+        // začínáme vždy na pozici 0. Nepřičítáme počet tokenů.
+        let logits = self.model.forward(&input, 0)?;
 
         // 5. Extract last token logits
         let last_logits = logits.squeeze(0)?;
@@ -161,11 +161,12 @@ impl CandleL1Brain {
         Ok((action, confidence))
     }
 
-    /// Reset KV cache position (call periodically to prevent OOM).
+    /// Reset KV cache position
     pub fn reset_cache(&mut self) {
+        // Jelikož nyní nepoužíváme self.token_pos pro inkrementaci, 
+        // tato funkce primárně slouží k vyčištění vnitřního stavu, 
+        // pokud bys v budoucnu implementoval explicitní KV Cache struct.
         self.token_pos = 0;
-        // Note: ModelWeights doesn't expose clear_kv_cache() in all versions
-        // This is a soft reset — model will re-warm on next forward pass
     }
 
     /// Get the current LogitSniper for inspection.
