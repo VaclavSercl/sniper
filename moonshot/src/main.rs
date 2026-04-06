@@ -3,7 +3,6 @@
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use std::collections::HashMap;
 
 use anyhow::Result;
 use tracing::{info, warn};
@@ -17,6 +16,41 @@ use sniper_types::mmap_utils::init_mmap;
 
 const VERSION: &str = "14.3.0";
 
+const MAX_TICKER_SLOTS: usize = MOONSHOT_MAX_PAIRS;
+
+/// Cache-friendly flat lookup table replacing HashMap for channel IDs.
+struct FlatMapI64 {
+    keys: [i64; MAX_TICKER_SLOTS],
+    vals: [usize; MAX_TICKER_SLOTS],
+    len: usize,
+}
+
+impl FlatMapI64 {
+    const fn new() -> Self {
+        Self { keys: [0; MAX_TICKER_SLOTS], vals: [0; MAX_TICKER_SLOTS], len: 0 }
+    }
+
+    #[inline]
+    fn get(&self, key: i64) -> Option<usize> {
+        for i in 0..self.len {
+            if self.keys[i] == key { return Some(self.vals[i]); }
+        }
+        None
+    }
+
+    #[inline]
+    fn insert(&mut self, key: i64, val: usize) {
+        for i in 0..self.len {
+            if self.keys[i] == key { self.vals[i] = val; return; }
+        }
+        if self.len < MAX_TICKER_SLOTS {
+            self.keys[self.len] = key;
+            self.vals[self.len] = val;
+            self.len += 1;
+        }
+    }
+}
+
 struct MoonshotEngine {
     notifier: Arc<AsyncNotifier>,
     engine: *const MoonshotEngineState,
@@ -24,8 +58,8 @@ struct MoonshotEngine {
     l2cmd: *const sniper_types::l2_command::L2CommandMatrix,
     l2_risk: *const sniper_types::l2_command::L2GlobalRiskMatrix,
     
-    chan_to_idx: HashMap<i64, usize>,
-    idx_to_symbol: HashMap<usize, String>,
+    chan_to_idx: FlatMapI64,
+    idx_to_symbol: [String; MOONSHOT_MAX_PAIRS],
     last_order_ts: Vec<Instant>,
     
     ryu1: ryu::Buffer,
@@ -50,7 +84,7 @@ impl SovereignEngine for MoonshotEngine {
                     "channel": "ticker",
                     "symbol": symbol
                 }).to_string());
-                self.idx_to_symbol.insert(i, symbol);
+                self.idx_to_symbol[i] = symbol;
             }
         }
         subs
@@ -82,7 +116,7 @@ impl SovereignEngine for MoonshotEngine {
     fn on_market_message(&mut self, payload: &mut [u8], out_buf: &mut bytes::BytesMut) {
         let loop_start = Instant::now();
         if let Some((chan, bid, ask)) = sniper_types::exchange::fast_parse_ticker(payload) {
-            if let Some(&idx) = self.chan_to_idx.get(&chan) {
+            if let Some(idx) = self.chan_to_idx.get(chan) {
                 let e = unsafe { &(*self.engine).pairs[idx] };
                 let r = unsafe { &(*self.risk).pairs[idx] };
 
@@ -107,7 +141,8 @@ impl SovereignEngine for MoonshotEngine {
                     
                     if order_usd > 0.0 && mid_f64 > 0.0 {
                         let coin_amount = (order_usd / mid_f64).max(0.00015);
-                        if let Some(symbol) = self.idx_to_symbol.get(&idx) {
+                        let symbol = &self.idx_to_symbol[idx];
+                        if !symbol.is_empty() {
                             sniper_types::exchange::bitfinex_venue::BitfinexVenue::write_standalone_ioc(
                                 out_buf, 2001, symbol.as_bytes(),
                                 self.ryu1.format(coin_amount), self.ryu2.format(mid_f64),
@@ -136,7 +171,8 @@ impl SovereignEngine for MoonshotEngine {
                         let ask_f64 = ask as f64 / PRICE_SCALE_I as f64;
 
                         if buy_p < ask_f64 {
-                            if let Some(symbol) = self.idx_to_symbol.get(&idx) {
+                            let symbol = &self.idx_to_symbol[idx];
+                            if !symbol.is_empty() {
                                 use sniper_types::exchange::bitfinex_venue::BitfinexVenue;
                                 BitfinexVenue::write_batch_open_cancel_sym(out_buf, symbol.as_bytes());
                                 BitfinexVenue::write_limit_order(
@@ -162,7 +198,7 @@ impl SovereignEngine for MoonshotEngine {
     fn on_system_event(&mut self, value: &serde_json::Value, _out_buf: &mut bytes::BytesMut) {
         if value["event"] == "subscribed" && value["channel"] == "ticker" {
             if let (Some(chan_id), Some(symbol)) = (value["chanId"].as_i64(), value["symbol"].as_str()) {
-                for (&idx, sym) in self.idx_to_symbol.iter() {
+                for (idx, sym) in self.idx_to_symbol.iter().enumerate() {
                     if sym == symbol {
                         self.chan_to_idx.insert(chan_id, idx);
                         info!(event = "pair_subscribed", symbol = symbol, idx = idx, chan_id = chan_id);
@@ -199,8 +235,8 @@ async fn main() -> Result<()> {
         risk: risk_ptr,
         l2cmd: &l2_shared.cmd,
         l2_risk: &l2_shared.global_risk,
-        chan_to_idx: HashMap::new(),
-        idx_to_symbol: HashMap::new(),
+        chan_to_idx: FlatMapI64::new(),
+        idx_to_symbol: core::array::from_fn(|_| String::new()),
         last_order_ts: vec![Instant::now(); MOONSHOT_MAX_PAIRS],
         ryu1: ryu::Buffer::new(),
         ryu2: ryu::Buffer::new(),
