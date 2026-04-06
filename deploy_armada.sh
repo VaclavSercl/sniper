@@ -26,6 +26,9 @@ echo "$(date +%s)" > /tmp/sniper_boot.lock
 
 ARMADA_ROOT="$(cd "$(dirname "$0")" && pwd)"
 LOG_DIR="$ARMADA_ROOT/logs"
+
+# Ensure ~/.cargo/bin is in PATH (systemd has minimal PATH without it)
+export PATH="$HOME/.cargo/bin:$PATH"
 BIN_DIR="$ARMADA_ROOT/target/release"
 SHM_DIR="/dev/shm/beroun"
 STATE_FILE="$ARMADA_ROOT/state/armada_state.json"
@@ -160,16 +163,22 @@ sleep 2
 
 # 6. ZeroClaw L2 Daemon (replaces l2_oracle.py)
 echo "  [T+25s] Starting ZeroClaw L2 Oracle..."
-[ -f "$ARMADA_ROOT/.env" ] && export $(grep -v '^#' "$ARMADA_ROOT/.env" | grep GEMINI_API_KEY | xargs)
-if command -v zeroclaw &>/dev/null && [ -n "${GEMINI_API_KEY:-}" ]; then
-    # Čisté řešení: Synchronizace API klíče z .env do zabezpečené SQLite vrstvy zeroclaw při každém startu.
-    zeroclaw onboard --api-key "$GEMINI_API_KEY" --provider gemini --model gemini-3.1-pro-preview --quick --force >/dev/null 2>&1
-    zeroclaw daemon >> "$LOG_DIR/zeroclaw.log" 2>&1 &
+# Safety: strip any stray quotes from GEMINI_API_KEY (.env already source'd at L36)
+if [ -n "${GEMINI_API_KEY:-}" ]; then
+    export GEMINI_API_KEY=$(echo "$GEMINI_API_KEY" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
+fi
+ZEROCLAW_BIN=$(command -v zeroclaw 2>/dev/null || echo "")
+if [ -n "$ZEROCLAW_BIN" ] && [ -n "${GEMINI_API_KEY:-}" ]; then
+    echo "  ✅ ZeroClaw found: $ZEROCLAW_BIN (API key: ${#GEMINI_API_KEY} chars)"
+    "$ZEROCLAW_BIN" onboard --api-key "$GEMINI_API_KEY" --provider gemini --model gemini-3.1-pro-preview --quick --force >/dev/null 2>&1
+    "$ZEROCLAW_BIN" daemon >> "$LOG_DIR/zeroclaw.log" 2>&1 &
     ZEROCLAW_PID=$!
     echo "  ✅ ZeroClaw L2: PID $ZEROCLAW_PID (Gemini 3.1 Pro)"
 else
     ZEROCLAW_PID="N/A"
-    echo "  ⚠️  ZeroClaw skipped (no GEMINI_API_KEY or zeroclaw not installed)"
+    [ -z "$ZEROCLAW_BIN" ] && echo "  ⚠️  zeroclaw binary not found in PATH ($PATH)"
+    [ -z "${GEMINI_API_KEY:-}" ] && echo "  ⚠️  GEMINI_API_KEY not set"
+    echo "  ⚠️  ZeroClaw skipped"
 fi
 
 echo ""

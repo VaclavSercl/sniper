@@ -115,16 +115,23 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // 5.5 Zážeh Unified Fee Fetcheru
+    // CRITICAL FIX: Must be MmapMut — fee_intel writes to AtomicU64 fields via .store()!
+    // Read-only Mmap caused SIGSEGV on first tick (immediate write to RO page).
     let fee_file = std::fs::OpenOptions::new().read(true).write(true).create(true)
         .open(sniper_types::fee_types::FEE_MATRIX_PATH)?;
-    let _ = fee_file.set_len(std::mem::size_of::<sniper_types::fee_types::GlobalFeeMatrix>() as u64);
-    let fee_mmap = unsafe { memmap2::Mmap::map(&fee_file)? };
+    let matrix_size = std::mem::size_of::<sniper_types::fee_types::GlobalFeeMatrix>() as u64;
+    if fee_file.metadata()?.len() < matrix_size {
+        fee_file.set_len(matrix_size)?;
+    }
+    let fee_mmap = unsafe { memmap2::MmapMut::map_mut(&fee_file)? };
     let fee_ptr = fee_mmap.as_ptr() as *const sniper_types::fee_types::GlobalFeeMatrix;
 
     let fee_ptr_usize = fee_ptr as usize;
     tokio::spawn(async move {
         fee_intel::run_global_fee_monitor(fee_ptr_usize).await;
     });
+    // Keep mmap alive for the lifetime of the process (moved ownership stays in main scope)
+    let _fee_mmap_guard = fee_mmap;
 
     // 6. Launch Sentinel Guardian (tokio async task)
     let sentinel_memory = Arc::clone(&memory);
