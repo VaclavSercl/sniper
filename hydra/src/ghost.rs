@@ -1,5 +1,5 @@
 // ═════════════════════════════════════════════════════════════
-// 👻 Ghost Liquidity & Fee Guards
+// 👻 GHOST CORE — Syntetická simulace profitu na stinných tradech
 // ═════════════════════════════════════════════════════════════
 
 use std::sync::atomic::Ordering;
@@ -7,8 +7,18 @@ use sniper_types::fee_types::{GlobalFeeMatrix, VENUE_BITFINEX};
 use sniper_types::EngineState;
 
 /// v11.3 FEE SENTINEL: Profitability Guard
-/// Returns true if the spread is wide enough to cover the round-trip fee.
 #[inline(always)]
+pub fn is_spread_profitable(spread_bps: u64, fee_matrix: &GlobalFeeMatrix) -> bool {
+    let maker_fee = fee_matrix.venues[VENUE_BITFINEX].maker_fee_bps.load(Ordering::Relaxed); // bps×100
+    let taker_fee = fee_matrix.venues[VENUE_BITFINEX].taker_fee_bps.load(Ordering::Relaxed); // bps×100
+    
+    // Round-trip = maker (our resting order) + taker (fill)
+    // Scale: 1000 = 10 bps = 0.10%
+    let round_trip_fee_bps = (maker_fee + taker_fee) / 100; // convert to bps
+    
+    if round_trip_fee_bps > 0 && spread_bps < round_trip_fee_bps * 2 {
+        false
+    } else {
         true
     }
 }

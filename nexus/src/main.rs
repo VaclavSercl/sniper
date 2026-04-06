@@ -406,7 +406,7 @@ impl SovereignEngine for NexusEngine {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args = Args::parse();
+    let mut args = Args::parse();
     tracing_subscriber::fmt::init();
 
     let cross_mmap = open_mmap_readonly(CROSS_EXCHANGE_PATH).context("cross_exchange.bin not found")?;

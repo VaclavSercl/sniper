@@ -449,7 +449,7 @@ impl SovereignEngine for HydraEngine {
         let risk = unsafe { &*self.risk };
         let l2cmd = unsafe { &*self.l2cmd };
         let l2risk = unsafe { &*self.l2risk };
-        let fee_state = unsafe { &*self.fee_state };
+        let fee_state = unsafe { &*self.fee_matrix };
 
         let best_bid = engine.best_bid.load(Ordering::Acquire);
         let best_ask = engine.best_ask.load(Ordering::Acquire);

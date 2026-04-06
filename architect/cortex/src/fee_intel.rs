@@ -2,17 +2,17 @@
 use sniper_types::fee_types::{GlobalFeeMatrix, VENUE_BITFINEX, VENUE_BINANCE};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-use sniper_types::framework::epoch_ms;
+use anyhow::Result;
 
-pub async fn run_global_fee_monitor(matrix_ptr: *const GlobalFeeMatrix) {
+pub async fn run_global_fee_monitor(matrix_ptr_usize: usize) {
     println!("  💰 [FEE INTEL] Booting Unified Fee Fetcher (Bitfinex + Binance)...");
     let mut interval = tokio::time::interval(Duration::from_secs(3600)); // Update 1x za hodinu
     let client = reqwest::Client::new();
 
     loop {
         interval.tick().await;
-        let now = epoch_ms();
-        let matrix = unsafe { &*matrix_ptr };
+        let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as u64;
+        let matrix = unsafe { &*(matrix_ptr_usize as *const GlobalFeeMatrix) };
 
         // 1. Bitfinex Fetch (Simulace - doplň HMAC logiku)
         // let (bfx_maker, bfx_taker) = fetch_bitfinex(&client).await;

@@ -11,16 +11,19 @@ pub const VENUE_OKX: usize = 3;
 pub const MAX_VENUES: usize = 8;
 
 #[repr(C, align(64))]
+#[derive(Default)]
 pub struct VenueFeeState {
     // Poplatky uložené v bps * 100 (např. 200 = 2.00 bps)
     pub maker_fee_bps: AtomicU64,
     pub taker_fee_bps: AtomicU64,
     pub last_update_ms: AtomicU64,
     pub is_online: std::sync::atomic::AtomicU32,
-    pub _pad: [u8; 36], // Výplň pro dokonalé zarovnání 64 bajtů (L1 Cache Line)
+    pub _pad1: [u8; 32], // Výplň pro dokonalé zarovnání 64 bajtů (L1 Cache Line)
+    pub _pad2: [u8; 4],
 }
 
 #[repr(C, align(64))]
+#[derive(Default)]
 pub struct GlobalFeeMatrix {
     pub venues: [VenueFeeState; MAX_VENUES],
 }

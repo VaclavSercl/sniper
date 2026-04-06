@@ -121,8 +121,9 @@ async fn main() -> anyhow::Result<()> {
     let fee_mmap = unsafe { memmap2::Mmap::map(&fee_file)? };
     let fee_ptr = fee_mmap.as_ptr() as *const sniper_types::fee_types::GlobalFeeMatrix;
 
+    let fee_ptr_usize = fee_ptr as usize;
     tokio::spawn(async move {
-        fee_intel::run_global_fee_monitor(fee_ptr).await;
+        fee_intel::run_global_fee_monitor(fee_ptr_usize).await;
     });
 
     // 6. Launch Sentinel Guardian (tokio async task)
