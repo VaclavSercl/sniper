@@ -12,6 +12,7 @@ use std::sync::atomic::Ordering;
 use std::path::Path;
 use std::process::Command;
 use std::sync::{Arc, RwLock, LazyLock};
+use futures_util::{StreamExt, SinkExt};
 
 #[derive(Clone, Serialize, Default)]
 pub struct ServerHealth {
@@ -97,7 +98,7 @@ use sniper_types::moonshot_types::{MoonshotEngineState, MOONSHOT_ENGINE_PATH, MO
 use sniper_types::grid_types::{GridEngineState, GRID_ENGINE_PATH, GRID_RISK_PATH, GridRiskState};
 use sniper_types::trigon_types::{TrigonEngineState, TRIGON_ENGINE_PATH, TRIGON_RISK_PATH, TrigonRiskState};
 use sniper_types::exchange::cross_types::{CrossExchangeState, CROSS_EXCHANGE_PATH};
-use sniper_types::mmap_utils::open_mmap_readonly;
+use sniper_types::mmap_utils::{open_mmap_readonly, open_mmap_readwrite};
 
 pub trait BotSnapshot {
     fn name(&self) -> &'static str;
@@ -122,6 +123,49 @@ fn load_mmap<T>(path: &str) -> Option<&'static T> {
         Err(_) => None,
     }
 }
+
+fn load_mmap_mut<T>(path: &str) -> Option<&'static T> {
+    if !Path::new(path).exists() {
+        return None;
+    }
+    match open_mmap_readwrite(path) {
+        Ok(mmap) => {
+            let leaked = Box::leak(Box::new(mmap));
+            Some(unsafe { &*(leaked.as_mut_ptr() as *const T) })
+        }
+        Err(_) => None,
+    }
+}
+
+pub struct MutTies {
+    pub hydra: Option<&'static RiskState>,
+    pub moonshot: Option<&'static MoonshotRiskState>,
+    pub grid: Option<&'static GridRiskState>,
+    pub trigon: Option<&'static TrigonRiskState>,
+    pub nexus: Option<&'static CrossExchangeState>,
+}
+unsafe impl Send for MutTies {}
+unsafe impl Sync for MutTies {}
+
+static ACTIVE_MUT_TIES: LazyLock<Arc<MutTies>> = LazyLock::new(|| {
+    Arc::new(MutTies {
+        hydra: load_mmap_mut(RISK_STATE_PATH),
+        moonshot: load_mmap_mut(MOONSHOT_RISK_PATH),
+        grid: load_mmap_mut(GRID_RISK_PATH),
+        trigon: load_mmap_mut(TRIGON_RISK_PATH),
+        nexus: load_mmap_mut(CROSS_EXCHANGE_PATH),
+    })
+});
+
+static GLOBAL_KELLY_WEIGHTS: LazyLock<Arc<RwLock<std::collections::HashMap<String, f64>>>> = LazyLock::new(|| {
+    let mut m = std::collections::HashMap::new();
+    m.insert("Nexus".to_string(), 0.25);
+    m.insert("Trigon".to_string(), 0.25);
+    m.insert("Hydra".to_string(), 0.20);
+    m.insert("Moonshot".to_string(), 0.10);
+    m.insert("Grid".to_string(), 0.10);
+    Arc::new(RwLock::new(m))
+});
 
 // ═══════════════════════════════════════════════════════════
 // HYDRA PROBE
@@ -344,8 +388,9 @@ async fn ws_handler(ws: WebSocketUpgrade) -> impl IntoResponse {
     ws.on_upgrade(handle_socket)
 }
 
-async fn handle_socket(mut socket: WebSocket) {
-    // 1. Initialize Probes directly mapping MMaps from /dev/shm
+async fn handle_socket(socket: WebSocket) {
+    let (mut sender, mut receiver) = socket.split();
+
     let h_engine = load_mmap::<EngineState>(ENGINE_STATE_PATH);
     let h_risk = load_mmap::<RiskState>(RISK_STATE_PATH);
     let hydra = HydraProbe { engine: h_engine, risk: h_risk };
@@ -372,61 +417,111 @@ async fn handle_socket(mut socket: WebSocket) {
         Box::new(trigon),
         Box::new(nexus),
     ];
-    
-    // Fractional Kelly Weights
-    let weights = vec![
-        ("Nexus", 0.25),
-        ("Trigon", 0.25),
-        ("Hydra", 0.20),
-        ("Moonshot", 0.10),
-        ("Grid", 0.10),
-    ];
 
     loop {
-        let global_capital_limit = std::fs::read_to_string("/home/wwwenda/sniper/state/armada_state.json")
-            .ok()
-            .and_then(|data| serde_json::from_str::<Value>(&data).ok())
-            .and_then(|v| v["global_capital_limit"].as_f64())
-            .unwrap_or(10000.0);
-        
-        let mut bots_data = Vec::new();
-        let mut total_pnl = 0.0;
-        
-        for probe in &probes {
-            let name = probe.name();
-            let weight = weights.iter().find(|(n, _)| *n == name).map(|(_, w)| *w).unwrap_or(0.0);
-            let kelly_limit = global_capital_limit * weight;
-            
-            let pnl = probe.pnl();
-            total_pnl += pnl;
-            
-            bots_data.push(BotData {
-                name,
-                mode: probe.mode(),
-                pnl,
-                position: probe.position(),
-                kelly_limit,
-                detail: probe.detail(),
-            });
-        }
-        
-        let hw_stats = SERVER_HEALTH.read().unwrap().clone();
-        
-        let state = PanopticonState {
-            global_capital: global_capital_limit,
-            total_equity: 15420.0 + total_pnl, // Example static baseline + real PnL
-            armada_pnl: total_pnl,
-            bots: bots_data,
-            hardware: hw_stats,
-        };
-        
-        if let Ok(json) = serde_json::to_string(&state) {
-            if socket.send(Message::Text(json.into())).await.is_err() {
-                break;
+        tokio::select! {
+            cmd_opt = receiver.next() => {
+                match cmd_opt {
+                    Some(Ok(Message::Text(text))) => {
+                        let parsed: Value = match serde_json::from_str(&text) {
+                            Ok(v) => v,
+                            Err(_) => { tracing::warn!("Invalid JSON command ignored"); continue; }
+                        };
+                        
+                        let cmd = parsed["cmd"].as_str()
+                            .or_else(|| parsed["action"].as_str())
+                            .unwrap_or("");
+                        let target = parsed["bot"].as_str().unwrap_or("");
+                        
+                        if cmd == "GLOBAL_KILL" {
+                            if let Some(r) = ACTIVE_MUT_TIES.hydra { r.paused.store(1, Ordering::Release); }
+                            if let Some(r) = ACTIVE_MUT_TIES.moonshot { r.global_paused.store(1, Ordering::Release); }
+                            if let Some(r) = ACTIVE_MUT_TIES.grid { r.global_paused.store(1, Ordering::Release); }
+                            if let Some(r) = ACTIVE_MUT_TIES.trigon { r.global_paused.store(1, Ordering::Release); }
+                            if let Some(r) = ACTIVE_MUT_TIES.nexus { r.emergency_pause.store(1, Ordering::Release); }
+                            tracing::warn!("☢️ GLOBAL KILL INITIATED FRONTEND!");
+                            continue;
+                        }
+                        
+                        if cmd == "KELLY_UPDATE" {
+                            let val = parsed["val"].as_f64().unwrap_or(0.0);
+                            let updates = parsed["updates"].as_object();
+                            if let Ok(mut lock) = GLOBAL_KELLY_WEIGHTS.write() {
+                                if let Some(upds) = updates {
+                                    for (k, v) in upds {
+                                        if let Some(w) = v.as_f64() { lock.insert(k.to_string(), w); }
+                                    }
+                                } else {
+                                    lock.insert(target.to_string(), val);
+                                }
+                            }
+                            continue;
+                        }
+                        
+                        let is_pause = if cmd == "FORCE_STOP" { 1 } else { 0 };
+                        
+                        match target {
+                            "Hydra" => if let Some(r) = ACTIVE_MUT_TIES.hydra { r.paused.store(is_pause, Ordering::Release); },
+                            "Moonshot" => if let Some(r) = ACTIVE_MUT_TIES.moonshot { r.global_paused.store(is_pause, Ordering::Release); },
+                            "Grid" => if let Some(r) = ACTIVE_MUT_TIES.grid { r.global_paused.store(is_pause, Ordering::Release); },
+                            "Trigon" => if let Some(r) = ACTIVE_MUT_TIES.trigon { r.global_paused.store(is_pause, Ordering::Release); },
+                            "Nexus" => if let Some(r) = ACTIVE_MUT_TIES.nexus { r.emergency_pause.store(is_pause as u32, Ordering::Release); },
+                            _ => {}
+                        }
+                        tracing::info!("Tactical Execution: {} on {}", cmd, target);
+                    }
+                    Some(Ok(_)) => {},
+                    Some(Err(e)) => { tracing::warn!("WS err: {}", e); break; }
+                    None => { break; }
+                }
+            }
+            _ = tokio::time::sleep(Duration::from_millis(50)) => {
+                let global_capital_limit = std::fs::read_to_string("/home/wwwenda/sniper/state/armada_state.json")
+                    .ok()
+                    .and_then(|data| serde_json::from_str::<Value>(&data).ok())
+                    .and_then(|v| v["global_capital_limit"].as_f64())
+                    .unwrap_or(10000.0);
+                
+                let mut bots_data = Vec::new();
+                let mut total_pnl = 0.0;
+                
+                for probe in &probes {
+                    let name = probe.name();
+                    let weight = {
+                        let lock = GLOBAL_KELLY_WEIGHTS.read().unwrap();
+                        *lock.get(name).unwrap_or(&0.0)
+                    };
+                    let kelly_limit = global_capital_limit * weight;
+                    
+                    let pnl = probe.pnl();
+                    total_pnl += pnl;
+                    
+                    bots_data.push(BotData {
+                        name,
+                        mode: probe.mode(),
+                        pnl,
+                        position: probe.position(),
+                        kelly_limit,
+                        detail: probe.detail(),
+                    });
+                }
+                
+                let hw_stats = SERVER_HEALTH.read().unwrap().clone();
+                let state = PanopticonState {
+                    global_capital: global_capital_limit,
+                    total_equity: 15420.0 + total_pnl,
+                    armada_pnl: total_pnl,
+                    bots: bots_data,
+                    hardware: hw_stats,
+                };
+                
+                if let Ok(json) = serde_json::to_string(&state) {
+                    if sender.send(Message::Text(json.into())).await.is_err() {
+                        break;
+                    }
+                }
             }
         }
-        
-        tokio::time::sleep(Duration::from_millis(50)).await; // 20 FPS real-time rendering
     }
 }
 

@@ -291,7 +291,7 @@ impl SovereignEngine for TrigonEngine {
             let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
             let engine = unsafe { &*self.engine };
             let risk = unsafe { &*self.risk };
-            let fee_state = unsafe { &*self.fee_state };
+            let fee_state = unsafe { &*self.fee_matrix };
             
             if let Some(sym_hash) = self.chan_to_symbol.get(chan) {
                 let bid_f = bid as u64;
@@ -313,7 +313,7 @@ impl SovereignEngine for TrigonEngine {
                 }
 
                 if self.last_scan.elapsed().as_millis() >= 100 {
-                    let fee_bps = fee_state.taker_fee_bps.load(Ordering::Relaxed);
+                    let fee_bps = fee_state.venues[0].taker_fee_bps.load(Ordering::Relaxed);
                     let _paused = risk.global_paused.load(Ordering::Acquire) != 0;
                     
                     let mut best_profit = -1000000i64;
@@ -477,7 +477,7 @@ async fn main() -> Result<()> {
         notifier: Arc::new(AsyncNotifier::new("trigon", "🔺")),
         engine: engine_ptr,
         risk: risk_ptr,
-        fee_state: fee_ptr,
+        fee_matrix: fee_ptr,
         l2_cmd: &l2_shared.cmd,
         chan_to_symbol: FlatMapI64::new(),
         symbol_bids_i: FlatMap::new(),

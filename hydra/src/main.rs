@@ -251,6 +251,9 @@ impl SovereignEngine for HydraEngine {
                         if self.cs_fail_count >= 5 {
                             error!(event = "checksum_persist", remote = remote_cs, local = local_cs);
                             self.cs_fail_count = 0;
+                            self.notifier.alert("⚠️ *RECONNECT*\\n`Reason: checksum_persist`".to_string());
+                            out_buf.clear();
+                            out_buf.extend_from_slice(b"RECONNECT");
                         }
                     } else {
                         self.cs_fail_count = 0;

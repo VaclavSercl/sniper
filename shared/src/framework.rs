@@ -129,6 +129,10 @@ macro_rules! drain_out_buf {
     ($runner:expr, $write:expr, $out_buf:expr) => {
         if !$out_buf.is_empty() {
             let text = unsafe { String::from_utf8_unchecked($out_buf.to_vec()) };
+            if text == "RECONNECT" {
+                tracing::warn!(event = "reconnection_triggered", bot = ?$runner.name);
+                break;
+            }
             if $runner.engine.is_shadow() {
                 if text.contains("\"oc\"") || text.contains("cancel") || text.contains("ox_multi") {
                     $runner.shadow_queue.clear();
