@@ -198,7 +198,7 @@ struct TrigonEngine {
     notifier: Arc<AsyncNotifier>,
     engine: *const TrigonEngineState,
     risk: *const TrigonRiskState,
-    fee_state: *const sniper_types::fee_types::GlobalFeeState,
+    fee_matrix: *const sniper_types::fee_types::GlobalFeeMatrix,
     l2_cmd: *const sniper_types::l2_command::L2CommandMatrix,
     
     chan_to_symbol: FlatMapI64,
@@ -458,8 +458,8 @@ async fn main() -> Result<()> {
     
     let engine_mmap = init_mmap::<TrigonEngineState>(TRIGON_ENGINE_PATH)?;
     let risk_mmap = init_mmap::<TrigonRiskState>(TRIGON_RISK_PATH)?;
-    let fee_mmap = init_mmap::<sniper_types::fee_types::GlobalFeeState>(
-        sniper_types::fee_types::FEE_STATE_PATH)?;
+    let fee_mmap = init_mmap::<sniper_types::fee_types::GlobalFeeMatrix>(
+        sniper_types::fee_types::FEE_MATRIX_PATH)?;
     let l2_mmap = init_mmap::<sniper_types::l2_command::L2SharedState>(
         sniper_types::l2_command::L2_COMMAND_PATH,
     )?;
@@ -470,7 +470,7 @@ async fn main() -> Result<()> {
 
     let engine_ptr = engine_mmap.as_ptr() as *const TrigonEngineState;
     let risk_ptr = risk_mmap.as_ptr() as *const TrigonRiskState;
-    let fee_ptr = fee_mmap.as_ptr() as *const sniper_types::fee_types::GlobalFeeState;
+    let fee_ptr = fee_mmap.as_ptr() as *const sniper_types::fee_types::GlobalFeeMatrix;
     let l2_shared = unsafe { &*(l2_mmap.as_ptr() as *const sniper_types::l2_command::L2SharedState) };
 
     let engine = TrigonEngine {

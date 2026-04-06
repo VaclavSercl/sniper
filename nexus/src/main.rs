@@ -26,8 +26,7 @@ const GID_NEXUS: u32 = 5000;
 struct Args {
     #[arg(long)] paper: bool,
     #[arg(long, default_value_t = 5.0)] min_profit_bps: f64,
-    #[arg(long, default_value_t = 10.0)] bfx_fee_bps: f64,
-    #[arg(long, default_value_t = 10.0)] bnb_fee_bps: f64,
+    #[arg(skip)] pub fee_matrix_ptr: *const sniper_types::fee_types::GlobalFeeMatrix,
     #[arg(long, default_value_t = 3.0)] slippage_bps: f64,
     #[arg(long, default_value_t = 100.0)] max_trade_usd: f64,
     #[arg(long, default_value_t = 5000)] cooldown_ms: u64,
@@ -164,7 +163,10 @@ fn scan_for_arb(cross_state: &CrossExchangeState, args: &Args, latency_pad_100x:
     let daily_limit_raw = cross_state.daily_loss_limit.load(Ordering::Acquire) as i64;
     if daily_pnl_raw < -daily_limit_raw { return None; }
 
-    let total_fee_bps_100x = ((args.bfx_fee_bps + args.bnb_fee_bps + args.slippage_bps) * 100.0) as i64 + latency_pad_100x;
+    let fee_matrix_ref = unsafe { &*args.fee_matrix_ptr };
+    let bfx_fee = fee_matrix_ref.venues[sniper_types::fee_types::VENUE_BITFINEX].taker_fee_bps.load(Ordering::Relaxed) as i64;
+    let bnb_fee = fee_matrix_ref.venues[sniper_types::fee_types::VENUE_BINANCE].taker_fee_bps.load(Ordering::Relaxed) as i64;
+    let total_fee_bps_100x = bfx_fee + bnb_fee + (args.slippage_bps * 100.0) as i64 + latency_pad_100x;
     let min_profit_100x = (args.min_profit_bps * 100.0) as i64;
     let args_max_trade_usd = (args.max_trade_usd * PRICE_SCALE_I as f64) as i64;
     
@@ -409,6 +411,9 @@ async fn main() -> Result<()> {
 
     let cross_mmap = open_mmap_readonly(CROSS_EXCHANGE_PATH).context("cross_exchange.bin not found")?;
     let cross_state = unsafe { &*(cross_mmap.as_ptr() as *const CrossExchangeState) };
+
+    let fee_mmap = sniper_types::mmap_utils::init_mmap::<sniper_types::fee_types::GlobalFeeMatrix>(sniper_types::fee_types::FEE_MATRIX_PATH)?;
+    args.fee_matrix_ptr = fee_mmap.as_ptr() as *const sniper_types::fee_types::GlobalFeeMatrix;
 
     let l2cmd_mmap = sniper_types::mmap_utils::init_mmap::<sniper_types::l2_command::L2SharedState>(
         sniper_types::l2_command::L2_COMMAND_PATH,

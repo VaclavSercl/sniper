@@ -8,6 +8,90 @@ use dotenvy::dotenv;
 use crate::exchange::venue::VenueAdapter;
 use crate::exchange::ExchangeCredentials;
 
+use crate::EngineState;
+use crate::math::FixedPrice;
+use crate::fee_types::GlobalFeeMatrix;
+use std::sync::atomic::Ordering;
+
+/// Sjednocený kontext bez jakýchkoliv alokací (předává se botovi v každém cyklu)
+// 1. Zavedeme generické typy E (Engine) a R (Risk)
+pub struct BotContext<'a, E, R> {
+    pub engine: &'a E,
+    pub risk: Option<&'a R>,
+    pub fee_matrix: &'a GlobalFeeMatrix,
+    pub toxic_storm_active: bool,
+    pub current_time_ms: u64,
+}
+
+// 2. Metody pro poplatky zůstávají stejné (sahají do fee_matrix)
+impl<'a, E, R> BotContext<'a, E, R> {
+    #[inline(always)]
+    pub fn taker_fee_bps(&self, venue_id: usize) -> FixedPrice {
+        let bps = self.fee_matrix.venues[venue_id].taker_fee_bps.load(Ordering::Relaxed);
+        FixedPrice::new(bps as i64 * (crate::PRICE_SCALE_I / 100))
+    }
+
+    #[inline(always)]
+    pub fn maker_fee_bps(&self, venue_id: usize) -> FixedPrice {
+        let bps = self.fee_matrix.venues[venue_id].maker_fee_bps.load(Ordering::Relaxed);
+        FixedPrice::new(bps as i64 * (crate::PRICE_SCALE_I / 100))
+    }
+}
+
+// 3. Memory Bootloader (vrací raw pointery, které si Runner sestaví do kontextu)
+pub struct SovereignMemory<E, R> {
+    pub engine_ptr: *const E,
+    pub risk_ptr: Option<*const R>,
+    pub fee_matrix_ptr: *const GlobalFeeMatrix,
+    pub l2_ptr: *mut crate::l2_command::L2SharedState,
+    pub toxic_storm_ptr: *const u8,
+    // (Zde si framework drží memmap2::Mmap instance, aby nebyly zahozeny)
+    _engine_mmap: memmap2::MmapMut,
+    _risk_mmap: Option<memmap2::MmapMut>,
+    _fee_mmap: memmap2::MmapMut,
+    _l2_mmap: memmap2::MmapMut,
+    _storm_mmap: memmap2::Mmap,
+}
+
+impl<E: Default, R: Default> SovereignMemory<E, R> {
+    pub fn boot(engine_path: &str, risk_path: Option<&str>) -> anyhow::Result<Self> {
+        let engine_mmap = crate::mmap_utils::init_mmap::<E>(engine_path)?;
+        let engine_ptr = engine_mmap.as_ptr() as *const E;
+
+        let (risk_mmap, risk_ptr) = if let Some(path) = risk_path {
+            let rm = crate::mmap_utils::init_mmap::<R>(path)?;
+            let rp = rm.as_ptr() as *const R;
+            (Some(rm), Some(rp))
+        } else {
+            (None, None)
+        };
+
+        let fee_mmap = crate::mmap_utils::init_mmap::<GlobalFeeMatrix>(crate::fee_types::FEE_MATRIX_PATH)?;
+        let fee_matrix_ptr = fee_mmap.as_ptr() as *const GlobalFeeMatrix;
+
+        let l2_mmap = crate::mmap_utils::init_mmap::<crate::l2_command::L2SharedState>(crate::l2_command::L2_COMMAND_PATH)?;
+        let l2_ptr = l2_mmap.as_ptr() as *mut crate::l2_command::L2SharedState;
+        
+        let storm_path = "/dev/shm/beroun/toxic_storm.bin";
+        if !std::path::Path::new(storm_path).exists() { let _ = std::fs::write(storm_path, [0u8]); }
+        let toxic_storm_mmap = crate::mmap_utils::open_mmap_readonly(storm_path)?;
+        let toxic_storm_ptr = toxic_storm_mmap.as_ptr();
+
+        Ok(Self {
+            engine_ptr,
+            risk_ptr,
+            fee_matrix_ptr,
+            l2_ptr,
+            toxic_storm_ptr,
+            _engine_mmap: engine_mmap,
+            _risk_mmap: risk_mmap,
+            _fee_mmap: fee_mmap,
+            _l2_mmap: l2_mmap,
+            _storm_mmap: toxic_storm_mmap,
+        })
+    }
+}
+
 /// Zastřešující Trait pro všechny L0 Sovereign Boty.
 pub trait SovereignEngine {
     /// Očekávané WebSocket subskripce po ověření

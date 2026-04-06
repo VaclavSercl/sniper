@@ -131,6 +131,7 @@ struct MoonshotEngine {
     notifier: Arc<AsyncNotifier>,
     engine: *const MoonshotEngineState,
     risk: *const MoonshotRiskState,
+    fee_matrix: *const sniper_types::fee_types::GlobalFeeMatrix,
     l2cmd: *const sniper_types::l2_command::L2CommandMatrix,
     l1ring: *const sniper_types::l2_command::L1TelemetryRing,
     toxic_storm_ptr: *const u8,
@@ -320,6 +321,9 @@ async fn main() -> Result<()> {
     let l2_shared_mmap = init_mmap::<sniper_types::l2_command::L2SharedState>(
         sniper_types::l2_command::L2_COMMAND_PATH,
     )?;
+    let fee_mmap = init_mmap::<sniper_types::fee_types::GlobalFeeMatrix>(
+        sniper_types::fee_types::FEE_MATRIX_PATH,
+    )?;
     
     let storm_path = "/dev/shm/beroun/toxic_storm.bin";
     if !std::path::Path::new(storm_path).exists() { let _ = std::fs::write(storm_path, [0u8]); }
@@ -327,12 +331,14 @@ async fn main() -> Result<()> {
 
     let engine_ptr = engine_mmap.as_ptr() as *const MoonshotEngineState;
     let risk_ptr = risk_mmap.as_ptr() as *const MoonshotRiskState;
+    let fee_ptr = fee_mmap.as_ptr() as *const sniper_types::fee_types::GlobalFeeMatrix;
     let l2_shared = unsafe { &*(l2_shared_mmap.as_ptr() as *const sniper_types::l2_command::L2SharedState) };
     
     let engine = MoonshotEngine {
         notifier: Arc::new(AsyncNotifier::new("moonshot", "🚀")),
         engine: engine_ptr,
         risk: risk_ptr,
+        fee_matrix: fee_ptr,
         l2cmd: &l2_shared.cmd,
         l1ring: &l2_shared.latency_ring,
         toxic_storm_ptr: toxic_storm_mmap.as_ptr(),

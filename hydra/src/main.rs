@@ -129,7 +129,7 @@ struct HydraEngine {
     notifier: Arc<AsyncNotifier>,
     engine: *mut EngineState,
     risk: *const RiskState,
-    fee_state: *const sniper_types::fee_types::GlobalFeeState,
+    fee_matrix: *const sniper_types::fee_types::GlobalFeeMatrix,
     l2cmd: *const sniper_types::l2_command::L2CommandMatrix,
     l2as: *const sniper_types::l2_command::L2ASMatrix,
     l2risk: *const sniper_types::l2_command::L2GlobalRiskMatrix,
@@ -864,10 +864,10 @@ async fn async_main() -> Result<()> {
     let notifier = Arc::new(AsyncNotifier::new("hydra", "🐉"));
     let mut engine_mmap = init_mmap::<EngineState>(&ENGINE_STATE_PATH)?;
     let risk_mmap = init_mmap::<RiskState>(&RISK_STATE_PATH)?;
-    let fee_mmap = init_mmap::<sniper_types::fee_types::GlobalFeeState>(sniper_types::fee_types::FEE_STATE_PATH)?;
+    let fee_mmap = init_mmap::<sniper_types::fee_types::GlobalFeeMatrix>(sniper_types::fee_types::FEE_MATRIX_PATH)?;
     let l2_mmap = init_mmap::<sniper_types::l2_command::L2SharedState>(sniper_types::l2_command::L2_COMMAND_PATH)?;
 
-    let fee_state = unsafe { &*(fee_mmap.as_ptr() as *const sniper_types::fee_types::GlobalFeeState) };
+    let fee_matrix = unsafe { &*(fee_mmap.as_ptr() as *const sniper_types::fee_types::GlobalFeeMatrix) };
     let l2_shared = unsafe { &*(l2_mmap.as_ptr() as *const sniper_types::l2_command::L2SharedState) };
     let engine_ptr = engine_mmap.as_mut_ptr() as *mut EngineState;
     let risk_ptr = risk_mmap.as_ptr() as *const RiskState;
@@ -892,7 +892,7 @@ async fn async_main() -> Result<()> {
         notifier: notifier.clone(),
         engine: engine_ptr,
         risk: risk_ptr,
-        fee_state,
+        fee_matrix,
         l2cmd: &l2_shared.cmd,
         l2as: &l2_shared.as_mat,
         l2risk: &l2_shared.global_risk,
