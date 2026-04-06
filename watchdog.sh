@@ -77,15 +77,8 @@ ALERTS=0
 
 # ═══ PROCESS HEALTH ═══
 
-if ! is_alive "hydra-core"; then
-    tg_alert "hydra_down" "🚨 WATCHDOG: Hydra-core CRASHED! → restartuji přes SBP"
-    pkill -9 "hydra-core" 2>/dev/null; sleep 1
-    cd "$ARMADA_ROOT" && python3 -c "from architect.orchestration import start_bot; start_bot('hydra')" &
-    ALERTS=$((ALERTS + 1))
-fi
-
 # Trading bots: auto-restart if mode is PAPER or LIVE
-for BOT_NAME in moonshot grid trigon nexus; do
+for BOT_NAME in hydra moonshot grid trigon nexus; do
     CORE="${BOT_NAME}-core"
     if ! is_alive "$CORE"; then
         BOT_MODE=$(python3 -c "import json; print(json.load(open('$ARMADA_ROOT/state/armada_state.json')).get('$BOT_NAME',{}).get('mode','OFFLINE'))" 2>/dev/null || echo "OFFLINE")

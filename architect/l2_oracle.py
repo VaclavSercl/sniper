@@ -253,16 +253,35 @@ class L2OracleAsync:
         # Read historical PnL
         all_pnl = self.pnl_db.get_all_bots_pnl() if hasattr(self, 'pnl_db') and self.pnl_db else {}
 
-        # Bot states
+        # Bot states a Contextual Defiance Protocol
         bot_states = ""
+        panic_active = False
+        
+        try:
+            with open(os.path.join(PROJECT_ROOT, "state", "armada_state.json")) as f:
+                self._armada_state = json.load(f)
+        except Exception:
+            if not hasattr(self, '_armada_state'):
+                self._armada_state = {}
+
         for b in bots:
+            current_mode = self._armada_state.get(b['name'], {}).get("mode", "OFFLINE")
             status = "ONLINE" if b.get("online") else "OFFLINE"
+            
+            # Detekce lidského veta (Panic / Manual Stop)
+            override_warn = ""
+            if current_mode in ("OFFLINE", "STOPPED"):
+                panic_active = True
+                override_warn = " [⚠️ HUMAN/SYSTEM VETO ACTIVE: Bot was killed. Justify in reasoning if you want to START it via Paper Trial.]"
+            elif current_mode == "PAPER":
+                override_warn = " [🧪 IN PAPER PURGATORY: Bot is currently validating your previous START command.]"
+
             p_1h = all_pnl.get(b['name'], {}).get('1h', {}).get('realized', 0)
             p_24h = all_pnl.get(b['name'], {}).get('24h', {}).get('realized', 0)
             p_7d = all_pnl.get(b['name'], {}).get('7d', {}).get('realized', 0)
             
             bot_states += (
-                f"\n[{b['emoji']} {b['name'].upper()}] {status}\n"
+                f"\n[{b['emoji']} {b['name'].upper()}] {status} | Mode: {current_mode}{override_warn}\n"
                 f"Price=${b['price']:.0f} Spread=${b.get('spread', 0):.2f} "
                 f"Pos={b['position']:.6f}BTC SessionPnL=${b['pnl']:.4f}\n"
                 f"Historical PnL: 1h=${p_1h:.4f} | 24h=${p_24h:.4f} | 7d=${p_7d:.4f}\n"
@@ -581,6 +600,24 @@ PARAMETER CONSTRAINTS:
         except Exception:
             self._armada_state = {}
 
+        # Pomocná funkce pro bezpečné probuzení přes Paper Purgatory
+        def _safe_ai_ignition(bot_name):
+            current_mode = self._armada_state.get(bot_name, {}).get("mode", "OFFLINE")
+            if current_mode in ("OFFLINE", "STOPPED", "LOCKED"):
+                log.warning(f"  🧠 [TRIBUNAL] {bot_name.upper()} awakening: AI overriding OFFLINE state. Routing through PAPER Purgatory (SBP Phase 4).")
+                self._save_bot_state(bot_name, "PAPER")
+                start_bot(bot_name)
+                self.cortex.pause(bot_name) # Force scanner/paper mode
+                fills_snapshot = self.pnl_db.get_all_bots_pnl().get(bot_name, {}).get('24h', {}).get('fills', 0) if hasattr(self, 'pnl_db') else 0
+                self._start_paper_trial(bot_name, current_mode, fills_snapshot)
+            elif current_mode == "PAPER":
+                log.info(f"  🛡️ [TRIBUNAL] {bot_name.upper()} is already in PAPER Trial. AI START command acknowledged but MUST complete 66min gate. Ignoring unpause.")
+            else:
+                self._save_bot_state(bot_name, "LIVE")
+                start_bot(bot_name)
+                self.cortex.unpause(bot_name)
+                log.info(f"  ✅ {bot_name.upper()} shifted to LIVE by AI")
+
         # ═══ HYDRA ═══
         hydra = decision.get("hydra", {})
         
@@ -591,16 +628,18 @@ PARAMETER CONSTRAINTS:
             start_bot("hydra")
             log.info("  🐍 Hydra shifted to PAPER (AI STOP bypass)")
         elif os_action == "START":
-            self._save_bot_state("hydra", "LIVE")
-            start_bot("hydra")
-            self.cortex.unpause("hydra")
-            log.info("  🐍 Hydra shifted to LIVE by AI")
+            _safe_ai_ignition("hydra")
 
         if hydra.get("pause_trading") is True:
             r = self.cortex.pause("hydra")
             log.info(f"  ⏸️ HYDRA PAUSED: {r}")
         elif hydra.get("pause_trading") is False and os_action != "STOP":
-            log.info("  🔒 [SHADOW LOCK] Refusing to unpause Hydra (Zátěžový test)")
+            current_hydra_mode = self._armada_state.get("hydra", {}).get("mode", "OFFLINE")
+            if current_hydra_mode == "PAPER":
+                log.info("  🔒 [SHADOW LOCK] Refusing to unpause Hydra — Bot is in PAPER Purgatory.")
+            else:
+                self.cortex.unpause("hydra")
+                log.info("  ▶️ HYDRA UNPAUSED by AI")
 
         grid = hydra.get("recommended_grid_step") or hydra.get("grid_step")
         if grid is not None:
@@ -629,23 +668,39 @@ PARAMETER CONSTRAINTS:
 
         # ═══ MOONSHOT ═══
         moonshot = decision.get("moonshot", {})
+        if moonshot.get("os_action") == "START":
+            _safe_ai_ignition("moonshot")
+        elif moonshot.get("os_action") == "STOP":
+            self._save_bot_state("moonshot", "PAPER")
+            self.cortex.pause("moonshot")
         self._apply_moonshot(moonshot)
-        log.info("  🔒 [SHADOW LOCK] Refusing to unpause Moonshot")
 
         # ═══ GRID ═══
         grid_bot = decision.get("grid", {})
+        if grid_bot.get("os_action") == "START":
+            _safe_ai_ignition("grid")
+        elif grid_bot.get("os_action") == "STOP":
+            self._save_bot_state("grid", "PAPER")
+            self.cortex.pause("grid")
         self._apply_grid(grid_bot)
-        log.info("  🔒 [SHADOW LOCK] Refusing to unpause Grid")
 
         # ═══ TRIGON ═══
         trigon = decision.get("trigon", {})
+        if trigon.get("os_action") == "START":
+            _safe_ai_ignition("trigon")
+        elif trigon.get("os_action") == "STOP":
+            self._save_bot_state("trigon", "PAPER")
+            self.cortex.pause("trigon")
         self._apply_trigon(trigon)
-        log.info("  🔒 [SHADOW LOCK] Refusing to unpause Trigon")
 
         # ═══ NEXUS ═══
         nexus = decision.get("nexus", {})
+        if nexus.get("os_action") == "START":
+            _safe_ai_ignition("nexus")
+        elif nexus.get("os_action") == "STOP":
+            self._save_bot_state("nexus", "PAPER")
+            self.cortex.pause("nexus")
         self._apply_nexus(nexus)
-        log.info("  🔒 [SHADOW LOCK] Refusing to unpause Nexus")
 
         # ═══ L2 COMMAND MATRIX (Issue #18 Quick Wins) ═══
         self._write_l2_command(decision, bots=None)
