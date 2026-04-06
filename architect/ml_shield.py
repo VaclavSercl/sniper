@@ -247,7 +247,7 @@ class FeatureExtractor:
             ret_5,            # F6: 5-tick return (bps)
             ret_20,           # F7: 20-tick return (bps)
             depth_asym,       # F8: deep book asymmetry
-            read_obi,         # F9: L2 OBI (from mmap, computed by Hydra)
+            current_obi,      # F9: L2 OBI (from mmap, computed by Hydra)
         ], dtype=np.float64)
 
         return features
