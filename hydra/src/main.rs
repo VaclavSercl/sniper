@@ -153,6 +153,7 @@ struct HydraEngine {
     ghost_last_inject: Instant,
     toxic_storm_ptr: *const u8,
     ml_shield: sniper_types::ml_shield::MlShield,
+    armada_state: &'static sniper_types::armada_types::ArmadaState,
 }
 
 unsafe impl Send for HydraEngine {}
@@ -589,7 +590,14 @@ impl SovereignEngine for HydraEngine {
         if in_liquidity_hole && !self.was_in_hole { self.was_in_hole = true; }
         else if hole_recovering && self.was_in_hole { self.was_in_hole = false; }
 
-        let base_usd = FixedPrice::new(risk.order_usd.load(Ordering::Acquire) as i64 * PRICE_SCALE_I);
+        let auth_cap_total = FixedPrice::new(self.armada_state.authorized_capital[0].load(Ordering::Acquire) as i64);
+        let current_pos_abs = engine.net_position.load(Ordering::Acquire).abs();
+        let current_exposure = FixedPrice::new(current_pos_abs) * micro;
+        let cap_95 = auth_cap_total * FixedPrice::new(95_000_000);
+        let available_margin = cap_95 - current_exposure;
+        let max_theoretical_usd = if available_margin.0 > 0 { available_margin } else { FixedPrice::zero() };
+        let total_expected_levels = (risk.grid_size.load(Ordering::Acquire) as i64).max(1);
+        let base_usd = max_theoretical_usd / FixedPrice::new(total_expected_levels * PRICE_SCALE_I as i64);
         let micro_bias = micro_i - mid_i;
         
         let fp_0_5 = FixedPrice::new(50_000_000);
@@ -736,31 +744,27 @@ impl SovereignEngine for HydraEngine {
             let w_btc = FixedPrice::new(engine.wallet_btc.load(Ordering::Relaxed) as i64); 
             let w_usd = FixedPrice::new(engine.wallet_usd.load(Ordering::Relaxed) as i64);
 
-            let amt = (final_order_usd / micro).max(min_order_btc);
+            // ARMADA KŘEMÍKOVÁ ZEĎ 🛡️
+            if self.armada_state.is_kill_switch_active() {
+                self.last_upd = now;
+                return;
+            }
 
-            let auth_cap = FixedPrice::new(risk.authorized_capital.load(Ordering::Acquire) as i64);
+            // 1. Čtení limitu a expozice (Armada Orchestrator)
+            let auth_cap_usd = FixedPrice::new(self.armada_state.authorized_capital[0].load(Ordering::Acquire) as i64);
             let pos_fp = FixedPrice::new(current_pos);
             let mut abs_pos = pos_fp;
             if abs_pos.0 < 0 { abs_pos.0 = -abs_pos.0; }
-            let pos_value = abs_pos * micro; // micro is mid
+            let current_exposure_usd = abs_pos * micro; // Expozice v USD
 
-            let cap_available = if pos_fp.0 < 0 || auth_cap.0 <= 0 {
-                w_usd
-            } else {
-                let remain = auth_cap - pos_value;
-                remain.max(FixedPrice::zero()).min(w_usd)
-            };
+            // 5% buffer pro klid duše
+            let cap_95_pct = auth_cap_usd * FixedPrice::new(95_000_000);
+            let available_margin_usd = cap_95_pct - current_exposure_usd;
 
-            let btc_cap = if pos_fp.0 > 0 || auth_cap.0 <= 0 {
-                w_btc
-            } else if micro.0 > 0 {
-                (auth_cap / micro).min(w_btc)
-            } else {
-                w_btc
-            };
-
-            let mut total_buy_usd = FixedPrice::zero();
-            let mut total_sell_btc = FixedPrice::zero();
+            // 2. Rozpočet na jednu vrstvu Gridu 
+            // - používáme total_grid_levels aby orchestrator rozprostřel kapitál spravedlivě
+            let total_grid_levels = (n_buy + n_sell).max(1) as i64;
+            let max_usd_per_level = available_margin_usd / FixedPrice::new(total_grid_levels * sniper_types::PRICE_SCALE_I as i64);
 
             let gc = ghost::calculate_ghost_levels(engine, n_buy, n_sell);
             let n_public_buy = gc.n_public_buy;
@@ -771,26 +775,38 @@ impl SovereignEngine for HydraEngine {
                 let spacing = (FixedPrice::new(grid) * FixedPrice::from_f64(sniper_types::LEVEL_SPACING[i])).0;
                 let bp_i = (micro_i - spacing + final_bias_with_l1).max(0).min(ba_i - MIN_TICK);
                 let bp_fp = FixedPrice::new(bp_i);
-                let cost = amt * bp_fp;
 
                 if i < n_public_buy {
-                    if (total_buy_usd + cost) <= (cap_available * FixedPrice::new(95_000_000)) && amt >= min_order_btc {
-                        if has_items { out_buf.extend_from_slice(b","); }
-                        out_buf.extend_from_slice(b"[\"on\",{\"gid\":");
-                        out_buf.extend_from_slice(itoa_buf.format(sniper_types::BOT_GID_HYDRA).as_bytes());
-                        out_buf.extend_from_slice(b",\"symbol\":\"");
-                        out_buf.extend_from_slice(sniper_types::TRADING_SYMBOL.as_bytes());
-                        out_buf.extend_from_slice(b"\",\"amount\":\"");
-                        let amt_str = FixedFormat::new(amt.0);
-                        out_buf.extend_from_slice(amt_str.as_str().as_bytes());
-                        out_buf.extend_from_slice(b"\",\"price\":\"");
-                        let bp_str = FixedFormat::new(bp_i);
-                        out_buf.extend_from_slice(bp_str.as_str().as_bytes());
-                        out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\",\"flags\":4096}]");
-                        
-                        has_items = true;
-                        total_buy_usd += cost;
+                    // 3. THE CLAMPING
+                    let mut final_usd_size = final_order_usd;
+                    
+                    if pos_fp.0 >= 0 {
+                        // Jsme Long. Zvyšujeme expozici. Máme limit?
+                        if available_margin_usd.0 <= 0 { continue; }
+                        if final_usd_size > max_usd_per_level {
+                            final_usd_size = max_usd_per_level;
+                        }
                     }
+
+                    // 4. Kontrola min Notional (Bitfinex cca 10 USD, dáme 15)
+                    let min_notional = FixedPrice::new(15 * sniper_types::PRICE_SCALE_I as i64);
+                    if final_usd_size < min_notional { continue; }
+
+                    let amt = final_usd_size / bp_fp;
+
+                    if has_items { out_buf.extend_from_slice(b","); }
+                    out_buf.extend_from_slice(b"[\"on\",{\"gid\":");
+                    out_buf.extend_from_slice(itoa_buf.format(sniper_types::BOT_GID_HYDRA).as_bytes());
+                    out_buf.extend_from_slice(b",\"symbol\":\"");
+                    out_buf.extend_from_slice(sniper_types::TRADING_SYMBOL.as_bytes());
+                    out_buf.extend_from_slice(b"\",\"amount\":\"");
+                    let amt_str = FixedFormat::new(amt.0);
+                    out_buf.extend_from_slice(amt_str.as_str().as_bytes());
+                    out_buf.extend_from_slice(b"\",\"price\":\"");
+                    let bp_str = FixedFormat::new(bp_i);
+                    out_buf.extend_from_slice(bp_str.as_str().as_bytes());
+                    out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\",\"flags\":4096}]");
+                    has_items = true;
                 } else if ghost_mode {
                     engine.ghost_buy_prices[i].store(bp_i, Ordering::Relaxed);
                 }
@@ -799,25 +815,40 @@ impl SovereignEngine for HydraEngine {
             for i in 0..n_sell {
                 let spacing = (FixedPrice::new(grid) * FixedPrice::from_f64(sniper_types::LEVEL_SPACING[i])).0;
                 let sp_i = (micro_i + spacing + final_bias_with_l1).max(0).max(bb_i + MIN_TICK);
-
+                
                 if i < n_public_sell {
-                    if (total_sell_btc + amt) <= (btc_cap * FixedPrice::new(95_000_000)) && amt >= min_order_btc {
-                        if has_items { out_buf.extend_from_slice(b","); }
-                        out_buf.extend_from_slice(b"[\"on\",{\"gid\":");
-                        out_buf.extend_from_slice(itoa_buf.format(sniper_types::BOT_GID_HYDRA).as_bytes());
-                        out_buf.extend_from_slice(b",\"symbol\":\"");
-                        out_buf.extend_from_slice(sniper_types::TRADING_SYMBOL.as_bytes());
-                        out_buf.extend_from_slice(b"\",\"amount\":\"");
-                        let amt_str = FixedFormat::new(-amt.0);
-                        out_buf.extend_from_slice(amt_str.as_str().as_bytes());
-                        out_buf.extend_from_slice(b"\",\"price\":\"");
-                        let sp_str = FixedFormat::new(sp_i);
-                        out_buf.extend_from_slice(sp_str.as_str().as_bytes());
-                        out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\",\"flags\":4096}]");
-                        
-                        has_items = true;
-                        total_sell_btc += amt;
+                    let sp_fp = FixedPrice::new(sp_i);
+                    // 3. THE CLAMPING
+                    let mut final_usd_size = final_order_usd;
+                    
+                    if pos_fp.0 <= 0 {
+                        // Jsme Short. Zvyšujeme expozici. Máme limit?
+                        if available_margin_usd.0 <= 0 { continue; }
+                        if final_usd_size > max_usd_per_level {
+                            final_usd_size = max_usd_per_level;
+                        }
                     }
+
+                    // 4. Kontrola min Notional
+                    let min_notional = FixedPrice::new(15 * sniper_types::PRICE_SCALE_I as i64);
+                    if final_usd_size < min_notional { continue; }
+
+                    let mut amt = final_usd_size / sp_fp;
+                    amt.0 = -amt.0; // Short order = negative amount
+
+                    if has_items { out_buf.extend_from_slice(b","); }
+                    out_buf.extend_from_slice(b"[\"on\",{\"gid\":");
+                    out_buf.extend_from_slice(itoa_buf.format(sniper_types::BOT_GID_HYDRA).as_bytes());
+                    out_buf.extend_from_slice(b",\"symbol\":\"");
+                    out_buf.extend_from_slice(sniper_types::TRADING_SYMBOL.as_bytes());
+                    out_buf.extend_from_slice(b"\",\"amount\":\"");
+                    let amt_str = FixedFormat::new(amt.0);
+                    out_buf.extend_from_slice(amt_str.as_str().as_bytes());
+                    out_buf.extend_from_slice(b"\",\"price\":\"");
+                    let sp_str = FixedFormat::new(sp_i);
+                    out_buf.extend_from_slice(sp_str.as_str().as_bytes());
+                    out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\",\"flags\":4096}]");
+                    has_items = true;
                 } else if ghost_mode {
                     engine.ghost_sell_prices[i].store(sp_i, Ordering::Relaxed);
                 }
@@ -880,6 +911,7 @@ async fn async_main() -> Result<()> {
 
     let ml_weights_ro = sniper_types::ml_shield::load_ml_weights_ro();
     let ml_shield = sniper_types::ml_shield::MlShield::new(ml_weights_ro);
+    let armada_state = sniper_types::armada_types::load_armada_state_ro();
 
     tokio::spawn(async move {
         let mut report_interval = tokio::time::interval(Duration::from_secs(3600));
@@ -922,6 +954,7 @@ async fn async_main() -> Result<()> {
         ghost_last_inject: Instant::now(),
         toxic_storm_ptr: toxic_storm_mmap.as_ptr(),
         ml_shield,
+        armada_state,
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();

@@ -11,6 +11,7 @@ pub mod exchange;
 pub mod bot_manifest;
 pub mod ml_types;
 pub mod ml_shield;
+pub mod armada_types;
 
 // ═══ Runtime utilities (behind 'runtime' feature) ═══
 // Enable with: sniper-shared = { path = "../shared", features = ["runtime"] }

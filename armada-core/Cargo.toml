@@ -1,0 +1,9 @@
+[package]
+name = "armada-core"
+version = "21.1.0"
+edition = "2024"
+
+[dependencies]
+tokio = { version = "1.38", features = ["full"] }
+sniper-shared = { path = "../shared", features = ["runtime"] }
+anyhow = "1.0"
