@@ -146,9 +146,9 @@
     }
 
     function renderFleet(data) {
-        document.getElementById('tot-eq').innerText = `$${data.total_equity.toFixed(2)}`;
+        document.getElementById('tot-eq').textContent = `$${data.total_equity.toFixed(2)}`;
         const pnl = document.getElementById('arm-pnl');
-        pnl.innerText = formatUsd(data.armada_pnl);
+        pnl.textContent = formatUsd(data.armada_pnl);
         pnl.className = data.armada_pnl >= 0 ? 'pos' : 'neg';
 
         let cards = fleetView.children;
@@ -158,7 +158,7 @@
                 const statusCls = b.mode.toLowerCase();
                 const pnlCls = b.pnl >= 0 ? 'pos' : 'neg';
                 html += `
-                    <div class="bot-card" id="card-${b.name}" onclick="showBotView('${b.name}')">
+                    <div class="bot-card" id="card-${b.name}" data-bot-name="${b.name}">
                         <div class="name-row">
                             <div class="name">${b.name}</div>
                             <div id="status-${b.name}" class="status ${statusCls}">${b.mode}</div>
@@ -177,19 +177,19 @@
             data.bots.forEach(b => {
                 const statusEl = document.getElementById(`status-${b.name}`);
                 if (statusEl) {
-                    statusEl.innerText = b.mode;
+                    statusEl.textContent = b.mode;
                     statusEl.className = `status ${b.mode.toLowerCase()}`;
                 }
                 const pnlEl = document.getElementById(`pnl-${b.name}`);
                 if (pnlEl) {
-                    pnlEl.innerText = formatUsd(b.pnl);
+                    pnlEl.textContent = formatUsd(b.pnl);
                     pnlEl.className = b.pnl >= 0 ? 'pos' : 'neg';
                 }
                 const posEl = document.getElementById(`pos-${b.name}`);
-                if (posEl) posEl.innerText = b.position.toFixed(4);
+                if (posEl) posEl.textContent = b.position.toFixed(4);
                 
                 const kellyEl = document.getElementById(`kelly-${b.name}`);
-                if (kellyEl) kellyEl.innerText = `$${b.kelly_limit.toFixed(0)}`;
+                if (kellyEl) kellyEl.textContent = `$${b.kelly_limit.toFixed(0)}`;
             });
         }
     }
@@ -198,9 +198,9 @@
         const bot = data.bots.find(b => b.name === currentBot);
         if (!bot) return;
         
-        document.getElementById('tactical-title').innerText = bot.name;
+        document.getElementById('tactical-title').textContent = bot.name;
         const statEl = document.getElementById('tactical-status');
-        statEl.innerText = bot.mode;
+        statEl.textContent = bot.mode;
         statEl.className = `status ${bot.mode.toLowerCase()}`;
         
         // Draw using Canvas API
@@ -399,13 +399,13 @@
     
     ws.onopen = () => {
         const st = document.getElementById('ws-status');
-        st.innerText = 'ONLINE'; 
+        st.textContent = 'ONLINE'; 
         st.style.color = 'var(--green)';
     };
     
     ws.onclose = () => {
         const st = document.getElementById('ws-status');
-        st.innerText = 'OFFLINE'; 
+        st.textContent = 'OFFLINE'; 
         st.style.color = 'var(--red)';
     };
     
@@ -414,6 +414,14 @@
         if (currentBot) renderTactical(lastData);
         else renderFleet(lastData);
     };
+
+    // Event Delegation for Fleet View clicks
+    fleetView.addEventListener('click', (e) => {
+        const card = e.target.closest('.bot-card');
+        if (!card) return;
+        const botName = card.dataset.botName;
+        if (botName) showBotView(botName);
+    });
 
 </script>
 </body>
