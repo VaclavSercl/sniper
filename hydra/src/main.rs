@@ -773,10 +773,6 @@ impl SovereignEngine for HydraEngine {
             let mut has_items = false;
             let mut itoa_buf = itoa::Buffer::new();
             
-            // LOGGING
-            eprintln!("[DEBUG] db={} ds={} lb={} sell_i={} buy_i={} margin_usd={} final_usd_size={}", 
-                db, ds, lb, sell_i, buy_i, available_margin.0, final_order_usd.0);
-
             // GID-BASED MASS CANCEL — always cancel ALL Hydra orders atomically
             // This is immune to ID tracking leaks and guarantees clean slate
             out_buf.extend_from_slice(b"[\"oc_multi\",{\"gid\":[");
