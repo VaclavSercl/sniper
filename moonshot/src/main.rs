@@ -365,7 +365,25 @@ impl SovereignEngine for MoonshotEngine {
 
     fn on_loop(&mut self, _out_buf: &mut bytes::BytesMut) {
         let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
-        unsafe { &*self.engine }.heartbeat_ms.store(now_ms, Ordering::Release);
+        let e_global = unsafe { &*self.engine };
+        e_global.heartbeat_ms.store(now_ms, Ordering::Release);
+        
+        let bid = e_global.pairs[0].best_bid.load(Ordering::Relaxed) as i64;
+        let ask = e_global.pairs[0].best_ask.load(Ordering::Relaxed) as i64;
+        if ask > 0 && bid > 0 {
+            let spread_bps = ((ask - bid) * 10000) / ask;
+            let fee_ref = unsafe { &*self.fee_matrix };
+            let bfx_taker = fee_ref.venues[sniper_types::fee_types::VENUE_BITFINEX].taker_fee_bps.load(Ordering::Relaxed) as i64;
+            let slippage = 3; // 3 bps slippage estimate
+            let required_spread = (bfx_taker * 2) + slippage;
+            
+            let risk = unsafe { &*self.risk };
+            if spread_bps < required_spread {
+                risk.global_paused.store(1, Ordering::Relaxed);
+            } else {
+                risk.global_paused.store(0, Ordering::Relaxed);
+            }
+        }
     }
 }
 

@@ -270,6 +270,12 @@ impl SovereignEngine for NexusEngine {
         info!(event = "authenticated", bot = "nexus");
     }
 
+    fn on_shutdown(&mut self, out_buf: &mut bytes::BytesMut) {
+        if self.authed {
+            out_buf.extend_from_slice(b"[0,\"oc_multi\",null,{\"gid\":[5000]}]");
+        }
+    }
+
     fn is_shadow(&self) -> bool {
         let cross_state = unsafe { &*self.cross };
         cross_state.paper_mode.load(Ordering::Relaxed) == 1 
