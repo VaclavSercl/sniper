@@ -274,6 +274,30 @@ impl BitfinexVenue {
         buf.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\",\"flags\":4096}]");
     }
 
+    /// Write an FOK order into the batch (handles comma separation dynamically).
+    #[inline]
+    pub fn write_fok_order(
+        buf: &mut bytes::BytesMut,
+        gid: u32,
+        symbol: &[u8],
+        amount: &str,
+        price: &str,
+    ) {
+        if !buf.ends_with(b"[") {
+            buf.extend_from_slice(b",");
+        }
+        buf.extend_from_slice(b"[\"on\",{\"gid\":");
+        let mut itoa_buf = itoa::Buffer::new();
+        buf.extend_from_slice(itoa_buf.format(gid).as_bytes());
+        buf.extend_from_slice(b",\"symbol\":\"");
+        buf.extend_from_slice(symbol);
+        buf.extend_from_slice(b"\",\"amount\":\"");
+        buf.extend_from_slice(amount.as_bytes());
+        buf.extend_from_slice(b"\",\"price\":\"");
+        buf.extend_from_slice(price.as_bytes());
+        buf.extend_from_slice(b"\",\"type\":\"EXCHANGE FOK\"}]");
+    }
+
     /// Write an IOC order into the batch.
     #[inline]
     pub fn write_ioc_order(

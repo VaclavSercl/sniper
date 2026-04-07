@@ -303,13 +303,8 @@ impl SovereignEngine for TrigonEngine {
                         if arr.len() > 1 {
                             let mt = arr[1].as_str().unwrap_or("");
                             if mt == "wu" || mt == "ws" {
-                                let iter: Box<dyn Iterator<Item = &serde_json::Value>> = if mt == "wu" {
-                                    Box::new(std::iter::once(&arr[2]))
-                                } else {
-                                    if let Some(a) = arr[2].as_array() { Box::new(a.iter()) } else { Box::new(std::iter::empty()) }
-                                };
-                                let e_global = unsafe { &*self.engine };
-                                for w in iter {
+                                // ZERO-BOX PURGE: Nativní iterace bez haldové alokace
+                                let process_wallet = |w: &serde_json::Value, e_global: &TrigonEngineState| {
                                     if let Some(w_arr) = w.as_array() {
                                         let get_f = |v: &serde_json::Value| -> Option<u64> {
                                             v.as_f64().map(|f| (f * sniper_types::PRICE_SCALE as f64).round() as u64)
@@ -321,6 +316,16 @@ impl SovereignEngine for TrigonEngine {
                                                 else if cur == sniper_types::TRADING_QUOTE || cur == "UST" { e_global.wallet_usd.store(bal, Ordering::SeqCst); }
                                                 else if cur == "ETH" { e_global.wallet_eth.store(bal, Ordering::SeqCst); }
                                             }
+                                        }
+                                    }
+                                };
+                                let e_global = unsafe { &*self.engine };
+                                if mt == "wu" {
+                                    process_wallet(&arr[2], e_global); // Zpracování jednoho updatu
+                                } else if mt == "ws" {
+                                    if let Some(snapshot) = arr[2].as_array() {
+                                        for w in snapshot {
+                                            process_wallet(w, e_global); // Zpracování pole bez alokace pointeru
                                         }
                                     }
                                 }
@@ -448,23 +453,14 @@ impl SovereignEngine for TrigonEngine {
                                 let q_fmt = FixedFormat::new(qty_fp.0);
                                 let p_fmt = FixedFormat::new(price_fp.0);
 
-                                if l == 0 {
-                                    out_buf.extend_from_slice(b"[\"on\",{\"gid\":");
-                                    let mut itoa_buf = itoa::Buffer::new();
-                                    out_buf.extend_from_slice(itoa_buf.format(7000u32).as_bytes());
-                                    out_buf.extend_from_slice(b",\"symbol\":\"");
-                                    out_buf.extend_from_slice(fsym.as_bytes());
-                                    out_buf.extend_from_slice(b"\",\"amount\":\"");
-                                    out_buf.extend_from_slice(q_fmt.as_str().as_bytes());
-                                    out_buf.extend_from_slice(b"\",\"price\":\"");
-                                    out_buf.extend_from_slice(p_fmt.as_str().as_bytes());
-                                    out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE IOC\"}]");
-                                } else {
-                                    BitfinexVenue::write_ioc_order(
-                                        out_buf, 7000, fsym.as_bytes(),
-                                        q_fmt.as_str(), p_fmt.as_str(),
-                                    );
-                                }
+                                // Absolutní symetrie a Fill-Or-Kill garance
+                                sniper_types::exchange::bitfinex_venue::BitfinexVenue::write_fok_order(
+                                    out_buf, 
+                                    7000, 
+                                    fsym.as_bytes(),
+                                    q_fmt.as_str(), 
+                                    p_fmt.as_str(),
+                                );
                             }
                             BitfinexVenue::write_batch_close(out_buf);
 
