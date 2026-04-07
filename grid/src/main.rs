@@ -112,6 +112,7 @@ fn calculate_grid_levels(
     num_sell: u32,
     mode: u32,
     geo_pct: FixedPrice,
+    grid_inv: i64,
 ) -> (GridLevels, GridLevels) {
     let mut buys = GridLevels::new();
     let mut sells = GridLevels::new();
@@ -132,10 +133,25 @@ fn calculate_grid_levels(
     }
 
     let mut current_sell = center;
-    let sell_mult = scale_fp + (geo_pct / f_100);
+    
+    // ZLATÉ PRAVIDLO: Inventory Skew Penalty (Pasivní akumulace)
+    // Pokud držíme BTC, stavíme prodejní limity blíže k trhu pro rychlejší exit v zisku.
+    let inventory_btc = grid_inv as f64 / sniper_types::PRICE_SCALE as f64;
+    let inventory_penalty_factor = if inventory_btc > 0.0 {
+        // Redukce sell spacingu úměrně k drženému BTC (až o 80 %)
+        let penalty = 1.0 - inventory_btc.min(0.8);
+        penalty.max(0.2)
+    } else {
+        1.0
+    };
+
+    let sell_spacing = FixedPrice::new((spacing.0 as f64 * inventory_penalty_factor) as i64);
+    let sell_geo_pct = FixedPrice::new((geo_pct.0 as f64 * inventory_penalty_factor) as i64);
+    let sell_mult = scale_fp + (sell_geo_pct / f_100);
+    
     for _ in 1..=(num_sell as usize).min(GRID_ARRAY_CAP) {
         let price = if mode == 0 {
-            current_sell + spacing
+            current_sell + sell_spacing
         } else {
             current_sell * sell_mult
         };
@@ -351,7 +367,7 @@ impl SovereignEngine for GridEngine {
                             warp_sells.sort_unstable_by(|a, b| a.cmp(b));
                             (warp_buys, warp_sells)
                         } else {
-                            calculate_grid_levels(center, spacing, num_buy, num_sell, mode, geo_pct)
+                            calculate_grid_levels(center, spacing, num_buy, num_sell, mode, geo_pct, grid_inv)
                         };
 
                         let buys_ref = unsafe { &mut (*(self.engine as *mut GridEngineState)).buy_levels };

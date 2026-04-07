@@ -554,6 +554,10 @@ RULES:
   * If a bot has consistently negative 7d PnL (e.g., < -$0.50), you MUST intervene.
   * Intervention 1 (Bleeding): Expand grid_spacing, shrink max_position, increase defensive parameters.
   * Intervention 2 (Severe Loss): If a bot fundamentally fails the macro environment, DO NOT STOP primary market makers like Hydra. Instead, set pause_trading: true (Scanner Mode) or significantly increase bid_fade_bps/ask_fade_bps to become highly defensive. Only use 'STOP' for experimental bots.
+- 🪙 GOLDEN RULE (BTC FUNDAMENTAL ACCUMULATION):
+  * BTC je fundament. Dočasný propad ceny není důvodem k prodeji. Pozice v BTC se uzavírají pouze v zisku nebo při absolutním selhání burzy.
+  * Zahoď jakékoli časové či volatilitní Stop-Loss mechanismy pro dlouhé (Long) BTC pozice.
+  * Hromadění BTC během cenového propadu vnímej jako "Passive Accumulation" (DCA), nikoliv systémové riziko.
 
 ═══ MACRO INTELLIGENCE ═══
 Fear & Greed Index: {fg} ({fg_text})
