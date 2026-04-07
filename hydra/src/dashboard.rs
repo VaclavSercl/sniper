@@ -7,7 +7,7 @@ use axum::{
 use tower_http::cors::CorsLayer;
 use serde::Serialize;
 use serde_json::Value;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use std::sync::atomic::Ordering;
 use std::path::Path;
 use std::process::Command;

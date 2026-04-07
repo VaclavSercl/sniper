@@ -15,7 +15,7 @@ use simd_json::BorrowedValue;
 use sniper_types::{EngineState, RiskState, ENGINE_STATE_PATH, RISK_STATE_PATH, PRICE_SCALE_I, PRICE_SCALE};
 use sniper_types::notifier::AsyncNotifier;
 use sniper_types::mmap_utils::init_mmap;
-use sniper_types::framework::{SovereignEngine, SovereignDualRunner};
+use sniper_types::framework::SovereignEngine;
 use sniper_types::math::FixedPrice;
 
 mod book;
@@ -48,7 +48,7 @@ impl FixedFormat {
             val = -val;
         }
         let int_part = val / PRICE_SCALE_I;
-        let mut frac_part = val % PRICE_SCALE_I;
+        let frac_part = val % PRICE_SCALE_I;
         
         let mut itoa_buf = itoa::Buffer::new();
         let int_str = itoa_buf.format(int_part).as_bytes();
@@ -756,27 +756,6 @@ impl SovereignEngine for HydraEngine {
         let db = (buy_i - lb).abs();
         let ds = (sell_i - ls).abs();
         if db >= MIN_TICK || ds >= MIN_TICK || lb == 0 {
-            let dll = risk.daily_loss_limit.load(Ordering::Acquire) as f64 / PRICE_SCALE as f64;
-            let r_pnl = engine.realized_pnl.load(Ordering::Acquire) as f64 / sniper_types::PRICE_SCALE as f64;
-            /* 
-            // DISABLE DLL CHECK FOR NOW
-            if dll > 0.0 && r_pnl < -dll {
-                let cancel_ids = collect_all_order_ids(engine);
-                if !cancel_ids.is_empty() {
-                    out_buf.extend_from_slice(b"[0,\"oc_multi\",null,{\"id\":[");
-                    let mut itoa_buf = itoa::Buffer::new();
-                    for (i, &id) in cancel_ids.iter().enumerate() {
-                        if i > 0 { out_buf.extend_from_slice(b","); }
-                        out_buf.extend_from_slice(itoa_buf.format(id).as_bytes());
-                    }
-                    out_buf.extend_from_slice(b"]}]");
-                }
-                risk.paused.store(1, Ordering::SeqCst);
-                self.notifier.alert(format!("🛑 *EMERGENCY STOP*\nDaily Loss Limit reached: `${:.2}` (limit `-${:.2}`)\nAll orders cancelled. System *LOCKED*.", r_pnl, dll));
-                return;
-            }
-            */
-
             let grid_levels = risk.grid_size.load(Ordering::Acquire).clamp(1, sniper_types::MAX_GRID_LEVELS as u64) as usize;
             let max_pos = risk.max_inv_delta.load(Ordering::Acquire) as i64;
             let pos_ratio = if max_pos > 0 { FixedPrice::new(current_pos).max(FixedPrice::new(-max_pos)).min(FixedPrice::new(max_pos)) / FixedPrice::new(max_pos) } else { FixedPrice::zero() };
@@ -841,6 +820,15 @@ impl SovereignEngine for HydraEngine {
             let n_public_sell = gc.n_public_sell;
             let ghost_mode = gc.ghost_mode;
 
+            // === L1 ORACLE HYPER-SKEWING ===
+            // obi ukazuje směr (Kupci dominují = >0). trending_score ukazuje sílu VPIN (od 0 do 1)
+            let trending_fp = FixedPrice::new(l2risk.trending_score.load(Ordering::Relaxed) as i64);
+            let skew_factor = obi * trending_fp;
+            let one_fp = FixedPrice::new(sniper_types::PRICE_SCALE_I);
+            let buy_skew_multiplier = one_fp + skew_factor;
+            let sell_skew_multiplier = one_fp - skew_factor;
+            // ===============================
+
             let base_bp = (micro_i + final_bias_with_l1).max(0).min(ba_i - MIN_TICK);
             for i in 0..n_buy {
                 let spacing = (FixedPrice::new(grid) * FixedPrice::from_f64(sniper_types::LEVEL_SPACING[i])).0;
@@ -849,7 +837,7 @@ impl SovereignEngine for HydraEngine {
 
                 if i < n_public_buy {
                     // 3. THE CLAMPING
-                    let mut final_usd_size = final_order_usd;
+                    let mut final_usd_size = final_order_usd * buy_skew_multiplier;
                     
                     if pos_fp.0 >= 0 {
                         // Jsme Long. Zvyšujeme expozici. Máme limit?
@@ -891,7 +879,7 @@ impl SovereignEngine for HydraEngine {
                 if i < n_public_sell {
                     let sp_fp = FixedPrice::new(sp_i);
                     // 3. THE CLAMPING
-                    let mut final_usd_size = final_order_usd;
+                    let mut final_usd_size = final_order_usd * sell_skew_multiplier;
                     
                     if pos_fp.0 <= 0 {
                         // Jsme Short. Zvyšujeme expozici. Máme limit?
