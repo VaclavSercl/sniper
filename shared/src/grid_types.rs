@@ -70,6 +70,8 @@ pub struct GridEngineState {
     /// Active tracking fields
     pub active_buy_ids: [AtomicU64; GRID_MAX_LEVELS],
     pub active_sell_ids: [AtomicU64; GRID_MAX_LEVELS],
+    /// Volume Weighted Average Price of current inventory
+    pub vwap: AtomicU64,
 }
 
 // ═══════════════════════════════════════════════════════════

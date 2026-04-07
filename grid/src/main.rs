@@ -174,6 +174,8 @@ struct GridEngine {
     last_grid_calc: Instant,
     toxic_storm_ptr: *const u8,
     armada_state: &'static sniper_types::armada_types::ArmadaState,
+    last_anchor_price: i64,
+    last_trending_score: i64,
 }
 
 unsafe impl Send for GridEngine {}
@@ -312,7 +314,30 @@ impl SovereignEngine for GridEngine {
                 
                 let hedge_active = !sniper_types::l2_command::should_grid_place_bid(l2r);
 
-                if self.last_grid_calc.elapsed().as_secs() >= 3 {
+                let trending_score_raw = l2r.trending_score.load(Ordering::Relaxed) as i64;
+                let base_spacing_raw = r.grid_spacing.load(Ordering::Acquire) as i64;
+                let spacing_fp = FixedPrice::new(base_spacing_raw);
+                
+                // ZÁSAH 1: Skewed Delta-Trigger
+                let delta_price = (mid as i64 - self.last_anchor_price).abs();
+                let spacing_threshold = (spacing_fp.0 * 35) / 100; // 35% posun
+                let trend_delta = (trending_score_raw - self.last_trending_score).abs();
+                let time_elapsed = self.last_grid_calc.elapsed().as_secs();
+
+                // Přepočítáme mřížku jen pokud se cena pohnula o 35% rozteče, 
+                // změnila se drasticky toxicita, nebo uběhlo 60 vteřin (Fallback)
+                if delta_price > spacing_threshold || trend_delta > 200_000 || time_elapsed > 60 {
+                    let mut new_anchor_price = mid as i64;
+                    // One-Way Anchor Freeze (Zlaté pravidlo Bitcoinu): Nezlevňujeme při poklesu s plnou taškou
+                    let armada_cap = self.armada_state.authorized_capital[2].load(Ordering::Acquire) as i64;
+                    let inventory_usd = (grid_inv as f64 / sniper_types::PRICE_SCALE as f64) * mid as f64;
+                    let cap_pct = if armada_cap > 0 { inventory_usd / armada_cap as f64 } else { 0.0 };
+                    if cap_pct > 0.5 && new_anchor_price < self.last_anchor_price {
+                        new_anchor_price = self.last_anchor_price; // Zastaví kráčení dolů
+                    }
+                    self.last_anchor_price = new_anchor_price;
+                    self.last_trending_score = trending_score_raw;
+                    
                     // ═══ HIVE MIND: Cross-Bot Toxic Storm ═══
                     let storm_byte = unsafe { std::ptr::read_volatile(self.toxic_storm_ptr) };
                     if storm_byte == 1 { return; }
@@ -322,33 +347,45 @@ impl SovereignEngine for GridEngine {
                         return;
                     }
                     
-                    let trending_score = l2r.trending_score.load(Ordering::Relaxed) as f64 / 1e8;
-                    let base_spacing = r.grid_spacing.load(Ordering::Acquire) as f64;
+                    let trending_score = trending_score_raw as f64 / 1e8;
                     let expansion_multiplier = 1.0 + (trending_score.max(0.0) * 2.0);
-                    let spacing = FixedPrice::new((base_spacing * expansion_multiplier) as i64);
+                    let spacing = FixedPrice::new((base_spacing_raw as f64 * expansion_multiplier) as i64);
                     let num_buy = r.num_buy_levels.load(Ordering::Acquire);
                     let num_sell = r.num_sell_levels.load(Ordering::Acquire);
                     let mode = r.grid_mode.load(Ordering::Acquire);
                     let geo_pct = FixedPrice::new(r.geometric_step_pct.load(Ordering::Acquire) as i64);
                     
-                    let mut qty = FixedPrice::new(r.order_qty.load(Ordering::Acquire) as i64);
+                    let base_qty = FixedPrice::new(r.order_qty.load(Ordering::Acquire) as i64);
                     let center_override_fp = FixedPrice::new(r.center_price_override.load(Ordering::Acquire) as i64);
 
                     let mid_fp = FixedPrice::new(mid as i64);
-                    let center = if center_override_fp.0 > 0 { center_override_fp } else { mid_fp };
+                    let center = if center_override_fp.0 > 0 { center_override_fp } else { FixedPrice::new(new_anchor_price) };
                     
+                    // ZÁSAH 2: Zero-Bound Toxic Shrinking (Zlaté pravidlo Bitcoinu)
+                    let mut buy_qty = base_qty;
+                    let mut sell_qty = base_qty;
+                    
+                    if trending_score_raw < -500_000 {
+                        // Silná toxicita dolů: Osekáme nákupy na 30 % (nechytáme plnou kudlu)
+                        // Prodáváme rychleji to, co jsme nabrali (150 % objemu)
+                        buy_qty = FixedPrice::new((buy_qty.0 as i128 * 30_000_000 / sniper_types::PRICE_SCALE_I as i128) as i64);
+                        sell_qty = FixedPrice::new((sell_qty.0 as i128 * 150_000_000 / sniper_types::PRICE_SCALE_I as i128) as i64);
+                    } else if trending_score_raw > 500_000 {
+                        // Trend nahoru: Zadržujeme prodeje (zlato roste), kupujeme agresivněji
+                        sell_qty = FixedPrice::new((sell_qty.0 as i128 * 30_000_000 / sniper_types::PRICE_SCALE_I as i128) as i64);
+                        buy_qty = FixedPrice::new((buy_qty.0 as i128 * 150_000_000 / sniper_types::PRICE_SCALE_I as i128) as i64);
+                    }
+
                     // Graceful shrink through Armada Limit
-                    let armada_cap = self.armada_state.authorized_capital[2].load(Ordering::Acquire) as i64;
                     let total_orders = (num_buy + num_sell) as i64;
                     if total_orders > 0 {
                         let max_total_qty = FixedPrice::new(armada_cap) / mid_fp;
                         let max_qty_per_order = max_total_qty / FixedPrice::new(total_orders * sniper_types::PRICE_SCALE_I as i64);
-                        if qty > max_qty_per_order {
-                            qty = max_qty_per_order;
-                        }
+                        if buy_qty > max_qty_per_order { buy_qty = max_qty_per_order; }
+                        if sell_qty > max_qty_per_order { sell_qty = max_qty_per_order; }
                     }
 
-                    if spacing.0 > 0 && qty.0 >= 15000 && center.0 > 0 {
+                    if spacing.0 > 0 && buy_qty.0 >= 15000 && center.0 > 0 {
                         let anchor = l2w.grid_dynamic_anchor.load(Ordering::Relaxed);
                         let (mut buys, mut sells) = if anchor > 0 {
                             let mut warp_buys = GridLevels::new();
@@ -374,7 +411,7 @@ impl SovereignEngine for GridEngine {
                         for (i, &price) in buys.iter().enumerate() {
                             if i < GRID_MAX_LEVELS {
                                 buys_ref[i].price.store(price.0 as u64, Ordering::Release);
-                                buys_ref[i].quantity.store(qty.0 as u64, Ordering::Release);
+                                buys_ref[i].quantity.store(buy_qty.0 as u64, Ordering::Release);
                             }
                         }
                         
@@ -385,7 +422,7 @@ impl SovereignEngine for GridEngine {
                         for (i, &price) in sells.iter().enumerate() {
                             if i < GRID_MAX_LEVELS {
                                 sells_ref[i].price.store(price.0 as u64, Ordering::Release);
-                                sells_ref[i].quantity.store(qty.0 as u64, Ordering::Release);
+                                sells_ref[i].quantity.store(sell_qty.0 as u64, Ordering::Release);
                             }
                         }
                         e_mut.active_sell_levels.store(sells.len() as u32, Ordering::Release);
@@ -400,7 +437,7 @@ impl SovereignEngine for GridEngine {
                             let safe_price = if ask_fp.0 > 0 && price.0 >= ask_fp.0 { ask_fp.0 - 10_000 } else { price.0 };
                             let p_fp = FixedPrice::new(safe_price);
                             
-                            let mut final_qty = qty.0;
+                            let mut final_qty = buy_qty.0;
                             let usd_cost = p_fp * FixedPrice::new(final_qty);
                             
                             let min_usd_allowed = (FixedPrice::new(15000) * p_fp).0;
@@ -415,18 +452,30 @@ impl SovereignEngine for GridEngine {
 
                             let q_fmt = FixedFormat::new(final_qty);
                             let p_fmt = FixedFormat::new(safe_price);
-                            BitfinexVenue::write_limit_order(
+                            // POST-ONLY GARANCE FLAG (4096)
+                            // POST-ONLY GARANCE FLAG (4096)
+                            BitfinexVenue::write_limit_postonly_order(
                                 out_buf, 3000, symbol,
                                 q_fmt.as_str(), p_fmt.as_str(),
                             );
                         }
 
                         let mut remaining_btc = (e.wallet_btc.load(Ordering::Relaxed) as i64 * 98) / 100;
+                        let min_profit = 10_000; // 1 tick
                         for price in &sells {
                             let bid_fp = FixedPrice::new(e.best_bid.load(Ordering::Relaxed) as i64);
-                            let safe_price = if bid_fp.0 > 0 && price.0 <= bid_fp.0 { bid_fp.0 + 10_000 } else { price.0 };
+                            let mut safe_price = if bid_fp.0 > 0 && price.0 <= bid_fp.0 { bid_fp.0 + 10_000 } else { price.0 };
 
-                            let mut final_qty = qty.0;
+                            // 1. Zlatá podlaha (Breakeven Floor pro Sell příkazy)
+                            let vwap = e.vwap.load(Ordering::Relaxed) as i64;
+                            if vwap > 0 {
+                                let min_allowed_sell_price = vwap + min_profit;
+                                if safe_price < min_allowed_sell_price {
+                                    safe_price = min_allowed_sell_price;
+                                }
+                            }
+
+                            let mut final_qty = sell_qty.0;
                             if remaining_btc < 15000 { break; } 
                             
                             if final_qty > remaining_btc {
@@ -438,7 +487,9 @@ impl SovereignEngine for GridEngine {
 
                             let q_fmt = FixedFormat::new(-final_qty);
                             let p_fmt = FixedFormat::new(safe_price);
-                            BitfinexVenue::write_limit_order(
+                            // POST-ONLY GARANCE FLAG (4096)
+                            // POST-ONLY GARANCE FLAG (4096)
+                            BitfinexVenue::write_limit_postonly_order(
                                 out_buf, 3000, symbol,
                                 q_fmt.as_str(), p_fmt.as_str(),
                             );
@@ -496,6 +547,8 @@ async fn main() -> Result<()> {
         last_grid_calc: Instant::now() - core::time::Duration::from_secs(10), // force init run
         toxic_storm_ptr: toxic_storm_mmap.as_ptr(),
         armada_state: sniper_types::armada_types::load_armada_state_ro(),
+        last_anchor_price: 0,
+        last_trending_score: 0,
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();
