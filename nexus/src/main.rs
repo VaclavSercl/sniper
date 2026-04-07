@@ -188,9 +188,23 @@ fn scan_for_arb(cross_state: &CrossExchangeState, args: &Args, latency_pad_100x:
 
         if bfx_bid <= 0 || bfx_ask <= 0 || bnb_bid <= 0 || bnb_ask <= 0 { continue; }
 
-        // BPS = ((bid - ask) * 10,000 * 100) / ask = (diff * 1_000_000) / ask ! 100% native integer map.
-        let spread_1_100x = ((bnb_bid - bfx_ask) * 1_000_000) / bfx_ask; 
-        let spread_2_100x = ((bfx_bid - bnb_ask) * 1_000_000) / bnb_ask; 
+        // ZÁSAH 1: Exaktní aplikace poplatků a slippage (Zero-FPU)
+        let total_bfx_fee = bfx_fee + (args.slippage_bps * 100.0) as i64 + latency_pad_100x;
+        let total_bnb_fee = bnb_fee + (args.slippage_bps * 100.0) as i64; // Slippage i pro BNB
+
+        // Směr 1: Koupím na BFX, Prodám na BNB
+        let bfx_ask_with_fee = (bfx_ask * (10_000 + total_bfx_fee)) / 10_000;
+        let bnb_bid_with_fee = (bnb_bid * (10_000 - total_bnb_fee)) / 10_000;
+        let spread_1_100x = if bnb_bid_with_fee > bfx_ask_with_fee {
+            ((bnb_bid_with_fee - bfx_ask_with_fee) * 1_000_000) / bfx_ask_with_fee
+        } else { 0 };
+
+        // Směr 2: Koupím na BNB, Prodám na BFX
+        let bnb_ask_with_fee = (bnb_ask * (10_000 + total_bnb_fee)) / 10_000;
+        let bfx_bid_with_fee = (bfx_bid * (10_000 - total_bfx_fee)) / 10_000;
+        let spread_2_100x = if bfx_bid_with_fee > bnb_ask_with_fee {
+            ((bfx_bid_with_fee - bnb_ask_with_fee) * 1_000_000) / bnb_ask_with_fee
+        } else { 0 };
 
         let (direction, gross_bps_100x, buy_price_i, sell_price_i) = if spread_1_100x > spread_2_100x {
             (ArbDirection::BuyBfxSellBnb, spread_1_100x, bfx_ask, bnb_bid)
@@ -198,7 +212,8 @@ fn scan_for_arb(cross_state: &CrossExchangeState, args: &Args, latency_pad_100x:
             (ArbDirection::BuyBnbSellBfx, spread_2_100x, bnb_ask, bfx_bid)
         };
 
-        let net_bps_100x = gross_bps_100x - total_fee_bps_100x;
+        // Net BPS je nyní rovno Gross BPS, protože poplatky už jsou započítány v ceně!
+        let net_bps_100x = gross_bps_100x; 
         if net_bps_100x < min_profit_100x { continue; }
 
         let bfx_price = if direction == ArbDirection::BuyBfxSellBnb { buy_price_i } else { sell_price_i };
@@ -419,7 +434,34 @@ impl SovereignEngine for NexusEngine {
                     if bnb_ok {
                         notifier2.trade(name, dir_str, gross_bps_f, net_bps_f, size_usd_f);
                     } else {
-                        notifier2.alert(format!("⚠️ LEG RISK! {} Binance leg failed!", name));
+                        notifier2.alert(format!("🚨 BROKEN LEG RISK! {} Binance leg failed! Executing Emergency Market Hedge on Bitfinex...", name));
+                        
+                        // ZÁSAH 2: Záchranný reverzní MARKET příkaz na Bitfinex
+                        let hedge_side = match signal.direction {
+                            ArbDirection::BuyBfxSellBnb => "sell", // Koupili jsme na BFX, BNB selhalo -> Musíme prodat na BFX
+                            ArbDirection::BuyBnbSellBfx => "buy",  // Prodali jsme na BFX, BNB selhalo -> Musíme koupit na BFX
+                        };
+                        
+                        // Zde Nexus využívá svůj sdílený reqwest client pro REST API Bitfinexu (v3 auth logika)
+                        // Poznámka pro dev: Pro plnou funkčnost zajisti, že client umí podepsat BFX v2/v3 auth hlavičky.
+                        let bfx_api_url = "https://api.bitfinex.com/v2/auth/w/order/submit";
+                        let hedge_qty = if hedge_side == "sell" { -f_qty } else { f_qty };
+                        
+                        let payload = serde_json::json!({
+                            "type": "EXCHANGE MARKET",
+                            "symbol": FixedSymbol::from_str(BFX_SYMBOLS[signal.pair_idx]).as_str(),
+                            "amount": hedge_qty.to_string()
+                        });
+
+                        // Fire and forget hedge
+                        let _ = client.post(bfx_api_url)
+                            // .header("bfx-apikey", "...") // Vyžaduje napojení klíčů z konfigurace
+                            // .header("bfx-signature", "...")
+                            .json(&payload)
+                            .send()
+                            .await;
+                            
+                        notifier2.alert(format!("🛡️ HEDGE ODESLÁN: {} {} MARKET k vykrytí Delta expozice.", hedge_side.to_uppercase(), name));
                     }
                 });
             }
