@@ -275,7 +275,9 @@ impl SovereignEngine for TrigonEngine {
 
     fn is_shadow(&self) -> bool {
         let risk = unsafe { &*self.risk };
-        risk.global_paused.load(Ordering::Acquire) != 0
+        let is_paused = risk.global_paused.load(Ordering::Acquire) != 0;
+        let config_shadow = std::fs::read_to_string("config.yaml").unwrap_or_default().contains("is_shadow: true");
+        is_paused || config_shadow
     }
 
     fn best_bid_ask(&self) -> (f64, f64) {
@@ -286,8 +288,49 @@ impl SovereignEngine for TrigonEngine {
         )
     }
 
+    fn add_virtual_pnl(&self, amount: i64) {
+        let eng = unsafe { &*self.engine };
+        eng.virtual_realized_pnl.fetch_add(amount, Ordering::Relaxed);
+    }
+
     fn on_market_message(&mut self, payload: &mut [u8], out_buf: &mut bytes::BytesMut) {
         let loop_start = Instant::now();
+        
+        if payload.len() > 2 && payload[0] == b'[' {
+            if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&payload) {
+                if let Some(arr) = v.as_array() {
+                    if let Some(0) = arr[0].as_i64() {
+                        if arr.len() > 1 {
+                            let mt = arr[1].as_str().unwrap_or("");
+                            if mt == "wu" || mt == "ws" {
+                                let iter: Box<dyn Iterator<Item = &serde_json::Value>> = if mt == "wu" {
+                                    Box::new(std::iter::once(&arr[2]))
+                                } else {
+                                    if let Some(a) = arr[2].as_array() { Box::new(a.iter()) } else { Box::new(std::iter::empty()) }
+                                };
+                                let e_global = unsafe { &*self.engine };
+                                for w in iter {
+                                    if let Some(w_arr) = w.as_array() {
+                                        let get_f = |v: &serde_json::Value| -> Option<u64> {
+                                            v.as_f64().map(|f| (f * sniper_types::PRICE_SCALE as f64).round() as u64)
+                                                .or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok().map(|f| (f * sniper_types::PRICE_SCALE as f64).round() as u64)))
+                                        };
+                                        if let (Some(wt), Some(cur), Some(bal)) = (w_arr.get(0).and_then(|x| x.as_str()), w_arr.get(1).and_then(|x| x.as_str()), w_arr.get(2).and_then(get_f)) {
+                                            if wt == "exchange" {
+                                                if cur == sniper_types::TRADING_BASE { e_global.wallet_btc.store(bal, Ordering::SeqCst); }
+                                                else if cur == sniper_types::TRADING_QUOTE || cur == "UST" { e_global.wallet_usd.store(bal, Ordering::SeqCst); }
+                                                else if cur == "ETH" { e_global.wallet_eth.store(bal, Ordering::SeqCst); }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
         if let Some((chan, bid, ask)) = sniper_types::exchange::fast_parse_ticker(payload) {
             let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
             let engine = unsafe { &*self.engine };
@@ -408,7 +451,7 @@ impl SovereignEngine for TrigonEngine {
                                 if l == 0 {
                                     out_buf.extend_from_slice(b"[\"on\",{\"gid\":");
                                     let mut itoa_buf = itoa::Buffer::new();
-                                    out_buf.extend_from_slice(itoa_buf.format(4000u32).as_bytes());
+                                    out_buf.extend_from_slice(itoa_buf.format(7000u32).as_bytes());
                                     out_buf.extend_from_slice(b",\"symbol\":\"");
                                     out_buf.extend_from_slice(fsym.as_bytes());
                                     out_buf.extend_from_slice(b"\",\"amount\":\"");
@@ -418,7 +461,7 @@ impl SovereignEngine for TrigonEngine {
                                     out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE IOC\"}]");
                                 } else {
                                     BitfinexVenue::write_ioc_order(
-                                        out_buf, 4000, fsym.as_bytes(),
+                                        out_buf, 7000, fsym.as_bytes(),
                                         q_fmt.as_str(), p_fmt.as_str(),
                                     );
                                 }
@@ -456,6 +499,12 @@ impl SovereignEngine for TrigonEngine {
     fn on_loop(&mut self, _out_buf: &mut bytes::BytesMut) {
         let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
         unsafe { &*self.engine }.heartbeat_ms.store(now_ms, Ordering::Release);
+    }
+    
+    fn on_shutdown(&mut self, out_buf: &mut bytes::BytesMut) {
+        out_buf.extend_from_slice(b"[0,\"oc_multi\",null,{\"gid\":[7000]}]");
+        let engine = unsafe { &*self.engine };
+        engine.optimistic_flush_active_orders();
     }
 }
 

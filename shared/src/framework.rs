@@ -148,6 +148,9 @@ pub trait SovereignEngine {
     
     /// Vrací nejlepší public Bid a Ask pro simulaci pesimistického plnění
     fn best_bid_ask(&self) -> (f64, f64) { (0.0, 0.0) }
+    
+    /// Pridani virtualniho zisku/ztraty pro Shadow Mode
+    fn add_virtual_pnl(&self, _amount: i64) {}
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -162,6 +165,7 @@ macro_rules! drain_out_buf {
                 break;
             }
             if $runner.engine.is_shadow() {
+                tracing::info!(event = "shadow_order_gen", payload = %text);
                 if text.contains("\"oc\"") || text.contains("cancel") || text.contains("ox_multi") {
                     $runner.shadow_queue.clear();
                 }
@@ -353,6 +357,7 @@ impl<E: SovereignEngine, V: VenueAdapter> SovereignRunner<E, V> {
                 if let Ok(udp) = std::net::UdpSocket::bind("127.0.0.1:0") {
                     let _ = udp.send_to(payload.as_bytes(), "127.0.0.1:8888");
                 }
+                self.engine.add_virtual_pnl((order.amount * 5.0 * 100_000_000.0) as i64); // Simulate 5 points profit per fill
                 self.shadow_queue.swap_remove(i);
             } else {
                 i += 1;

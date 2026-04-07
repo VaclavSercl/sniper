@@ -183,7 +183,9 @@ impl SovereignEngine for GridEngine {
 
     fn is_shadow(&self) -> bool {
         let risk = unsafe { &*self.risk };
-        risk.global_paused.load(Ordering::Acquire) != 0
+        let is_paused = risk.global_paused.load(Ordering::Acquire) != 0;
+        let config_shadow = std::fs::read_to_string("config.yaml").unwrap_or_default().contains("is_shadow: true");
+        is_paused || config_shadow
     }
 
     fn best_bid_ask(&self) -> (f64, f64) {
@@ -192,6 +194,11 @@ impl SovereignEngine for GridEngine {
             engine.best_bid.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64,
             engine.best_ask.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64
         )
+    }
+
+    fn add_virtual_pnl(&self, amount: i64) {
+        let eng = unsafe { &*self.engine };
+        eng.virtual_realized_pnl.fetch_add(amount, Ordering::Relaxed);
     }
 
     fn on_market_message(&mut self, payload: &mut [u8], out_buf: &mut bytes::BytesMut) {

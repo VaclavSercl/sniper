@@ -108,6 +108,7 @@ pub struct CrossExchangeState {
     pub emergency_pause: AtomicU32,
     /// Daily cross-exchange PnL × PRICE_SCALE
     pub daily_cross_pnl: AtomicI64,
+    pub virtual_realized_pnl: AtomicI64,
     /// Daily loss limit × PRICE_SCALE (positive value, triggers pause if exceeded)
     pub daily_loss_limit: AtomicI64,
     /// Paper trading mode (1 = paper, 0 = live)

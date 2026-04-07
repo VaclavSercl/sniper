@@ -79,6 +79,7 @@ pub struct EngineState {
     // --- COLD: updated infrequently ---
     pub net_position: AtomicI64,
     pub realized_pnl: AtomicI64,
+    pub virtual_realized_pnl: AtomicI64,
     pub wallet_btc: AtomicU64,
     pub wallet_usd: AtomicU64,
     pub checksum: AtomicU32,
@@ -203,6 +204,7 @@ impl Default for EngineState {
             _pad_hot_cold: [0; 8],
             net_position: AtomicI64::new(0),
             realized_pnl: AtomicI64::new(0),
+            virtual_realized_pnl: AtomicI64::new(0),
             wallet_btc: AtomicU64::new(0),
             wallet_usd: AtomicU64::new(0),
             checksum: AtomicU32::new(0),

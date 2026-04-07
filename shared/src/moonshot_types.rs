@@ -26,6 +26,7 @@ pub struct MoonshotPairEngine {
     pub latency_ns: AtomicU64,         // Processing latency (nanoseconds)
     pub net_position: AtomicI64,       // Open position (signed, × PRICE_SCALE)
     pub realized_pnl: AtomicI64,       // Realized PnL (USD × PRICE_SCALE)
+    pub virtual_realized_pnl: AtomicI64,
     pub unrealized_pnl: AtomicI64,     // Mark-to-market unrealized PnL
     pub active: AtomicU32,             // 1 = pair active, 0 = inactive
     pub buy_order_price: AtomicU64,    // Current ghost BUY level × PRICE_SCALE
@@ -43,6 +44,7 @@ pub struct MoonshotEngineState {
     pub wallet_usd: AtomicU64,         // Total USD balance × PRICE_SCALE
     pub total_fills: AtomicU64,        // Global fill counter
     pub daily_pnl: AtomicI64,          // Daily realized PnL (USD × PRICE_SCALE)
+    pub virtual_realized_pnl: AtomicI64, // Virtual PnL for shadow mapping
     pub heartbeat_ms: AtomicU64,       // Last engine heartbeat (epoch ms)
 }
 

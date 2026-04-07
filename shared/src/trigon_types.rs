@@ -61,9 +61,12 @@ pub struct TrigonTriangle {
 pub struct TrigonEngineState {
     pub triangles: [TrigonTriangle; TRIGON_MAX_TRIANGLES],
     pub wallet_usd: AtomicU64,         // USD balance × PRICE_SCALE
+    pub wallet_btc: AtomicU64,
+    pub wallet_eth: AtomicU64,
     pub total_arbs: AtomicU64,         // Total successful arbitrages (lifetime)
     pub total_pnl: AtomicI64,          // Total PnL across all triangles
     pub daily_pnl: AtomicI64,          // Daily realized PnL
+    pub virtual_realized_pnl: AtomicI64,
     pub heartbeat_ms: AtomicU64,       // Engine heartbeat (epoch ms)
     pub scan_latency_ns: AtomicU64,    // Full scan latency (all triangles)
     pub best_profit_bps: AtomicI64,    // Current best opportunity (bps)
@@ -103,6 +106,14 @@ pub struct TrigonRiskState {
 impl Default for TrigonEngineState {
     fn default() -> Self {
         unsafe { std::mem::zeroed() }
+    }
+}
+
+impl TrigonEngineState {
+    pub fn optimistic_flush_active_orders(&self) {
+        for t in 0..TRIGON_MAX_TRIANGLES {
+            self.triangles[t].executing.store(0, std::sync::atomic::Ordering::Release);
+        }
     }
 }
 

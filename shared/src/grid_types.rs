@@ -48,6 +48,7 @@ pub struct GridEngineState {
     pub wallet_usd: AtomicU64,
     /// Realized PnL (USD × PRICE_SCALE)
     pub realized_pnl: AtomicI64,
+    pub virtual_realized_pnl: AtomicI64,
     /// Unrealized PnL (mark-to-market)
     pub unrealized_pnl: AtomicI64,
     /// Net BTC position (signed × PRICE_SCALE)

@@ -222,7 +222,9 @@ impl SovereignEngine for HydraEngine {
 
     fn is_shadow(&self) -> bool {
         let risk = unsafe { &*self.risk };
-        risk.paused.load(Ordering::Relaxed) != 0
+        let is_paused = risk.paused.load(Ordering::Relaxed) != 0;
+        let config_shadow = std::fs::read_to_string("config.yaml").unwrap_or_default().contains("is_shadow: true");
+        is_paused || config_shadow
     }
 
     // Pro debug dashboard na UI posunuto pomocí L2 Ring konverze (přípustné)
@@ -232,6 +234,11 @@ impl SovereignEngine for HydraEngine {
             engine.best_bid.load(Ordering::Relaxed) as f64 / PRICE_SCALE as f64,
             engine.best_ask.load(Ordering::Relaxed) as f64 / PRICE_SCALE as f64
         )
+    }
+
+    fn add_virtual_pnl(&self, amount: i64) {
+        let eng = unsafe { &*self.engine };
+        eng.virtual_realized_pnl.fetch_add(amount, Ordering::Relaxed);
     }
 
     fn on_shutdown(&mut self, out_buf: &mut bytes::BytesMut) {

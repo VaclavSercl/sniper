@@ -278,9 +278,11 @@ impl SovereignEngine for NexusEngine {
 
     fn is_shadow(&self) -> bool {
         let cross_state = unsafe { &*self.cross };
-        cross_state.paper_mode.load(Ordering::Relaxed) == 1 
+        let is_paused = cross_state.paper_mode.load(Ordering::Relaxed) == 1 
             || cross_state.emergency_pause.load(Ordering::Relaxed) == 1 
-            || self.args.paper
+            || self.args.paper;
+        let config_shadow = std::fs::read_to_string("config.yaml").unwrap_or_default().contains("is_shadow: true");
+        is_paused || config_shadow
     }
 
     fn best_bid_ask(&self) -> (f64, f64) {
@@ -290,6 +292,11 @@ impl SovereignEngine for NexusEngine {
             bfx.bid.load(Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64,
             bfx.ask.load(Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64
         )
+    }
+
+    fn add_virtual_pnl(&self, amount: i64) {
+        let rng = unsafe { &*self.cross };
+        rng.virtual_realized_pnl.fetch_add(amount, Ordering::Relaxed);
     }
 
     fn on_market_message(&mut self, _payload: &mut [u8], _out_buf: &mut bytes::BytesMut) {
