@@ -261,9 +261,9 @@ impl SovereignEngine for MoonshotEngine {
                 e.latency_ns.store(loop_start.elapsed().as_nanos() as u64, Ordering::Release);
 
                 let storm_byte = unsafe { std::ptr::read_volatile(self.toxic_storm_ptr) };
-                if storm_byte == 1 {
-                    return;
-                }
+                // if storm_byte == 1 {
+                //     return;
+                // }
                 
                 // ARMADA KŘEMÍKOVÁ ZEĎ 🛡️
                 if self.armada_state.is_kill_switch_active() {

@@ -330,7 +330,7 @@ impl SovereignEngine for NexusEngine {
 
         // ═══ HIVE MIND: Toxic Storm check ═══
         let storm_byte = unsafe { std::ptr::read_volatile(self.toxic_storm_ptr) };
-        if storm_byte == 1 { return; }
+        // if storm_byte == 1 { return; }
         
         // ARMADA KŘEMÍKOVÁ ZEĎ 🛡️
         if self.armada_state.is_kill_switch_active() { return; }

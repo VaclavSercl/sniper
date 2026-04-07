@@ -181,7 +181,11 @@ impl BotSnapshot for HydraProbe {
         if r.paused.load(Ordering::Relaxed) != 0 { "PAUSED".to_string() } else { "LIVE".to_string() }
     }
     fn pnl(&self) -> f64 {
-        self.engine.map(|e| e.realized_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE).unwrap_or(0.0)
+        self.engine.map(|e| {
+            let r = e.realized_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+            let v = e.virtual_realized_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+            r + v
+        }).unwrap_or(0.0)
     }
     fn position(&self) -> f64 {
         self.engine.map(|e| e.net_position.load(Ordering::Relaxed) as f64 / PRICE_SCALE).unwrap_or(0.0)
@@ -226,7 +230,11 @@ impl BotSnapshot for MoonshotProbe {
         if r.global_paused.load(Ordering::Relaxed) != 0 { "PAUSED".to_string() } else { "LIVE".to_string() }
     }
     fn pnl(&self) -> f64 {
-        self.engine.map(|e| e.daily_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE).unwrap_or(0.0)
+        self.engine.map(|e| {
+            let r = e.daily_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+            let v = e.virtual_realized_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+            r + v
+        }).unwrap_or(0.0)
     }
     fn position(&self) -> f64 { 0.0 } // Aggregate position isn't meaningful here
     fn detail(&self) -> Value {
@@ -261,7 +269,11 @@ impl BotSnapshot for GridProbe {
         if r.global_paused.load(Ordering::Relaxed) != 0 { "PAUSED".to_string() } else { "LIVE".to_string() }
     }
     fn pnl(&self) -> f64 {
-        self.engine.map(|e| e.realized_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE).unwrap_or(0.0)
+        self.engine.map(|e| {
+            let r = e.realized_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+            let v = e.virtual_realized_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+            r + v
+        }).unwrap_or(0.0)
     }
     fn position(&self) -> f64 {
         self.engine.map(|e| e.net_position.load(Ordering::Relaxed) as f64 / PRICE_SCALE).unwrap_or(0.0)
@@ -297,7 +309,11 @@ impl BotSnapshot for TrigonProbe {
         if r.global_paused.load(Ordering::Relaxed) != 0 { "PAUSED".to_string() } else { "LIVE".to_string() }
     }
     fn pnl(&self) -> f64 {
-        self.engine.map(|e| e.total_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE).unwrap_or(0.0)
+        self.engine.map(|e| {
+            let r = e.total_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+            let v = e.virtual_realized_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+            r + v
+        }).unwrap_or(0.0)
     }
     fn position(&self) -> f64 { 0.0 }
     fn detail(&self) -> Value {
@@ -332,7 +348,11 @@ impl BotSnapshot for NexusProbe {
         else { "LIVE".to_string() }
     }
     fn pnl(&self) -> f64 {
-        self.cross.map(|c| c.daily_cross_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE).unwrap_or(0.0)
+        self.cross.map(|c| {
+            let r = c.daily_cross_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+            let v = c.virtual_realized_pnl.load(Ordering::Relaxed) as f64 / PRICE_SCALE;
+            r + v
+        }).unwrap_or(0.0)
     }
     fn position(&self) -> f64 { 0.0 }
     fn detail(&self) -> Value {
@@ -418,6 +438,8 @@ async fn handle_socket(socket: WebSocket) {
         Box::new(nexus),
     ];
 
+    let armada_state = load_mmap::<sniper_types::armada_types::ArmadaState>("/dev/shm/beroun/armada_state.bin");
+
     loop {
         tokio::select! {
             cmd_opt = receiver.next() => {
@@ -485,13 +507,9 @@ async fn handle_socket(socket: WebSocket) {
                 let mut bots_data = Vec::new();
                 let mut total_pnl = 0.0;
                 
-                for probe in &probes {
+                for (i, probe) in probes.iter().enumerate() {
                     let name = probe.name();
-                    let weight = {
-                        let lock = GLOBAL_KELLY_WEIGHTS.read().unwrap();
-                        *lock.get(name).unwrap_or(&0.0)
-                    };
-                    let kelly_limit = global_capital_limit * weight;
+                    let kelly_limit = armada_state.map(|a| a.authorized_capital[i].load(Ordering::Relaxed) as f64 / PRICE_SCALE).unwrap_or(2000.0);
                     
                     let pnl = probe.pnl();
                     total_pnl += pnl;

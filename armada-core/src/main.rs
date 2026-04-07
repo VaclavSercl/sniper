@@ -66,29 +66,32 @@ fn recalculate_kelly_matrix(
     }
 
     let total_equity = state.total_equity.load(Ordering::Relaxed) as f64 / 1e8;
-    let active_equity = if total_equity < 1000.0 { 1000.0 } else { total_equity };
+    let total_active_equity = if total_equity < 1000.0 { 10000.0 } else { total_equity };
 
     let ranging = l2_state.global_risk.ranging_score.load(Ordering::Relaxed) as f64 / 1e8;
     let trending = l2_state.global_risk.trending_score.load(Ordering::Relaxed) as f64 / 1e8;
 
-    let base_usd = [2000.0, 2000.0, 2000.0, 2000.0, 2000.0];
-    let bot_weights = [1.0, 1.0, 1.0, 1.0, 1.0];
-    let total_baseline_usd: f64 = base_usd.iter().sum();
-    let mut mempool_float_usd = active_equity - total_baseline_usd;
-    if mempool_float_usd < 0.0 { mempool_float_usd = 0.0; }
+    let mut raw_weights = [0.0; 5];
+    raw_weights[0] = ranging * 2.0; // Hydra
+    raw_weights[1] = trending * 3.0; // Moonshot
+    raw_weights[2] = ranging * 1.5; // Grid
+    raw_weights[3] = 1.0;           // Trigon
+    raw_weights[4] = trending * 3.0; // Nexus
+
+    let toxic_storm_active = std::fs::read("/dev/shm/beroun/toxic_storm.bin").unwrap_or_else(|_| vec![0]).first().cloned().unwrap_or(0) == 1;
+    if toxic_storm_active {
+        raw_weights[0] = 0.0;
+        raw_weights[2] = 0.0;
+    }
+
+    let total_weight: f64 = raw_weights.iter().sum();
 
     for i in 0..5 {
-        let baseline_usd = base_usd[i];
-        
-        let dynamic_weight = match i {
-            0 | 2 => ranging, // Hydra/Grid
-            1 | 4 => trending, // Moonshot/Nexus
-            3 => 1.0, // Trigon
-            _ => 0.0,
+        let allocated_usd = if total_weight > 0.0 {
+            total_active_equity * (raw_weights[i] / total_weight)
+        } else {
+            0.0
         };
-
-        let overdrive_usd = mempool_float_usd * dynamic_weight * bot_weights[i];
-        let allocated_usd = baseline_usd + overdrive_usd;
 
         state.authorized_capital[i].store((allocated_usd * 1e8) as u64, Ordering::Relaxed);
     }
