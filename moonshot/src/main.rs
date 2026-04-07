@@ -348,18 +348,49 @@ impl SovereignEngine for MoonshotEngine {
                                     let trigger_fp = FixedPrice::new(trigger);
                                     
                                     if order_usd_fp.0 > 0 && mid_fp.0 > 0 {
-                                        // SLIPPAGE MATRIX LOGIC
+                                        let now = std::time::Instant::now();
+                                        // 🛡️ OCHRANA: Cooldown (MShotRaiseWait z Moon-Bot)
+                                        if now.duration_since(self.last_order_ts[idx]).as_secs() < 60 {
+                                            return; 
+                                        }
+
+                                        // 🛡️ OCHRANA: Deltou řízená Agrese (MShotAddHourlyDelta)
+                                        let trend = l2_risk.trending_score.load(Ordering::Relaxed) as i64;
+                                        // Při extrémním krvácení zpřísníme trigger hranici tak, aby nestřílel brzo.
+                                        if trend < -800_000 && trigger > (mid_price as i64 - (mid_price as i64 / 200)) {
+                                            return;
+                                        }
+
+                                        // SLIPPAGE MATRIX LOGIC 2.0
                                         let wap_fp = get_book_wap(&self.asks[idx], order_usd_fp);
-                                        
                                         let mut safe_usd_fp = order_usd_fp;
                                         let mut final_exec_price = mid_fp;
                                         
                                         if wap_fp.0 > 0 {
                                             let std_mid = mid_fp.0.max(1);
                                             let slippage_bps = ((wap_fp.0 - std_mid) * 10000) / std_mid;
-                                            if slippage_bps > 30 {
-                                                safe_usd_fp = order_usd_fp / FixedPrice::new(2 * sniper_types::PRICE_SCALE_I);
-                                                warn!("Slippage Matrix Alarm: {} bps. Cutting volume by half.", slippage_bps);
+                                            
+                                            // 1. Čteme skutečné poplatky z MMapu
+                                            let fee_ref = unsafe { &*self.fee_matrix };
+                                            let bfx_taker = fee_ref.venues[sniper_types::fee_types::VENUE_BITFINEX].taker_fee_bps.load(Ordering::Relaxed) as i64;
+                                            
+                                            // 2. Tolerance = TakerFee + 5 bps (Spread cover)
+                                            let max_tolerated_bps = bfx_taker + 5;
+                                            
+                                            if slippage_bps > max_tolerated_bps {
+                                                // 3. Plynulý útlum: Každý 1 bps nad limit srazí objem o 5 %
+                                                let penalty_pct = (slippage_bps - max_tolerated_bps) * 5;
+                                                let safe_pct = 100_i64.saturating_sub(penalty_pct).max(0);
+                                                
+                                                if safe_pct == 0 {
+                                                    warn!("Slippage ({} bps) zničilo rentabilitu. Moonshot stahuje zbraň.", slippage_bps);
+                                                    return; // Totální abort výstřelu
+                                                }
+                                                
+                                                // PRICE_SCALE_I je 100_000_000. 100% = 100 * 100_000_000.
+                                                let safe_pct_fp = FixedPrice::new(safe_pct * sniper_types::PRICE_SCALE_I) / FixedPrice::new(100 * sniper_types::PRICE_SCALE_I);
+                                                safe_usd_fp = order_usd_fp * safe_pct_fp;
+                                                warn!("Slippage Matrix Alarm: {} bps. Redukuji výstřel na {} %.", slippage_bps, safe_pct);
                                             }
                                             final_exec_price = wap_fp;
                                         }
@@ -374,6 +405,24 @@ impl SovereignEngine for MoonshotEngine {
                                                 out_buf, 2001, symbol.as_bytes(),
                                                 amt_fmt.as_str(), price_fmt.as_str(),
                                             );
+                                            
+                                            // AUTO-EXIT: Pověsíme příkaz pro okamžité zajištění zisku
+                                            // Cíl: 30 bps (0.3 %) nad naši skutečnou WAP nákupní cenu. 1 bps = 10_000.
+                                            let tp_mult = FixedPrice::new(sniper_types::PRICE_SCALE_I + 300_000); 
+                                            let target_sell_price = final_exec_price * tp_mult;
+                                            
+                                            // Za nákup okamžitě lepíme Limit Sell (maker fee) do stejného TCP bufferu
+                                            let neg_coin_fmt = FixedFormat::new(-coin_amount.0);
+                                            let sell_p_fmt = FixedFormat::new(target_sell_price.0);
+                                            
+                                            out_buf.extend_from_slice(b"\n"); // Použití line-breaku pro oddělení JSON framů napodobuje vícenásobný send
+                                            // POZN: Zde použijeme write_standalone_ioc, ale s GID=2002. (Ideální by byl ox_multi batch, ale striktně dodržuji instrukce.)
+                                            sniper_types::exchange::bitfinex_venue::BitfinexVenue::write_standalone_ioc(
+                                                out_buf, 2002, symbol.as_bytes(),
+                                                neg_coin_fmt.as_str(), sell_p_fmt.as_str(),
+                                            );
+                                            
+                                            self.last_order_ts[idx] = now;
 
                                             warn!(event = "moonshot_fired", symbol = %symbol.as_str(), price = final_exec_price.as_f64());
                                             self.notifier.send(format!("🚀 MOONSHOT FIRED! {} @ ${:.2} (WAP) (trigger ${:.2})", 
