@@ -105,6 +105,18 @@ if ! is_alive "sovereign-cortex"; then
     ALERTS=$((ALERTS + 1))
 fi
 
+if ! is_alive "armada-core"; then
+    tg_alert "armada_core_down" "🚨 WATCHDOG: Armada Core spadl → restartuji"
+    cd "$ARMADA_ROOT" && nohup ./target/release/armada-core >> "$LOG_DIR/armada-core.log" 2>&1 &
+    ALERTS=$((ALERTS + 1))
+fi
+
+if ! is_alive "hydra-dashboard"; then
+    tg_alert "dashboard_down" "⚠️ WATCHDOG: Dashboard spadl → restartuji"
+    cd "$ARMADA_ROOT" && nohup ./target/release/hydra-dashboard >> "$LOG_DIR/hydra-dashboard.log" 2>&1 &
+    ALERTS=$((ALERTS + 1))
+fi
+
 if ! is_alive "pnl_daemon"; then
     tg_alert "pnl_down" "⚠️ WATCHDOG: PnL Daemon spadl → restartuji"
     cd "$ARMADA_ROOT" && python3 architect/pnl_daemon.py >> "$LOG_DIR/pnl_daemon.log" 2>&1 &
@@ -136,7 +148,7 @@ fi
 
 # ═══ DUPLICATE CLEANUP ═══
 # Note: watchdog.sh is NOT checked — cron creates new bash instances each minute, pgrep sees them all
-for proc in tg_commander pnl_daemon price_bridge market_recorder sovereign-cortex hydra-core moonshot-core grid-core trigon-core nexus-core; do
+for proc in tg_commander pnl_daemon price_bridge market_recorder sovereign-cortex hydra-core moonshot-core grid-core trigon-core nexus-core armada-core hydra-dashboard; do
     kill_dupes "$proc"
 done
 
