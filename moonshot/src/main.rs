@@ -14,6 +14,42 @@ use sniper_types::framework::{SovereignEngine, SovereignDualRunner};
 use sniper_types::notifier::AsyncNotifier;
 use sniper_types::mmap_utils::init_mmap;
 use sniper_types::math::FixedPrice;
+mod book;
+use book::*;
+
+#[inline(always)]
+fn get_book_wap(book: &[sniper_types::OrderBookLevel; 25], target_usd_fp: FixedPrice) -> FixedPrice {
+    let mut remaining_usd = target_usd_fp.0;
+    let mut total_coin_cost = FixedPrice::zero();
+
+    for level in book.iter() {
+        let price = level.price.load(Ordering::Relaxed) as i64;
+        let count = level.count.load(Ordering::Relaxed);
+        let amount = level.amount.load(Ordering::Relaxed).abs();
+        
+        if price > 0 && count > 0 {
+            let p_fp = FixedPrice::new(price);
+            let a_fp = FixedPrice::new(amount);
+            let level_usd = p_fp * a_fp;
+            
+            if level_usd.0 >= remaining_usd {
+                let fraction_coin = FixedPrice::new(remaining_usd) / p_fp;
+                total_coin_cost += fraction_coin;
+                remaining_usd = 0;
+                break;
+            } else {
+                total_coin_cost += a_fp;
+                remaining_usd -= level_usd.0;
+            }
+        }
+    }
+    
+    if total_coin_cost.0 > 0 {
+        FixedPrice::new(target_usd_fp.0 - remaining_usd) / total_coin_cost
+    } else {
+        FixedPrice::zero()
+    }
+}
 
 const VERSION: &str = "14.4.0-moonshot-zerofpu";
 const MAX_TICKER_SLOTS: usize = MOONSHOT_MAX_PAIRS;
@@ -95,7 +131,7 @@ impl FixedFormat {
             val = -val;
         }
         let int_part = val / PRICE_SCALE_I;
-        let mut frac_part = val % PRICE_SCALE_I;
+        let frac_part = val % PRICE_SCALE_I;
         
         let mut itoa_buf = itoa::Buffer::new();
         let int_str = itoa_buf.format(int_part).as_bytes();
@@ -136,9 +172,9 @@ fn extract_u64_scaled(v: &BorrowedValue) -> Option<u64> {
         if i >= 0 { return Some((i * PRICE_SCALE_I) as u64); }
         None
     } else if let Some(f) = v.as_f64() {
-        Some((f * sniper_types::PRICE_SCALE as f64).round() as u64)
+        Some((f * sniper_types::PRICE_SCALE).round() as u64)
     } else if let Some(s) = v.as_str() {
-        s.parse::<f64>().ok().map(|f| (f * sniper_types::PRICE_SCALE as f64).round() as u64)
+        s.parse::<f64>().ok().map(|f| (f * sniper_types::PRICE_SCALE).round() as u64)
     } else {
         None
     }
@@ -158,6 +194,9 @@ struct MoonshotEngine {
     idx_to_symbol: [FixedSymbol; MOONSHOT_MAX_PAIRS],
     last_order_ts: [Instant; MOONSHOT_MAX_PAIRS],
     armada_state: &'static sniper_types::armada_types::ArmadaState,
+    bids: [[sniper_types::OrderBookLevel; 25]; MOONSHOT_MAX_PAIRS],
+    asks: [[sniper_types::OrderBookLevel; 25]; MOONSHOT_MAX_PAIRS],
+    snapshot_loaded: [bool; MOONSHOT_MAX_PAIRS],
 }
 
 unsafe impl Send for MoonshotEngine {}
@@ -175,8 +214,11 @@ impl SovereignEngine for MoonshotEngine {
                 let symbol = symbol_hash_to_str(symbol_hash);
                 subs.push(json!({
                     "event": "subscribe",
-                    "channel": "ticker",
-                    "symbol": symbol
+                    "channel": "book",
+                    "symbol": symbol,
+                    "prec": "P0",
+                    "freq": "F0",
+                    "len": "25"
                 }).to_string());
                 self.idx_to_symbol[i] = FixedSymbol::from_str(&symbol);
             }
@@ -204,8 +246,8 @@ impl SovereignEngine for MoonshotEngine {
     fn best_bid_ask(&self) -> (f64, f64) {
         let e = unsafe { &(*self.engine).pairs[0] }; 
         (
-            e.best_bid.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64,
-            e.best_ask.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64
+            e.best_bid.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE,
+            e.best_ask.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE
         )
     }
 
@@ -220,10 +262,10 @@ impl SovereignEngine for MoonshotEngine {
         // Check authentication / wallet stream
         if payload.len() > 2 && payload[0] == b'[' {
             let mut pl_clone = payload.to_vec();
-            if let Ok(v) = simd_json::to_borrowed_value(&mut pl_clone) {
-                if let Some(arr) = v.as_array() {
-                    if let Some(0) = arr[0].as_i64() {
-                        if arr.len() > 1 {
+            if let Ok(v) = simd_json::to_borrowed_value(&mut pl_clone)
+                && let Some(arr) = v.as_array()
+                    && let Some(0) = arr[0].as_i64()
+                        && arr.len() > 1 {
                             let mt = arr[1].as_str().unwrap_or("");
                             if mt == "wu" || mt == "ws" {
                                 let iter: Box<dyn Iterator<Item = &BorrowedValue>> = if mt == "wu" {
@@ -233,11 +275,157 @@ impl SovereignEngine for MoonshotEngine {
                                 };
                                 let e_global = unsafe { &*self.engine };
                                 for w in iter {
-                                    if let Some(w_arr) = w.as_array() {
-                                        if let (Some(wt), Some(cur), Some(bal)) = (w_arr.get(0).and_then(|x| x.as_str()), w_arr.get(1).and_then(|x| x.as_str()), w_arr.get(2).and_then(|x| extract_u64_scaled(x))) {
-                                            if wt == "exchange" {
+                                    if let Some(w_arr) = w.as_array()
+                                        && let (Some(wt), Some(cur), Some(bal)) = (w_arr.get(0).and_then(|x| x.as_str()), w_arr.get(1).and_then(|x| x.as_str()), w_arr.get(2).and_then(|x| extract_u64_scaled(x)))
+                                            && wt == "exchange" {
                                                 if cur == sniper_types::TRADING_BASE { e_global.wallet_btc.store(bal, Ordering::SeqCst); }
                                                 else if cur == sniper_types::TRADING_QUOTE || cur == "UST" { e_global.wallet_usd.store(bal, Ordering::SeqCst); }
+                                            }
+                                }
+                            }
+                        }
+        }
+
+        let mut pl_clone = payload.to_vec();
+        if let Ok(v) = simd_json::to_borrowed_value(&mut pl_clone)
+            && let Some(arr) = v.as_array()
+                && let Some(chan_id) = arr[0].as_i64()
+                    && let Some(idx) = self.chan_to_idx.get(chan_id) {
+                        if arr.len() > 1 {
+                            let mt = arr[1].as_str().unwrap_or("");
+                            if mt == "hb" || mt == "cs" { return; }
+                        }
+                        
+                        if let Some(top_arr) = arr.get(1).and_then(|x| x.as_array()) {
+                            let is_nested = top_arr.first().is_some_and(|e| e.as_array().is_some());
+                            if is_nested {
+                                for entry in top_arr {
+                                    if let Some(u) = entry.as_array() {
+                                        let price = extract_u64_scaled(&u[0]).unwrap_or(0);
+                                        let count = u[1].as_i64().unwrap_or(0) as u64;
+                                        if let Some(amount) = u[2].as_f64() {
+                                            let amt_i = (amount * sniper_types::PRICE_SCALE).round() as i64;
+                                            if amt_i > 0 { update_book(&mut self.bids[idx], price, amt_i, count); }
+                                            else { update_book(&mut self.asks[idx], price, amt_i, count); }
+                                        }
+                                    }
+                                }
+                                sort_book(&mut self.bids[idx], true);
+                                sort_book(&mut self.asks[idx], false);
+                                self.snapshot_loaded[idx] = true;
+                            } else {
+                                let price = extract_u64_scaled(&top_arr[0]).unwrap_or(0);
+                                let count = top_arr[1].as_i64().unwrap_or(0) as u64;
+                                if let Some(amount) = top_arr[2].as_f64() {
+                                    let amt_i = (amount * sniper_types::PRICE_SCALE).round() as i64;
+                                    if amt_i > 0 { update_book(&mut self.bids[idx], price, amt_i, count); sort_book(&mut self.bids[idx], true); }
+                                    else { update_book(&mut self.asks[idx], price, amt_i, count); sort_book(&mut self.asks[idx], false); }
+                                }
+                            }
+
+                            let bid = self.bids[idx][0].price.load(Ordering::Acquire);
+                            let ask = self.asks[idx][0].price.load(Ordering::Acquire);
+                            if bid > 0 && ask > 0 {
+                                let mid_price = (bid + ask) / 2;
+                                let e = unsafe { &(*self.engine).pairs[idx] };
+                                let r = unsafe { &(*self.risk).pairs[idx] };
+                                e.best_bid.store(bid, Ordering::Release);
+                                e.best_ask.store(ask, Ordering::Release);
+                                e.last_trade.store(mid_price, Ordering::Release);
+                                e.latency_ns.store(loop_start.elapsed().as_nanos() as u64, Ordering::Release);
+
+                                if self.armada_state.is_kill_switch_active() { return; }
+
+                                let l2cmd = unsafe { &*self.l2cmd };
+                                let l2_risk = unsafe { &*self.l2_risk };
+
+                                let _bid_fp = FixedPrice::new(bid as i64);
+                                let ask_fp = FixedPrice::new(ask as i64);
+                                let mid_fp = FixedPrice::new(mid_price as i64);
+
+                                if let Some(trigger) = sniper_types::l2_command::moonshot_check_and_disarm(l2cmd, mid_price as i64, 1, 0) {
+                                    let order_usd_fp = FixedPrice::new(self.armada_state.authorized_capital[1].load(Ordering::Acquire) as i64);
+                                    let trigger_fp = FixedPrice::new(trigger);
+                                    
+                                    if order_usd_fp.0 > 0 && mid_fp.0 > 0 {
+                                        // SLIPPAGE MATRIX LOGIC
+                                        let wap_fp = get_book_wap(&self.asks[idx], order_usd_fp);
+                                        
+                                        let mut safe_usd_fp = order_usd_fp;
+                                        let mut final_exec_price = mid_fp;
+                                        
+                                        if wap_fp.0 > 0 {
+                                            let std_mid = mid_fp.0.max(1);
+                                            let slippage_bps = ((wap_fp.0 - std_mid) * 10000) / std_mid;
+                                            if slippage_bps > 30 {
+                                                safe_usd_fp = order_usd_fp / FixedPrice::new(2 * sniper_types::PRICE_SCALE_I);
+                                                warn!("Slippage Matrix Alarm: {} bps. Cutting volume by half.", slippage_bps);
+                                            }
+                                            final_exec_price = wap_fp;
+                                        }
+
+                                        let coin_amount = (safe_usd_fp / final_exec_price).max(FixedPrice::new(15000));
+                                        let symbol = &self.idx_to_symbol[idx];
+                                        if !symbol.is_empty() {
+                                            let amt_fmt = FixedFormat::new(coin_amount.0);
+                                            let price_fmt = FixedFormat::new(final_exec_price.0);
+
+                                            sniper_types::exchange::bitfinex_venue::BitfinexVenue::write_standalone_ioc(
+                                                out_buf, 2001, symbol.as_bytes(),
+                                                amt_fmt.as_str(), price_fmt.as_str(),
+                                            );
+
+                                            warn!(event = "moonshot_fired", symbol = %symbol.as_str(), price = final_exec_price.as_f64());
+                                            self.notifier.send(format!("🚀 MOONSHOT FIRED! {} @ ${:.2} (WAP) (trigger ${:.2})", 
+                                                symbol.as_str(), final_exec_price.as_f64(), trigger_fp.as_f64()));
+
+                                            let f_10k = FixedPrice::new(10000 * sniper_types::PRICE_SCALE_I);
+                                            let drop_ratio = (mid_fp - trigger_fp) / mid_fp;
+                                            let drop_bps_fp = drop_ratio * f_10k;
+                                            sniper_types::l2_command::signal_flash_crash(l2_risk, drop_bps_fp.0 / sniper_types::PRICE_SCALE_I);
+                                            self.last_order_ts[idx] = Instant::now();
+                                        }
+                                    }
+                                } else if self.last_order_ts[idx].elapsed().as_millis() > 50 {
+                                    let f_100 = FixedPrice::new(100 * sniper_types::PRICE_SCALE_I);
+                                    let drop_fp = FixedPrice::new(r.m_shot_price_pct.load(Ordering::Acquire) as i64);
+                                    let tp_fp = FixedPrice::new(r.tp_pct.load(Ordering::Acquire) as i64);
+                                    let order_usd_fp = FixedPrice::new(self.armada_state.authorized_capital[1].load(Ordering::Acquire) as i64);
+
+                                    if drop_fp.0 > 0 && order_usd_fp.0 > 0 && mid_fp.0 > 0 {
+                                        let multiplier_fp = FixedPrice::new(sniper_types::PRICE_SCALE_I) - (drop_fp / f_100);
+                                        let buy_p_fp = mid_fp * multiplier_fp;
+                                        
+                                        let tp_mult = FixedPrice::new(sniper_types::PRICE_SCALE_I) + (tp_fp / f_100);
+                                        let sell_p_fp = buy_p_fp * tp_mult;
+                                        
+                                        let coin_amount = (order_usd_fp / buy_p_fp).max(FixedPrice::new(15000));
+
+                                        if buy_p_fp < ask_fp {
+                                            let symbol = &self.idx_to_symbol[idx];
+                                            if !symbol.is_empty() {
+                                                use sniper_types::exchange::bitfinex_venue::BitfinexVenue;
+                                                BitfinexVenue::write_batch_open_cancel_gid(out_buf, sniper_types::BOT_GID_MOONSHOT);
+                                                
+                                                let coin_fmt = FixedFormat::new(coin_amount.0);
+                                                let buy_p_fmt = FixedFormat::new(buy_p_fp.0);
+                                                
+                                                BitfinexVenue::write_limit_order(
+                                                    out_buf, 2000, symbol.as_bytes(),
+                                                    coin_fmt.as_str(), buy_p_fmt.as_str(),
+                                                );
+                                                
+                                                let neg_coin_fmt = FixedFormat::new(-coin_amount.0);
+                                                let sell_p_fmt = FixedFormat::new(sell_p_fp.0);
+                                                
+                                                BitfinexVenue::write_limit_order(
+                                                    out_buf, 2000, symbol.as_bytes(),
+                                                    neg_coin_fmt.as_str(), sell_p_fmt.as_str(),
+                                                );
+                                                BitfinexVenue::write_batch_close(out_buf);
+                                                
+                                                e.buy_order_price.store(buy_p_fp.0 as u64, Ordering::Release);
+                                                self.last_order_ts[idx] = Instant::now();
                                             }
                                         }
                                     }
@@ -245,120 +433,11 @@ impl SovereignEngine for MoonshotEngine {
                             }
                         }
                     }
-                }
-            }
-        }
-
-        if let Some((chan, bid, ask)) = sniper_types::exchange::fast_parse_ticker(payload) {
-            if let Some(idx) = self.chan_to_idx.get(chan) {
-                let e = unsafe { &(*self.engine).pairs[idx] };
-                let r = unsafe { &(*self.risk).pairs[idx] };
-
-                e.best_bid.store(bid as u64, Ordering::Release);
-                e.best_ask.store(ask as u64, Ordering::Release);
-                let mid_price = (bid + ask) / 2;
-                e.last_trade.store(mid_price as u64, Ordering::Release);
-                e.latency_ns.store(loop_start.elapsed().as_nanos() as u64, Ordering::Release);
-
-                let storm_byte = unsafe { std::ptr::read_volatile(self.toxic_storm_ptr) };
-                // if storm_byte == 1 {
-                //     return;
-                // }
-                
-                // ARMADA KŘEMÍKOVÁ ZEĎ 🛡️
-                if self.armada_state.is_kill_switch_active() {
-                    return;
-                }
-
-                let l2cmd = unsafe { &*self.l2cmd };
-                let l2_risk = unsafe { &*self.l2_risk };
-
-                let bid_fp = FixedPrice::new(bid);
-                let ask_fp = FixedPrice::new(ask);
-                let mid_fp = FixedPrice::new(mid_price);
-
-                if let Some(trigger) = sniper_types::l2_command::moonshot_check_and_disarm(
-                    l2cmd, mid_price as i64, 1, 0
-                ) {
-                    let order_usd_fp = FixedPrice::new(self.armada_state.authorized_capital[1].load(Ordering::Acquire) as i64);
-                    let trigger_fp = FixedPrice::new(trigger as i64);
-                    
-                    if order_usd_fp.0 > 0 && mid_fp.0 > 0 {
-                        let coin_amount = (order_usd_fp / mid_fp).max(FixedPrice::new(15000));
-                        let symbol = &self.idx_to_symbol[idx];
-                        if !symbol.is_empty() {
-                            let amt_fmt = FixedFormat::new(coin_amount.0);
-                            let price_fmt = FixedFormat::new(mid_price);
-
-                            sniper_types::exchange::bitfinex_venue::BitfinexVenue::write_standalone_ioc(
-                                out_buf, 2001, symbol.as_bytes(),
-                                amt_fmt.as_str(), price_fmt.as_str(),
-                            );
-
-                            let micro_f = mid_fp.as_f64();
-                            warn!(event = "moonshot_fired", symbol = %symbol.as_str(), price = micro_f);
-                            self.notifier.send(format!("🚀 MOONSHOT FIRED! {} @ ${:.2} (trigger ${:.2})", 
-                                symbol.as_str(), micro_f, trigger_fp.as_f64()));
-
-                            let f_10k = FixedPrice::new(10000 * PRICE_SCALE_I);
-                            let drop_ratio = (mid_fp - trigger_fp) / mid_fp;
-                            let drop_bps_fp = drop_ratio * f_10k;
-                            
-                            sniper_types::l2_command::signal_flash_crash(l2_risk, drop_bps_fp.0 / PRICE_SCALE_I);
-                            self.last_order_ts[idx] = Instant::now();
-                        }
-                    }
-                } else if self.last_order_ts[idx].elapsed().as_millis() > 50 {
-                    let f_100 = FixedPrice::new(100 * PRICE_SCALE_I);
-                    let drop_fp = FixedPrice::new(r.m_shot_price_pct.load(Ordering::Acquire) as i64);
-                    let tp_fp = FixedPrice::new(r.tp_pct.load(Ordering::Acquire) as i64);
-                    let order_usd_fp = FixedPrice::new(self.armada_state.authorized_capital[1].load(Ordering::Acquire) as i64);
-
-                    if drop_fp.0 > 0 && order_usd_fp.0 > 0 && mid_fp.0 > 0 {
-                        let multiplier_fp = FixedPrice::new(PRICE_SCALE_I) - (drop_fp / f_100);
-                        let buy_p_fp = mid_fp * multiplier_fp;
-                        
-                        let tp_mult = FixedPrice::new(PRICE_SCALE_I) + (tp_fp / f_100);
-                        let sell_p_fp = buy_p_fp * tp_mult;
-                        
-                        let coin_amount = (order_usd_fp / buy_p_fp).max(FixedPrice::new(15000));
-
-                        if buy_p_fp < ask_fp {
-                            let symbol = &self.idx_to_symbol[idx];
-                            if !symbol.is_empty() {
-                                use sniper_types::exchange::bitfinex_venue::BitfinexVenue;
-                                BitfinexVenue::write_batch_open_cancel_gid(out_buf, sniper_types::BOT_GID_MOONSHOT);
-                                
-                                let coin_fmt = FixedFormat::new(coin_amount.0);
-                                let buy_p_fmt = FixedFormat::new(buy_p_fp.0);
-                                
-                                BitfinexVenue::write_limit_order(
-                                    out_buf, 2000, symbol.as_bytes(),
-                                    coin_fmt.as_str(), buy_p_fmt.as_str(),
-                                );
-                                
-                                let neg_coin_fmt = FixedFormat::new(-coin_amount.0);
-                                let sell_p_fmt = FixedFormat::new(sell_p_fp.0);
-                                
-                                BitfinexVenue::write_limit_order(
-                                    out_buf, 2000, symbol.as_bytes(),
-                                    neg_coin_fmt.as_str(), sell_p_fmt.as_str(),
-                                );
-                                BitfinexVenue::write_batch_close(out_buf);
-                                
-                                e.buy_order_price.store(buy_p_fp.0 as u64, Ordering::Release);
-                                self.last_order_ts[idx] = Instant::now();
-                            }
-                        }
-                    }
-                }
-            }
-        }
     }
 
     fn on_system_event(&mut self, value: &serde_json::Value, _out_buf: &mut bytes::BytesMut) {
-        if value["event"] == "subscribed" && value["channel"] == "ticker" {
-            if let (Some(chan_id), Some(symbol)) = (value["chanId"].as_i64(), value["symbol"].as_str()) {
+        if value["event"] == "subscribed" && value["channel"] == "ticker"
+            && let (Some(chan_id), Some(symbol)) = (value["chanId"].as_i64(), value["symbol"].as_str()) {
                 for (idx, sym) in self.idx_to_symbol.iter().enumerate() {
                     if sym.as_str() == symbol {
                         self.chan_to_idx.insert(chan_id, idx);
@@ -367,7 +446,6 @@ impl SovereignEngine for MoonshotEngine {
                     }
                 }
             }
-        }
     }
 
     fn on_loop(&mut self, _out_buf: &mut bytes::BytesMut) {
@@ -429,6 +507,9 @@ async fn main() -> Result<()> {
         idx_to_symbol: core::array::from_fn(|_| FixedSymbol::new()),
         last_order_ts: core::array::from_fn(|_| Instant::now()),
         armada_state: sniper_types::armada_types::load_armada_state_ro(),
+        bids: core::array::from_fn(|_| core::array::from_fn(|_| sniper_types::OrderBookLevel::default())),
+        asks: core::array::from_fn(|_| core::array::from_fn(|_| sniper_types::OrderBookLevel::default())),
+        snapshot_loaded: [false; MOONSHOT_MAX_PAIRS],
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();
