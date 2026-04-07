@@ -267,7 +267,42 @@ impl SovereignEngine for MoonshotEngine {
                     && let Some(0) = arr[0].as_i64()
                         && arr.len() > 1 {
                             let mt = arr[1].as_str().unwrap_or("");
-                            if mt == "wu" || mt == "ws" {
+                            if mt == "tu" {
+                                if let Some(trade) = arr.get(2).and_then(|e| e.as_array()) {
+                                    if let (Some(exec_amount_val), Some(exec_price_val)) = (trade.get(4), trade.get(5)) {
+                                        let exec_amount_f64 = exec_amount_val.as_f64().unwrap_or(0.0);
+                                        let exec_price_f64 = exec_price_val.as_f64().unwrap_or(0.0);
+                                        let exec_amount = FixedPrice::new((exec_amount_f64 * sniper_types::PRICE_SCALE).round() as i64);
+                                        let exec_price = FixedPrice::new((exec_price_f64 * sniper_types::PRICE_SCALE).round() as i64);
+                                        
+                                        if exec_amount.0 > 0 {
+                                            // NAKOUPILI JSME! (I částečně)
+                                            // 1. DYNAMICKÝ TAKE PROFIT (Základ 20 bps + až 130 bps podle toxicity)
+                                            let l2_risk = unsafe { &*self.l2_risk };
+                                            let trend_fp = FixedPrice::new(l2_risk.trending_score.load(Ordering::Relaxed) as i64);
+                                            let tp_bps = 20 + ((130 * trend_fp.0) / sniper_types::PRICE_SCALE_I);
+                                            let tp_mult = FixedPrice::new(sniper_types::PRICE_SCALE_I + (tp_bps * 10_000));
+                                            let target_sell_price = exec_price * tp_mult;
+                                            
+                                            // 2. BEZPEČNÝ AUTO-EXIT NA PŘESNÝ OBJEM
+                                            let neg_coin_fmt = FixedFormat::new(-exec_amount.0);
+                                            let sell_p_fmt = FixedFormat::new(target_sell_price.0);
+                                            
+                                            if !out_buf.is_empty() { out_buf.extend_from_slice(b"\n"); }
+                                            out_buf.extend_from_slice(b"[0,\"on\",null,{\"gid\":2002,\"symbol\":\"");
+                                            out_buf.extend_from_slice(self.idx_to_symbol[0].as_bytes()); // Pro jednoduchost cíl 0
+                                            out_buf.extend_from_slice(b"\",\"amount\":\"");
+                                            out_buf.extend_from_slice(neg_coin_fmt.as_str().as_bytes());
+                                            out_buf.extend_from_slice(b"\",\"price\":\"");
+                                            out_buf.extend_from_slice(sell_p_fmt.as_str().as_bytes());
+                                            out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\",\"flags\":4096}]"); // 4096 = Post-Only Maker
+                                            
+                                            warn!("🎯 CONFIRMED KILL: Vstup @ ${:.2} (Množství: {}). Nastavuji Dynamic TP na {} bps (${:.2}).", 
+                                                exec_price.as_f64(), exec_amount.as_f64(), tp_bps, target_sell_price.as_f64());
+                                        }
+                                    }
+                                }
+                            } else if mt == "wu" || mt == "ws" {
                                 let iter: Box<dyn Iterator<Item = &BorrowedValue>> = if mt == "wu" {
                                     Box::new(std::iter::once(&arr[2]))
                                 } else {
@@ -406,22 +441,6 @@ impl SovereignEngine for MoonshotEngine {
                                                 amt_fmt.as_str(), price_fmt.as_str(),
                                             );
                                             
-                                            // AUTO-EXIT: Pověsíme příkaz pro okamžité zajištění zisku
-                                            // Cíl: 30 bps (0.3 %) nad naši skutečnou WAP nákupní cenu. 1 bps = 10_000.
-                                            let tp_mult = FixedPrice::new(sniper_types::PRICE_SCALE_I + 300_000); 
-                                            let target_sell_price = final_exec_price * tp_mult;
-                                            
-                                            // Za nákup okamžitě lepíme Limit Sell (maker fee) do stejného TCP bufferu
-                                            let neg_coin_fmt = FixedFormat::new(-coin_amount.0);
-                                            let sell_p_fmt = FixedFormat::new(target_sell_price.0);
-                                            
-                                            out_buf.extend_from_slice(b"\n"); // Použití line-breaku pro oddělení JSON framů napodobuje vícenásobný send
-                                            // POZN: Zde použijeme write_standalone_ioc, ale s GID=2002. (Ideální by byl ox_multi batch, ale striktně dodržuji instrukce.)
-                                            sniper_types::exchange::bitfinex_venue::BitfinexVenue::write_standalone_ioc(
-                                                out_buf, 2002, symbol.as_bytes(),
-                                                neg_coin_fmt.as_str(), sell_p_fmt.as_str(),
-                                            );
-                                            
                                             self.last_order_ts[idx] = now;
 
                                             warn!(event = "moonshot_fired", symbol = %symbol.as_str(), price = final_exec_price.as_f64());
@@ -497,7 +516,7 @@ impl SovereignEngine for MoonshotEngine {
             }
     }
 
-    fn on_loop(&mut self, _out_buf: &mut bytes::BytesMut) {
+    fn on_loop(&mut self, out_buf: &mut bytes::BytesMut) {
         let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
         let e_global = unsafe { &*self.engine };
         e_global.heartbeat_ms.store(now_ms, Ordering::Release);
@@ -518,6 +537,33 @@ impl SovereignEngine for MoonshotEngine {
                 risk.global_paused.store(0, Ordering::Relaxed);
             }
         }
+
+        // === THE BAGHOLDER PROTOCOL (Time-Stop) ===
+        let btc_bal = e_global.wallet_btc.load(Ordering::Relaxed) as i64;
+        
+        // Máme na skladě alespoň minimální množství? (> 0.00015 BTC)
+        if btc_bal > 15000 { 
+            // Použijeme časovač od posledního výstřelu
+            if self.last_order_ts[0].elapsed().as_secs() > 15 {
+                warn!("🩸 BAGHOLDER PROTOCOL: Držíme pozici přes 15 sekund! Ruším sítě a odpaluji PANIC SELL!");
+                
+                // 1. Zrušení visícího TP Limit příkazu (GID 2002)
+                sniper_types::exchange::bitfinex_venue::BitfinexVenue::write_cancel_gid_standalone(out_buf, 2002);
+                if !out_buf.is_empty() { out_buf.extend_from_slice(b"\n"); }
+                
+                // 2. Vypálení Market Sell na všechno, co máme
+                let neg_coin_fmt = FixedFormat::new(-btc_bal);
+                out_buf.extend_from_slice(b"[0,\"on\",null,{\"gid\":2003,\"symbol\":\"");
+                out_buf.extend_from_slice(self.idx_to_symbol[0].as_bytes());
+                out_buf.extend_from_slice(b"\",\"amount\":\"");
+                out_buf.extend_from_slice(neg_coin_fmt.as_str().as_bytes());
+                out_buf.extend_from_slice(b"\",\"type\":\"EXCHANGE MARKET\"}]");
+
+                // Reset časovače, abychom do sítě nespamovali Market Sell každou milisekundu
+                self.last_order_ts[0] = Instant::now();
+            }
+        }
+        // ==========================================
     }
 }
 
