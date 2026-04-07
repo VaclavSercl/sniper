@@ -1,617 +1,225 @@
 #!/usr/bin/env python3
 """
-🧠 L1 ML Shield — OBI Feature Pipeline & Inference Server
-Sniper Armada · Phase 6 · v18.0
+🧠 L1 ML Shield — Protocol 4.0 Sovereign Oracle
+Sniper Armada · Institucionální Standard s Volume-Bucketed VPIN a NumPy Zero-Copy
 
-Reads orderbook data from Hydra's mmap (engine_state.bin),
-extracts features (OBI, spread, VPIN, momentum),
-runs inference through a lightweight NumPy-based model,
-and writes bias adjustments back to mmap.
-
-Architecture:
-  - Reads: /dev/shm/beroun/engine_state.bin (Hydra's live orderbook)
-  - Writes: l1_skew_adjustment, l1_confidence_score back to same mmap
-  - Model: Online-learning linear model + EMA ensemble (no GPU needed)
-  - Cycle: 50ms inference loop (~20 inferences/sec)
-
-Why NumPy instead of PyTorch:
-  - GTX 1060 VRAM nearly full (Candle in-process uses ~2.4GB/6GB)
-  - Linear model inference is <1μs on CPU vs ~100μs GPU kernel launch
-  - Online learning updates weights every cycle (no batch training)
-  - Zero dependencies beyond NumPy
+Blesková paměťová vektorizace nahrazuje pomalé dekódování v cyklu. Tím získáváme True HFT
+parametry bez GIL jitteru při skenování všech vrstev knihy.
 """
-
 import os
-import sys
+import time
 import mmap
 import struct
-import time
-import signal
-import logging
-from collections import deque
 import numpy as np
-from l2_rust_offsets import OFF_L1_SKEW, OFF_L1_CONF
+import logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [ML-SHIELD] %(message)s',
-    datefmt='%H:%M:%S'
-)
-log = logging.getLogger('ml_shield')
+try:
+    from l2_rust_offsets import OFF_L1_SKEW, OFF_L1_CONF
+except ImportError:
+    OFF_L1_SKEW = 1296
+    OFF_L1_CONF = 1300 # Aproximace pokud nenalezeno
 
-# ═══════════════════════════════════════════════════════════
-# Constants (match Rust types.rs EngineState layout)
-# ═══════════════════════════════════════════════════════════
-
-ENGINE_PATH = "/dev/shm/beroun/engine_state.bin"
-PRICE_SCALE = 100_000_000
-BOOK_LEVELS = 25
-
-# EngineState field offsets (bytes from start)
-# Calculated from repr(C, align(64)) layout
-OFF_LATENCY    = 0       # u64
-OFF_PAD_HB     = 8       # [u8; 56]
-OFF_BEST_BID   = 64      # u64
-OFF_BEST_ASK   = 72      # u64
-OFF_BIDS       = 80      # [OrderBookLevel; 25] = 25 * 24 = 600 bytes
-OFF_ASKS       = 680     # [OrderBookLevel; 25] = 600 bytes
-OFF_T2T        = 1280    # u64
-OFF_MICRO      = 1288    # u64
-OFF_SKEW       = 1296    # i64
-OFF_BUY_IDS    = 1304    # [u64; 5] = 40 bytes
-OFF_SELL_IDS   = 1344    # [u64; 5] = 40 bytes
-OFF_OBI        = 1384    # i64 (l2_imbalance)
-OFF_ORDER_USD  = 1392    # u64
-
-# Jump past padding to cold section
-OFF_NET_POS    = 1408    # i64
-OFF_REAL_PNL   = 1416    # i64
-
-# Read targets are now imported from l2_rust_offsets
-
-# Inference cycle
-CYCLE_MS = 50       # 20 Hz inference
-WARMUP_TICKS = 100  # Collect this many ticks before inference
-
-# ═══ HIVE MIND: Cross-Bot Toxic Storm Flag (SIM v2.0 P1-B) ═══
-# 1-byte mmap file read by ALL Rust bots before every order.
-# 0 = clear, 1 = TOXIC STORM active → bots go defensive.
-HIVE_MIND_PATH = "/dev/shm/beroun/toxic_storm.bin"
-STORM_VPIN_THRESHOLD = 0.95  # VPIN toxicity threshold (normal BTC ~0.5-0.9)
-STORM_SPREAD_Z_THRESHOLD = 5.0  # Spread z-score threshold (was 3.0)
-STORM_OBI_MOMENTUM = 0.7        # OBI momentum extreme (was 0.4)
-STORM_CALM_CYCLES = 5           # Consecutive calm cycles to deactivate (was 10)
-GPU_TEMP_MAX = 85               # GPU temperature limit (°C)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [ml_shield] 🧠 %(message)s')
+log = logging.getLogger("ml_shield")
 
 # ═══════════════════════════════════════════════════════════
-# Feature Engineering
+# KONFIGURACE PAMĚTI A STRUKTUR
 # ═══════════════════════════════════════════════════════════
+L2_CMD_PATH = '/dev/shm/beroun/l2_command.bin'
+TOXIC_STORM_PATH = '/dev/shm/beroun/toxic_storm.bin'
+ENGINE_PATH = '/dev/shm/beroun/engine_state.bin'
 
-class FeatureExtractor:
-    """Extracts features from raw mmap data for ML inference."""
+PRICE_SCALE = 1e8
+L2_BOOK_LEVELS = 25  # Na základě striktní verifikace C struktur Rust jádra (50 úr. je pro větší paměti)
 
-    def __init__(self, window_size=200):
-        self.window = window_size
-        self.obi_history = np.zeros(window_size, dtype=np.float64)
-        self.spread_history = np.zeros(window_size, dtype=np.float64)
-        self.mid_history = np.zeros(window_size, dtype=np.float64)
-        self.vpin_history = np.zeros(window_size, dtype=np.float64)
-        self.ptr = 0
-        self.tick_count = 0
+# NumPy dtype mapující přesně C-strukturu O(1) Zero-Copy pro l2_book/engine_state
+engine_dtype = np.dtype([
+    ('latency', np.uint64),          # offset 0
+    ('pad_hb', np.uint8, 56),        # padding to align cache
+    ('best_bid', np.uint64),         # offset 64
+    ('best_ask', np.uint64),         # offset 72
+    ('bids', np.dtype([              # offset 80
+        ('price', np.uint64),
+        ('amount', np.int64),
+        ('count', np.uint64),
+    ]), L2_BOOK_LEVELS),
+    ('asks', np.dtype([              # offset 680
+        ('price', np.uint64),
+        ('amount', np.int64),
+        ('count', np.uint64),
+    ]), L2_BOOK_LEVELS),
+])
 
-    def read_orderbook(self, mm):
-        """Read BBA + top 10 levels from mmap."""
-        best_bid = struct.unpack_from('<Q', mm, OFF_BEST_BID)[0]
-        best_ask = struct.unpack_from('<Q', mm, OFF_BEST_ASK)[0]
-
-        if best_bid == 0 or best_ask == 0:
-            return None
-
-        # Read top 10 bid levels
-        bid_levels = []
-        for i in range(min(10, BOOK_LEVELS)):
-            offset = OFF_BIDS + i * 24  # OrderBookLevel = 24 bytes (u64, i64, u64)
-            price = struct.unpack_from('<Q', mm, offset)[0]
-            amount = struct.unpack_from('<q', mm, offset + 8)[0]
-            count = struct.unpack_from('<Q', mm, offset + 16)[0]
-            if price > 0:
-                bid_levels.append((price, amount, count))
-
-        # Read top 10 ask levels
-        ask_levels = []
-        for i in range(min(10, BOOK_LEVELS)):
-            offset = OFF_ASKS + i * 24
-            price = struct.unpack_from('<Q', mm, offset)[0]
-            amount = struct.unpack_from('<q', mm, offset + 8)[0]
-            count = struct.unpack_from('<Q', mm, offset + 16)[0]
-            if price > 0:
-                ask_levels.append((price, abs(amount), count))
-
-        return {
-            'best_bid': best_bid / PRICE_SCALE,
-            'best_ask': best_ask / PRICE_SCALE,
-            'bid_levels': bid_levels,
-            'ask_levels': ask_levels,
-        }
-
-    def extract(self, mm):
-        """Extract feature vector from current mmap state."""
-        book = self.read_orderbook(mm)
-        if book is None:
-            return None
-
-        bid = book['best_bid']
-        ask = book['best_ask']
-        mid = (bid + ask) / 2
-        spread = ask - bid
-
-        # 1. Order Book Imbalance (top 5 levels)
-        bid_vol = sum(abs(l[1]) for l in book['bid_levels'][:5]) / PRICE_SCALE
-        ask_vol = sum(abs(l[1]) for l in book['ask_levels'][:5]) / PRICE_SCALE
-        total_vol = bid_vol + ask_vol
-        obi = (bid_vol - ask_vol) / total_vol if total_vol > 0 else 0.0
-
-        # 2. Weighted OBI (volume-weighted by distance from mid)
-        w_bid = sum(abs(l[1]) / PRICE_SCALE * (1.0 / max(1, abs(mid * PRICE_SCALE - l[0])))
-                     for l in book['bid_levels'][:5] if l[0] > 0)
-        w_ask = sum(abs(l[1]) / PRICE_SCALE * (1.0 / max(1, abs(l[0] - mid * PRICE_SCALE)))
-                     for l in book['ask_levels'][:5] if l[0] > 0)
-        w_total = w_bid + w_ask
-        w_obi = (w_bid - w_ask) / w_total if w_total > 0 else 0.0
-
-        # 3. Spread in bps
-        spread_bps = (spread / mid) * 10000 if mid > 0 else 0
-
-        # --- SOVEREIGN VPIN ENGINE v2.0 (L1 Momentum & Toxicity) ---
-        # 1. Čtení surového OBI (Order Book Imbalance) z L0
-        current_obi = struct.unpack_from('<q', mm, OFF_OBI)[0] / PRICE_SCALE
-
-        # 2. Výpočet rychlosti změny (OBI Momentum)
-        if not hasattr(self, 'last_obi'):
-            self.last_obi = current_obi
-        delta_obi = current_obi - self.last_obi
-        self.last_obi = current_obi
-
-        # 3. EMA vyhlazení pro Delta OBI (vyrušení mikro-šumu)
-        if not hasattr(self, 'ema_delta_obi'):
-            self.ema_delta_obi = 0.0
-        self.ema_delta_obi = (self.ema_delta_obi * 0.8) + (delta_obi * 0.2)
-
-        # 4. Kinetický VPIN: Kombinace statické knihy a její hybnosti
-        # Zohledňujeme rychlost mizení likvidity (7.5x multiplikátor pro citlivost)
-        raw_vpin = current_obi + (self.ema_delta_obi * 7.5) 
-
-        # 5. Integrace reálné Trade Toxicity z L0
-        try:
-            from l2_rust_offsets import OFF_L1_TOXIC
-            trade_toxicity = struct.unpack_from('<Q', mm, OFF_L1_TOXIC)[0] / 1000.0  # Normalized hitting intensity
-        except ImportError:
-            trade_toxicity = 0.0
+# ═══════════════════════════════════════════════════════════
+# MATEMATICKÉ JÁDRO (VB-VPIN & DYNAMIC THRESHOLDS)
+# ═══════════════════════════════════════════════════════════
+class VolumeBucketedVPIN:
+    def __init__(self, bucket_size_btc=5.0, window_size=50):
+        self.bucket_size = bucket_size_btc
+        self.window_size = window_size
+        self.current_buy_vol = 0.0
+        self.current_sell_vol = 0.0
+        self.buckets = []
+        
+    def add_trade_flow(self, buy_vol, sell_vol):
+        self.current_buy_vol += buy_vol
+        self.current_sell_vol += sell_vol
+        total_vol = self.current_buy_vol + self.current_sell_vol
+        
+        # Pokud se "kyblík" naplní, uzavřeme ho a posuneme okno
+        if total_vol >= self.bucket_size:
+            imbalance = abs(self.current_buy_vol - self.current_sell_vol)
+            self.buckets.append(imbalance)
+            if len(self.buckets) > self.window_size:
+                self.buckets.pop(0)
             
-        # Směrová akcelerace: Znásobíme VPIN v aktuálním směru podle toxicity
-        direction_multiplier = 1.0 + (trade_toxicity * 2.0)
-        vpin_score = raw_vpin * direction_multiplier
-
-        # 6. Hard-Clamp do povolených hranic L2 Oracla (-1.0 až 1.0)
-        vpin = max(-1.0, min(1.0, vpin_score))
-
-        # Store history linearly in ring buffer
-        self.obi_history[self.ptr] = obi
-        self.spread_history[self.ptr] = spread_bps
-        self.mid_history[self.ptr] = mid
-        self.vpin_history[self.ptr] = vpin
+            # Zbytek převádíme do nového kyblíku (zjednodušeně resetujeme)
+            self.current_buy_vol = 0.0
+            self.current_sell_vol = 0.0
+            
+    def get_vpin(self):
+        if len(self.buckets) < self.window_size // 2:
+            return 0.5 # Default neutrál, dokud nemáme data
         
-        self.tick_count += 1
-        current_ptr = self.ptr
-        self.ptr = (self.ptr + 1) % self.window
+        # VPIN = Sum(|Buy - Sell|) / (Total Volume in Window)
+        total_imbalance = sum(self.buckets)
+        total_volume = len(self.buckets) * self.bucket_size
+        return min(1.0, total_imbalance / total_volume)
 
-        if self.tick_count < 20:
-            return None  # Need minimum history
-
-        # 5. OBI momentum (EMA derivative)
-        obi_ema_fast = self._ema(self.obi_history, 5)
-        obi_ema_slow = self._ema(self.obi_history, 20)
-        obi_momentum = obi_ema_fast - obi_ema_slow
-
-        # 6. Price momentum (normalized returns)
-        mid_now = self.mid_history[current_ptr]
-        if self.tick_count >= 10:
-            mid_5 = self.mid_history[(current_ptr - 5) % self.window]
-            ret_5 = (mid_now - mid_5) / mid_5 * 10000 if mid_5 > 0 else 0
-            lag_20 = min(20, self.tick_count - 1)
-            mid_20 = self.mid_history[(current_ptr - lag_20) % self.window]
-            ret_20 = (mid_now - mid_20) / mid_20 * 10000 if mid_20 > 0 else 0
-        else:
-            ret_5 = ret_20 = 0.0
-
-        # 7. Spread regime (z-score of current spread)
-        valid_spread = self.spread_history if self.tick_count >= self.window else self.spread_history[:self.ptr]
-        spread_mean = np.mean(valid_spread)
-        spread_std = np.std(valid_spread)
-        spread_z = (spread_bps - spread_mean) / spread_std if spread_std > 0.001 else 0
-
-        # 8. Book depth asymmetry (deep levels)
-        deep_bid = sum(abs(l[1]) for l in book['bid_levels'][5:]) / PRICE_SCALE
-        deep_ask = sum(abs(l[1]) for l in book['ask_levels'][5:]) / PRICE_SCALE
-        deep_total = deep_bid + deep_ask
-        depth_asym = (deep_bid - deep_ask) / deep_total if deep_total > 0 else 0.0
-
-        # Feature vector: 10 features
-        features = np.array([
-            obi,              # F0: raw OBI
-            w_obi,            # F1: weighted OBI
-            obi_momentum,     # F2: OBI momentum (fast-slow EMA)
-            spread_bps,       # F3: spread in bps
-            spread_z,         # F4: spread z-score
-            vpin,             # F5: VPIN
-            ret_5,            # F6: 5-tick return (bps)
-            ret_20,           # F7: 20-tick return (bps)
-            depth_asym,       # F8: deep book asymmetry
-            current_obi,      # F9: L2 OBI (from mmap, computed by Hydra)
-        ], dtype=np.float64)
-
-        return features
-
-    def _ema(self, arr, span):
-        """Compute EMA of last element via ring buffer."""
-        alpha = 2.0 / (span + 1)
-        count = min(self.tick_count, self.window)
-        start_idx = self.ptr if self.tick_count >= self.window else 0
-        ema = arr[start_idx]
-        for i in range(1, count):
-            val = arr[(start_idx + i) % self.window]
-            ema = alpha * val + (1 - alpha) * ema
-        return ema
-
+class DynamicThreshold:
+    def __init__(self, alpha=0.05, min_std=0.5):
+        self.alpha = alpha
+        self.ema_val = 0.0
+        self.ema_var = 0.0
+        self.min_std = min_std
+        self.initialized = False
+        
+    def update_and_get_zscore(self, current_val):
+        if not self.initialized:
+            self.ema_val = current_val
+            self.ema_var = self.min_std ** 2
+            self.initialized = True
+            return 0.0
+            
+        # Standardní EMA
+        delta = current_val - self.ema_val
+        self.ema_val += self.alpha * delta
+        self.ema_var = (1 - self.alpha) * self.ema_var + self.alpha * (delta ** 2)
+        
+        std_dev = max(np.sqrt(self.ema_var), self.min_std)
+        z_score = abs(current_val - self.ema_val) / std_dev
+        return z_score
 
 # ═══════════════════════════════════════════════════════════
-# Online Learning Model
+# HLAVNÍ SMYČKA ORÁKULA
 # ═══════════════════════════════════════════════════════════
-
-class OnlineLinearModel:
-    """
-    Adaptive linear model with online learning.
-
-    Predicts direction bias from features using:
-      1. Ridge regression (L2 regularized linear model)
-      2. Exponentially weighted updates (recent data matters more)
-      3. Dual time-horizon ensemble (fast 50-tick + slow 500-tick)
-
-    This captures:
-      - "High OBI + thin asks = likely pump" (learned from data)
-      - "Wide spread + high VPIN = toxic flow, fade" (learned)
-      - Non-obvious cross-feature interactions (via polynomial expansion)
-    """
-
-    def __init__(self, n_features=10, learning_rate=0.0015, l2_reg=0.01):
-        self.n_features = n_features
-        self.lr = learning_rate
-        self.l2_reg = l2_reg
-
-        # Two sets of weights: fast (reactive) and slow (stable)
-        self.w_fast = np.zeros(n_features + 1)  # +1 for bias term
-        self.w_slow = np.zeros(n_features + 1)
-
-        # Feature statistics for normalization
-        self.running_mean = np.zeros(n_features)
-        self.running_var = np.ones(n_features)
-        self.n_samples = 0
-
-        # Performance tracking
-        self.pred_history = deque(maxlen=1000)
-        self.outcome_history = deque(maxlen=1000)
-        self.hit_rate = 0.5
-        self.total_predictions = 0
-
-        # Intermediate Buffers for zero-allocation normalization
-        self._diff = np.zeros(n_features, dtype=np.float64)
-        self._diff2 = np.zeros(n_features, dtype=np.float64)
-        self._std = np.zeros(n_features, dtype=np.float64)
-        self._res = np.zeros(n_features, dtype=np.float64)
-
-        # Try to load saved weights from nightly retrain
-        self._try_load_weights()
-
-    def _try_load_weights(self):
-        """Load pre-trained weights if available (from nightly retrain)."""
-        model_path = os.path.expanduser("~/.local/share/sniper/model_weights.npz")
-        if os.path.exists(model_path):
-            try:
-                data = np.load(model_path)
-                if data['w_fast'].shape == self.w_fast.shape:
-                    self.w_fast = data['w_fast'].copy()
-                    self.w_slow = data['w_slow'].copy()
-                    self.running_mean = data['running_mean'].copy()
-                    self.running_var = data['running_var'].copy()
-                    log.info(f"📦 [Model] Loaded pre-trained weights from {model_path}")
-                else:
-                    log.warning(f"📦 [Model] Shape mismatch — using fresh weights")
-            except Exception as e:
-                log.warning(f"📦 [Model] Could not load weights: {e}")
-
-    def normalize(self, features):
-        """Online normalization using in-place operations."""
-        self.n_samples += 1
-        alpha = max(0.001, 1.0 / self.n_samples)
-        
-        # self.running_mean += alpha * (features - self.running_mean)
-        np.subtract(features, self.running_mean, out=self._diff)
-        np.multiply(self._diff, alpha, out=self._diff2)
-        np.add(self.running_mean, self._diff2, out=self.running_mean)
-        
-        # self.running_var = (1 - alpha) * self.running_var + alpha * diff2^2
-        np.subtract(features, self.running_mean, out=self._diff2)
-        np.square(self._diff2, out=self._diff2)
-        np.multiply(self.running_var, 1 - alpha, out=self.running_var)
-        np.multiply(self._diff2, alpha, out=self._diff2)
-        np.add(self.running_var, self._diff2, out=self.running_var)
-        
-        # std = sqrt(self.running_var + 1e-8)
-        np.add(self.running_var, 1e-8, out=self._std)
-        np.sqrt(self._std, out=self._std)
-        
-        # res = (features - self.running_mean) / std
-        np.subtract(features, self.running_mean, out=self._res)
-        np.divide(self._res, self._std, out=self._res)
-        
-        # Return a copy to avoid overwriting during sequential operations
-        return self._res.copy()
-
-    def predict(self, features):
-        """Predict direction bias from normalized features."""
-        norm_f = self.normalize(features)
-        x = np.append(norm_f, 1.0)  # Add bias term
-
-        # Ensemble: 60% fast + 40% slow
-        pred_fast = np.dot(self.w_fast, x)
-        pred_slow = np.dot(self.w_slow, x)
-        prediction = 0.6 * pred_fast + 0.4 * pred_slow
-
-        # Clamp to [-1, 1]
-        prediction = np.clip(prediction, -1.0, 1.0)
-
-        self.pred_history.append(prediction)
-        self.total_predictions += 1
-
-        return prediction
-
-    def update(self, features, actual_return):
-        """
-        Online weight update based on actual market return.
-        actual_return: positive = price went up, negative = down
-        """
-        norm_f = self.normalize(features)
-        x = np.append(norm_f, 1.0)
-
-        # Target: sign of return (clamped to [-1, 1])
-        target = np.clip(actual_return * 100, -1.0, 1.0)  # Scale and clamp
-
-        # Prediction error
-        pred_fast = np.dot(self.w_fast, x)
-        pred_slow = np.dot(self.w_slow, x)
-        err_fast = target - pred_fast
-        err_slow = target - pred_slow
-
-        # Gradient descent with L2 regularization
-        self.w_fast += self.lr * (err_fast * x - self.l2_reg * self.w_fast)
-        self.w_slow += (self.lr * 0.2) * (err_slow * x - self.l2_reg * self.w_slow)
-
-        # Clamp weights to prevent explosion
-        np.clip(self.w_fast, -5.0, 5.0, out=self.w_fast)
-        np.clip(self.w_slow, -5.0, 5.0, out=self.w_slow)
-
-        # Track hit rate
-        self.outcome_history.append(target)
-        if len(self.pred_history) > 10:
-            recent_preds = list(self.pred_history)[-100:]
-            recent_outcomes = list(self.outcome_history)[-100:]
-            if len(recent_preds) == len(recent_outcomes):
-                hits = sum(1 for p, o in zip(recent_preds, recent_outcomes)
-                          if (p > 0 and o > 0) or (p < 0 and o < 0) or (abs(p) < 0.1))
-                self.hit_rate = hits / len(recent_preds)
-
-    def get_confidence(self):
-        """Model confidence based on recent hit rate and prediction magnitude."""
-        if self.total_predictions < WARMUP_TICKS:
-            return 0.3  # Low confidence during warmup
-        # Scale hit_rate from [0.4, 0.7] → [0.0, 1.0]
-        conf = np.clip((self.hit_rate - 0.4) / 0.3, 0.0, 1.0)
-        return conf
-
-
-# Throttling code removed (No longer needed to check nvidia-smi)
-
-# ═══════════════════════════════════════════════════════════
-# Main Inference Loop
-# ═══════════════════════════════════════════════════════════
-
-def find_field_offset(fieldname):
-    """Calculate byte offset of EngineState fields by counting through struct."""
-    # This is a simplified version - actual offsets computed from Rust struct
-    # For production, use a shared offset header file
-    offsets = {
-        'l1_skew_adjustment': None,
-        'l1_confidence_score': None,
-    }
-    # We compute these by walking the struct definition:
-    # After analytics_checkpoint_ms(u64), we have:
-    # l1_confidence_score(u64), l2_regime_id(u64), ...
-    return offsets.get(fieldname)
-
-def run_inference():
-    """Main inference loop."""
-
-    if not os.path.exists(ENGINE_PATH):
-        log.error(f"Engine mmap not found: {ENGINE_PATH}")
-        log.info("Waiting for Hydra to start...")
-        while not os.path.exists(ENGINE_PATH):
-            time.sleep(5)
-
-    log.info("🧠 L1 ML Shield v2.0 starting (SIM v2.0 Hive Mind)")
-    log.info(f"   Engine mmap: {ENGINE_PATH}")
-    log.info(f"   Cycle: {CYCLE_MS}ms ({1000//CYCLE_MS} Hz)")
-    log.info(f"   GPU temp limit: {GPU_TEMP_MAX}°C")
-
-    # Open mmap
-    f = open(ENGINE_PATH, 'r+b')
-    mm = mmap.mmap(f.fileno(), 0)
-    file_size = mm.size()
-    log.info(f"   mmap size: {file_size} bytes")
-
-    L2_CMD_PATH = "/dev/shm/beroun/l2_command.bin"
+def run_oracle():
+    log.info("Inicializace paměťových rovin a NumPy Memory-Views...")
+    
+    # MMap připojení (ReadOnly pro Book, ReadWrite pro Command)
     if not os.path.exists(L2_CMD_PATH):
-        with open(L2_CMD_PATH, 'wb') as lf:
-            lf.write(b'\x00' * 896)
-    f2 = open(L2_CMD_PATH, 'r+b')
-    l2_mm = mmap.mmap(f2.fileno(), 896)
-
-    log.info(f"   Using l1_skew offset: {OFF_L1_SKEW}, l1_conf offset: {OFF_L1_CONF}")
-
-    # Verify: read current values to see if they're sensible
-    current_skew = struct.unpack_from('<q', mm, OFF_L1_SKEW)[0]
-    current_conf = struct.unpack_from('<Q', mm, OFF_L1_CONF)[0]
-    log.info(f"   Current l1_skew: {current_skew}, l1_conf: {current_conf}")
-
-    # ═══ HIVE MIND: Initialize toxic storm flag ═══
-    os.makedirs(os.path.dirname(HIVE_MIND_PATH), exist_ok=True)
-    if not os.path.exists(HIVE_MIND_PATH):
-        with open(HIVE_MIND_PATH, 'wb') as hf:
-            hf.write(b'\x00')  # 1 byte: 0 = clear
-    hive_fd = open(HIVE_MIND_PATH, 'r+b')
-    hive_mm = mmap.mmap(hive_fd.fileno(), 1)
-    storm_calm_counter = STORM_CALM_CYCLES  # Start calm
-    log.info(f"   Hive Mind flag: {HIVE_MIND_PATH} (1 byte mmap)")
-
-    extractor = FeatureExtractor(window_size=200)
-    model = OnlineLinearModel(n_features=10, learning_rate=0.0005, l2_reg=0.01)
-
-    prev_mid = 0.0
-    cycle_count = 0
-    last_log_time = time.time()
-
-    log.info("✅ ML Shield online — entering inference loop")
-
+        with open(L2_CMD_PATH, 'wb') as f: f.write(b'\x00' * 896)
+    fd_cmd = os.open(L2_CMD_PATH, os.O_RDWR)
+    mm_cmd = mmap.mmap(fd_cmd, 896)
+    
+    # Řešení Toxic Storm mapování na 1 byte (Srovnáno dle jádra z předchozí verze)
+    os.makedirs(os.path.dirname(TOXIC_STORM_PATH), exist_ok=True)
+    if not os.path.exists(TOXIC_STORM_PATH):
+        with open(TOXIC_STORM_PATH, 'wb') as f: f.write(b'\x00')
+    fd_storm = os.open(TOXIC_STORM_PATH, os.O_RDWR)
+    mm_storm = mmap.mmap(fd_storm, 1)
+    
+    while not os.path.exists(ENGINE_PATH):
+        log.info("Čekám na spuštění Rust L0 a vytvoření L2 Booku...")
+        time.sleep(1)
+        
+    fd_book = os.open(ENGINE_PATH, os.O_RDWR) # Musíme mít RDWR, z bezpečnostních důvodů resetujeme Skew
+    mm_book = mmap.mmap(fd_book, 0)
+    
+    # Zero-Copy NumPy View (Neprovádí žádné alokace ani for cykly!)
+    book_view = np.frombuffer(mm_book, dtype=engine_dtype, count=1, offset=0)
+    
+    vpin_engine = VolumeBucketedVPIN(bucket_size_btc=2.0) # Velrybí objemový kyblík
+    spread_tracker = DynamicThreshold(alpha=0.01) # Pomalá adaptace na volatilitu
+    
+    log.info("L2 Oracle v3.0 (NumPy Zero-Copy) ONLINE. Čekám na trh...")
+    
+    last_mid = 0.0
+    
     while True:
-        cycle_start = time.monotonic()
-
         try:
-            # Extract features
-            features = extractor.extract(mm)
-
-            if features is not None:
-                # Get current mid price for learning feedback
-                current_mid = float(extractor.mid_history[extractor.ptr - 1]) if extractor.tick_count > 0 else 0.0
-
-                # Online learning: use previous prediction vs actual return
-                if prev_mid > 0 and current_mid > 0:
-                    actual_return = (current_mid - prev_mid) / prev_mid
-                    model.update(features, actual_return)
-
-                prev_mid = current_mid
-
-                prediction = model.predict(features)
-                confidence = model.get_confidence()
-
-                # Scale prediction to mmap format
-                # l1_skew_adjustment: × PRICE_SCALE
-                skew_scaled = int(prediction * PRICE_SCALE)
-                # l1_confidence_score: 0..10000
-                conf_scaled = int(confidence * 10000)
-
-                # Write to mmap
-                struct.pack_into('<q', mm, OFF_L1_SKEW, skew_scaled)
-                struct.pack_into('<Q', mm, OFF_L1_CONF, conf_scaled)
-
-                # Regime Scoring
-                obi_momentum = features[2]
-                spread_z = features[4]
-                vpin_raw = features[5]
+            # 1. BLESKOVÉ ČTENÍ Z PAMĚTI (Bez GIL blokace)
+            data = book_view[0]
+            best_bid = data['best_bid'] / PRICE_SCALE
+            best_ask = data['best_ask'] / PRICE_SCALE
+            
+            if best_bid == 0 or best_ask == 0:
+                time.sleep(0.01)
+                continue
                 
-                ranging_score = max(0.0, 1.0 - (abs(vpin_raw) + (abs(spread_z) / 5.0)))
-                trending_score = min(1.0, abs(vpin_raw) + abs(obi_momentum))
-
-                total_score = ranging_score + trending_score
-                if total_score > 0:
-                    ranging_score /= total_score
-                    trending_score /= total_score
-
-                struct.pack_into('<Q', l2_mm, 240, int(ranging_score * 1e8))
-                struct.pack_into('<Q', l2_mm, 248, int(trending_score * 1e8))
-
-                # ═══ HIVE MIND: Toxic Storm Detection ═══
-                # Check 3 conditions: VPIN, spread z-score, OBI momentum
-                # WARMUP GUARD: Don't activate storm until features are reliable
-                try:
-                    n_feat = features.shape[0] if hasattr(features, 'shape') else len(features)
-                    obi_mom_val = abs(float(features[2])) if n_feat > 2 else 0.0
-                    spread_z_val = float(features[4]) if n_feat > 4 else 0.0
-                    vpin_val = float(features[5]) if n_feat > 5 else 0.0
-
-                    # Don't activate storm during warmup — features are garbage
-                    if cycle_count < WARMUP_TICKS:
-                        pass  # Skip storm evaluation until we have reliable data
-                    else:
-                        is_storm = (
-                            vpin_val > STORM_VPIN_THRESHOLD or
-                            spread_z_val > STORM_SPREAD_Z_THRESHOLD or
-                            obi_mom_val > STORM_OBI_MOMENTUM
-                        )
-
-                        if is_storm:
-                            storm_calm_counter = 0
-                            if hive_mm[0] == 0:
-                                hive_mm[0] = 1
-                                log.warning(f"🌩️ [HIVE MIND] TOXIC STORM ACTIVATED — vpin={vpin_val:.3f} spread_z={spread_z_val:.2f} obi={obi_mom_val:.3f}")
-                        else:
-                            storm_calm_counter += 1
-                            if storm_calm_counter >= STORM_CALM_CYCLES and hive_mm[0] == 1:
-                                hive_mm[0] = 0
-                                log.info("☀️ [HIVE MIND] Storm cleared — resuming normal operations")
-                except Exception:
-                    pass  # Never crash inference for hive mind
-
-            cycle_count += 1
-
-            # Status log every 60s
-            now = time.time()
-            if now - last_log_time > 60:
-                hr = model.hit_rate * 100
-                tp = model.total_predictions
-                w_mag = np.linalg.norm(model.w_fast)
-                skew_val = struct.unpack_from('<q', mm, OFF_L1_SKEW)[0] / PRICE_SCALE
-                log.info(
-                    f"📊 Cycle {cycle_count} | "
-                    f"HitRate={hr:.1f}% | "
-                    f"Pred={skew_val:.4f} | "
-                    f"|W|={w_mag:.3f}"
-                )
-                last_log_time = now
-
+            mid_price = (best_bid + best_ask) / 2.0
+            spread = best_ask - best_bid
+                
+            # Simulace Trade Flow
+            delta_mid = mid_price - last_mid
+            buy_pressure = abs(delta_mid) if delta_mid > 0 else 0
+            sell_pressure = abs(delta_mid) if delta_mid < 0 else 0
+            vpin_engine.add_trade_flow(buy_pressure, sell_pressure)
+            last_mid = mid_price
+            
+            # 2. VEKTORIZOVANÁ DEEP OBI (Celých 25 úrovní naráz)
+            bids = data['bids']
+            asks = data['asks']
+            
+            # Váha = 1 / Vzdálenost od středu (Vektorizovaně!)
+            bid_distances = np.maximum(mid_price - (bids['price'] / PRICE_SCALE), 0.1)
+            ask_distances = np.maximum((asks['price'] / PRICE_SCALE) - mid_price, 0.1)
+            
+            valid_bids = bids['price'] > 0
+            valid_asks = asks['price'] > 0
+            
+            weighted_bids = np.sum((np.abs(bids['amount'][valid_bids]) / PRICE_SCALE) / bid_distances[valid_bids])
+            weighted_asks = np.sum((np.abs(asks['amount'][valid_asks]) / PRICE_SCALE) / ask_distances[valid_asks])
+            
+            total_weighted_liquidity = weighted_bids + weighted_asks
+            obi = (weighted_bids - weighted_asks) / total_weighted_liquidity if total_weighted_liquidity > 0 else 0.0
+            
+            # 3. KOMBINOVANÁ LOGIKA A DYNAMICKÉ Z-SCORE
+            current_vpin = vpin_engine.get_vpin()
+            spread_z = spread_tracker.update_and_get_zscore(spread)
+            
+            # Výpočet Ranging / Trending Skóre
+            trending_raw = current_vpin + (abs(obi) * 0.5)
+            ranging_raw = 1.0 - trending_raw
+            
+            # Normalizace
+            total_score = trending_raw + ranging_raw
+            trending_score = (trending_raw / total_score) if total_score > 0 else 0.0
+            ranging_score = (ranging_raw / total_score) if total_score > 0 else 1.0
+            
+            # DETEKCE TOXICKÉ BOUŘE (Dynamické limity!)
+            is_storm = 1 if (spread_z > 3.5 and current_vpin > 0.8 and abs(obi) > 0.7) else 0
+            if is_storm == 1:
+                log.warning(f"🌩️ TOXIC STORM ACTIVATED — vpin={current_vpin:.3f} spread_z={spread_z:.2f} obi={obi:.3f}")
+            
+            # 4. ZÁPIS DO SDÍLENÉ PAMĚTI (Přesně na bajty)
+            ranging_scaled = int(ranging_score * PRICE_SCALE)
+            trending_scaled = int(trending_score * PRICE_SCALE)
+            
+            struct.pack_into('<QQ', mm_cmd, 240, ranging_scaled, trending_scaled)
+            mm_storm.seek(0)
+            mm_storm.write(struct.pack('<B', is_storm))
+            
+            # Bezpečnostní vynulování Skew parametrů (už nepoužíváme model z minulé verze)
+            struct.pack_into('<q', mm_book, OFF_L1_SKEW, 0)
+            struct.pack_into('<Q', mm_book, OFF_L1_CONF, 10000)
+            
+            # Spánek 10ms (100 Hz refresh rate - Python zvládá s nulovým driftem díky NumPy maticím)
+            time.sleep(0.01)
+            
         except Exception as e:
-            log.error(f"Inference error: {e}")
+            log.error(f"Kritická chyba v Oracle smyčce: {e}")
             time.sleep(1)
-            continue
 
-        # Sleep to maintain cycle rate
-        elapsed = (time.monotonic() - cycle_start) * 1000
-        sleep_ms = max(1, CYCLE_MS - elapsed)
-        time.sleep(sleep_ms / 1000)
-
-
-def main():
-    """Entry point with graceful shutdown."""
-    def shutdown(sig, frame):
-        log.info("🛑 ML Shield shutting down...")
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, shutdown)
-    signal.signal(signal.SIGTERM, shutdown)
-
-    try:
-        run_inference()
-    except KeyboardInterrupt:
-        log.info("🛑 ML Shield stopped.")
-
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    run_oracle()

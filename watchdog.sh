@@ -144,7 +144,11 @@ if ! is_alive "ml_shield"; then
     ALERTS=$((ALERTS + 1))
 fi
 
-
+if ! is_alive "fee_monitor"; then
+    tg_alert "feemon_down" "⚠️ WATCHDOG: Fee Monitor spadl → restartuji"
+    cd "$ARMADA_ROOT" && nohup python3 architect/fee_monitor.py >> "$LOG_DIR/fee_monitor.log" 2>&1 &
+    ALERTS=$((ALERTS + 1))
+fi
 
 # ═══ DUPLICATE CLEANUP ═══
 # Note: watchdog.sh is NOT checked — cron creates new bash instances each minute, pgrep sees them all

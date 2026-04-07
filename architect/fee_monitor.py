@@ -43,8 +43,12 @@ def load_dotenv(path):
 
 load_dotenv(os.path.join(PROJECT_ROOT, '.env'))
 
-FEE_STATE_PATH = "/dev/shm/beroun/fee_state.bin"
-FEE_STATE_SIZE = 64  # sizeof(GlobalFeeState) — 1 cache line
+FEE_MATRIX_PATH = "/dev/shm/beroun/fee_matrix.bin"
+FEE_MATRIX_SIZE = 512  # MAX_VENUES (8) * 64 bytes
+
+# Constants matching fee_types.rs
+VENUE_BITFINEX = 0
+VENUE_BINANCE = 1
 
 # mmap offsets (from fee_types.rs)
 OFF_MAKER_BPS = 0       # u64
@@ -57,22 +61,31 @@ OFF_FEE_TIER = 48       # u64
 OFF_HEARTBEAT = 56      # u64
 
 def _init_mmap():
-    """Open or create fee_state.bin mmap."""
-    os.makedirs(os.path.dirname(FEE_STATE_PATH), exist_ok=True)
-    if not os.path.exists(FEE_STATE_PATH):
-        with open(FEE_STATE_PATH, 'wb') as f:
-            # Defaults: BFX=0/0 (verified zero-fee tier), BNB=10/10 bps
-            f.write(struct.pack('<Q', 0))      # BFX maker (0 bps)
-            f.write(struct.pack('<Q', 0))      # BFX taker (0 bps)
-            f.write(struct.pack('<Q', 1000))   # BNB maker (10 bps)
-            f.write(struct.pack('<Q', 1000))   # BNB taker (10 bps)
-            f.write(struct.pack('<Q', 0))      # last_updated
-            f.write(struct.pack('<q', 0))      # monthly_volume
-            f.write(struct.pack('<Q', 0))      # fee_tier
-            f.write(struct.pack('<Q', 0))      # heartbeat
-    with open(FEE_STATE_PATH, 'r+b') as f:
-        mm = mmap.mmap(f.fileno(), FEE_STATE_SIZE)
+    """Open or create fee_matrix.bin mmap."""
+    os.makedirs(os.path.dirname(FEE_MATRIX_PATH), exist_ok=True)
+    if not os.path.exists(FEE_MATRIX_PATH):
+        with open(FEE_MATRIX_PATH, 'wb') as f:
+            f.write(b'\x00' * FEE_MATRIX_SIZE)
+            
+        # Ochranná brzda - inicializace na bezpečné výchozí hodnoty (20 bps)
+        with open(FEE_MATRIX_PATH, 'r+b') as f:
+            mm = mmap.mmap(f.fileno(), FEE_MATRIX_SIZE)
+            for i in range(8):
+                write_venue_fee(mm, i, 2000, 2000, 0, 1) # 20 bps, Online
+            mm.close()
+            
+    with open(FEE_MATRIX_PATH, 'r+b') as f:
+        mm = mmap.mmap(f.fileno(), FEE_MATRIX_SIZE)
     return mm
+
+def write_venue_fee(mm, venue_idx, maker_bps100, taker_bps100, last_update_ms, is_online):
+    offset = venue_idx * 64
+    struct.pack_into('<QQQI', mm, offset, maker_bps100, taker_bps100, last_update_ms, is_online)
+
+def read_venue_fee(mm, venue_idx):
+    offset = venue_idx * 64
+    maker, taker, ts, is_online = struct.unpack_from('<QQQI', mm, offset)
+    return maker, taker
 
 
 # ═══════════════════════════════════════════════════════════
@@ -92,7 +105,9 @@ def fetch_bitfinex_fees():
 
     path = '/v2/auth/r/summary'
     for attempt in range(3):
-        nonce = str(int(time.time() * 1000))
+        # Bitfinex vyžaduje striktně rostoucí nonce. Pokud systém dříve vygeneroval
+        # nonce v mikrosekundách, milisekundy budou "příliš malé". Použijeme * 1_000_000.
+        nonce = str(int(time.time() * 1000000))
         body = '{}'
         signature_payload = f'/api{path}{nonce}{body}'
         sig = hmac.new(secret.encode(), signature_payload.encode(), hashlib.sha384).hexdigest()
@@ -204,33 +219,28 @@ def update_fees():
     now_ms = int(time.time() * 1000)
 
     # Read previous values for change detection
-    prev_maker = struct.unpack_from('<Q', mm, OFF_MAKER_BPS)[0]
-    prev_taker = struct.unpack_from('<Q', mm, OFF_TAKER_BPS)[0]
+    prev_maker_bfx, prev_taker_bfx = read_venue_fee(mm, VENUE_BITFINEX)
 
     # Fetch Bitfinex (primary — used by Hydra/Moonshot/Grid/Trigon)
     bfx = fetch_bitfinex_fees()
     if bfx:
-        struct.pack_into('<Q', mm, OFF_MAKER_BPS, bfx['maker'])
-        struct.pack_into('<Q', mm, OFF_TAKER_BPS, bfx['taker'])
-        struct.pack_into('<Q', mm, OFF_LAST_UPDATED, now_ms)
+        write_venue_fee(mm, VENUE_BITFINEX, bfx['maker'], bfx['taker'], now_ms, 1)
+    else:
+        # Fallback na 20 bps pokud burza neodpovídá a hodnoty dříve byly 0
+        if prev_maker_bfx == 0:
+            log.warning("Bitfinex offline and no previous fee state. Activating 20 bps safety brake!")
+            write_venue_fee(mm, VENUE_BITFINEX, 2000, 2000, now_ms, 1)
 
     # Fetch Binance (for Nexus cross-exchange calculations)
     bnb = fetch_binance_fees()
-    # Note: We store Binance fees in deriv_maker/taker fields (reusing slots)
-    # This is a pragmatic choice — deriv fees are not used currently
     if bnb:
-        struct.pack_into('<Q', mm, OFF_DERIV_MAKER, bnb['maker'])
-        struct.pack_into('<Q', mm, OFF_DERIV_TAKER, bnb['taker'])
-
-    # Update heartbeat
-    struct.pack_into('<Q', mm, OFF_HEARTBEAT, now_ms)
+        write_venue_fee(mm, VENUE_BINANCE, bnb['maker'], bnb['taker'], now_ms, 1)
 
     # Change detection → Telegram alert
-    new_maker = struct.unpack_from('<Q', mm, OFF_MAKER_BPS)[0]
-    new_taker = struct.unpack_from('<Q', mm, OFF_TAKER_BPS)[0]
+    new_maker_bfx, new_taker_bfx = read_venue_fee(mm, VENUE_BITFINEX)
 
-    if prev_maker > 0 and (new_maker != prev_maker or new_taker != prev_taker):
-        _send_fee_change_alert(prev_maker, prev_taker, new_maker, new_taker)
+    if prev_maker_bfx > 0 and (new_maker_bfx != prev_maker_bfx or new_taker_bfx != prev_taker_bfx):
+        _send_fee_change_alert(prev_maker_bfx, prev_taker_bfx, new_maker_bfx, new_taker_bfx)
 
     mm.close()
     log.info(f"Fee state updated at {datetime.now(timezone.utc).isoformat()}")
@@ -264,6 +274,10 @@ def _send_fee_change_alert(old_maker, old_taker, new_maker, new_taker):
 
 
 if __name__ == '__main__':
-    log.info("💰 Fee Monitor starting...")
-    update_fees()
-    log.info("✅ Done")
+    log.info("💰 Fee Monitor Daemon starting...")
+    while True:
+        try:
+            update_fees()
+        except Exception as e:
+            log.error(f"Fee Monitor Loop Error: {e}")
+        time.sleep(60)
