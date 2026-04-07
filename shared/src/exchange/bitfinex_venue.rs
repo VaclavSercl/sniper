@@ -41,11 +41,10 @@ impl BitfinexVenue {
     /// Register a symbol for hash↔string mapping.
     pub fn register_symbol(&mut self, symbol: &str) {
         let hash = str_to_symbol_hash(symbol);
-        if !self.symbols.iter().any(|(h, _)| *h == hash) {
-            if let Ok(s) = arrayvec::ArrayString::try_from(symbol) {
+        if !self.symbols.iter().any(|(h, _)| *h == hash)
+            && let Ok(s) = arrayvec::ArrayString::try_from(symbol) {
                 let _ = self.symbols.try_push((hash, s));
             }
-        }
     }
 
     /// Find symbol hash for a channel ID.
@@ -138,7 +137,7 @@ impl BitfinexVenue {
         let arr = v.get(2)?.as_array()?;
         if arr.len() < 5 { return None; }
 
-        let order_id = arr.get(0)?.as_u64().unwrap_or(0);
+        let order_id = arr.first()?.as_u64().unwrap_or(0);
         let remaining = arr.get(6)?.as_f64().unwrap_or(0.0).abs();
         let status_str = arr.get(13)?.as_str().unwrap_or("");
 
@@ -183,6 +182,27 @@ impl BitfinexVenue {
 // ═══════════════════════════════════════════════════════════
 
 impl BitfinexVenue {
+    // ── Update builder pro bleskové úpravy bez rušení fronty (Issue #11) ──
+
+    /// Write an UPDATE (Amend) order into the batch.
+    /// Pattern: `,["ou",{"id":123456789,"amount":"0.001","price":"68000.0"}]`
+    #[inline]
+    pub fn write_amend_order(
+        buf: &mut bytes::BytesMut,
+        order_id: u64,
+        amount: &str,
+        price: &str,
+    ) {
+        buf.extend_from_slice(b",[\"ou\",{\"id\":");
+        let mut itoa_buf = itoa::Buffer::new();
+        buf.extend_from_slice(itoa_buf.format(order_id).as_bytes());
+        buf.extend_from_slice(b",\"amount\":\"");
+        buf.extend_from_slice(amount.as_bytes());
+        buf.extend_from_slice(b"\",\"price\":\"");
+        buf.extend_from_slice(price.as_bytes());
+        buf.extend_from_slice(b"\"}]");
+    }
+
     // ── ox_multi batch builders ──
 
     /// Write the opening of an ox_multi batch with cancel-by-symbol.

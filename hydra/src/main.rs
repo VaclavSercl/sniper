@@ -659,19 +659,33 @@ impl SovereignEngine for HydraEngine {
             }
         }
         
-        let fp_0_5 = FixedPrice::new(50_000_000);
-        let fp_1_5 = FixedPrice::new(150_000_000);
-        let fp_2_0 = FixedPrice::new(200_000_000);
-        let fp_0_7 = FixedPrice::new(70_000_000);
+        // === NOVÝ EXPONENCIÁLNÍ SKEWING (Issue #11) ===
+        let trending_fp = FixedPrice::new(l2risk.trending_score.load(Ordering::Relaxed) as i64);
+        let one_fp = FixedPrice::new(sniper_types::PRICE_SCALE_I);
+        let min_multiplier = FixedPrice::new(10_000_000); // Max útlum na 10 %
+        let max_multiplier = FixedPrice::new(300_000_000); // Max boost na 300 %
 
-        let final_order_usd: FixedPrice = if in_liquidity_hole { base_usd * fp_0_5 }
-        else if (obi > FixedPrice::new(20_000_000) && micro_bias > 0) || (obi < FixedPrice::new(-20_000_000) && micro_bias < 0) { 
-            (base_usd * fp_1_5).max(base_usd * fp_0_5).min(base_usd * fp_2_0)
-        }
-        else if (obi > FixedPrice::new(10_000_000) && micro_bias < 0) || (obi < FixedPrice::new(-10_000_000) && micro_bias > 0) { 
-            (base_usd * fp_0_7).max(base_usd * fp_0_5).min(base_usd * fp_2_0)
-        }
-        else { base_usd };
+        // Výpočet Kvadratického OBI (zachování znaménka) pro exponenciální reakci
+        let obi_abs = FixedPrice::new(obi.0.abs());
+        let obi_sq = (obi_abs * obi_abs) / one_fp;
+        let mut skew_factor = (obi_sq * trending_fp) / one_fp;
+        if obi.0 < 0 { skew_factor.0 = -skew_factor.0; }
+
+        let mut buy_skew_multiplier = one_fp + skew_factor;
+        let mut sell_skew_multiplier = one_fp - skew_factor;
+
+        // Ochrana proti přílišnému ztenčení nebo přepálení sítě
+        if buy_skew_multiplier < min_multiplier { buy_skew_multiplier = min_multiplier; }
+        if buy_skew_multiplier > max_multiplier { buy_skew_multiplier = max_multiplier; }
+        if sell_skew_multiplier < min_multiplier { sell_skew_multiplier = min_multiplier; }
+        if sell_skew_multiplier > max_multiplier { sell_skew_multiplier = max_multiplier; }
+
+        // V Liquidity Hole plošně přiškrtíme základní velikost mřížky
+        let mut active_base_usd = base_usd;
+        if in_liquidity_hole { active_base_usd = base_usd * FixedPrice::new(50_000_000); }
+
+        let final_order_usd = active_base_usd; // Slouží jako základ, skewing se násobí níže
+        // ==============================================
 
         let trending_score = l2risk.trending_score.load(Ordering::Relaxed) as f64 / 1e8;
         let base_grid = risk.grid_step.load(Ordering::Acquire) as f64;
@@ -816,13 +830,7 @@ impl SovereignEngine for HydraEngine {
             let n_public_sell = gc.n_public_sell;
             let ghost_mode = gc.ghost_mode;
 
-            // === L1 ORACLE HYPER-SKEWING ===
-            // obi ukazuje směr (Kupci dominují = >0). trending_score ukazuje sílu VPIN (od 0 do 1)
-            let trending_fp = FixedPrice::new(l2risk.trending_score.load(Ordering::Relaxed) as i64);
-            let skew_factor = obi * trending_fp;
-            let one_fp = FixedPrice::new(sniper_types::PRICE_SCALE_I);
-            let buy_skew_multiplier = one_fp + skew_factor;
-            let sell_skew_multiplier = one_fp - skew_factor;
+            // OBI Kvadratický skewing již spočítán výše v kontextu (Issue #11)
             // ===============================
 
             let base_bp = (micro_i + final_bias_with_l1).max(0).min(ba_i - MIN_TICK);
