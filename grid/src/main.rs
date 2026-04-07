@@ -378,11 +378,26 @@ impl SovereignEngine for GridEngine {
                         let symbol = b"tBTCUSD";
                         BitfinexVenue::write_batch_open_cancel_gid(out_buf, sniper_types::BOT_GID_GRID);
 
+                        let mut remaining_usd = (e.wallet_usd.load(Ordering::Relaxed) as i64 * 98) / 100;
                         for price in &buys {
-                            // Anchor buy to ask so we don't cross spread
                             let ask_fp = FixedPrice::new(e.best_ask.load(Ordering::Relaxed) as i64);
                             let safe_price = if ask_fp.0 > 0 && price.0 >= ask_fp.0 { ask_fp.0 - 10_000 } else { price.0 };
-                            let q_fmt = FixedFormat::new(qty.0);
+                            let p_fp = FixedPrice::new(safe_price);
+                            
+                            let mut final_qty = qty.0;
+                            let usd_cost = p_fp * FixedPrice::new(final_qty);
+                            
+                            let min_usd_allowed = (FixedPrice::new(15000) * p_fp).0;
+                            if remaining_usd < min_usd_allowed { break; } 
+                            
+                            if usd_cost.0 > remaining_usd {
+                                final_qty = (FixedPrice::new(remaining_usd) / p_fp).0;
+                            }
+                            if final_qty < 15000 { break; }
+                            
+                            remaining_usd -= (p_fp * FixedPrice::new(final_qty)).0;
+
+                            let q_fmt = FixedFormat::new(final_qty);
                             let p_fmt = FixedFormat::new(safe_price);
                             BitfinexVenue::write_limit_order(
                                 out_buf, 3000, symbol,
@@ -390,23 +405,21 @@ impl SovereignEngine for GridEngine {
                             );
                         }
 
-                        // Physical Wallet Guard
-                        let w_btc_raw = e.wallet_btc.load(Ordering::Relaxed) as i64;
-                        let n_sell_levels = sells.len().max(1) as i64;
-                        let max_sell_per_level = (w_btc_raw * 90 / 100) / n_sell_levels;
-                        
+                        let mut remaining_btc = (e.wallet_btc.load(Ordering::Relaxed) as i64 * 98) / 100;
                         for price in &sells {
-                            // Anchor sell to bid so we don't cross spread
                             let bid_fp = FixedPrice::new(e.best_bid.load(Ordering::Relaxed) as i64);
                             let safe_price = if bid_fp.0 > 0 && price.0 <= bid_fp.0 { bid_fp.0 + 10_000 } else { price.0 };
 
                             let mut final_qty = qty.0;
-                            // Clamp to wallet
-                            if final_qty > max_sell_per_level {
-                                if max_sell_per_level < 15000 { continue; } // Under min order size
-                                final_qty = max_sell_per_level;
-                            }
+                            if remaining_btc < 15000 { break; } 
                             
+                            if final_qty > remaining_btc {
+                                final_qty = remaining_btc;
+                            }
+                            if final_qty < 15000 { break; }
+                            
+                            remaining_btc -= final_qty;
+
                             let q_fmt = FixedFormat::new(-final_qty);
                             let p_fmt = FixedFormat::new(safe_price);
                             BitfinexVenue::write_limit_order(
