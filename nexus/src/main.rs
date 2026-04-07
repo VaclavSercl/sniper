@@ -232,6 +232,7 @@ struct NexusEngine {
     notifier: Arc<AsyncNotifier>,
     cross: *const CrossExchangeState,
     l2cmd: *const sniper_types::l2_command::L2CommandMatrix,
+    l1ring: *const sniper_types::l2_command::L1TelemetryRing,
     args: Args,
     
     binance: Binance,
@@ -400,14 +401,20 @@ impl SovereignEngine for NexusEngine {
                 let notifier2 = self.notifier.clone();
                 let name = signal.pair_name.as_str().to_string();
                 let dir_str = signal.direction.to_string();
+                let ring_ptr = self.l1ring as usize;
 
                 tokio::spawn(async move {
+                    let send_ts = std::time::Instant::now();
                     let req = match signed.method {
                         "POST" => client.post(&signed.url),
                         "DELETE" => client.delete(&signed.url),
                         _ => client.get(&signed.url),
                     };
                     let res = req.header("X-MBX-APIKEY", &signed.api_key).send().await;
+                    
+                    let ring = unsafe { &*(ring_ptr as *const sniper_types::l2_command::L1TelemetryRing) };
+                    sniper_types::l2_command::record_latency(ring, send_ts);
+                    
                     let bnb_ok = res.map(|r| r.status().is_success()).unwrap_or(false);
                     if bnb_ok {
                         notifier2.trade(name, dir_str, gross_bps_f, net_bps_f, size_usd_f);
@@ -447,6 +454,7 @@ async fn main() -> Result<()> {
         notifier: Arc::new(AsyncNotifier::new("nexus", "🪐")),
         cross: cross_state,
         l2cmd: &l2cmd.cmd,
+        l1ring: &l2cmd.latency_ring,
         args,
         binance: Binance::new(),
         http_client: reqwest::Client::builder()
