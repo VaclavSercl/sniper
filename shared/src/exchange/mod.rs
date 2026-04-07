@@ -62,32 +62,49 @@ pub fn fast_parse_ticker(data: &[u8]) -> Option<(i64, i64, i64)> {
     while i < data.len() && data[i] != b',' { i += 1; }
     if i >= data.len() { return None; }
     let chan_id = std::str::from_utf8(&data[1..i]).ok()?.parse::<i64>().ok()?;
-    // Skip heartbeat: ,"hb"
-    if i + 2 < data.len() && data[i+1] == b'"' && data[i+2] == b'h' { return None; }
-    // Find inner array
-    while i < data.len() && data[i] != b'[' { i += 1; }
-    if i >= data.len() { return None; }
-    i += 1;
+    
+    i += 1; // skip comma
+    // Skip heartbeat: "hb"
+    if i + 3 <= data.len() && data[i] == b'"' && data[i+1] == b'h' && data[i+2] == b'b' { return None; }
+    
+    // Tolerate optional nested array `[` (e.g. for some Bitfinex endpoints)
+    if i < data.len() && (data[i] == b'[' || data[i] == b' ' || data[i] == b'"') { 
+        while i < data.len() && (data[i] == b'[' || data[i] == b' ' || data[i] == b'"') { i += 1; }
+    }
+
     // BID
     let start = i;
-    while i < data.len() && data[i] != b',' { i += 1; }
+    while i < data.len() && data[i] != b',' && data[i] != b'"' { i += 1; }
     if i >= data.len() || start >= i { return None; }
-    let bid = (std::str::from_utf8(&data[start..i]).ok()?.parse::<f64>().ok()?
-        * crate::PRICE_SCALE_I as f64) as i64;
-    i += 1;
+    
+    let bid_f = std::str::from_utf8(&data[start..i]).ok()?.parse::<f64>().ok()?;
+    let bid = (bid_f * crate::PRICE_SCALE_I as f64).round() as i64;
+    
+    // consume until next comma
+    while i < data.len() && data[i] != b',' { i += 1; }
+    i += 1; // skip comma
     if i >= data.len() { return None; }
+    
     // Skip BID_SIZE
     while i < data.len() && data[i] != b',' { i += 1; }
-    i += 1;
+    i += 1; // skip comma
     if i >= data.len() { return None; }
+    
+    // skip optional format quotes
+    if i < data.len() && (data[i] == b' ' || data[i] == b'"') { 
+        while i < data.len() && (data[i] == b' ' || data[i] == b'"') { i += 1; }
+    }
+
     // ASK
     let start = i;
-    while i < data.len() && data[i] != b',' && data[i] != b']' { i += 1; }
+    while i < data.len() && data[i] != b',' && data[i] != b']' && data[i] != b'"' { i += 1; }
     if start >= i { return None; }
-    let ask = (std::str::from_utf8(&data[start..i]).ok()?.parse::<f64>().ok()?
-        * crate::PRICE_SCALE_I as f64) as i64;
+    let ask_f = std::str::from_utf8(&data[start..i]).ok()?.parse::<f64>().ok()?;
+    let ask = (ask_f * crate::PRICE_SCALE_I as f64).round() as i64;
+    
     Some((chan_id, bid, ask))
 }
+
 
 // ═══════════════════════════════════════════════════════════
 // Bitfinex Auth Message Builder

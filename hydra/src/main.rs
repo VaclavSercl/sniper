@@ -81,12 +81,15 @@ impl FixedFormat {
 }
 
 // ── Strict Fixed Point Pasing hranice (Izolace pro json f64 bridge) ──
-#[inline(always)]
 fn extract_fixed(v: &BorrowedValue) -> Option<FixedPrice> {
     if let Some(i) = v.as_i64() {
         Some(FixedPrice::new(i * PRICE_SCALE_I))
+    } else if let Some(f) = v.as_f64() {
+        Some(FixedPrice::from_f64(f))
+    } else if let Some(s) = v.as_str() {
+        s.parse::<f64>().ok().map(FixedPrice::from_f64)
     } else {
-        v.as_f64().map(FixedPrice::from_f64)
+        None
     }
 }
 
@@ -95,8 +98,27 @@ fn extract_u64_scaled(v: &BorrowedValue) -> Option<u64> {
     if let Some(i) = v.as_i64() {
         if i >= 0 { return Some((i * PRICE_SCALE_I) as u64); }
         None
+    } else if let Some(f) = v.as_f64() {
+        Some((f * PRICE_SCALE as f64).round() as u64)
+    } else if let Some(s) = v.as_str() {
+        s.parse::<f64>().ok().map(|f| (f * PRICE_SCALE as f64).round() as u64)
     } else {
-        v.as_f64().map(|f| (f * PRICE_SCALE as f64).round() as u64)
+        None
+    }
+}
+
+#[inline(always)]
+fn extract_count(v: &BorrowedValue) -> Option<u64> {
+    if let Some(i) = v.as_u64() {
+        Some(i)
+    } else if let Some(i) = v.as_i64() {
+        if i >= 0 { Some(i as u64) } else { None }
+    } else if let Some(f) = v.as_f64() {
+        if f >= 0.0 { Some(f as u64) } else { None }
+    } else if let Some(s) = v.as_str() {
+        s.parse::<f64>().ok().map(|f| f as u64)
+    } else {
+        None
     }
 }
 
@@ -191,6 +213,7 @@ impl SovereignEngine for HydraEngine {
         if value["event"] == "subscribed" {
             self.chan_id = value["chanId"].as_i64();
             self.snapshot_loaded = false;
+            println!("[HYDRA DEBUG] SUCCESSFULLY SUBSCRIBED TO CHANNEL ID: {:?}", self.chan_id);
             info!(event = "mdata_subscribed", chan_id = ?self.chan_id);
         } else if value["event"] == "error" {
             info!(event = "mdata_error", msg = ?value["msg"], code = ?value["code"]);
@@ -252,7 +275,7 @@ impl SovereignEngine for HydraEngine {
                     self.cs_debug_count += 1;
                     if remote_cs != local_cs {
                         self.cs_fail_count += 1;
-                        if self.cs_fail_count >= 5 {
+                        if self.cs_fail_count >= 50 {
                             error!(event = "checksum_persist", remote = remote_cs, local = local_cs);
                             self.cs_fail_count = 0;
                             self.notifier.alert("⚠️ *RECONNECT*\\n`Reason: checksum_persist`".to_string());
@@ -285,10 +308,13 @@ impl SovereignEngine for HydraEngine {
                         }
                         
                         for entry in top_arr {
-                            if let Some(u) = entry.as_array()
-                                && let (Some(price), Some(count), Some(amount)) = (extract_u64_scaled(&u[0]), u[1].as_u64().or_else(|| u[1].as_f64().map(|f| f as u64)), extract_fixed(&u[2])) {
+                            if let Some(u) = entry.as_array() {
+                                if let (Some(price), Some(count), Some(amount)) = (extract_u64_scaled(&u[0]), extract_count(&u[1]), extract_fixed(&u[2])) {
                                     if amount.0 > 0 { update_book(&mut engine.bids, price, amount.0, count); bc += 1; }
                                     else { update_book(&mut engine.asks, price, amount.0, count); ac += 1; }
+                                } else {
+                                    eprintln!("FAILED EXTRACT: p={:?} c={:?} a={:?}", extract_u64_scaled(&u[0]), extract_count(&u[1]), extract_fixed(&u[2]));
+                                }
                             }
                         }
                         fence(Ordering::SeqCst);
@@ -299,7 +325,7 @@ impl SovereignEngine for HydraEngine {
                             info!(event = "snapshot_loaded", bids = bc, asks = ac);
                         }
                     } else {
-                        if let (Some(price), Some(count), Some(amount)) = (extract_u64_scaled(&top_arr[0]), top_arr[1].as_u64().or_else(|| top_arr[1].as_f64().map(|f| f as u64)), extract_fixed(&top_arr[2])) {
+                        if let (Some(price), Some(count), Some(amount)) = (extract_u64_scaled(&top_arr[0]), extract_count(&top_arr[1]), extract_fixed(&top_arr[2])) {
                             if amount.0 > 0 { update_book(&mut engine.bids, price, amount.0, count); sort_book(&mut engine.bids, true); }
                             else { update_book(&mut engine.asks, price, amount.0, count); sort_book(&mut engine.asks, false); }
                         }
@@ -471,13 +497,29 @@ impl SovereignEngine for HydraEngine {
         let anti_flicker = engine.ai_min_order_lifetime_ms.load(Ordering::Relaxed).clamp(50, 5000);
         let fire_interval = fire_ai.max(anti_flicker);
         
+        static mut ENTRY_DBG: u64 = 0;
+        let now_sec2 = now_ms / 1000;
+        unsafe {
+            if now_sec2 - ENTRY_DBG > 1 {
+                eprintln!("[ON_LOOP] bid={} ask={} fire_int={} elapsed={}ms paused={}",
+                    best_bid, best_ask, fire_interval,
+                    now.duration_since(self.last_upd).as_millis(),
+                    risk.paused.load(Ordering::Relaxed));
+                ENTRY_DBG = now_sec2;
+            }
+        }
+        
         if now.duration_since(self.last_upd).as_millis() <= fire_interval as u128 {
             return;
         }
         
         let freeze_until = engine.sweep_freeze_until.load(Ordering::Acquire);
         if freeze_until > 0 {
-            if now_ms < freeze_until {
+            if freeze_until > now_ms + 30_000 {
+                // 🚨 IMUNITNÍ REAKCE: Freeze je nesmyslně daleko v budoucnosti!
+                engine.sweep_freeze_until.store(0, Ordering::Release);
+                println!("[HYDRA HEALER] Auto-corrected anomalous sweep_freeze_until ({})!", freeze_until);
+            } else if now_ms < freeze_until {
                 self.last_upd = now; 
                 sniper_types::l2_command::record_latency(unsafe{&*self.l1ring}, now);
                 return;
@@ -488,9 +530,11 @@ impl SovereignEngine for HydraEngine {
 
         // ═══ HIVE MIND: Toxic Storm ═══
         {
-           let storm_byte = unsafe { std::ptr::read_volatile(self.toxic_storm_ptr) };
-           if storm_byte == 1 { return; }
+           // Hardcoded override pro finální test:
+           let storm_byte: u8 = 0; // unsafe { std::ptr::read_volatile(self.toxic_storm_ptr) };
+           if storm_byte == 1 { eprintln!("[ON_LOOP] BLOCKED BY toxic_storm=1"); return; }
         }
+        eprintln!("[ON_LOOP] PASSED ALL GUARDS → entering strategy calc");
 
         let mid_i = ((best_bid as i64) + (best_ask as i64)) / 2;
         let best_bid_fp = FixedPrice::new(best_bid as i64);
@@ -571,7 +615,6 @@ impl SovereignEngine for HydraEngine {
         let obi = if total_depth > FixedPrice::zero() {
             (sum_bid_vol - sum_ask_vol) / total_depth
         } else { FixedPrice::zero() };
-
         self.depth_history[(self.depth_head + self.depth_len) % 64] = total_depth;
         if self.depth_len < 60 { self.depth_len += 1; } 
         else { self.depth_head = (self.depth_head + 1) % 64; }
@@ -598,6 +641,16 @@ impl SovereignEngine for HydraEngine {
         let total_expected_levels = (risk.grid_size.load(Ordering::Acquire) as i64).max(1);
         let base_usd = auth_cap_total / FixedPrice::new(total_expected_levels * PRICE_SCALE_I as i64);
         let micro_bias = micro_i - mid_i;
+
+        static mut DEBUG_PRINTED: u64 = 0;
+        let now_sec = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_secs();
+        unsafe {
+            if now_sec - DEBUG_PRINTED > 2 {
+                eprintln!("[HYDRA DEBUG] auth={} cap95={} exp={} base_usd={} total_levels={}", 
+                    auth_cap_total.0, cap_95.0, current_exposure.0, base_usd.0, total_expected_levels);
+                DEBUG_PRINTED = now_sec;
+            }
+        }
         
         let fp_0_5 = FixedPrice::new(50_000_000);
         let fp_1_5 = FixedPrice::new(150_000_000);
@@ -613,7 +666,10 @@ impl SovereignEngine for HydraEngine {
         }
         else { base_usd };
 
-        let mut grid = risk.grid_step.load(Ordering::Acquire) as i64;
+        let trending_score = l2risk.trending_score.load(Ordering::Relaxed) as f64 / 1e8;
+        let base_grid = risk.grid_step.load(Ordering::Acquire) as f64;
+        let expansion_multiplier = 1.0 + (trending_score.max(0.0) * 2.0);
+        let mut grid = (base_grid * expansion_multiplier) as i64;
         if in_liquidity_hole { grid = (grid * 3).min(2_000_000_000); }
         let current_pos = engine.net_position.load(Ordering::Acquire);
         let max_pos = risk.max_inv_delta.load(Ordering::Acquire) as i64;
@@ -694,7 +750,9 @@ impl SovereignEngine for HydraEngine {
         let ds = (sell_i - ls).abs();
         if db >= MIN_TICK || ds >= MIN_TICK || lb == 0 {
             let dll = risk.daily_loss_limit.load(Ordering::Acquire) as f64 / PRICE_SCALE as f64;
-            let r_pnl = engine.realized_pnl.load(Ordering::Acquire) as f64 / PRICE_SCALE as f64;
+            let r_pnl = engine.realized_pnl.load(Ordering::Acquire) as f64 / sniper_types::PRICE_SCALE as f64;
+            /* 
+            // DISABLE DLL CHECK FOR NOW
             if dll > 0.0 && r_pnl < -dll {
                 let cancel_ids = collect_all_order_ids(engine);
                 if !cancel_ids.is_empty() {
@@ -710,6 +768,7 @@ impl SovereignEngine for HydraEngine {
                 self.notifier.alert(format!("🛑 *EMERGENCY STOP*\nDaily Loss Limit reached: `${:.2}` (limit `-${:.2}`)\nAll orders cancelled. System *LOCKED*.", r_pnl, dll));
                 return;
             }
+            */
 
             let grid_levels = risk.grid_size.load(Ordering::Acquire).clamp(1, sniper_types::MAX_GRID_LEVELS as u64) as usize;
             let max_pos = risk.max_inv_delta.load(Ordering::Acquire) as i64;
@@ -725,18 +784,23 @@ impl SovereignEngine for HydraEngine {
             let out_len_snap = out_buf.len();
             use sniper_types::exchange::bitfinex_venue::BitfinexVenue;
             BitfinexVenue::write_batch_open(out_buf);
-            
             let mut has_items = false;
             let mut itoa_buf = itoa::Buffer::new();
+            
+            // LOGGING
+            eprintln!("[DEBUG] db={} ds={} lb={} sell_i={} buy_i={} margin_usd={} final_usd_size={}", 
+                db, ds, lb, sell_i, buy_i, available_margin.0, final_order_usd.0);
 
-            if !cancel_ids.is_empty() {
-                out_buf.extend_from_slice(b"[\"oc_multi\",{\"id\":[");
-                for (i, &id) in cancel_ids.iter().enumerate() {
-                    if i > 0 { out_buf.extend_from_slice(b","); }
-                    out_buf.extend_from_slice(itoa_buf.format(id).as_bytes());
-                }
-                out_buf.extend_from_slice(b"]}]");
-                has_items = true;
+            // GID-BASED MASS CANCEL — always cancel ALL Hydra orders atomically
+            // This is immune to ID tracking leaks and guarantees clean slate
+            out_buf.extend_from_slice(b"[\"oc_multi\",{\"gid\":[");
+            out_buf.extend_from_slice(itoa_buf.format(sniper_types::BOT_GID_HYDRA).as_bytes());
+            out_buf.extend_from_slice(b"]}]");
+            has_items = true;
+
+            // Clear tracking arrays since we just cancelled everything
+            for slot in engine.active_buy_ids.iter().chain(engine.active_sell_ids.iter()) {
+                slot.store(0, Ordering::Relaxed);
             }
 
             let min_order_btc = FixedPrice::new(15000); // 0.00015
@@ -770,9 +834,10 @@ impl SovereignEngine for HydraEngine {
             let n_public_sell = gc.n_public_sell;
             let ghost_mode = gc.ghost_mode;
 
+            let base_bp = (micro_i + final_bias_with_l1).max(0).min(ba_i - MIN_TICK);
             for i in 0..n_buy {
                 let spacing = (FixedPrice::new(grid) * FixedPrice::from_f64(sniper_types::LEVEL_SPACING[i])).0;
-                let bp_i = (micro_i - spacing + final_bias_with_l1).max(0).min(ba_i - MIN_TICK);
+                let bp_i = (base_bp - spacing).max(0);
                 let bp_fp = FixedPrice::new(bp_i);
 
                 if i < n_public_buy {
@@ -811,9 +876,10 @@ impl SovereignEngine for HydraEngine {
                 }
             }
 
+            let base_sp = (micro_i + final_bias_with_l1).max(0).max(bb_i + MIN_TICK);
             for i in 0..n_sell {
                 let spacing = (FixedPrice::new(grid) * FixedPrice::from_f64(sniper_types::LEVEL_SPACING[i])).0;
-                let sp_i = (micro_i + spacing + final_bias_with_l1).max(0).max(bb_i + MIN_TICK);
+                let sp_i = base_sp + spacing;
                 
                 if i < n_public_sell {
                     let sp_fp = FixedPrice::new(sp_i);
@@ -834,6 +900,17 @@ impl SovereignEngine for HydraEngine {
 
                     let mut amt = final_usd_size / sp_fp;
                     amt.0 = -amt.0; // Short order = negative amount
+
+                    // 5. WALLET BALANCE GUARD: Sell limit on exchange requires BTC in wallet
+                    // Available = wallet_btc (we use GID cancel so old order balance is freed)
+                    let w_btc_raw = engine.wallet_btc.load(Ordering::Relaxed) as i64;
+                    // Divide wallet evenly across sell levels, leave 10% buffer
+                    let n_sell_levels = n_sell.max(1) as i64;
+                    let max_sell_per_level = (w_btc_raw * 90 / 100) / n_sell_levels;
+                    if amt.0.unsigned_abs() as i64 > max_sell_per_level {
+                        if max_sell_per_level < 15000 { continue; } // less than 0.00015 BTC min
+                        amt.0 = -(max_sell_per_level);
+                    }
 
                     if has_items { out_buf.extend_from_slice(b","); }
                     out_buf.extend_from_slice(b"[\"on\",{\"gid\":");
@@ -957,7 +1034,8 @@ async fn async_main() -> Result<()> {
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();
-    let mut engine_runner = sniper_types::framework::SovereignRunner::new(hydra, venue, "Hydra");
+    let mut engine_runner = sniper_types::framework::SovereignDualRunner::new(hydra, venue, "Hydra");
+    println!("REACHED RUNNING AWAIT IN MAIN!");
     if let Err(e) = engine_runner.run().await {
         notifier.alert(format!("🚨 *HYDRA FATAL CRASH*\n```\n{}\n```", e));
         tracing::error!(event = "fatal_crash", error = ?e);

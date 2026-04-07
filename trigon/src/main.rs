@@ -10,7 +10,7 @@ use serde_json::json;
 
 use sniper_types::trigon_types::*;
 use sniper_types::moonshot_types::{symbol_hash_to_str};
-use sniper_types::framework::{SovereignEngine, SovereignRunner};
+use sniper_types::framework::{SovereignEngine, SovereignDualRunner};
 use sniper_types::notifier::AsyncNotifier;
 use sniper_types::mmap_utils::init_mmap;
 use sniper_types::math::FixedPrice;
@@ -498,7 +498,7 @@ async fn main() -> Result<()> {
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();
-    let mut runner = SovereignRunner::new(engine, venue, "Trigon");
+    let mut runner = SovereignDualRunner::new(engine, venue, "Trigon");
     runner.run().await?;
     
     Ok(())

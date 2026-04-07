@@ -72,7 +72,10 @@ pub struct L2GlobalRiskMatrix {
     pub flash_crash_epoch_ms: AtomicU64,
     /// Cross-bot: magnitude of drop in bps (e.g., -300 = -3%)
     pub flash_crash_drop_bps: AtomicI64,
-    _pad_cl4: [u8; 16],
+    /// Pravděpodobnost klidného trhu (0.0 až 1.0) v u64 (škálováno 1e8)
+    pub ranging_score: AtomicU64,
+    /// Pravděpodobnost silného trendu/průrazu (0.0 až 1.0) v u64 (škálováno 1e8)
+    pub trending_score: AtomicU64,
 }
 
 // ═══ CL5: Portfolio Telemetry (L1 → L2, Phase 3) ═══
@@ -159,7 +162,8 @@ impl Default for L2GlobalRiskMatrix {
             portfolio_is_hedged: AtomicI64::new(0),
             flash_crash_epoch_ms: AtomicU64::new(0),
             flash_crash_drop_bps: AtomicI64::new(0),
-            _pad_cl4: [0u8; 16],
+            ranging_score: AtomicU64::new(0),
+            trending_score: AtomicU64::new(0),
         }
     }
 }
@@ -356,3 +360,14 @@ impl Default for L2SharedState {
 
 /// Total mmap size is simply the size of the Master Struct (896B)
 pub const L2_COMMAND_FILE_SIZE: usize = std::mem::size_of::<L2SharedState>();
+
+pub fn load_l2_shared_state_ro() -> &'static L2SharedState {
+    let file = std::fs::File::open(L2_COMMAND_PATH)
+        .expect("🔥 L2 Command State neexistuje.");
+    
+    let mmap = unsafe { memmap2::MmapOptions::new().map(&file).unwrap() };
+    let mmap_ref = Box::leak(Box::new(mmap));
+    
+    let state_ptr = mmap_ref.as_ptr() as *const L2SharedState;
+    unsafe { &*state_ptr }
+}

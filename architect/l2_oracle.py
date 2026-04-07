@@ -1997,13 +1997,18 @@ Respond with EXACTLY one JSON object:
         
         # Per-bot risk mmap paths and offsets
         # These offsets are from the Rust struct layouts (repr(C, align(64)))
+        # Per-bot risk mmap paths and offsets
+        # These offsets are from the Rust struct layouts (repr(C, align(64)))
+        # RiskState has 56-byte pad after paused → all data fields start at offset 64
         BOT_RISK_MAP = {
             "hydra": {
                 "path": "/dev/shm/beroun/risk_state.bin",
                 "paused_offset": 0,
-                "capital_offset": 8,       # authorized_capital_usd (u64, PRICE_SCALE)
-                "max_pos_offset": 16,      # max_inv_delta_btc (u64, PRICE_SCALE)
-                "grid_step_offset": 24,    # grid_step (u64, PRICE_SCALE)
+                "grid_step_offset": 64,       # grid_step (u64, PRICE_SCALE)
+                "grid_size_offset": 72,        # grid_size (u64, count)
+                "order_usd_offset": 80,        # order_usd (u64, PRICE_SCALE)
+                "max_pos_offset": 88,          # max_inv_delta (u64, PRICE_SCALE)
+                "capital_offset": 104,         # authorized_capital (u64, PRICE_SCALE)
             },
         }
         
@@ -2024,10 +2029,14 @@ Respond with EXACTLY one JSON object:
                 capital = int(tier["capital_usd"] * PRICE_SCALE)
                 max_pos = int(tier["max_pos_btc"] * PRICE_SCALE)
                 grid = int(tier["grid_step"] * PRICE_SCALE)
+                grid_size = int(tier.get("grid_size", 3))
+                order_usd = int(tier.get("order_usd", tier["capital_usd"] * 0.25) * PRICE_SCALE)
                 
-                _struct.pack_into('<Q', mm, risk_info["capital_offset"], capital)
-                _struct.pack_into('<Q', mm, risk_info["max_pos_offset"], max_pos)
                 _struct.pack_into('<Q', mm, risk_info["grid_step_offset"], grid)
+                _struct.pack_into('<Q', mm, risk_info["grid_size_offset"], grid_size)
+                _struct.pack_into('<Q', mm, risk_info["order_usd_offset"], order_usd)
+                _struct.pack_into('<Q', mm, risk_info["max_pos_offset"], max_pos)
+                _struct.pack_into('<Q', mm, risk_info["capital_offset"], capital)
                 
                 mm.flush()
                 mm.close()

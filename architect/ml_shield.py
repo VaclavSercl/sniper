@@ -77,10 +77,10 @@ WARMUP_TICKS = 100  # Collect this many ticks before inference
 # 1-byte mmap file read by ALL Rust bots before every order.
 # 0 = clear, 1 = TOXIC STORM active → bots go defensive.
 HIVE_MIND_PATH = "/dev/shm/beroun/toxic_storm.bin"
-STORM_VPIN_THRESHOLD = 0.60  # VPIN toxicity threshold
-STORM_SPREAD_Z_THRESHOLD = 3.0  # Spread z-score threshold
-STORM_OBI_MOMENTUM = 0.4        # OBI momentum extreme
-STORM_CALM_CYCLES = 10          # Consecutive calm cycles to deactivate
+STORM_VPIN_THRESHOLD = 0.95  # VPIN toxicity threshold (normal BTC ~0.5-0.9)
+STORM_SPREAD_Z_THRESHOLD = 5.0  # Spread z-score threshold (was 3.0)
+STORM_OBI_MOMENTUM = 0.7        # OBI momentum extreme (was 0.4)
+STORM_CALM_CYCLES = 5           # Consecutive calm cycles to deactivate (was 10)
 GPU_TEMP_MAX = 85               # GPU temperature limit (°C)
 
 # ═══════════════════════════════════════════════════════════
@@ -458,6 +458,13 @@ def run_inference():
     file_size = mm.size()
     log.info(f"   mmap size: {file_size} bytes")
 
+    L2_CMD_PATH = "/dev/shm/beroun/l2_command.bin"
+    if not os.path.exists(L2_CMD_PATH):
+        with open(L2_CMD_PATH, 'wb') as lf:
+            lf.write(b'\x00' * 896)
+    f2 = open(L2_CMD_PATH, 'r+b')
+    l2_mm = mmap.mmap(f2.fileno(), 896)
+
     log.info(f"   Using l1_skew offset: {OFF_L1_SKEW}, l1_conf offset: {OFF_L1_CONF}")
 
     # Verify: read current values to see if they're sensible
@@ -515,30 +522,51 @@ def run_inference():
                 struct.pack_into('<q', mm, OFF_L1_SKEW, skew_scaled)
                 struct.pack_into('<Q', mm, OFF_L1_CONF, conf_scaled)
 
+                # Regime Scoring
+                obi_momentum = features[2]
+                spread_z = features[4]
+                vpin_raw = features[5]
+                
+                ranging_score = max(0.0, 1.0 - (abs(vpin_raw) + (abs(spread_z) / 5.0)))
+                trending_score = min(1.0, abs(vpin_raw) + abs(obi_momentum))
+
+                total_score = ranging_score + trending_score
+                if total_score > 0:
+                    ranging_score /= total_score
+                    trending_score /= total_score
+
+                struct.pack_into('<Q', l2_mm, 240, int(ranging_score * 1e8))
+                struct.pack_into('<Q', l2_mm, 248, int(trending_score * 1e8))
+
                 # ═══ HIVE MIND: Toxic Storm Detection ═══
                 # Check 3 conditions: VPIN, spread z-score, OBI momentum
+                # WARMUP GUARD: Don't activate storm until features are reliable
                 try:
                     n_feat = features.shape[0] if hasattr(features, 'shape') else len(features)
                     obi_mom_val = abs(float(features[2])) if n_feat > 2 else 0.0
                     spread_z_val = float(features[4]) if n_feat > 4 else 0.0
                     vpin_val = float(features[5]) if n_feat > 5 else 0.0
 
-                    is_storm = (
-                        vpin_val > STORM_VPIN_THRESHOLD or
-                        spread_z_val > STORM_SPREAD_Z_THRESHOLD or
-                        obi_mom_val > STORM_OBI_MOMENTUM
-                    )
-
-                    if is_storm:
-                        storm_calm_counter = 0
-                        if hive_mm[0] == 0:
-                            hive_mm[0] = 1
-                            log.warning("🌩️ [HIVE MIND] TOXIC STORM ACTIVATED — all bots go defensive")
+                    # Don't activate storm during warmup — features are garbage
+                    if cycle_count < WARMUP_TICKS:
+                        pass  # Skip storm evaluation until we have reliable data
                     else:
-                        storm_calm_counter += 1
-                        if storm_calm_counter >= STORM_CALM_CYCLES and hive_mm[0] == 1:
-                            hive_mm[0] = 0
-                            log.info("☀️ [HIVE MIND] Storm cleared — resuming normal operations")
+                        is_storm = (
+                            vpin_val > STORM_VPIN_THRESHOLD or
+                            spread_z_val > STORM_SPREAD_Z_THRESHOLD or
+                            obi_mom_val > STORM_OBI_MOMENTUM
+                        )
+
+                        if is_storm:
+                            storm_calm_counter = 0
+                            if hive_mm[0] == 0:
+                                hive_mm[0] = 1
+                                log.warning(f"🌩️ [HIVE MIND] TOXIC STORM ACTIVATED — vpin={vpin_val:.3f} spread_z={spread_z_val:.2f} obi={obi_mom_val:.3f}")
+                        else:
+                            storm_calm_counter += 1
+                            if storm_calm_counter >= STORM_CALM_CYCLES and hive_mm[0] == 1:
+                                hive_mm[0] = 0
+                                log.info("☀️ [HIVE MIND] Storm cleared — resuming normal operations")
                 except Exception:
                     pass  # Never crash inference for hive mind
 

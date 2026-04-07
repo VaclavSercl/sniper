@@ -10,7 +10,7 @@ use serde_json::json;
 
 use sniper_types::moonshot_types::*;
 use sniper_types::PRICE_SCALE_I;
-use sniper_types::framework::{SovereignEngine, SovereignRunner};
+use sniper_types::framework::{SovereignEngine, SovereignDualRunner};
 use sniper_types::notifier::AsyncNotifier;
 use sniper_types::mmap_utils::init_mmap;
 use sniper_types::math::FixedPrice;
@@ -127,6 +127,23 @@ impl FixedFormat {
     }
 }
 
+use simd_json::prelude::*;
+use simd_json::BorrowedValue;
+
+#[inline(always)]
+fn extract_u64_scaled(v: &BorrowedValue) -> Option<u64> {
+    if let Some(i) = v.as_i64() {
+        if i >= 0 { return Some((i * PRICE_SCALE_I) as u64); }
+        None
+    } else if let Some(f) = v.as_f64() {
+        Some((f * sniper_types::PRICE_SCALE as f64).round() as u64)
+    } else if let Some(s) = v.as_str() {
+        s.parse::<f64>().ok().map(|f| (f * sniper_types::PRICE_SCALE as f64).round() as u64)
+    } else {
+        None
+    }
+}
+
 struct MoonshotEngine {
     notifier: Arc<AsyncNotifier>,
     engine: *const MoonshotEngineState,
@@ -150,6 +167,7 @@ impl SovereignEngine for MoonshotEngine {
     fn subscriptions(&mut self) -> Vec<String> {
         let risk_state = unsafe { &*self.risk };
         let mut subs = Vec::new();
+        subs.push(json!({"event":"conf","flags":131072|536870912}).to_string());
         
         for i in 0..MOONSHOT_MAX_PAIRS {
             let symbol_hash = risk_state.pairs[i].symbol_hash.load(Ordering::Acquire);
@@ -191,6 +209,39 @@ impl SovereignEngine for MoonshotEngine {
 
     fn on_market_message(&mut self, payload: &mut [u8], out_buf: &mut bytes::BytesMut) {
         let loop_start = Instant::now();
+
+        // Check authentication / wallet stream
+        if payload.len() > 2 && payload[0] == b'[' {
+            let mut pl_clone = payload.to_vec();
+            if let Ok(v) = simd_json::to_borrowed_value(&mut pl_clone) {
+                if let Some(arr) = v.as_array() {
+                    if let Some(0) = arr[0].as_i64() {
+                        if arr.len() > 1 {
+                            let mt = arr[1].as_str().unwrap_or("");
+                            if mt == "wu" || mt == "ws" {
+                                let iter: Box<dyn Iterator<Item = &BorrowedValue>> = if mt == "wu" {
+                                    Box::new(std::iter::once(&arr[2]))
+                                } else {
+                                    if let Some(a) = arr[2].as_array() { Box::new(a.iter()) } else { Box::new(std::iter::empty()) }
+                                };
+                                let e_global = unsafe { &*self.engine };
+                                for w in iter {
+                                    if let Some(w_arr) = w.as_array() {
+                                        if let (Some(wt), Some(cur), Some(bal)) = (w_arr.get(0).and_then(|x| x.as_str()), w_arr.get(1).and_then(|x| x.as_str()), w_arr.get(2).and_then(|x| extract_u64_scaled(x))) {
+                                            if wt == "exchange" {
+                                                if cur == sniper_types::TRADING_BASE { e_global.wallet_btc.store(bal, Ordering::SeqCst); }
+                                                else if cur == sniper_types::TRADING_QUOTE || cur == "UST" { e_global.wallet_usd.store(bal, Ordering::SeqCst); }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if let Some((chan, bid, ask)) = sniper_types::exchange::fast_parse_ticker(payload) {
             if let Some(idx) = self.chan_to_idx.get(chan) {
                 let e = unsafe { &(*self.engine).pairs[idx] };
@@ -269,7 +320,7 @@ impl SovereignEngine for MoonshotEngine {
                             let symbol = &self.idx_to_symbol[idx];
                             if !symbol.is_empty() {
                                 use sniper_types::exchange::bitfinex_venue::BitfinexVenue;
-                                BitfinexVenue::write_batch_open_cancel_sym(out_buf, symbol.as_bytes());
+                                BitfinexVenue::write_batch_open_cancel_gid(out_buf, sniper_types::BOT_GID_MOONSHOT);
                                 
                                 let coin_fmt = FixedFormat::new(coin_amount.0);
                                 let buy_p_fmt = FixedFormat::new(buy_p_fp.0);
@@ -356,7 +407,7 @@ async fn main() -> Result<()> {
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();
-    let mut runner = SovereignRunner::new(engine, venue, "Moonshot");
+    let mut runner = SovereignDualRunner::new(engine, venue, "Moonshot");
     runner.run().await?;
     
     Ok(())

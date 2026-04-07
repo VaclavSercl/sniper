@@ -42,6 +42,10 @@ pub struct GridEngineState {
     pub best_bid: AtomicU64,
     /// Current ASK × PRICE_SCALE
     pub best_ask: AtomicU64,
+    /// Wallet BTC balance (physical)
+    pub wallet_btc: AtomicU64,
+    /// Wallet USD balance (physical)
+    pub wallet_usd: AtomicU64,
     /// Realized PnL (USD × PRICE_SCALE)
     pub realized_pnl: AtomicI64,
     /// Unrealized PnL (mark-to-market)
@@ -62,6 +66,9 @@ pub struct GridEngineState {
     pub active_sell_levels: AtomicU32,
     /// Consecutive losses counter (for safety halt)
     pub consecutive_losses: AtomicU32,
+    /// Active tracking fields
+    pub active_buy_ids: [AtomicU64; GRID_MAX_LEVELS],
+    pub active_sell_ids: [AtomicU64; GRID_MAX_LEVELS],
 }
 
 // ═══════════════════════════════════════════════════════════

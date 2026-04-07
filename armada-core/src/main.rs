@@ -18,6 +18,7 @@ async fn main() -> Result<()> {
 
     // Nové L3 Orákulum (Read-Only)
     let oracle_state = load_oracle_state_ro();
+    let l2_state = sniper_types::l2_command::load_l2_shared_state_ro();
 
     // 2. Nastavení 10 Hz Heartbeatu (100 ms)
     let mut ticker = interval(Duration::from_millis(100));
@@ -26,7 +27,7 @@ async fn main() -> Result<()> {
         ticker.tick().await;
         
         // 3. Výpočet Kelly Matici
-        recalculate_kelly_matrix(armada_state, oracle_state);
+        recalculate_kelly_matrix(armada_state, oracle_state, l2_state);
     }
 }
 
@@ -54,82 +55,41 @@ fn zero_all_capital(state: &mut ArmadaState) {
     state.version.store(current_v + 1, Ordering::Release);
 }
 
-fn recalculate_kelly_matrix(state: &mut ArmadaState, oracle: &sniper_types::armada_types::OracleState) {
-    // Pokud je Kill-Switch nahoře, vše nulujeme!
+fn recalculate_kelly_matrix(
+    state: &mut ArmadaState, 
+    oracle: &sniper_types::armada_types::OracleState,
+    l2_state: &sniper_types::l2_command::L2SharedState
+) {
     if state.is_kill_switch_active() {
         zero_all_capital(state);
         return;
     }
 
     let total_equity = state.total_equity.load(Ordering::Relaxed) as f64 / 1e8;
-    // Jako safety fall-back nastavíme minimum na $1k (kdyby náhodou total_equity bylo 0)
     let active_equity = if total_equity < 1000.0 { 1000.0 } else { total_equity };
-    
-    // Čtení Oracle stavu (zkontrolujeme heartbeat staleness, max 5 vteřin tolerance)
-    let now_ms = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64;
-        
-    let hb = oracle.oracle_heartbeat_ms.load(Ordering::Acquire);
-    let mut fractional_dampener = 0.5; // Zvýchozí Half-Kelly
-    
-    if hb == 0 || now_ms.saturating_sub(hb) > 5000 {
-        // Blind mode (Orákulum nekomunikuje)
-        // Zůstává 0.5 jako neutrální obrana
-    } else {
-        // Oracle je živé! Analyzujeme data
-        let whale_warn = oracle.mempool_whale_warning.load(Ordering::Acquire);
-        let sentiment = oracle.sentiment_score_fp.load(Ordering::Acquire) as f64 / 1e8;
-        
-        if whale_warn == 1 {
-            // WHALE DUMP DETECTED z L3! Okamžitě srazíme tlumič na 1/10 (Crush long botů)
-            fractional_dampener = 0.05; 
-        } else if sentiment < -0.5 {
-            fractional_dampener = 0.2; // Extrémní strach, jedeme čtvrtinový Kelly
-        } else if sentiment > 0.5 {
-            fractional_dampener = 0.8; // Bull run
-        }
-        
-        static mut LAST_PRINT: u64 = 0;
-        if now_ms - unsafe { LAST_PRINT } > 2000 {
-            println!("[ARMADA] L3 ORACLE ACTIVE | Sent: {:.2} | Whale: {} | Dampener: {:.2}", sentiment, whale_warn, fractional_dampener);
-            unsafe { LAST_PRINT = now_ms };
-        }
-    }
-    
-    let mut raw_k = [0.0f32; 5];
-    let mut sum_k = 0.0;
+
+    let ranging = l2_state.global_risk.ranging_score.load(Ordering::Relaxed) as f64 / 1e8;
+    let trending = l2_state.global_risk.trending_score.load(Ordering::Relaxed) as f64 / 1e8;
+
+    let base_usd = [2000.0, 2000.0, 2000.0, 2000.0, 2000.0];
+    let bot_weights = [1.0, 1.0, 1.0, 1.0, 1.0];
+    let total_baseline_usd: f64 = base_usd.iter().sum();
+    let mut mempool_float_usd = active_equity - total_baseline_usd;
+    if mempool_float_usd < 0.0 { mempool_float_usd = 0.0; }
 
     for i in 0..5 {
-        let w = get_win_rate(i); 
-        let r = get_risk_reward(i);
-
-        let k = fractional_dampener * (w - ((1.0 - w) / r));
+        let baseline_usd = base_usd[i];
         
-        // Kelly nikdy nesmí být záporný (nebudeme shortovat vlastní strategii)
-        raw_k[i] = k.max(0.0) as f32;
-        sum_k += raw_k[i];
-    }
+        let dynamic_weight = match i {
+            0 | 2 => ranging, // Hydra/Grid
+            1 | 4 => trending, // Moonshot/Nexus
+            3 => 1.0, // Trigon
+            _ => 0.0,
+        };
 
-    // Aplikace Covariance Penalty (Korelační zámek)
-    // Pokud bot 0 (Hydra) a bot 4 (Nexus) korelují nad 0.8
-    if get_correlation(0, 4) > 0.8 {
-        raw_k[0] *= 0.5; // Zkosíme alokaci oběma
-        raw_k[4] *= 0.5;
-        // Přepočítáme sum_k
-        sum_k = raw_k.iter().sum();
-    }
+        let overdrive_usd = mempool_float_usd * dynamic_weight * bot_weights[i];
+        let allocated_usd = baseline_usd + overdrive_usd;
 
-    // Normalizace a Distribuce Peněz
-    let normalization_factor = if sum_k > 1.0 { 1.0 / sum_k } else { 1.0 };
-
-    for i in 0..5 {
-        let final_k = raw_k[i] * normalization_factor;
-        let allocated_usd = active_equity * (final_k as f64);
-        
-        // Zápis do sdílené paměti!
-        state.kelly_weight[i].store(final_k.to_bits(), Ordering::Relaxed);
         state.authorized_capital[i].store((allocated_usd * 1e8) as u64, Ordering::Relaxed);
     }
     

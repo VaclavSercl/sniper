@@ -13,7 +13,7 @@ use sniper_types::exchange::types::*;
 use sniper_types::exchange::binance::Binance;
 use sniper_types::PRICE_SCALE_I;
 
-use sniper_types::framework::{SovereignEngine, SovereignRunner};
+use sniper_types::framework::{SovereignEngine, SovereignDualRunner};
 use sniper_types::notifier::AsyncNotifier;
 use sniper_types::mmap_utils::open_mmap_readonly;
 use sniper_types::math::FixedPrice;
@@ -453,7 +453,7 @@ async fn main() -> Result<()> {
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();
-    let mut runner = SovereignRunner::new(engine, venue, "Nexus");
+    let mut runner = SovereignDualRunner::new(engine, venue, "Nexus");
     runner.run().await?;
     
     Ok(())

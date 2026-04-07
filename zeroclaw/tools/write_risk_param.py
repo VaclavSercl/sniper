@@ -4,7 +4,17 @@ ZeroClaw Tool: write_risk_param
 Writes risk parameters to mmap /dev/shm/beroun/risk_state.bin
 
 Usage: python3 write_risk_param.py <field> <value>
-Fields: grid_step, order_usd, paused, bias_offset
+
+RiskState struct layout (repr(C, align(64))):
+  offset  0: paused           (u64, 8 bytes)
+  offset  8: _pad_paused      (56 bytes) → cache-line aligned
+  offset 64: grid_step         (u64)
+  offset 72: grid_size         (u64)
+  offset 80: order_usd         (u64)
+  offset 88: max_inv_delta     (u64)
+  offset 96: bias_offset       (i64, SIGNED)
+  offset 104: authorized_capital (u64)
+  offset 112: daily_loss_limit   (u64)
 """
 import struct
 import mmap
@@ -14,12 +24,16 @@ import json
 
 PRICE_SCALE = 1e8
 
-# Field offsets in RiskState struct (cache-aligned)
+# Field offsets in RiskState struct — CORRECTED for 56-byte cache-line padding
 FIELD_MAP = {
-    "grid_step":    (0,  "uint64", lambda v: int(float(v) * PRICE_SCALE)),
-    "order_usd":    (8,  "uint64", lambda v: int(float(v) * PRICE_SCALE)),
-    "paused":       (16, "uint64", lambda v: 1 if v.lower() in ("1", "true", "yes") else 0),
-    "bias_offset":  (24, "int64",  lambda v: int(float(v) * PRICE_SCALE)),
+    "paused":              (0,   "uint64", lambda v: 1 if v.lower() in ("1", "true", "yes") else 0),
+    "grid_step":           (64,  "uint64", lambda v: int(float(v) * PRICE_SCALE)),
+    "grid_size":           (72,  "uint64", lambda v: int(float(v))),
+    "order_usd":           (80,  "uint64", lambda v: int(float(v) * PRICE_SCALE)),
+    "max_inv_delta":       (88,  "uint64", lambda v: int(float(v) * PRICE_SCALE)),
+    "bias_offset":         (96,  "int64",  lambda v: int(float(v) * PRICE_SCALE)),
+    "authorized_capital":  (104, "uint64", lambda v: int(float(v) * PRICE_SCALE)),
+    "daily_loss_limit":    (112, "uint64", lambda v: int(float(v) * PRICE_SCALE)),
 }
 
 def main():
@@ -55,6 +69,7 @@ def main():
             "field": field,
             "raw_value": raw_value,
             "atoms": value,
+            "offset": offset,
             "human": f"{field} = {raw_value}",
         }
         print(json.dumps(result, indent=2))

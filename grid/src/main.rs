@@ -10,7 +10,7 @@ use serde_json::json;
 
 use sniper_types::grid_types::*;
 use sniper_types::PRICE_SCALE_I;
-use sniper_types::framework::{SovereignEngine, SovereignRunner};
+use sniper_types::framework::{SovereignEngine, SovereignDualRunner};
 use sniper_types::notifier::AsyncNotifier;
 use sniper_types::mmap_utils::init_mmap;
 use sniper_types::math::FixedPrice;
@@ -69,6 +69,39 @@ impl FixedFormat {
     #[inline(always)]
     fn as_str(&self) -> &str {
         unsafe { std::str::from_utf8_unchecked(&self.buf[..self.len]) }
+    }
+}
+
+use simd_json::prelude::*;
+use simd_json::BorrowedValue;
+
+#[inline(always)]
+fn extract_u64_scaled(v: &BorrowedValue) -> Option<u64> {
+    if let Some(i) = v.as_i64() {
+        if i >= 0 { return Some((i * PRICE_SCALE_I) as u64); }
+        None
+    } else if let Some(f) = v.as_f64() {
+        Some((f * sniper_types::PRICE_SCALE as f64).round() as u64)
+    } else if let Some(s) = v.as_str() {
+        s.parse::<f64>().ok().map(|f| (f * sniper_types::PRICE_SCALE as f64).round() as u64)
+    } else {
+        None
+    }
+}
+
+#[inline(always)]
+fn store_order_slot(ids: &[std::sync::atomic::AtomicU64; GRID_MAX_LEVELS], id: u64) {
+    for slot in ids {
+        if slot.compare_exchange(0, id, Ordering::Relaxed, Ordering::Relaxed).is_ok() {
+            return;
+        }
+    }
+}
+
+#[inline(always)]
+fn clear_order_slot(ids: &[std::sync::atomic::AtomicU64; GRID_MAX_LEVELS], id: u64) {
+    for slot in ids {
+        let _ = slot.compare_exchange(id, 0, Ordering::Relaxed, Ordering::Relaxed);
     }
 }
 
@@ -132,7 +165,10 @@ unsafe impl Sync for GridEngine {}
 
 impl SovereignEngine for GridEngine {
     fn subscriptions(&mut self) -> Vec<String> {
-        vec![json!({"event": "subscribe", "channel": "ticker", "symbol": "tBTCUSD"}).to_string()]
+        vec![
+            json!({"event":"conf","flags":131072|536870912}).to_string(),
+            json!({"event": "subscribe", "channel": "ticker", "symbol": "tBTCUSD"}).to_string()
+        ]
     }
 
     fn on_start(&mut self) -> Result<()> {
@@ -160,14 +196,88 @@ impl SovereignEngine for GridEngine {
 
     fn on_market_message(&mut self, payload: &mut [u8], out_buf: &mut bytes::BytesMut) {
         let loop_start = Instant::now();
+        let e = unsafe { &*self.engine };
+        let r = unsafe { &*self.risk };
+        let l2p = unsafe { &*self.l2_portfolio };
+        let l2r = unsafe { &*self.l2_risk };
+        let l2w = unsafe { &*self.l2_warp };
+
+        // Parse JSON for auth channel execution stream (wallets, orders)
+        if payload.len() > 2 && payload[0] == b'[' {
+            // Keep a clone for JSON so we don't mess up fast_parse_ticker if it fails
+            let mut pl_clone = payload.to_vec();
+            if let Ok(v) = simd_json::to_borrowed_value(&mut pl_clone) {
+                if let Some(arr) = v.as_array() {
+                    if let Some(0) = arr[0].as_i64() {
+                    if arr.len() > 1 {
+                        let mt = arr[1].as_str().unwrap_or("");
+                        if mt == "wu" || mt == "ws" {
+                            let iter: Box<dyn Iterator<Item = &BorrowedValue>> = if mt == "wu" {
+                                Box::new(std::iter::once(&arr[2]))
+                            } else {
+                                if let Some(a) = arr[2].as_array() {
+                                    Box::new(a.iter())
+                                } else {
+                                    Box::new(std::iter::empty())
+                                }
+                            };
+                            for w in iter {
+                                if let Some(w_arr) = w.as_array() {
+                                    if let (Some(wt), Some(cur), Some(bal)) = (w_arr.get(0).and_then(|x| x.as_str()), w_arr.get(1).and_then(|x| x.as_str()), w_arr.get(2).and_then(|x| extract_u64_scaled(x))) {
+                                        if wt == "exchange" {
+                                            if cur == sniper_types::TRADING_BASE { e.wallet_btc.store(bal, Ordering::SeqCst); }
+                                            else if cur == sniper_types::TRADING_QUOTE || cur == "UST" { e.wallet_usd.store(bal, Ordering::SeqCst); }
+                                        }
+                                    }
+                                }
+                            }
+                        } else if mt == "os" || mt == "on" || mt == "ou" || mt == "oc" {
+                            let e_mut = unsafe { &mut *(self.engine as *const GridEngineState as *mut GridEngineState) };
+                            if mt == "os" {
+                                if let Some(orders) = arr.get(2).and_then(|a| a.as_array()) {
+                                    for order in orders {
+                                        if let Some(o) = order.as_array()
+                                            && let (Some(id), Some(sym), Some(amt_val), Some(status)) = (
+                                                o.get(0).and_then(|v| v.as_u64().or_else(|| v.as_f64().map(|f| f as u64))),
+                                                o.get(3).and_then(|v| v.as_str()), 
+                                                o.get(6).and_then(|v| v.as_f64()),
+                                                o.get(13).and_then(|v| v.as_str())
+                                            )
+                                            && sym == "tBTCUSD" {
+                                                if status.contains("ACTIVE") || status.contains("PARTIALLY") {
+                                                    if amt_val > 0.0 { store_order_slot(&e_mut.active_buy_ids, id); }
+                                                    else { store_order_slot(&e_mut.active_sell_ids, id); }
+                                                }
+                                            }
+                                    }
+                                }
+                            } else {
+                                if let Some(o) = arr.get(2).and_then(|a| a.as_array())
+                                    && let (Some(id), Some(sym), Some(amt_val), Some(status)) = (
+                                        o.get(0).and_then(|v| v.as_u64().or_else(|| v.as_f64().map(|f| f as u64))),
+                                        o.get(3).and_then(|v| v.as_str()), 
+                                        o.get(6).and_then(|v| v.as_f64()),
+                                        o.get(13).and_then(|v| v.as_str())
+                                    )
+                                    && sym == "tBTCUSD" {
+                                        if status.contains("ACTIVE") || status.contains("PARTIALLY") {
+                                            if amt_val > 0.0 { store_order_slot(&e_mut.active_buy_ids, id); }
+                                            else { store_order_slot(&e_mut.active_sell_ids, id); }
+                                        } else if status.contains("CANCELED") || status.contains("EXECUTED") {
+                                            if amt_val > 0.0 { clear_order_slot(&e_mut.active_buy_ids, id); }
+                                            else { clear_order_slot(&e_mut.active_sell_ids, id); }
+                                        }
+                                    }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
         if let Some((chan, bid, ask)) = sniper_types::exchange::fast_parse_ticker(payload) {
             if Some(chan) == self.ticker_chan {
-                let e = unsafe { &*self.engine };
-                let r = unsafe { &*self.risk };
-                let l2p = unsafe { &*self.l2_portfolio };
-                let l2r = unsafe { &*self.l2_risk };
-                let l2w = unsafe { &*self.l2_warp };
-
                 let mid = (bid + ask) / 2;
                 e.best_bid.store(bid as u64, Ordering::Release);
                 e.best_ask.store(ask as u64, Ordering::Release);
@@ -189,7 +299,10 @@ impl SovereignEngine for GridEngine {
                         return;
                     }
                     
-                    let spacing = FixedPrice::new(r.grid_spacing.load(Ordering::Acquire) as i64);
+                    let trending_score = l2r.trending_score.load(Ordering::Relaxed) as f64 / 1e8;
+                    let base_spacing = r.grid_spacing.load(Ordering::Acquire) as f64;
+                    let expansion_multiplier = 1.0 + (trending_score.max(0.0) * 2.0);
+                    let spacing = FixedPrice::new((base_spacing * expansion_multiplier) as i64);
                     let num_buy = r.num_buy_levels.load(Ordering::Acquire);
                     let num_sell = r.num_sell_levels.load(Ordering::Acquire);
                     let mode = r.grid_mode.load(Ordering::Acquire);
@@ -256,20 +369,39 @@ impl SovereignEngine for GridEngine {
 
                         use sniper_types::exchange::bitfinex_venue::BitfinexVenue;
                         let symbol = b"tBTCUSD";
-                        BitfinexVenue::write_batch_open_cancel_sym(out_buf, symbol);
+                        BitfinexVenue::write_batch_open_cancel_gid(out_buf, sniper_types::BOT_GID_GRID);
 
                         for price in &buys {
+                            // Anchor buy to ask so we don't cross spread
+                            let ask_fp = FixedPrice::new(e.best_ask.load(Ordering::Relaxed) as i64);
+                            let safe_price = if ask_fp.0 > 0 && price.0 >= ask_fp.0 { ask_fp.0 - 10_000 } else { price.0 };
                             let q_fmt = FixedFormat::new(qty.0);
-                            let p_fmt = FixedFormat::new(price.0);
+                            let p_fmt = FixedFormat::new(safe_price);
                             BitfinexVenue::write_limit_order(
                                 out_buf, 3000, symbol,
                                 q_fmt.as_str(), p_fmt.as_str(),
                             );
                         }
 
+                        // Physical Wallet Guard
+                        let w_btc_raw = e.wallet_btc.load(Ordering::Relaxed) as i64;
+                        let n_sell_levels = sells.len().max(1) as i64;
+                        let max_sell_per_level = (w_btc_raw * 90 / 100) / n_sell_levels;
+                        
                         for price in &sells {
-                            let q_fmt = FixedFormat::new(-qty.0);
-                            let p_fmt = FixedFormat::new(price.0);
+                            // Anchor sell to bid so we don't cross spread
+                            let bid_fp = FixedPrice::new(e.best_bid.load(Ordering::Relaxed) as i64);
+                            let safe_price = if bid_fp.0 > 0 && price.0 <= bid_fp.0 { bid_fp.0 + 10_000 } else { price.0 };
+
+                            let mut final_qty = qty.0;
+                            // Clamp to wallet
+                            if final_qty > max_sell_per_level {
+                                if max_sell_per_level < 15000 { continue; } // Under min order size
+                                final_qty = max_sell_per_level;
+                            }
+                            
+                            let q_fmt = FixedFormat::new(-final_qty);
+                            let p_fmt = FixedFormat::new(safe_price);
                             BitfinexVenue::write_limit_order(
                                 out_buf, 3000, symbol,
                                 q_fmt.as_str(), p_fmt.as_str(),
@@ -331,7 +463,7 @@ async fn main() -> Result<()> {
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();
-    let mut runner = SovereignRunner::new(engine, venue, "Grid");
+    let mut runner = SovereignDualRunner::new(engine, venue, "Grid");
     runner.run().await?;
     
     Ok(())

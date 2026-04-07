@@ -9,6 +9,34 @@ use crate::exchange::venue::VenueAdapter;
 use crate::exchange::ExchangeCredentials;
 
 use crate::EngineState;
+
+/// Fleet-wide Bitfinex notification parser.
+/// Intercepts [0, "n", [...]] messages and logs rejections/successes.
+/// Returns true if the message was a notification (so caller can skip further parsing).
+#[inline]
+fn parse_bitfinex_notification(bytes: &[u8]) -> bool {
+    // Quick check: must be [0,"n", pattern (auth channel notification)
+    if bytes.len() < 10 || bytes[0] != b'[' { return false; }
+    // Check for channel 0 and "n" type
+    if !(bytes[1] == b'0' && bytes[2] == b',') { return false; }
+    // Find message type marker after channel
+    let needle = b"\"n\"";
+    let found = bytes[3..12.min(bytes.len())].windows(3).any(|w| w == needle);
+    if !found { return false; }
+    // Parse with serde_json for the notification payload
+    if let Ok(v) = serde_json::from_slice::<serde_json::Value>(bytes) {
+        if let Some(arr) = v.get(2).and_then(|a| a.as_array()) {
+            let status = arr.get(6).and_then(|s| s.as_str()).unwrap_or("");
+            let msg = arr.get(7).and_then(|s| s.as_str()).unwrap_or("");
+            if status.contains("ERROR") {
+                error!(event = "bitfinex_reject", status = status, msg = msg);
+            } else if !msg.is_empty() {
+                info!(event = "bitfinex_notification", status = status, msg = msg);
+            }
+        }
+    }
+    true
+}
 use crate::math::FixedPrice;
 use crate::fee_types::GlobalFeeMatrix;
 use std::sync::atomic::Ordering;
@@ -174,6 +202,7 @@ macro_rules! drain_out_buf {
                 }
             } else {
                 use futures_util::SinkExt;
+                tracing::info!(event = "order_send", payload = %text);
                 let _ = $write.send(Message::Text(text.into())).await;
             }
             $out_buf.clear();
@@ -279,9 +308,12 @@ impl<E: SovereignEngine, V: VenueAdapter> SovereignRunner<E, V> {
                                     self.engine.on_system_event(&v, &mut out_buf);
                                 }
                             } else if bytes.first() == Some(&b'[') {
-                                // Market Data Array (Fast-path)
-                                let mut mut_bytes = bytes.to_vec();
-                                self.engine.on_market_message(&mut mut_bytes, &mut out_buf);
+                                // Fleet-wide notification interception
+                                if !parse_bitfinex_notification(bytes) {
+                                    // Market Data Array (Fast-path)
+                                    let mut mut_bytes = bytes.to_vec();
+                                    self.engine.on_market_message(&mut mut_bytes, &mut out_buf);
+                                }
                             }
                         }
                         
@@ -432,16 +464,12 @@ impl<E: SovereignEngine, V: VenueAdapter> SovereignDualRunner<E, V> {
                                     self.engine.on_system_event(&v, &mut out_buf);
                                 }
                             } else if bytes.first() == Some(&b'[') {
-                                let mut mut_bytes = bytes.to_vec();
-                                self.engine.on_market_message(&mut mut_bytes, &mut out_buf);
+                                if !parse_bitfinex_notification(bytes) {
+                                    let mut mut_bytes = bytes.to_vec();
+                                    self.engine.on_market_message(&mut mut_bytes, &mut out_buf);
+                                }
                             }
                         }
-                        drain_out_buf!(self, exec_write, &mut out_buf);
-                    }
-                    _ = tokio::time::sleep(Duration::from_millis(1)) => {
-                        // Background loop iteration
-                        out_buf.clear();
-                        self.engine.on_loop(&mut out_buf);
                         drain_out_buf!(self, exec_write, &mut out_buf);
                     }
                     _ = tokio::signal::ctrl_c() => {
@@ -452,6 +480,10 @@ impl<E: SovereignEngine, V: VenueAdapter> SovereignDualRunner<E, V> {
                         return Ok(());
                     }
                 }
+                // on_loop runs EVERY iteration — engine's internal fire_interval throttle controls frequency
+                out_buf.clear();
+                self.engine.on_loop(&mut out_buf);
+                drain_out_buf!(self, exec_write, &mut out_buf);
                 self.process_shadow_matches();
             } // end dual stream loop
         }
@@ -645,14 +677,6 @@ impl<E: CrossVenueEngine, V1: VenueAdapter, V2: VenueAdapter> SovereignCrossVenu
                             }
                         }
                     }
-                    _ = tokio::time::sleep(Duration::from_millis(1)) => {
-                        out_buf.clear();
-                        self.engine.on_loop(&mut out_buf);
-                        if !out_buf.is_empty() {
-                            let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
-                            let _ = primary_write.send(Message::Text(text.into())).await;
-                        }
-                    }
                     _ = tokio::signal::ctrl_c() => {
                         info!("Received Ctrl-C, shutting down {}", self.name);
                         out_buf.clear();
@@ -663,6 +687,13 @@ impl<E: CrossVenueEngine, V1: VenueAdapter, V2: VenueAdapter> SovereignCrossVenu
                         }
                         return Ok(());
                     }
+                }
+                // on_loop runs after every WS message — engine's fire_interval throttle controls frequency
+                out_buf.clear();
+                self.engine.on_loop(&mut out_buf);
+                if !out_buf.is_empty() {
+                    let text = unsafe { String::from_utf8_unchecked(out_buf.to_vec()) };
+                    let _ = primary_write.send(Message::Text(text.into())).await;
                 }
             }
         }
