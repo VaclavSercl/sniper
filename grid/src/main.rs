@@ -173,7 +173,7 @@ struct GridEngine {
     ticker_chan: Option<i64>,
     last_grid_calc: Instant,
     toxic_storm_ptr: *const u8,
-    armada_state: &'static sniper_types::armada_types::ArmadaState,
+    armada_v2: &'static sniper_types::armada_types::ArmadaStateV2,
     last_anchor_price: i64,
     last_trending_score: i64,
 }
@@ -203,7 +203,8 @@ impl SovereignEngine for GridEngine {
         let risk = unsafe { &*self.risk };
         let is_paused = risk.global_paused.load(Ordering::Acquire) != 0;
         let config_shadow = std::fs::read_to_string("config.yaml").unwrap_or_default().contains("is_shadow: true");
-        is_paused || config_shadow
+        let v2_kill = self.armada_v2.global.global_kill_switch.load(Ordering::Acquire) == 1;
+        is_paused || config_shadow || v2_kill
     }
 
     fn best_bid_ask(&self) -> (f64, f64) {
@@ -329,7 +330,8 @@ impl SovereignEngine for GridEngine {
                 if delta_price > spacing_threshold || trend_delta > 200_000 || time_elapsed > 60 {
                     let mut new_anchor_price = mid as i64;
                     // One-Way Anchor Freeze (Zlaté pravidlo Bitcoinu): Nezlevňujeme při poklesu s plnou taškou
-                    let armada_cap = self.armada_state.authorized_capital[2].load(Ordering::Acquire) as i64;
+                    let c_idx = sniper_types::armada_types::capital_index(2, 0); // Grid = 2
+                    let armada_cap = self.armada_v2.capital.authorized_capital[c_idx].load(Ordering::Acquire) as i64;
                     let inventory_usd = (grid_inv as f64 / sniper_types::PRICE_SCALE as f64) * mid as f64;
                     let cap_pct = if armada_cap > 0 { inventory_usd / armada_cap as f64 } else { 0.0 };
                     if cap_pct > 0.5 && new_anchor_price < self.last_anchor_price {
@@ -342,8 +344,8 @@ impl SovereignEngine for GridEngine {
                     let storm_byte = unsafe { std::ptr::read_volatile(self.toxic_storm_ptr) };
                     if storm_byte == 1 { return; }
                     
-                    // ARMADA KŘEMÍKOVÁ ZEĎ 🛡️
-                    if self.armada_state.is_kill_switch_active() {
+                    // ARMADA KŘEMÍKOVÁ ZEĎ V2 🛡️
+                    if self.armada_v2.global.global_kill_switch.load(Ordering::Acquire) == 1 {
                         return;
                     }
                     
@@ -460,7 +462,9 @@ impl SovereignEngine for GridEngine {
                             );
                         }
 
-                        let mut remaining_btc = (e.wallet_btc.load(Ordering::Relaxed) as i64 * 98) / 100;
+                        let cold_vault_btc = self.armada_v2.global.cold_vault_btc.load(Ordering::Acquire);
+                        let w_btc_raw = e.wallet_btc.load(Ordering::Relaxed) as i64;
+                        let mut remaining_btc = ((w_btc_raw - cold_vault_btc).max(0) * 98) / 100;
                         let min_profit = 10_000; // 1 tick
                         for price in &sells {
                             let bid_fp = FixedPrice::new(e.best_bid.load(Ordering::Relaxed) as i64);
@@ -546,7 +550,7 @@ async fn main() -> Result<()> {
         ticker_chan: None,
         last_grid_calc: Instant::now() - core::time::Duration::from_secs(10), // force init run
         toxic_storm_ptr: toxic_storm_mmap.as_ptr(),
-        armada_state: sniper_types::armada_types::load_armada_state_ro(),
+        armada_v2: sniper_types::armada_types::load_armada_state_v2_ro(),
         last_anchor_price: 0,
         last_trending_score: 0,
     };

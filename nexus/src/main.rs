@@ -261,7 +261,7 @@ struct NexusEngine {
     
     itoa_buf: itoa::Buffer,
     toxic_storm_ptr: *const u8,
-    armada_state: &'static sniper_types::armada_types::ArmadaState,
+    armada_v2: &'static sniper_types::armada_types::ArmadaStateV2,
 }
 
 unsafe impl Send for NexusEngine {}
@@ -298,7 +298,8 @@ impl SovereignEngine for NexusEngine {
             || cross_state.emergency_pause.load(Ordering::Relaxed) == 1 
             || self.args.paper;
         let config_shadow = std::fs::read_to_string("config.yaml").unwrap_or_default().contains("is_shadow: true");
-        is_paused || config_shadow
+        let v2_kill = self.armada_v2.global.global_kill_switch.load(Ordering::Acquire) == 1;
+        is_paused || config_shadow || v2_kill
     }
 
     fn best_bid_ask(&self) -> (f64, f64) {
@@ -348,12 +349,13 @@ impl SovereignEngine for NexusEngine {
         let storm_byte = unsafe { std::ptr::read_volatile(self.toxic_storm_ptr) };
         // if storm_byte == 1 { return; }
         
-        // ARMADA KŘEMÍKOVÁ ZEĎ 🛡️
-        if self.armada_state.is_kill_switch_active() { return; }
+        // ARMADA KŘEMÍKOVÁ ZEĎ V2 🛡️
+        if self.armada_v2.global.global_kill_switch.load(Ordering::Acquire) == 1 { return; }
 
         self.last_scan = Instant::now();
         
-        let armada_cap = self.armada_state.authorized_capital[4].load(Ordering::Acquire) as i64;
+        let c_idx = sniper_types::armada_types::capital_index(4, 0); // Nexus = 4
+        let armada_cap = self.armada_v2.capital.authorized_capital[c_idx].load(Ordering::Acquire) as i64;
 
         if let Some(signal) = scan_for_arb(cross_state, &self.args, latency_pad_100x, armada_cap) {
             self.total_signals += 1;
@@ -512,7 +514,7 @@ async fn main() -> Result<()> {
         total_trades: 0,
         itoa_buf: itoa::Buffer::new(),
         toxic_storm_ptr: toxic_storm_mmap.as_ptr(),
-        armada_state: sniper_types::armada_types::load_armada_state_ro(),
+        armada_v2: sniper_types::armada_types::load_armada_state_v2_ro(),
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();

@@ -210,7 +210,7 @@ struct TrigonEngine {
     last_scan: Instant,
     last_exec_ms: [u64; TRIGON_MAX_TRIANGLES],
     toxic_storm_ptr: *const u8,
-    armada_state: &'static sniper_types::armada_types::ArmadaState,
+    armada_v2: &'static sniper_types::armada_types::ArmadaStateV2,
 }
 
 unsafe impl Send for TrigonEngine {}
@@ -277,7 +277,8 @@ impl SovereignEngine for TrigonEngine {
         let risk = unsafe { &*self.risk };
         let is_paused = risk.global_paused.load(Ordering::Acquire) != 0;
         let config_shadow = std::fs::read_to_string("config.yaml").unwrap_or_default().contains("is_shadow: true");
-        is_paused || config_shadow
+        let v2_kill = self.armada_v2.global.global_kill_switch.load(Ordering::Acquire) == 1;
+        is_paused || config_shadow || v2_kill
     }
 
     fn best_bid_ask(&self) -> (f64, f64) {
@@ -418,12 +419,13 @@ impl SovereignEngine for TrigonEngine {
                         let storm_byte = unsafe { std::ptr::read_volatile(self.toxic_storm_ptr) };
                         if storm_byte == 1 { continue; }
                         
-                        // ARMADA KŘEMÍKOVÁ ZEĎ 🛡️
-                        if self.armada_state.is_kill_switch_active() {
+                        // ARMADA KŘEMÍKOVÁ ZEĎ V2 🛡️
+                        if self.armada_v2.global.global_kill_switch.load(Ordering::Acquire) == 1 {
                             continue;
                         }
                         
-                        let armada_cap = self.armada_state.authorized_capital[3].load(Ordering::Acquire) as i64;
+                        let c_idx = sniper_types::armada_types::capital_index(3, 0); // Trigon = 3
+                        let armada_cap = self.armada_v2.capital.authorized_capital[c_idx].load(Ordering::Acquire) as i64;
                         let max_usd = armada_cap / PRICE_SCALE_I;
                         let cooldown = tr.cooldown_ms.load(Ordering::Acquire);
 
@@ -539,7 +541,7 @@ async fn main() -> Result<()> {
         last_scan: Instant::now() - core::time::Duration::from_secs(10),
         last_exec_ms: [0; TRIGON_MAX_TRIANGLES],
         toxic_storm_ptr: toxic_storm_mmap.as_ptr(),
-        armada_state: sniper_types::armada_types::load_armada_state_ro(),
+        armada_v2: sniper_types::armada_types::load_armada_state_v2_ro(),
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();

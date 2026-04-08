@@ -193,7 +193,7 @@ struct MoonshotEngine {
     chan_to_idx: FlatMapI64,
     idx_to_symbol: [FixedSymbol; MOONSHOT_MAX_PAIRS],
     last_order_ts: [Instant; MOONSHOT_MAX_PAIRS],
-    armada_state: &'static sniper_types::armada_types::ArmadaState,
+    armada_v2: &'static sniper_types::armada_types::ArmadaStateV2,
     bids: [[sniper_types::OrderBookLevel; 25]; MOONSHOT_MAX_PAIRS],
     asks: [[sniper_types::OrderBookLevel; 25]; MOONSHOT_MAX_PAIRS],
     snapshot_loaded: [bool; MOONSHOT_MAX_PAIRS],
@@ -240,7 +240,8 @@ impl SovereignEngine for MoonshotEngine {
         let risk = unsafe { &*self.risk };
         let is_paused = risk.global_paused.load(Ordering::Acquire) != 0;
         let config_shadow = std::fs::read_to_string("config.yaml").unwrap_or_default().contains("is_shadow: true");
-        is_paused || config_shadow
+        let v2_kill = self.armada_v2.global.global_kill_switch.load(Ordering::Acquire) == 1;
+        is_paused || config_shadow || v2_kill
     }
 
     fn best_bid_ask(&self) -> (f64, f64) {
@@ -369,7 +370,7 @@ impl SovereignEngine for MoonshotEngine {
                                 e.last_trade.store(mid_price, Ordering::Release);
                                 e.latency_ns.store(loop_start.elapsed().as_nanos() as u64, Ordering::Release);
 
-                                if self.armada_state.is_kill_switch_active() { return; }
+                                if self.armada_v2.global.global_kill_switch.load(Ordering::Acquire) == 1 { return; }
 
                                 let l2cmd = unsafe { &*self.l2cmd };
                                 let l2_risk = unsafe { &*self.l2_risk };
@@ -379,7 +380,8 @@ impl SovereignEngine for MoonshotEngine {
                                 let mid_fp = FixedPrice::new(mid_price as i64);
 
                                 if let Some(trigger) = sniper_types::l2_command::moonshot_check_and_disarm(l2cmd, mid_price as i64, 1, 0) {
-                                    let order_usd_fp = FixedPrice::new(self.armada_state.authorized_capital[1].load(Ordering::Acquire) as i64);
+                                    let c_idx = sniper_types::armada_types::capital_index(1, 0); // Moonshot = 1
+                                    let order_usd_fp = FixedPrice::new(self.armada_v2.capital.authorized_capital[c_idx].load(Ordering::Acquire) as i64);
                                     let trigger_fp = FixedPrice::new(trigger);
                                     
                                     if order_usd_fp.0 > 0 && mid_fp.0 > 0 {
@@ -458,7 +460,8 @@ impl SovereignEngine for MoonshotEngine {
                                     let f_100 = FixedPrice::new(100 * sniper_types::PRICE_SCALE_I);
                                     let drop_fp = FixedPrice::new(r.m_shot_price_pct.load(Ordering::Acquire) as i64);
                                     let tp_fp = FixedPrice::new(r.tp_pct.load(Ordering::Acquire) as i64);
-                                    let order_usd_fp = FixedPrice::new(self.armada_state.authorized_capital[1].load(Ordering::Acquire) as i64);
+                                    let c_idx = sniper_types::armada_types::capital_index(1, 0); // Moonshot = 1
+                                    let order_usd_fp = FixedPrice::new(self.armada_v2.capital.authorized_capital[c_idx].load(Ordering::Acquire) as i64);
 
                                     if drop_fp.0 > 0 && order_usd_fp.0 > 0 && mid_fp.0 > 0 {
                                         let multiplier_fp = FixedPrice::new(sniper_types::PRICE_SCALE_I) - (drop_fp / f_100);
@@ -539,7 +542,9 @@ impl SovereignEngine for MoonshotEngine {
         }
 
         // === THE BAGHOLDER PROTOCOL (Time-Stop) ===
-        let btc_bal = e_global.wallet_btc.load(Ordering::Relaxed) as i64;
+        let cold_vault_btc = self.armada_v2.global.cold_vault_btc.load(Ordering::Acquire);
+        let btc_bal_raw = e_global.wallet_btc.load(Ordering::Relaxed) as i64;
+        let btc_bal = (btc_bal_raw - cold_vault_btc).max(0);
         
         // Máme na skladě alespoň minimální množství? (> 0.00015 BTC)
         if btc_bal > 15000 { 
@@ -601,7 +606,7 @@ async fn main() -> Result<()> {
         chan_to_idx: FlatMapI64::new(),
         idx_to_symbol: core::array::from_fn(|_| FixedSymbol::new()),
         last_order_ts: core::array::from_fn(|_| Instant::now()),
-        armada_state: sniper_types::armada_types::load_armada_state_ro(),
+        armada_v2: sniper_types::armada_types::load_armada_state_v2_ro(),
         bids: core::array::from_fn(|_| core::array::from_fn(|_| sniper_types::OrderBookLevel::default())),
         asks: core::array::from_fn(|_| core::array::from_fn(|_| sniper_types::OrderBookLevel::default())),
         snapshot_loaded: [false; MOONSHOT_MAX_PAIRS],

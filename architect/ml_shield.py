@@ -17,7 +17,7 @@ try:
     from l2_rust_offsets import OFF_L1_SKEW, OFF_L1_CONF
 except ImportError:
     OFF_L1_SKEW = 1296
-    OFF_L1_CONF = 1300 # Aproximace pokud nenalezeno
+    OFF_L1_CONF = 1304 # Aproximace pokud nenalezeno (1296 + 8 bajtů)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [ml_shield] 🧠 %(message)s')
 log = logging.getLogger("ml_shield")
@@ -84,6 +84,8 @@ class VolumeBucketedVPIN:
         # VPIN = Sum(|Buy - Sell|) / (Total Volume in Window)
         total_imbalance = sum(self.buckets)
         total_volume = len(self.buckets) * self.bucket_size
+        if total_volume <= 0:
+            return 0.5
         return min(1.0, total_imbalance / total_volume)
 
 class DynamicThreshold:
@@ -210,7 +212,7 @@ def run_oracle():
             
             # Výpočet Ranging / Trending Skóre
             trending_raw = current_vpin + (abs(obi) * 0.5)
-            ranging_raw = 1.0 - trending_raw
+            ranging_raw = max(0.0, 1.0 - trending_raw)
             
             # Normalizace
             total_score = trending_raw + ranging_raw
