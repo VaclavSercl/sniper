@@ -3,8 +3,8 @@ import struct
 import time
 import os
 
-L2_PATH = '/dev/shm/beroun/l2_command.bin'
-ARMADA_PATH = '/dev/shm/beroun/armada_state.bin'
+L2_PATH = '/dev/shm/sniper/l2_command.bin'
+ARMADA_PATH = '/dev/shm/sniper/armada_state.bin'
 
 def poll_memory():
     while True:

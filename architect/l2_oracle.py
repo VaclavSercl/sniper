@@ -86,7 +86,7 @@ class L2OracleAsync:
         self.pnl_db = PnlDatabase() if HAS_PNL_DB else None
 
         # 1. Optimalizace: Mapujeme paměť permanentně POUZE pro čtení a zápis
-        L2_CMD_PATH = "/dev/shm/beroun/l2_command.bin"
+        L2_CMD_PATH = "/dev/shm/sniper/l2_command.bin"
         os.makedirs(os.path.dirname(L2_CMD_PATH), exist_ok=True)
         if not os.path.exists(L2_CMD_PATH):
             with open(L2_CMD_PATH, "wb") as f:
@@ -201,7 +201,7 @@ class L2OracleAsync:
             regime = decision.get("global_regime", "UNKNOWN")
             if reasoning:
                 try:
-                    with open("/dev/shm/beroun/l2_reasoning.txt", "w") as f:
+                    with open("/dev/shm/sniper/l2_reasoning.txt", "w") as f:
                         f.write(f"{regime}\n{reasoning}")
                 except Exception:
                     pass
@@ -244,7 +244,7 @@ class L2OracleAsync:
             PRICE_SCALE = 100_000_000.0
 
             # 1. Přečtení reálného fyzického zůstatku z L0 paměti Hydry
-            eng_path = "/dev/shm/beroun/engine_state.bin"
+            eng_path = "/dev/shm/sniper/engine_state.bin"
             if not os.path.exists(eng_path): return
 
             with open(eng_path, 'rb') as f:
@@ -384,7 +384,7 @@ class L2OracleAsync:
         fee_info = ""
         try:
             import struct as _st
-            with open("/dev/shm/beroun/fee_state.bin", "rb") as f:
+            with open("/dev/shm/sniper/fee_state.bin", "rb") as f:
                 fd = f.read(64)
             maker = _st.unpack_from('<Q', fd, 0)[0] / 100.0
             taker = _st.unpack_from('<Q', fd, 8)[0] / 100.0
@@ -398,7 +398,7 @@ class L2OracleAsync:
             import struct as _st
             import math as _math
             PRICE_SCALE = 100_000_000
-            with open("/dev/shm/beroun/l2_command.bin", "rb") as f:
+            with open("/dev/shm/sniper/l2_command.bin", "rb") as f:
                 mm_data = f.read(320)  # CL1-5
             if len(mm_data) >= 320:
                 CL4, CL5 = 192, 256
@@ -486,7 +486,7 @@ class L2OracleAsync:
         latency_section = ""
         try:
             import mmap as mmap_mod, struct as _st
-            L2_CMD_PATH = "/dev/shm/beroun/l2_command.bin"
+            L2_CMD_PATH = "/dev/shm/sniper/l2_command.bin"
             # CL6 offset = CL1(64) + CL2(64) + CL3(64) + CL4(64) + CL5(64) = 320
             RING_OFFSET = 320
             RING_SIZE = 64
@@ -834,7 +834,7 @@ PARAMETER CONSTRAINTS:
 
     def _write_v2_global_logic(self, decision):
         """Write global orchestration logic (Netting & Cold Vault) to ArmadaStateV2."""
-        V2_PATH = "/dev/shm/beroun/armada_state_v2.bin"
+        V2_PATH = "/dev/shm/sniper/armada_state_v2.bin"
         if not os.path.exists(V2_PATH):
             return
 
@@ -1154,7 +1154,7 @@ PARAMETER CONSTRAINTS:
             return
         try:
             import struct as _st
-            MOONSHOT_RISK_PATH = "/dev/shm/beroun/moonshot_risk.bin"
+            MOONSHOT_RISK_PATH = "/dev/shm/sniper/moonshot_risk.bin"
             PAIR_SIZE = 128
             MAX_PAIRS = 20
             GLOBAL_OFF = MAX_PAIRS * PAIR_SIZE
@@ -1277,7 +1277,7 @@ PARAMETER CONSTRAINTS:
             
         try:
             import struct as _st
-            TRIGON_RISK_PATH = "/dev/shm/beroun/trigon_risk.bin"
+            TRIGON_RISK_PATH = "/dev/shm/sniper/trigon_risk.bin"
 
             fd = os.open(TRIGON_RISK_PATH, os.O_RDWR)
             import mmap
@@ -1353,7 +1353,7 @@ PARAMETER CONSTRAINTS:
 
         try:
             import struct as _st
-            CROSS_PATH = "/dev/shm/beroun/cross_exchange.bin"
+            CROSS_PATH = "/dev/shm/sniper/cross_exchange.bin"
             if not os.path.exists(CROSS_PATH):
                 log.warning("  🪐 cross_exchange.bin not found — skipping Nexus mmap")
                 return
@@ -1505,7 +1505,7 @@ PARAMETER CONSTRAINTS:
         # ── Latency + ML sparkline ──
         try:
             import mmap as _mmap
-            l2_path = "/dev/shm/beroun/l2_command.bin"
+            l2_path = "/dev/shm/sniper/l2_command.bin"
             if os.path.exists(l2_path):
                 with open(l2_path, 'rb') as f:
                     mm = _mmap.mmap(f.fileno(), 0, access=_mmap.ACCESS_READ)
@@ -1528,7 +1528,7 @@ PARAMETER CONSTRAINTS:
 
         try:
             import mmap as _mmap
-            eng_path = "/dev/shm/beroun/engine_state.bin"
+            eng_path = "/dev/shm/sniper/engine_state.bin"
             if os.path.exists(eng_path):
                 with open(eng_path, 'rb') as f:
                     mm = _mmap.mmap(f.fileno(), 0, access=_mmap.ACCESS_READ)
@@ -2080,7 +2080,7 @@ Respond with EXACTLY one JSON object:
         # RiskState has 56-byte pad after paused → all data fields start at offset 64
         BOT_RISK_MAP = {
             "hydra": {
-                "path": "/dev/shm/beroun/risk_state.bin",
+                "path": "/dev/shm/sniper/risk_state.bin",
                 "paused_offset": 0,
                 "grid_step_offset": 64,       # grid_step (u64, PRICE_SCALE)
                 "grid_size_offset": 72,        # grid_size (u64, count)
@@ -2089,26 +2089,63 @@ Respond with EXACTLY one JSON object:
                 "capital_offset": 104,         # authorized_capital (u64, PRICE_SCALE)
             },
         }
+        capital = int(tier.get("capital_usd", 0) * PRICE_SCALE)
         
+        # V2 Matrix population (For Issue #17 2D matrix)
+        v2_path = "/dev/shm/sniper/armada_state_v2.bin"
+        if os.path.exists(v2_path):
+            try:
+                with open(v2_path, "r+b") as f_v2:
+                    mm_v2 = _mmap.mmap(f_v2.fileno(), 0)
+                    
+                    bot_idx = {"hydra": 0, "moonshot": 1, "grid": 2, "trigon": 3, "nexus": 4}.get(bot_name, -1)
+                    if bot_idx != -1:
+                        kelly_weight = float(tier.get("kelly_weight", 0.1))
+                        
+                        if bot_idx == 4:  # Nexus
+                            half_capital = capital // 2
+                            # Bitfinex (Venue 0)
+                            idx_bfx = bot_idx * 8 + 0
+                            _struct.pack_into('<Q', mm_v2, 128 + (idx_bfx * 8), half_capital)
+                            _struct.pack_into('<f', mm_v2, 448 + (idx_bfx * 4), kelly_weight)
+                            
+                            # Binance (Venue 1)
+                            idx_bnb = bot_idx * 8 + 1
+                            _struct.pack_into('<Q', mm_v2, 128 + (idx_bnb * 8), half_capital)
+                            _struct.pack_into('<f', mm_v2, 448 + (idx_bnb * 4), kelly_weight)
+                        else:
+                            venue = 0
+                            idx = bot_idx * 8 + venue
+                            cap_offset = 128 + (idx * 8)
+                            kelly_offset = 448 + (idx * 4)
+                            
+                            _struct.pack_into('<Q', mm_v2, cap_offset, capital)
+                            _struct.pack_into('<f', mm_v2, kelly_offset, kelly_weight)
+                        
+                    mm_v2.flush()
+                    mm_v2.close()
+                log.info(f"  💾 (V2) {bot_name} matrix explicitly populated (Capital: {capital}, Kelly: {kelly_weight:.2f})")
+            except Exception as e:
+                log.error(f"  ❌ (V2) Matrix population failed for {bot_name}: {e}")
+
         risk_info = BOT_RISK_MAP.get(bot_name)
         if not risk_info:
-            log.warning(f"  ⚠️ No risk mmap mapping for {bot_name}")
+            log.warning(f"  ⚠️ No legacy risk mmap mapping for {bot_name}")
             return
         
         risk_path = risk_info["path"]
         if not os.path.exists(risk_path):
-            log.warning(f"  ⚠️ Risk mmap not found: {risk_path}")
+            log.warning(f"  ⚠️ Legacy risk mmap not found: {risk_path}")
             return
         
         try:
             with open(risk_path, "r+b") as f:
                 mm = _mmap.mmap(f.fileno(), 0)
                 
-                capital = int(tier["capital_usd"] * PRICE_SCALE)
-                max_pos = int(tier["max_pos_btc"] * PRICE_SCALE)
-                grid = int(tier["grid_step"] * PRICE_SCALE)
+                max_pos = int(tier.get("max_pos_btc", 0) * PRICE_SCALE)
+                grid = int(tier.get("grid_step", 0) * PRICE_SCALE)
                 grid_size = int(tier.get("grid_size", 3))
-                order_usd = int(tier.get("order_usd", tier["capital_usd"] * 0.25) * PRICE_SCALE)
+                order_usd = int(tier.get("order_usd", tier.get("capital_usd", 0) * 0.25) * PRICE_SCALE)
                 
                 _struct.pack_into('<Q', mm, risk_info["grid_step_offset"], grid)
                 _struct.pack_into('<Q', mm, risk_info["grid_size_offset"], grid_size)
@@ -2119,36 +2156,9 @@ Respond with EXACTLY one JSON object:
                 mm.flush()
                 mm.close()
             
-            log.info(f"  💾 {bot_name}: risk mmap updated → "
-                     f"capital=${tier['capital_usd']}, "
-                     f"max_pos={tier['max_pos_btc']} BTC, "
-                     f"grid=${tier['grid_step']}")
+            log.info(f"  💾 {bot_name}: risk mmap updated")
         except Exception as e:
             log.error(f"  ❌ Risk mmap write failed for {bot_name}: {e}")
-            
-        # V2 Matrix population (For Issue #17 2D matrix)
-        v2_path = "/dev/shm/beroun/armada_state_v2.bin"
-        if os.path.exists(v2_path):
-            try:
-                with open(v2_path, "r+b") as f_v2:
-                    mm_v2 = _mmap.mmap(f_v2.fileno(), 0)
-                    
-                    bot_idx = {"hydra": 0, "moonshot": 1, "grid": 2, "trigon": 3, "nexus": 4}.get(bot_name, -1)
-                    if bot_idx != -1:
-                        venue = 0
-                        idx = bot_idx * 8 + venue
-                        cap_offset = 128 + (idx * 8)
-                        kelly_offset = 448 + (idx * 4)
-                        
-                        _struct.pack_into('<Q', mm_v2, cap_offset, capital)
-                        kelly_weight = float(tier.get("kelly_weight", 0.1))
-                        _struct.pack_into('<f', mm_v2, kelly_offset, kelly_weight)
-                        
-                    mm_v2.flush()
-                    mm_v2.close()
-                log.info(f"  💾 (V2) {bot_name} matrix explicitly populated (Capital: {capital}, Kelly: {kelly_weight:.2f})")
-            except Exception as e:
-                log.error(f"  ❌ (V2) Matrix explicitly population failed for {bot_name}: {e}")
 
     def _get_bot_pnl(self, bot_name):
         """Get current realized PnL for bot from pnl.db."""

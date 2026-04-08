@@ -196,8 +196,8 @@ pub const HYDRA_MANIFEST: BotManifest = BotManifest {
         BotParam { name: "sell_levels", description: "Number of sell grid levels", param_type: ParamType::Int { min: 1, max: 10 }, default: "5", unit: "levels" },
         BotParam { name: "skew_bps", description: "Inventory skew in basis points", param_type: ParamType::Int { min: -500, max: 500 }, default: "0", unit: "bps" },
     ],
-    engine_path: "/dev/shm/beroun/engine_state.bin",
-    risk_path: "/dev/shm/beroun/risk_state.bin",
+    engine_path: "/dev/shm/sniper/engine_state.bin",
+    risk_path: "/dev/shm/sniper/risk_state.bin",
     dashboard_port: Some(3000),
 };
 
@@ -213,8 +213,8 @@ pub const GRID_MANIFEST: BotManifest = BotManifest {
         BotParam { name: "grid_spacing_pct", description: "Spacing between levels", param_type: ParamType::Float { min: 0.05, max: 5.0 }, default: "0.5", unit: "%" },
         BotParam { name: "quantity", description: "BTC amount per level", param_type: ParamType::Float { min: 0.0001, max: 1.0 }, default: "0.001", unit: "BTC" },
     ],
-    engine_path: "/dev/shm/beroun/grid_engine.bin",
-    risk_path: "/dev/shm/beroun/grid_risk.bin",
+    engine_path: "/dev/shm/sniper/grid_engine.bin",
+    risk_path: "/dev/shm/sniper/grid_risk.bin",
     dashboard_port: None,
 };
 
@@ -230,8 +230,8 @@ pub const MOONSHOT_MANIFEST: BotManifest = BotManifest {
         BotParam { name: "tp_pct", description: "Take profit percentage", param_type: ParamType::Float { min: 0.1, max: 10.0 }, default: "1.5", unit: "%" },
         BotParam { name: "order_usd", description: "Order size in USD", param_type: ParamType::Float { min: 5.0, max: 5000.0 }, default: "50.0", unit: "USD" },
     ],
-    engine_path: "/dev/shm/beroun/moonshot_engine.bin",
-    risk_path: "/dev/shm/beroun/moonshot_risk.bin",
+    engine_path: "/dev/shm/sniper/moonshot_engine.bin",
+    risk_path: "/dev/shm/sniper/moonshot_risk.bin",
     dashboard_port: None,
 };
 
@@ -247,8 +247,8 @@ pub const TRIGON_MANIFEST: BotManifest = BotManifest {
         BotParam { name: "max_usd", description: "Maximum USD per triangle execution", param_type: ParamType::Float { min: 10.0, max: 50000.0 }, default: "500.0", unit: "USD" },
         BotParam { name: "cooldown_ms", description: "Cooldown between triangle executions", param_type: ParamType::Int { min: 100, max: 60000 }, default: "5000", unit: "ms" },
     ],
-    engine_path: "/dev/shm/beroun/trigon_engine.bin",
-    risk_path: "/dev/shm/beroun/trigon_risk.bin",
+    engine_path: "/dev/shm/sniper/trigon_engine.bin",
+    risk_path: "/dev/shm/sniper/trigon_risk.bin",
     dashboard_port: None,
 };
 
@@ -263,8 +263,8 @@ pub const NEXUS_MANIFEST: BotManifest = BotManifest {
         BotParam { name: "min_spread_bps", description: "Minimum spread for arb signal", param_type: ParamType::Int { min: 1, max: 100 }, default: "8", unit: "bps" },
         BotParam { name: "order_usd", description: "Order size in USD", param_type: ParamType::Float { min: 10.0, max: 10000.0 }, default: "100.0", unit: "USD" },
     ],
-    engine_path: "/dev/shm/beroun/cross_exchange.bin",
-    risk_path: "/dev/shm/beroun/cross_exchange.bin",
+    engine_path: "/dev/shm/sniper/cross_exchange.bin",
+    risk_path: "/dev/shm/sniper/cross_exchange.bin",
     dashboard_port: None,
 };
 

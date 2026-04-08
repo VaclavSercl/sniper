@@ -66,3 +66,19 @@ Fáze: Izolovaná Optimalizace (Level 5 Autonomy Phase)
 **Vylepšení:**
 - **Synthetic Pair Construction:** Naučit Trigona skládat si vlastní (syntetický) orderbook ze tří různých měnových párů.
 - **Viability Killswitch:** Pokud Trigon za 48 hodin v Paper módu (nyní s reálnými nulovými poplatky na BFX) nevygeneruje zisk, bude tento modul oficiálně označen za zastaralý a jeho kapitálový slot bude přesunut k Moonshotovi.
+
+---
+
+## ✅ Dokončené Úkoly (Closed Issues):
+
+### 🏁 Issue #18: Autonomous ML Injector & Hot-Swap
+**Status:** DONE / CLOSED
+**Řešení:** Úspěšně implementováno. Systém nyní využívá zero-copy mmap architekturu k provádění L1 tensor operací bez nutnosti restartu engine (Sovereign Shield Hot-Swap).
+
+### 🏁 Issue #19: THE WAR ROOM (V2 Omni-Interface Dashboard)
+**Status:** DONE / CLOSED
+**Řešení:** Úspěšně implementováno. Přechod na 10Hz Server-Sent Events (SSE). Byly odstraněny staré zombie procesy na statických portech, nahrazeny dynamickým HTML5 Canvas s VWS depth-chartem a OBI tachometrem.
+
+### 🏁 Issue #20: Operace OMNI-ROUTER (L0 Exchange Adapters for Binance & Bitfinex)
+**Status:** DONE / CLOSED
+**Řešení:** Úspěšně implementováno. L0 adaptéry jsou plně spuštěny přes Omni-Router, což efektivně řeší propustnost dual-exchange a arbitráže mezi CEX jako Binance a Bitfinex.

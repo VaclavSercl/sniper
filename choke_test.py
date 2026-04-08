@@ -1,7 +1,7 @@
 import mmap
 import os
 
-MMAP_FILE = "/dev/shm/beroun/armada_state.bin"
+MMAP_FILE = "/dev/shm/sniper/armada_state.bin"
 
 def trigger_kill_switch():
     if not os.path.exists(MMAP_FILE):

@@ -25,7 +25,7 @@ from typing import Optional
 PRICE_SCALE = 100_000_000  # 1e8
 DB_DIR = os.path.expanduser("~/.local/share/sniper")
 DB_PATH = os.path.join(DB_DIR, "pnl.db")
-PNL_MMAP_PATH = "/dev/shm/beroun/pnl_state.bin"
+PNL_MMAP_PATH = "/dev/shm/sniper/pnl_state.bin"
 
 BOT_INDEX = {
     "hydra": 0, "moonshot": 1, "grid": 2, "trigon": 3,

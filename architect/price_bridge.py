@@ -5,7 +5,7 @@ Sniper Armada · v17.0
 
 Connects to Binance bookTicker stream and reads Bitfinex BBA from
 existing mmap files. Computes real-time cross-exchange spreads and
-writes them to /dev/shm/beroun/cross_exchange.bin for all bots to read.
+writes them to /dev/shm/sniper/cross_exchange.bin for all bots to read.
 
 Architecture:
   - Reads: Bitfinex prices from hydra/moonshot engine mmap (already running)
@@ -43,7 +43,7 @@ log = logging.getLogger('price_bridge')
 # Constants matching Rust cross_types.rs layout
 # ═══════════════════════════════════════════════════════════
 
-CROSS_EXCHANGE_PATH = "/dev/shm/beroun/cross_exchange.bin"
+CROSS_EXCHANGE_PATH = "/dev/shm/sniper/cross_exchange.bin"
 PRICE_SCALE = 100_000_000  # 1e8
 
 # ExchangeBBA: 64 bytes (i64, i64, i64, i64, u64, u32, u32, 16 padding)
@@ -104,7 +104,7 @@ class BitfinexPriceReader:
         """
         # For now, we use a simplified approach:
         # Read Hydra's best_bid/best_ask from its engine state
-        hydra_path = "/dev/shm/beroun/engine_state.bin"
+        hydra_path = "/dev/shm/sniper/engine_state.bin"
         if not os.path.exists(hydra_path):
             return
 

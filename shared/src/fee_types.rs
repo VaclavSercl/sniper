@@ -1,7 +1,7 @@
 // shared/src/fee_types.rs
 use std::sync::atomic::AtomicU64;
 
-pub const FEE_MATRIX_PATH: &str = "/dev/shm/beroun/fee_matrix.bin";
+pub const FEE_MATRIX_PATH: &str = "/dev/shm/sniper/fee_matrix.bin";
 
 // Pevné O(1) indexy burz
 pub const VENUE_BITFINEX: usize = 0;

@@ -7,7 +7,7 @@ use std::fs::File;
 // ═══════════════════════════════════════════════════════════
 
 /// Armada Orchestrator MMap (IPC) Root — V1 Legacy
-/// Namapováno na: `/dev/shm/beroun/armada_state.bin`
+/// Namapováno na: `/dev/shm/sniper/armada_state.bin`
 /// Cache-line aligned (64 bytes) to eliminate false sharing between daemon and bots.
 #[repr(C, align(64))]
 pub struct ArmadaState {
@@ -80,7 +80,7 @@ impl Default for ArmadaState {
 }
 
 pub fn load_armada_state_ro() -> &'static ArmadaState {
-    let file = File::open("/dev/shm/beroun/armada_state.bin")
+    let file = File::open("/dev/shm/sniper/armada_state.bin")
         .expect("🔥 Kritická chyba: Armada State neexistuje. Je spuštěn armada-core?");
     
     // Otevřeno POUZE PRO ČTENÍ
@@ -100,7 +100,7 @@ pub struct OracleState {
 }
 
 pub fn load_oracle_state_ro() -> &'static OracleState {
-    let path = "/dev/shm/beroun/oracle_state.bin";
+    let path = "/dev/shm/sniper/oracle_state.bin";
     let size = std::mem::size_of::<OracleState>();
 
     // Safe boot: create file with zeros if it doesn't exist (oracle_daemon.py not started yet)
@@ -231,7 +231,7 @@ pub struct ArmadaVenueRegistry {
 /// - CL0 (version/kill_switch) NEVER invalidated by capital/kelly writes
 /// - Each bot reads only its own row in capital matrix (1 CL miss max)
 ///
-/// Mapped to: `/dev/shm/beroun/armada_state_v2.bin`
+/// Mapped to: `/dev/shm/sniper/armada_state_v2.bin`
 #[repr(C, align(64))]
 pub struct ArmadaStateV2 {
     pub global: ArmadaGlobalCL,       // CL0
@@ -341,7 +341,7 @@ impl ArmadaStateV2 {
 /// Load ArmadaStateV2 read-only via mmap.
 /// Safe-creates zero-initialized file if it doesn't exist (boot race protection).
 pub fn load_armada_state_v2_ro() -> &'static ArmadaStateV2 {
-    let path = "/dev/shm/beroun/armada_state_v2.bin";
+    let path = "/dev/shm/sniper/armada_state_v2.bin";
     let size = std::mem::size_of::<ArmadaStateV2>();
 
     let file = match File::open(path) {

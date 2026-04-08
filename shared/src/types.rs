@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicU64, AtomicI64, AtomicU32};
 
-pub const RISK_STATE_PATH: &str = "/dev/shm/beroun/risk_state.bin";
-pub const ENGINE_STATE_PATH: &str = "/dev/shm/beroun/engine_state.bin";
+pub const RISK_STATE_PATH: &str = "/dev/shm/sniper/risk_state.bin";
+pub const ENGINE_STATE_PATH: &str = "/dev/shm/sniper/engine_state.bin";
 
 pub const PRICE_SCALE: f64 = 100_000_000.0;
 pub const PRICE_SCALE_I: i64 = 100_000_000;

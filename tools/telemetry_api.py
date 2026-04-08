@@ -8,10 +8,10 @@ import json
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"])
 
-L2_PATH = '/dev/shm/beroun/l2_command.bin'
-ARMADA_PATH = '/dev/shm/beroun/armada_state.bin'
+L2_PATH = '/dev/shm/sniper/l2_command.bin'
+ARMADA_PATH = '/dev/shm/sniper/armada_state.bin'
 # Cesty k L0 enginům
-HYDRA_PATH = '/dev/shm/beroun/engine_state.bin' # Používá engine_state.bin tradičně pro Hydru
+HYDRA_PATH = '/dev/shm/sniper/engine_state.bin' # Používá engine_state.bin tradičně pro Hydru
 
 def read_mmap_state():
     state = {}
@@ -47,7 +47,7 @@ def read_mmap_state():
 
         # 3. Paper Performance - Grid, Moonshot, Trigon, Nexus
         try:
-            with open('/dev/shm/beroun/grid_engine.bin', 'rb') as f:
+            with open('/dev/shm/sniper/grid_engine.bin', 'rb') as f:
                 mm_g = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
                 grid_vpnl = struct.unpack('<q', mm_g[464:472])[0] / 1e8
                 mm_g.close()
@@ -55,7 +55,7 @@ def read_mmap_state():
         except: pass
 
         try:
-            with open('/dev/shm/beroun/moonshot_engine.bin', 'rb') as f:
+            with open('/dev/shm/sniper/moonshot_engine.bin', 'rb') as f:
                 mm_m = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
                 moonshot_vpnl = struct.unpack('<q', mm_m[2592:2600])[0] / 1e8
                 mm_m.close()
@@ -63,7 +63,7 @@ def read_mmap_state():
         except: pass
 
         try:
-            with open('/dev/shm/beroun/trigon_engine.bin', 'rb') as f:
+            with open('/dev/shm/sniper/trigon_engine.bin', 'rb') as f:
                 mm_t = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
                 trigon_vpnl = struct.unpack('<q', mm_t[6192:6200])[0] / 1e8
                 mm_t.close()
@@ -71,7 +71,7 @@ def read_mmap_state():
         except: pass
 
         try:
-            with open('/dev/shm/beroun/cross_exchange.bin', 'rb') as f:
+            with open('/dev/shm/sniper/cross_exchange.bin', 'rb') as f:
                 mm_n = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
                 nexus_vpnl = struct.unpack('<q', mm_n[6208:6216])[0] / 1e8
                 mm_n.close()

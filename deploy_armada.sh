@@ -30,7 +30,7 @@ LOG_DIR="$ARMADA_ROOT/logs"
 # Ensure ~/.cargo/bin is in PATH (systemd has minimal PATH without it)
 export PATH="$HOME/.cargo/bin:$PATH"
 BIN_DIR="$ARMADA_ROOT/target/release"
-SHM_DIR="/dev/shm/beroun"
+SHM_DIR="/dev/shm/sniper"
 STATE_FILE="$ARMADA_ROOT/state/armada_state.json"
 
 mkdir -p "$LOG_DIR" "$SHM_DIR" "$ARMADA_ROOT/state"
@@ -76,7 +76,7 @@ echo "🧹 Cleaning ALL old instances..."
 echo "$(date +%s)" > /tmp/sniper_boot.lock
 # First pass: SIGTERM (graceful)
 for proc in tg_commander.py pnl_daemon.py sovereign-cortex hydra-core hydra-dashboard \
-            moonshot-core grid-core trigon-core nexus-core price_bridge.py market_recorder.py zeroclaw; do
+            moonshot-core grid-core trigon-core nexus-core armada-core price_bridge.py market_recorder.py zeroclaw; do
     pkill -f "$proc" 2>/dev/null || true
 done
 fuser -k 3004/tcp 2>/dev/null || true
@@ -84,7 +84,7 @@ sleep 2
 
 # Second pass: SIGKILL (force) — catch anything that survived SIGTERM
 for proc in tg_commander.py pnl_daemon.py sovereign-cortex hydra-core hydra-dashboard \
-            moonshot-core grid-core trigon-core nexus-core price_bridge.py market_recorder.py zeroclaw; do
+            moonshot-core grid-core trigon-core nexus-core armada-core price_bridge.py market_recorder.py zeroclaw; do
     pkill -9 -f "$proc" 2>/dev/null || true
 done
 
@@ -122,7 +122,7 @@ echo "🧠 Starting infrastructure (trading bots stay OFFLINE)..."
 
 # 0. MMap files — managed by beroun-mmap.service (SystemD Iron Sequence)
 #    Verify they exist (safety net for manual runs outside SystemD)
-if [ ! -f "/dev/shm/beroun/oracle_state.bin" ]; then
+if [ ! -f "/dev/shm/sniper/oracle_state.bin" ]; then
     echo "  [T+0s]  MMap not pre-created by SystemD — running init_mmap.sh as fallback..."
     "$ARMADA_ROOT/infra/init_mmap.sh"
 else
@@ -152,11 +152,7 @@ python3 "$ARMADA_ROOT/architect/pnl_daemon.py" >> "$LOG_DIR/pnl_daemon.log" 2>&1
 PNL_PID=$!
 sleep 5
 
-# 3. Dashboard
-echo "  [T+15s] Starting Dashboard..."
-taskset -c 3 "$BIN_DIR/hydra-dashboard" >> "$LOG_DIR/hydra-dashboard.log" 2>&1 &
-DASHBOARD_PID=$!
-sleep 5
+
 
 # 4. Price Bridge (cross_exchange.bin for Nexus)
 echo "  [T+20s] Starting Price Bridge..."
@@ -196,7 +192,7 @@ echo "   INFRASTRUCTURE ONLINE (v21.0 — Iron Sequence)"
 echo "   🧠 Cortex:    PID $CORTEX_PID (SystemD managed)"
 echo "   📈 Recorder:  PID $RECORDER_PID"
 echo "   💰 PnL:       PID $PNL_PID"
-echo "   📊 Dashboard: PID $DASHBOARD_PID"
+
 echo "   🌐 Bridge:    PID $BRIDGE_PID"
 echo "   📱 Commander: PID $COMMANDER_PID"
 echo ""

@@ -297,7 +297,7 @@ def save_model(weights):
     log.info(f"Model saved to {MODEL_PATH}")
 
 
-MMAP_FILE = "/dev/shm/beroun/ml_weights.bin"
+MMAP_FILE = "/dev/shm/sniper/ml_weights.bin"
 FILE_SIZE = 192
 
 def inject_weights_to_rust(w_fast, w_slow, r_mean, r_var):

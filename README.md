@@ -1,8 +1,8 @@
-# 🐺 Sniper Armada v21.1
+# 🐺 Sniper Armada v21.0 Omni-Interface
 
-**Sovereign HFT Trading System** — Pure Rust Hive with in-process AI inference.
+**Sovereign HFT Trading System** — Pure Rust Hive with Omni-Router and in-process AI inference.
 
-[![Version](https://img.shields.io/badge/Version-v21.1-gold)]()
+[![Version](https://img.shields.io/badge/Version-v21.0-gold)]()
 [![Architecture](https://img.shields.io/badge/Architecture-3_Layer_Sovereign-blue)]()
 [![Rust](https://img.shields.io/badge/L0+L1-Rust_2024-orange)]()
 [![AI](https://img.shields.io/badge/L2-Gemini_3.1_Pro-green)]()
@@ -11,6 +11,10 @@
 ---
 
 ## ⚡ Key Features
+
+- **Omni-Router (Dual-Exchange)** — Native Binance and Bitfinex support running concurrently in L0 hot paths.
+- **The War Room Dashboard** — 10Hz HTML5 Canvas SSE live data stream displaying OBI tachometers and VWS (Volume Weighted Spread).
+- **1088B Zero-Copy MMap Architecture (ArmadaStateV2)** — Ultra-fast IPC telemetry memory mapping avoiding kernel overhead.
 
 - **Sub-millisecond execution** — Zero-allocation Rust hot paths with fixed-point arithmetic (`i64 × 1e8`)
 - **5-bot fleet** — Hydra (MM), Moonshot (flash dip), Grid (grid maker), Trigon (tri-arb), Nexus (cross-venue arb)
@@ -21,6 +25,11 @@
 - **Autonomous operation** — Sovereign Boot Protocol (v20.0 Strategy Pattern) with 5 RiskClass Pillars (HEDGE, ARBITRAGE, MARKET_MAKER, STAT_ARB, POSITIONAL), quota watchdog, Sentinel guardian
 - **Lock-free IPC** — mmap with SeqLock atomics, 64-byte cache-line aligned structs via `/dev/shm/beroun/`
 
+### 🔧 V21.0 Omni-Interface Architecture Details
+- **The War Room (V2 Omni-Interface Dashboard)**: A modern HTML5 Canvas-based tactical view streaming live telemetry at 10Hz via Server-Sent Events (SSE). Replaces static port-based views with zero-lag OBI (Order Book Imbalance) tachometers and Volume Weighted Spread depth-charts.
+- **ArmadaStateV2 (1088B Zero-Copy MMap)**: Highly optimized memory mapping protocol for sub-millisecond data sharing. Layout eliminates kernel syscall bottlenecks, enabling lock-free state synchronization between Python orchestrators and Rust HFT threads.
+- **Cross-Exchange Arbitrage (VWS)**: Omni-Router natively integrates Bitfinex and Binance under a Volume Weighted Spread mechanism. Nexus analyzes true depth parity before executing latency-padded atomic cross-venue fills.
+- **Autonomous ML Injector & Hot-Swap**: Safe, lock-free Candle GGUF tensor weight deployments, allowing zero-downtime model swaps dynamically informed by L2 regime context.
 ## 🏗️ Architecture
 
 ```

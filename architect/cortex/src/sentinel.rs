@@ -8,7 +8,7 @@
 // Layer 5: System Resources — GPU temp, VRAM, disk, RAM, net
 // Layer 6: Regime Sentinel — flash crash, liquidity drain, sweep storm
 //
-// Writes regime_alert to /dev/shm/beroun/toxic_storm.bin (shared with ML Shield).
+// Writes regime_alert to /dev/shm/sniper/toxic_storm.bin (shared with ML Shield).
 // All alerts pushed to Python Commander via /tmp/commander_events.sock.
 // ═══════════════════════════════════════════════════════════
 
@@ -45,7 +45,7 @@ const SUSTAINED_THRESHOLD: u64 = 60;   // 60 × 5s = 5 min sustained before aler
 const CRITICAL_PCT: f64 = 95.0;        // Resource critical threshold
 
 // ── Regime Sentinel (Layer 6) ──
-const HIVE_MIND_PATH: &str = "/dev/shm/beroun/toxic_storm.bin";
+const HIVE_MIND_PATH: &str = "/dev/shm/sniper/toxic_storm.bin";
 const FLASH_CRASH_PCT: f64 = 0.005;    // 0.5% price drop = flash crash
 const FLASH_CRASH_WINDOW: usize = 6;    // 6 × 5s = 30s window
 const SWEEP_STORM_COUNT: usize = 3;     // 3 spread explosions in window

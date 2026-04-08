@@ -80,7 +80,7 @@ ALERTS=0
 # ═══ DUPLICATE CLEANUP (MUST run BEFORE respawns) ═══
 for proc in tg_commander pnl_daemon price_bridge market_recorder sovereign-cortex \
             hydra-core moonshot-core grid-core trigon-core nexus-core \
-            armada-core hydra-dashboard ml_shield fee_monitor; do
+            armada-core ml_shield fee_monitor; do
     kill_dupes "$proc"
 done
 
@@ -120,11 +120,7 @@ if ! is_alive "armada-core"; then
     ALERTS=$((ALERTS + 1))
 fi
 
-if ! is_alive "hydra-dashboard"; then
-    tg_alert "dashboard_down" "⚠️ WATCHDOG: Dashboard spadl → restartuji"
-    cd "$ARMADA_ROOT" && nohup ./target/release/hydra-dashboard >> "$LOG_DIR/hydra-dashboard.log" 2>&1 &
-    ALERTS=$((ALERTS + 1))
-fi
+
 
 if ! is_alive "pnl_daemon"; then
     tg_alert "pnl_down" "⚠️ WATCHDOG: PnL Daemon spadl → restartuji"
@@ -148,8 +144,8 @@ if ! is_alive "ml_shield"; then
     tg_alert "shield_down" "⚠️ WATCHDOG: ML Shield spadl → restartuji"
     cd "$ARMADA_ROOT/architect" && python3 ml_shield.py >> "$LOG_DIR/ml_shield.log" 2>&1 &
     # Ensure Hive Mind flag exists
-    mkdir -p /dev/shm/beroun
-    [ ! -f /dev/shm/beroun/toxic_storm.bin ] && printf '\x00' > /dev/shm/beroun/toxic_storm.bin
+    mkdir -p /dev/shm/sniper
+    [ ! -f /dev/shm/sniper/toxic_storm.bin ] && printf '\x00' > /dev/shm/sniper/toxic_storm.bin
     ALERTS=$((ALERTS + 1))
 fi
 

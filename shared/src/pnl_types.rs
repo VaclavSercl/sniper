@@ -11,7 +11,7 @@
 
 use std::sync::atomic::{AtomicU64, AtomicI64, AtomicU32};
 
-pub const PNL_STATE_PATH: &str = "/dev/shm/beroun/pnl_state.bin";
+pub const PNL_STATE_PATH: &str = "/dev/shm/sniper/pnl_state.bin";
 pub const MAX_PNL_BOTS: usize = 16; // hydra=0..7 (live), shadow=8..15
 
 /// Bot index constants for PnlGlobalState.bots[]

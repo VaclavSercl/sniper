@@ -2,8 +2,8 @@ import mmap
 import struct
 import sys
 
-L2_PATH = '/dev/shm/beroun/l2_command.bin'
-STORM_PATH = '/dev/shm/beroun/toxic_storm.bin'
+L2_PATH = '/dev/shm/sniper/l2_command.bin'
+STORM_PATH = '/dev/shm/sniper/toxic_storm.bin'
 
 def inject_chaos():
     print("🔥 INITIATING TOXIC STORM INJECTION 🔥")

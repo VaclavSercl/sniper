@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-SHM_DIR="/dev/shm/beroun"
+SHM_DIR="/dev/shm/sniper"
 mkdir -p "$SHM_DIR"
 
 echo "[MMAP] Pre-creating shared memory structures in $SHM_DIR..."

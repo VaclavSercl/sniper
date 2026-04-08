@@ -100,7 +100,7 @@ impl<E: Default, R: Default> SovereignMemory<E, R> {
         let l2_mmap = crate::mmap_utils::init_mmap::<crate::l2_command::L2SharedState>(crate::l2_command::L2_COMMAND_PATH)?;
         let l2_ptr = l2_mmap.as_ptr() as *mut crate::l2_command::L2SharedState;
         
-        let storm_path = "/dev/shm/beroun/toxic_storm.bin";
+        let storm_path = "/dev/shm/sniper/toxic_storm.bin";
         if !std::path::Path::new(storm_path).exists() { let _ = std::fs::write(storm_path, [0u8]); }
         let toxic_storm_mmap = crate::mmap_utils::open_mmap_readonly(storm_path)?;
         let toxic_storm_ptr = toxic_storm_mmap.as_ptr();

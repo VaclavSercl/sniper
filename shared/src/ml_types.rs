@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 /// Lock-free sdílená paměť pro ML váhy (Hot-Swap z Pythonu)
-/// Namapováno na: /dev/shm/beroun/ml_weights.bin
+/// Namapováno na: /dev/shm/sniper/ml_weights.bin
 #[repr(C, align(64))]
 pub struct MlWeightsState {
     pub version: AtomicU64,            // Inkrementováno pythonem po nahrání nového modelu

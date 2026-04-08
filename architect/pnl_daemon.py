@@ -93,7 +93,7 @@ def fetch_wallets_sync():
     return wallets
 
 # ── GLOBAL FEE STATE ───────────────────────────────────────
-FEE_STATE_PATH = "/dev/shm/beroun/fee_state.bin"
+FEE_STATE_PATH = "/dev/shm/sniper/fee_state.bin"
 
 class FeeStateWriter:
     def __init__(self):
@@ -285,8 +285,8 @@ class FillProcessor:
 
     def _get_btc_usd_spot(self):
         try:
-            if os.path.exists("/dev/shm/beroun/mdf.bin"):
-                with open("/dev/shm/beroun/mdf.bin", "rb") as f:
+            if os.path.exists("/dev/shm/sniper/mdf.bin"):
+                with open("/dev/shm/sniper/mdf.bin", "rb") as f:
                     bid, ask = struct.unpack_from("<dd", f.read(16), 0)
                     if bid > 0 and ask > 0: return (bid + ask) / 2
         except: pass

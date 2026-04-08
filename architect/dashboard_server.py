@@ -27,7 +27,7 @@ from sse_starlette.sse import EventSourceResponse
 log = logging.getLogger("dashboard_sse")
 
 DASHBOARD_PORT = 3004
-SSE_INTERVAL = 0.5  # 500ms between updates
+SSE_INTERVAL = 0.1  # 100ms between updates (10Hz)
 
 app = FastAPI(title="Sniper Master Dashboard API")
 app.add_middleware(
@@ -38,9 +38,10 @@ app.add_middleware(
 )
 
 # mmap paths
-CROSS_EXCHANGE_PATH = "/dev/shm/beroun/cross_exchange.bin"
-ENGINE_STATE_PATH = "/dev/shm/beroun/engine_state.bin"
-L2_COMMAND_PATH = "/dev/shm/beroun/l2_command.bin"
+CROSS_EXCHANGE_PATH = "/dev/shm/sniper/cross_exchange.bin"
+ENGINE_STATE_PATH = "/dev/shm/sniper/engine_state.bin"
+L2_COMMAND_PATH = "/dev/shm/sniper/l2_command.bin"
+ARMADA_V2_PATH = "/dev/shm/sniper/armada_state_v2.bin"
 PRICE_SCALE = 100_000_000
 
 # Latency ring buffer layout (from l2_command.rs CL6+)
@@ -65,10 +66,11 @@ _cortex = None
 _mmap_cross = None
 _mmap_engine = None
 _mmap_l2 = None
+_mmap_v2 = None
 
 def _init_mmaps():
     """Vytvoří permanentní memory-mapping objektů k zamezení kernel overheadu."""
-    global _mmap_cross, _mmap_engine, _mmap_l2
+    global _mmap_cross, _mmap_engine, _mmap_l2, _mmap_v2
     try:
         if os.path.exists(CROSS_EXCHANGE_PATH) and _mmap_cross is None:
             fd = os.open(CROSS_EXCHANGE_PATH, os.O_RDONLY)
@@ -90,9 +92,49 @@ def _init_mmaps():
             os.close(fd)
     except Exception as e: log.error(f"L2 mmap err: {e}")
 
+    try:
+        if os.path.exists(ARMADA_V2_PATH) and _mmap_v2 is None:
+            fd = os.open(ARMADA_V2_PATH, os.O_RDONLY)
+            _mmap_v2 = mmap.mmap(fd, 0, access=mmap.ACCESS_READ)
+            os.close(fd)
+    except Exception as e: log.error(f"Armada V2 mmap err: {e}")
+
+
+import threading
+import sys
+
+_wallet_cache = {
+    "bnb": {"btc": 0.0, "usd": 0.0, "total_usd": 0.0}
+}
+_wallet_thread_started = False
+
+def _wallet_updater():
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    try:
+        from balance_reconciler import read_binance_balances
+    except ImportError:
+        return
+
+    while True:
+        try:
+            bnb = read_binance_balances()
+            if bnb:
+                _wallet_cache["bnb"]["btc"] = bnb.get("BTC", {}).get("total", 0.0)
+                _wallet_cache["bnb"]["usd"] = bnb.get("USDT", {}).get("total", 0.0) + bnb.get("USDC", {}).get("total", 0.0)
+        except Exception as e:
+            pass
+        time.sleep(15)
+
+def _start_wallet_thread():
+    global _wallet_thread_started
+    if not _wallet_thread_started:
+        _wallet_thread_started = True
+        threading.Thread(target=_wallet_updater, daemon=True, name="wallet-updater").start()
 
 def _build_dashboard_state():
     """Fetch all data from Cortex and build a unified JSON state."""
+    _start_wallet_thread()
+
     if not _cortex:
         return {}
 
@@ -103,8 +145,31 @@ def _build_dashboard_state():
         snap = _cortex.get_snapshot()
         if snap.get("ok"):
             state["snapshot"] = snap["data"]
-    except Exception:
-        state["snapshot"] = {}
+            
+            # Zapouzdření nových oddělených peněženek a zachování původní BTC ceny
+            wallet_legacy = state["snapshot"].get("wallet") or {}
+            btc_price = wallet_legacy.get("btc_price", 0.0)
+            
+            w_bfx = {
+                "btc": wallet_legacy.get("btc", 0.0),
+                "usd": wallet_legacy.get("usd", 0.0),
+                "total_usd": wallet_legacy.get("total_usd", 0.0),
+                "btc_price": btc_price
+            }
+            
+            w_bnb = _wallet_cache["bnb"].copy()
+            w_bnb["total_usd"] = (w_bnb.get("usd") or 0.0) + ((w_bnb.get("btc") or 0.0) * btc_price)
+            w_bnb["btc_price"] = btc_price
+            
+            state["snapshot"]["wallet_bfx"] = w_bfx
+            state["snapshot"]["wallet_bnb"] = w_bnb
+            
+    except Exception as e:
+        log.error(f"Error in dashboard state fetch: {e}")
+        import traceback
+        traceback.print_exc()
+        if "snapshot" not in state:
+            state["snapshot"] = {}
 
     # 2. GPU telemetry
     try:
@@ -116,7 +181,7 @@ def _build_dashboard_state():
 
     # 3. L2 reasoning (file-based, written by L2 Oracle)
     try:
-        with open("/dev/shm/beroun/l2_reasoning.txt", "r") as f:
+        with open("/dev/shm/sniper/l2_reasoning.txt", "r") as f:
             lines = f.read().strip().split("\n", 1)
             state["l2"] = {
                 "regime": lines[0] if lines else "UNKNOWN",
@@ -159,8 +224,75 @@ def _build_dashboard_state():
     except Exception:
         state["monitor"] = {"online": False, "log_size_kb": 0, "events": 0}
 
+    # 10. War Room payload (Phase 7 V2 Dashboard)
+    state["war_room"] = _get_war_room_state()
+
     return state
 
+
+# ═══════════════════════════════════════════════════════════
+# War Room State Reader (Phase 7 V2 Dashboard)
+# ═══════════════════════════════════════════════════════════
+def _get_war_room_state():
+    try:
+        _init_mmaps()
+        if _mmap_v2 is None:
+            return {}
+            
+        mm_v2 = _mmap_v2
+        
+        # 1. Přečtení Global CL0 (Offset 0, 64 bajtů)
+        fmt_global = '<QBBBB4xQQqQ16x'
+        global_data = struct.unpack_from(fmt_global, mm_v2, 0)
+        (
+            version, kill_switch, active_venues, active_bots, regime, 
+            total_equity, global_var, cold_vault_btc, cold_vault_vwap
+        ) = global_data
+
+        # 2. Přečtení Capital Matrix CL2-6 (Offset 128, 320 bajtů)
+        fmt_capital = '<40Q'
+        capital_data = struct.unpack_from(fmt_capital, mm_v2, 128)
+
+        # 3. Přečtení PnL Matrix CL9-13 (Offset 576, 320 bajtů)
+        # 40 * i64 (Malé 'q' pro záporné PnL)
+        fmt_pnl = '<40q'
+        pnl_data = struct.unpack_from(fmt_pnl, mm_v2, 576)
+
+        # Rekonstrukce matice pro frontend
+        fleet_matrix = []
+        bot_names = ["Hydra", "Moonshot", "Grid", "Trigon", "Nexus"]
+
+        for bot_idx in range(5):
+            bot_info = {
+                "name": bot_names[bot_idx],
+                "venues": []
+            }
+            for venue_idx in range(8):
+                c_idx = bot_idx * 8 + venue_idx 
+                
+                cap_val = capital_data[c_idx] / PRICE_SCALE
+                pnl_val = pnl_data[c_idx] / PRICE_SCALE
+                
+                bot_info["venues"].append({
+                    "venue_id": venue_idx,
+                    "allocated_capital": cap_val,
+                    "daily_pnl": pnl_val
+                })
+            fleet_matrix.append(bot_info)
+
+        return {
+            "system": {
+                "version": version,
+                "kill_switch": bool(kill_switch),
+                "regime": regime,
+                "total_equity_usd": total_equity / PRICE_SCALE,
+                "cold_vault_btc": cold_vault_btc / PRICE_SCALE
+            },
+            "fleet": fleet_matrix
+        }
+    except Exception as e:
+        log.error(f"War room parse err: {e}")
+        return {}
 
 # ═══════════════════════════════════════════════════════════
 # Latency Ring Buffer Reader (Phase 4.1 → Phase 7.2 Sparkline)
@@ -323,11 +455,11 @@ try:
     from l2_rust_offsets import OFF_L1_SKEW, OFF_L1_CONF, OFF_L1_TOXIC, OFF_L1_UPTIME, OFF_AI_BIAS
 except ImportError:
     # Fallback: hardcoded values (stale risk — run deploy --build to fix)
-    OFF_L1_SKEW = 1584
-    OFF_L1_CONF = 1600
-    OFF_L1_TOXIC = 1568
-    OFF_L1_UPTIME = 1648
-    OFF_AI_BIAS = 1512
+    OFF_L1_SKEW = 1592
+    OFF_L1_CONF = 1608
+    OFF_L1_TOXIC = 1576
+    OFF_L1_UPTIME = 1672
+    OFF_AI_BIAS = 1480
 
 def _get_nexus_state():
     """Get Nexus bot status for dashboard."""
@@ -360,20 +492,22 @@ def _get_nexus_state():
     except Exception:
         pass
 
-    # Read live fees from fee_state.bin
+    # Read live fees from fee_matrix.bin
     try:
-        FEE_PATH = "/dev/shm/beroun/fee_state.bin"
+        FEE_PATH = "/dev/shm/sniper/fee_matrix.bin"
         if os.path.exists(FEE_PATH):
             with open(FEE_PATH, 'rb') as f:
-                data = f.read(64)
-            if len(data) >= 32:
-                maker = struct.unpack_from('<Q', data, 0)[0]
-                taker = struct.unpack_from('<Q', data, 8)[0]
-                # deriv_maker/taker used for Binance fees
-                bnb_maker = struct.unpack_from('<Q', data, 16)[0]
-                bnb_taker = struct.unpack_from('<Q', data, 24)[0]
-                result["bfx_fee_bps"] = taker / 100.0  # bps×100 → bps
-                result["bnb_fee_bps"] = bnb_taker / 100.0 if bnb_taker > 0 else 10
+                data = f.read(128)
+            if len(data) >= 128:
+                bfx_maker = struct.unpack_from('<Q', data, 0)[0]
+                bfx_taker = struct.unpack_from('<Q', data, 8)[0]
+                bnb_maker = struct.unpack_from('<Q', data, 64)[0]
+                bnb_taker = struct.unpack_from('<Q', data, 72)[0]
+                
+                result["bfx_maker_bps"] = bfx_maker / 100.0
+                result["bfx_taker_bps"] = bfx_taker / 100.0
+                result["bnb_maker_bps"] = bnb_maker / 100.0
+                result["bnb_taker_bps"] = bnb_taker / 100.0
     except Exception:
         pass
 
@@ -572,6 +706,84 @@ async def sse_endpoint():
 @app.get("/api/state")
 async def api_state():
     return _build_dashboard_state()
+
+@app.post("/api/kill")
+async def api_kill():
+    # Write to MMap offset 8 in ArmadaStateV2
+    try:
+        import mmap, struct, os
+        v2_path = "/dev/shm/sniper/armada_state_v2.bin"
+        if os.path.exists(v2_path):
+            with open(v2_path, "r+b") as f:
+                mm = mmap.mmap(f.fileno(), 0)
+                # offset 8 is kill_switch in ArmadaStateV2 (after 8 bytes of version)
+                struct.pack_into('<Q', mm, 8, 1)
+                mm.flush()
+                mm.close()
+            return {"status": "success", "message": "Global kill signal explicitly injected"}
+    except Exception as e:
+        log.error(f"Failed to explicitly inject KILL signal: {e}")
+    return {"status": "error", "message": str(e) if 'e' in locals() else "Kill signal dispatched to handlers"}
+
+@app.post("/api/routing")
+async def handle_routing(weights_data: dict):
+    """
+    Distributes capital in ArmadaStateV2 according to weights.
+    Payload expected: {"hydra": 40, "nexus": 30, "moonshot": 10, "grid": 10, "trigon": 10}
+    """
+    try:
+        import os, mmap, struct
+        if not os.path.exists(ARMADA_V2_PATH):
+            # FastAPI implicitly casts dicts to JSON responses
+            return {"status": "error", "message": "ArmadaStateV2 not found"}
+
+        with open(ARMADA_V2_PATH, 'r+b') as f:
+            mm = mmap.mmap(f.fileno(), 1088)
+
+            # Offset 16: total_equity (8 + 1 + 1 + 1 + 1 + 4 = 16)
+            total_equity_1e8 = struct.unpack_from('<Q', mm, 16)[0]
+            total_equity = total_equity_1e8 / PRICE_SCALE
+
+            total_weight = sum(weights_data.values())
+            if total_weight == 0:
+                mm.close()
+                return {"status": "error", "message": "Total weight cannot be zero."}
+
+            # Write to Capital Matrix (CL2-6, starts at offset 128)
+            bot_map = {"hydra": 0, "moonshot": 1, "grid": 2, "trigon": 3, "nexus": 4}
+            
+            for bot_name, weight_pct in weights_data.items():
+                bot_name_lower = bot_name.lower()
+                if bot_name_lower not in bot_map:
+                    continue
+                
+                bot_idx = bot_map[bot_name_lower]
+                normalized_weight = weight_pct / total_weight
+                target_capital_usd = total_equity * normalized_weight
+                target_capital_1e8 = int(target_capital_usd * PRICE_SCALE)
+
+                idx_base = 128 + (bot_idx * 8 * 8)
+                
+                if bot_idx == 4: # Nexus specific logic -> splitting capital on 2 venues
+                    half_cap = target_capital_1e8 // 2
+                    struct.pack_into('<Q', mm, idx_base, half_cap)
+                    struct.pack_into('<Q', mm, idx_base + 8, half_cap)
+                    for v_idx in range(2, 8):
+                         struct.pack_into('<Q', mm, idx_base + (v_idx * 8), 0)
+                else: # Any other bot starts allocating heavily on venue 0 only
+                    struct.pack_into('<Q', mm, idx_base, target_capital_1e8)
+                    for v_idx in range(1, 8):
+                         struct.pack_into('<Q', mm, idx_base + (v_idx * 8), 0)
+
+            mm.close()
+            
+        log.info(f"⚖️ CAPITAL ROUTED: Zapsány nové váhy flotily na základě {total_equity} USD.")
+        return {"status": "success"}
+
+    except Exception as e:
+        log.error(f"Routing Error: {e}")
+        # Assuming FastAPI returning JSON 500 equivalent structure
+        return Response(content='{"status": "error", "message": "'+str(e)+'"}', status_code=500)
 
 @app.get("/", response_class=HTMLResponse)
 @app.get("/dashboard", response_class=HTMLResponse)

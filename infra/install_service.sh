@@ -35,11 +35,11 @@ chmod +x "$ARMADA_ROOT/deploy_armada.sh"
 chmod +x "$ARMADA_ROOT/infra/stop_armada.sh"
 chmod +x "$ARMADA_ROOT/watchdog.sh" 2>/dev/null || true
 
-# 5. Create /dev/shm/beroun with correct permissions
+# 5. Create /dev/shm/sniper with correct permissions
 echo "[4/6] Preparing shared memory..."
-mkdir -p /dev/shm/beroun
-chown wwwenda:wwwenda /dev/shm/beroun
-chmod 700 /dev/shm/beroun
+mkdir -p /dev/shm/sniper
+chown wwwenda:wwwenda /dev/shm/sniper
+chmod 700 /dev/shm/sniper
 
 # 6. Enable and configure
 echo "[5/6] Enabling service..."

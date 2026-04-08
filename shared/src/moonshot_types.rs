@@ -10,8 +10,8 @@ use std::sync::atomic::{AtomicU64, AtomicI64, AtomicU32};
 pub const MOONSHOT_MAX_PAIRS: usize = 20;
 
 /// mmap file paths (in /dev/shm for zero-copy IPC)
-pub const MOONSHOT_ENGINE_PATH: &str = "/dev/shm/beroun/moonshot_engine.bin";
-pub const MOONSHOT_RISK_PATH: &str = "/dev/shm/beroun/moonshot_risk.bin";
+pub const MOONSHOT_ENGINE_PATH: &str = "/dev/shm/sniper/moonshot_engine.bin";
+pub const MOONSHOT_RISK_PATH: &str = "/dev/shm/sniper/moonshot_risk.bin";
 
 // ═══════════════════════════════════════════════════════════
 // Engine State — written by L0 (Rust main.rs), read by dashboard/brain/scripts

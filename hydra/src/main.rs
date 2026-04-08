@@ -973,7 +973,7 @@ fn main() -> Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env().add_directive(tracing::Level::INFO.into()))
         .init();
 
-    std::fs::create_dir_all("/dev/shm/beroun").context("Failed to create /dev/shm/beroun")?;
+    std::fs::create_dir_all("/dev/shm/sniper").context("Failed to create /dev/shm/sniper")?;
 
     let rt = tokio::runtime::Builder::new_current_thread().enable_all().build()?;
     rt.block_on(async_main())
@@ -1008,7 +1008,7 @@ async fn async_main() -> Result<()> {
         }
     });
 
-    let storm_path = "/dev/shm/beroun/toxic_storm.bin";
+    let storm_path = "/dev/shm/sniper/toxic_storm.bin";
     if !std::path::Path::new(storm_path).exists() { let _ = std::fs::write(storm_path, [0u8]); }
     let toxic_storm_mmap = sniper_types::mmap_utils::open_mmap_readonly(storm_path).unwrap();
 

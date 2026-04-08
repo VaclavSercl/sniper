@@ -27,10 +27,8 @@ class RiskClass(Enum):
 BOTS = {
     "hydra": {
         "core": os.path.join(BIN_DIR, "hydra-core"),
-        "dashboard": os.path.join(BIN_DIR, "hydra-dashboard"),
         "config": os.path.join(BIN_DIR, "hydra-config"),
         "cpu": 0,
-        "port": 3000,
         "emoji": "🐍",
         "desc": "BTC-USD Delta Lead",
         "type": RiskClass.MARKET_MAKER,
@@ -39,7 +37,6 @@ BOTS = {
         "core": os.path.join(BIN_DIR, "moonshot-core"),
         "config": os.path.join(BIN_DIR, "moonshot-config"),
         "cpu": 1,
-        "port": 3001,
         "emoji": "🌙",
         "desc": "Multi-Symbol Flash Crash",
         "type": RiskClass.POSITIONAL,
@@ -48,7 +45,6 @@ BOTS = {
         "core": os.path.join(BIN_DIR, "grid-core"),
         "config": os.path.join(BIN_DIR, "grid-config"),
         "cpu": 2,
-        "port": 3002,
         "emoji": "📐",
         "desc": "Dynamic Multi-Level Grid",
         "type": RiskClass.POSITIONAL,
@@ -57,7 +53,6 @@ BOTS = {
         "core": os.path.join(BIN_DIR, "trigon-core"),
         "config": os.path.join(BIN_DIR, "trigon-config"),
         "cpu": 3,
-        "port": 3003,
         "emoji": "🔺",
         "desc": "Triangular Arbitrage",
         "type": RiskClass.STAT_ARB,
@@ -66,7 +61,6 @@ BOTS = {
         "core": os.path.join(BIN_DIR, "nexus-core"),
         "config": os.path.join(BIN_DIR, "nexus-config"),
         "cpu": 3,
-        "port": 3004,
         "emoji": "🪐",
         "desc": "Cross-Exchange Arbitrage",
         "type": RiskClass.ARBITRAGE,
@@ -171,29 +165,13 @@ def start_bot(name: str) -> str:
         log.error(msg)
         return msg
 
-    # Start dashboard if exists (only hydra has it now)
-    if "dashboard" in info:
-        dash_log = os.path.join(LOG_DIR, f"{name}-dashboard.log")
-        try:
-            # Check if dashboard is running to prevent dual-dashboards
-            r = subprocess.run(["pgrep", "-f", f"{name}-dashboard"], capture_output=True, text=True)
-            if not (r.returncode == 0 and int(r.stdout.strip().split("\n")[0]) > 0):
-                subprocess.Popen(
-                    ["taskset", "-c", "3", info["dashboard"]],
-                    stdout=open(dash_log, "a"),
-                    stderr=subprocess.STDOUT,
-                    start_new_session=True,
-                    cwd=PROJECT_ROOT,
-                )
-                log.info(f"✅ {name.upper()} dashboard started on CPU 3")
-        except Exception as e:
-            log.error(f"❌ Failed to start {name} dashboard: {e}")
+
 
     import time
     time.sleep(2)
     if is_running(name):
         pid = get_pid(name)
-        msg = f"{info['emoji']} {name.upper()} spuštěn ✅ (PID {pid}, Core {info['cpu']}, :{info['port']})"
+        msg = f"{info['emoji']} {name.upper()} spuštěn ✅ (PID {pid}, Core {info['cpu']})"
     else:
         msg = f"❌ {name.upper()} se nepodařilo spustit. Zkontroluj log: {core_log}"
 
@@ -208,9 +186,7 @@ def stop_bot(name: str) -> str:
     if not is_running(name):
         return f"{info['emoji']} {name.upper()} neběží."
 
-    # Kill dashboard first
-    if "dashboard" in info:
-        subprocess.run(["pkill", "-f", f"{name}-dashboard"], capture_output=True)
+
             
     # Kill core
     pid = get_pid(name)

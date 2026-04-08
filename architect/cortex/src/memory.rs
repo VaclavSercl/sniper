@@ -91,8 +91,8 @@ impl ArmadaMemory {
     pub fn new() -> anyhow::Result<Self> {
         println!("🔗 Mapping shared memory...");
 
-        let hydra_engine = Self::map_file("/dev/shm/beroun/engine_state.bin")?;
-        let hydra_risk = Self::map_file("/dev/shm/beroun/risk_state.bin")?;
+        let hydra_engine = Self::map_file("/dev/shm/sniper/engine_state.bin")?;
+        let hydra_risk = Self::map_file("/dev/shm/sniper/risk_state.bin")?;
 
         let engine_size = std::mem::size_of::<EngineState>();
         let risk_size = std::mem::size_of::<RiskState>();
@@ -100,13 +100,13 @@ impl ArmadaMemory {
         println!("  ✅ Hydra risk_state.bin mapped ({risk_size} bytes → RiskState)");
 
         // Optional bots — logged but not fatal
-        let moonshot_engine = Self::try_map_file("/dev/shm/beroun/moonshot_engine.bin", "Moonshot");
-        let moonshot_risk = Self::try_map_file("/dev/shm/beroun/moonshot_risk.bin", "Moonshot Risk");
-        let grid_engine = Self::try_map_file("/dev/shm/beroun/grid_engine.bin", "Grid");
-        let grid_risk = Self::try_map_file("/dev/shm/beroun/grid_risk.bin", "Grid Risk");
-        let trigon_engine = Self::try_map_file("/dev/shm/beroun/trigon_engine.bin", "Trigon");
-        let trigon_risk = Self::try_map_file("/dev/shm/beroun/trigon_risk.bin", "Trigon Risk");
-        let cross_exchange = Self::try_map_file("/dev/shm/beroun/cross_exchange.bin", "Nexus CrossExchange");
+        let moonshot_engine = Self::try_map_file("/dev/shm/sniper/moonshot_engine.bin", "Moonshot");
+        let moonshot_risk = Self::try_map_file("/dev/shm/sniper/moonshot_risk.bin", "Moonshot Risk");
+        let grid_engine = Self::try_map_file("/dev/shm/sniper/grid_engine.bin", "Grid");
+        let grid_risk = Self::try_map_file("/dev/shm/sniper/grid_risk.bin", "Grid Risk");
+        let trigon_engine = Self::try_map_file("/dev/shm/sniper/trigon_engine.bin", "Trigon");
+        let trigon_risk = Self::try_map_file("/dev/shm/sniper/trigon_risk.bin", "Trigon Risk");
+        let cross_exchange = Self::try_map_file("/dev/shm/sniper/cross_exchange.bin", "Nexus CrossExchange");
 
         Ok(ArmadaMemory {
             hydra_engine, hydra_risk,
@@ -338,12 +338,12 @@ impl ArmadaMemory {
 }
 
 // ═══ PnL mmap reader ═══
-// Reads from /dev/shm/beroun/pnl_state.bin written by pnl_daemon.py
+// Reads from /dev/shm/sniper/pnl_state.bin written by pnl_daemon.py
 // Layout: 8 bots × 192 bytes each.
 // Per-bot offsets: realized_1h(i64@0), realized_24h(i64@8), realized_7d(i64@16),
 //   fills_24h(u32@52), closed_24h(u32@56)
 
-const PNL_MMAP_PATH: &str = "/dev/shm/beroun/pnl_state.bin";
+const PNL_MMAP_PATH: &str = "/dev/shm/sniper/pnl_state.bin";
 const PNL_BOT_SIZE: usize = 192;
 
 fn bot_pnl_index(name: &str) -> Option<usize> {

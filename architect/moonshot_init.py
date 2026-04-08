@@ -3,7 +3,7 @@
 🌙 Moonshot Pair Initializer — Seeds risk mmap with optimal flash crash pairs.
 Called by L2 Oracle (or manually for bootstrap).
 
-Writes to: /dev/shm/beroun/moonshot_risk.bin
+Writes to: /dev/shm/sniper/moonshot_risk.bin
 
 The L2 Oracle will dynamically rotate pairs based on:
   - 24h volatility (higher = better for flash crash catching)
@@ -19,7 +19,7 @@ import sys
 import time
 
 # Moonshot risk mmap layout (must match moonshot_types.rs)
-MOONSHOT_RISK_PATH = "/dev/shm/beroun/moonshot_risk.bin"
+MOONSHOT_RISK_PATH = "/dev/shm/sniper/moonshot_risk.bin"
 MOONSHOT_MAX_PAIRS = 20
 PRICE_SCALE = 100_000_000.0  # 1e8
 

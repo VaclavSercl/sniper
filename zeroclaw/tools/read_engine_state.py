@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ZeroClaw Tool: read_engine_state
-Reads live engine state from mmap /dev/shm/beroun/engine_state.bin
+Reads live engine state from mmap /dev/shm/sniper/engine_state.bin
 
 Output: JSON with prices, PnL, positions, bot status
 """
@@ -11,7 +11,7 @@ import os
 import json
 
 def main():
-    path = "/dev/shm/beroun/engine_state.bin"
+    path = "/dev/shm/sniper/engine_state.bin"
     if not os.path.exists(path):
         print(json.dumps({"error": "Engine state mmap not found", "path": path}))
         return

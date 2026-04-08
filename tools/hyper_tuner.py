@@ -5,7 +5,7 @@ import logging
 import struct
 import os
 
-PARAMS_PATH = '/dev/shm/beroun/oracle_params.bin'
+PARAMS_PATH = '/dev/shm/sniper/oracle_params.bin'
 
 def inject_winning_parameters(b_size, z_thresh, vpin_thresh):
     """Atomicky zapíše vítězné parametry do sdílené paměti pro živé Orákulum."""

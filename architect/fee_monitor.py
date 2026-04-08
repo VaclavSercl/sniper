@@ -3,7 +3,7 @@
 Sniper Armada · Phase F1 · v19.0
 
 Periodically polls Bitfinex + Binance REST API for current fee tier,
-writes results to /dev/shm/beroun/fee_state.bin (GlobalFeeState mmap).
+writes results to /dev/shm/sniper/fee_state.bin (GlobalFeeState mmap).
 
 All bots read this mmap to use real-time fees in their calculations.
 
@@ -43,7 +43,7 @@ def load_dotenv(path):
 
 load_dotenv(os.path.join(PROJECT_ROOT, '.env'))
 
-FEE_MATRIX_PATH = "/dev/shm/beroun/fee_matrix.bin"
+FEE_MATRIX_PATH = "/dev/shm/sniper/fee_matrix.bin"
 FEE_MATRIX_SIZE = 512  # MAX_VENUES (8) * 64 bytes
 
 # Constants matching fee_types.rs

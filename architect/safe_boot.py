@@ -31,10 +31,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from orchestration import BOTS, RiskClass
 
 BOT_RISK_MAP = {
-    "hydra":    ("/dev/shm/beroun/risk_state.bin", 0),
-    "moonshot": ("/dev/shm/beroun/moonshot_risk.bin", 2560),
-    "grid":     ("/dev/shm/beroun/grid_risk.bin", 72),
-    "trigon":   ("/dev/shm/beroun/trigon_risk.bin", 3072),
+    "hydra":    ("/dev/shm/sniper/risk_state.bin", 0),
+    "moonshot": ("/dev/shm/sniper/moonshot_risk.bin", 2560),
+    "grid":     ("/dev/shm/sniper/grid_risk.bin", 72),
+    "trigon":   ("/dev/shm/sniper/trigon_risk.bin", 3072),
 }
 
 class SafeBootPipeline:

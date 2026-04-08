@@ -10,13 +10,13 @@
 //   CL5 (64B): L1→L2 Portfolio Telemetry (all bot inventories)
 //   CL6+ (576B): L1→L2 Latency Ring Buffer
 //
-// mmap: /dev/shm/beroun/l2_command.bin (896 bytes)
+// mmap: /dev/shm/sniper/l2_command.bin (896 bytes)
 // ═══════════════════════════════════════════════════════════
 
 use std::sync::atomic::{AtomicI64, AtomicU64, AtomicUsize, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-pub const L2_COMMAND_PATH: &str = "/dev/shm/beroun/l2_command.bin";
+pub const L2_COMMAND_PATH: &str = "/dev/shm/sniper/l2_command.bin";
 pub const LATENCY_RING_SIZE: usize = 64;
 pub const LATENCY_RING_MASK: usize = LATENCY_RING_SIZE - 1;
 pub const MIN_AMEND_THRESHOLD_BPS: i64 = 3;

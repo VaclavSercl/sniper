@@ -16,7 +16,7 @@ use std::sync::atomic::{AtomicI64, AtomicU64, AtomicU32};
 pub const MAX_CROSS_PAIRS: usize = 16;
 
 /// mmap file path
-pub const CROSS_EXCHANGE_PATH: &str = "/dev/shm/beroun/cross_exchange.bin";
+pub const CROSS_EXCHANGE_PATH: &str = "/dev/shm/sniper/cross_exchange.bin";
 
 // ═══════════════════════════════════════════════════════════
 // Per-Pair Cross-Exchange State

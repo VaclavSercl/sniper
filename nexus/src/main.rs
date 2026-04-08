@@ -13,7 +13,7 @@ use sniper_types::exchange::types::*;
 use sniper_types::exchange::binance::Binance;
 use sniper_types::PRICE_SCALE_I;
 
-use sniper_types::framework::{SovereignEngine, SovereignDualRunner};
+use sniper_types::framework::{SovereignEngine, SovereignCrossVenueRunner, CrossVenueEngine};
 use sniper_types::notifier::AsyncNotifier;
 use sniper_types::mmap_utils::open_mmap_readonly;
 use sniper_types::math::FixedPrice;
@@ -354,8 +354,12 @@ impl SovereignEngine for NexusEngine {
 
         self.last_scan = Instant::now();
         
-        let c_idx = sniper_types::armada_types::capital_index(4, 0); // Nexus = 4
-        let armada_cap = self.armada_v2.capital.authorized_capital[c_idx].load(Ordering::Acquire) as i64;
+        let bfx_c_idx = sniper_types::armada_types::capital_index(4, 0); // Venue 0 (BFX)
+        let bnb_c_idx = sniper_types::armada_types::capital_index(4, 1); // Venue 1 (BNB)
+        
+        let bfx_cap = self.armada_v2.capital.authorized_capital[bfx_c_idx].load(Ordering::Acquire) as i64;
+        let bnb_cap = self.armada_v2.capital.authorized_capital[bnb_c_idx].load(Ordering::Acquire) as i64;
+        let armada_cap = std::cmp::min(bfx_cap, bnb_cap);
 
         if let Some(signal) = scan_for_arb(cross_state, &self.args, latency_pad_100x, armada_cap) {
             self.total_signals += 1;
@@ -474,6 +478,16 @@ impl SovereignEngine for NexusEngine {
     }
 }
 
+impl CrossVenueEngine for NexusEngine {
+    fn secondary_subscriptions(&mut self) -> Vec<String> {
+        vec![] // Data is handled elsewhere via mmap, so no WS subscriptions needed here
+    }
+
+    fn on_secondary_message(&mut self, _payload: &mut [u8], _out_buf: &mut bytes::BytesMut) {
+        // Ignored, data comes from mmap
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let mut args = Args::parse();
@@ -490,7 +504,7 @@ async fn main() -> Result<()> {
     )?;
     let l2cmd = unsafe { &*(l2cmd_mmap.as_ptr() as *const sniper_types::l2_command::L2SharedState) };
 
-    let storm_path = "/dev/shm/beroun/toxic_storm.bin";
+    let storm_path = "/dev/shm/sniper/toxic_storm.bin";
     if !std::path::Path::new(storm_path).exists() { let _ = std::fs::write(storm_path, [0u8]); }
     let toxic_storm_mmap = sniper_types::mmap_utils::open_mmap_readonly(storm_path).unwrap();
 
@@ -517,8 +531,11 @@ async fn main() -> Result<()> {
         armada_v2: sniper_types::armada_types::load_armada_state_v2_ro(),
     };
 
-    let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();
-    let mut runner = SovereignDualRunner::new(engine, venue, "Nexus");
+    let bfx_venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();
+    let bnb_venue = sniper_types::exchange::binance_venue::BinanceVenue::new();
+
+    println!("🐺 Nexus probouzí Cross-Venue Arbitráž (BFX <-> BNB)...");
+    let mut runner = SovereignCrossVenueRunner::new(engine, bfx_venue, bnb_venue, "Nexus");
     runner.run().await?;
     
     Ok(())

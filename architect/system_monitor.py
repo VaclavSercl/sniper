@@ -33,7 +33,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 LOG_DIR = os.path.join(PROJECT_ROOT, "logs")
 MONITOR_LOG = os.path.join(LOG_DIR, "system_monitor.jsonl")
 MONITOR_PID = os.path.join(LOG_DIR, "system_monitor.pid")
-MMAP_DIR = "/dev/shm/beroun"
+MMAP_DIR = "/dev/shm/sniper"
 STATE_FILE = os.path.join(PROJECT_ROOT, "state", "armada_state.json")
 PNL_DB = os.path.expanduser("~/.local/share/sniper/pnl.db")
 

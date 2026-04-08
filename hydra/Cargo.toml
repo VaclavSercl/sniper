@@ -7,9 +7,6 @@ edition = "2024"
 name = "hydra-core"
 path = "src/main.rs"
 
-[[bin]]
-name = "hydra-dashboard"
-path = "src/dashboard.rs"
 
 [[bin]]
 name = "hydra-config"

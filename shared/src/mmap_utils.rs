@@ -35,7 +35,7 @@ use memmap2::MmapMut;
 pub fn init_mmap<T: Default>(path: &str) -> Result<MmapMut> {
     let dir = Path::new(path)
         .parent()
-        .unwrap_or_else(|| Path::new("/dev/shm/beroun"));
+        .unwrap_or_else(|| Path::new("/dev/shm/sniper"));
     std::fs::create_dir_all(dir)
         .with_context(|| format!("Failed to create mmap dir: {}", dir.display()))?;
 

@@ -41,7 +41,7 @@ packed_data = struct.pack(
 )
 
 # Zápis do MMapu
-filepath = '/dev/shm/beroun/armada_state.bin'
+filepath = '/dev/shm/sniper/armada_state.bin'
 if os.path.exists(filepath):
     with open(filepath, 'r+b') as f:
         mm = mmap.mmap(f.fileno(), 0)

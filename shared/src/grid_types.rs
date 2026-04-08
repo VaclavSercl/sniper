@@ -10,8 +10,8 @@ use std::sync::atomic::{AtomicU64, AtomicI64, AtomicU32};
 pub const GRID_MAX_LEVELS: usize = 10;
 
 /// mmap file paths
-pub const GRID_ENGINE_PATH: &str = "/dev/shm/beroun/grid_engine.bin";
-pub const GRID_RISK_PATH: &str = "/dev/shm/beroun/grid_risk.bin";
+pub const GRID_ENGINE_PATH: &str = "/dev/shm/sniper/grid_engine.bin";
+pub const GRID_RISK_PATH: &str = "/dev/shm/sniper/grid_risk.bin";
 
 // ═══════════════════════════════════════════════════════════
 // Engine State — written by L0 (Rust), read by dashboard/brain

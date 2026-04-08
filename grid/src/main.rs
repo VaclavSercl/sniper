@@ -532,7 +532,7 @@ async fn main() -> Result<()> {
         sniper_types::l2_command::L2_COMMAND_PATH,
     )?;
 
-    let storm_path = "/dev/shm/beroun/toxic_storm.bin";
+    let storm_path = "/dev/shm/sniper/toxic_storm.bin";
     if !std::path::Path::new(storm_path).exists() { let _ = std::fs::write(storm_path, [0u8]); }
     let toxic_storm_mmap = sniper_types::mmap_utils::open_mmap_readonly(storm_path).unwrap();
 

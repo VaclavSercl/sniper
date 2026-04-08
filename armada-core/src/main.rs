@@ -5,8 +5,8 @@ use anyhow::{Context, Result};
 use sniper_types::armada_types::{ArmadaState, ArmadaStateV2, load_oracle_state_ro, capital_index, MAX_BOTS, MAX_VENUES};
 use sniper_types::mmap_utils::{init_mmap, open_mmap_readonly};
 
-const ARMADA_STATE_V1_PATH: &str = "/dev/shm/beroun/armada_state.bin";
-const ARMADA_STATE_V2_PATH: &str = "/dev/shm/beroun/armada_state_v2.bin";
+const ARMADA_STATE_V1_PATH: &str = "/dev/shm/sniper/armada_state.bin";
+const ARMADA_STATE_V2_PATH: &str = "/dev/shm/sniper/armada_state_v2.bin";
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -28,7 +28,7 @@ async fn main() -> Result<()> {
 
     // ═══ Toxic Storm: mmap pointer (ZERO-ALLOCATION read in hot loop) ═══
     // Fix B5: Replaced std::fs::read() + vec![0] with mmap pointer
-    let toxic_mmap = open_mmap_readonly("/dev/shm/beroun/toxic_storm.bin")
+    let toxic_mmap = open_mmap_readonly("/dev/shm/sniper/toxic_storm.bin")
         .context("Failed to mmap toxic_storm.bin")?;
     let toxic_ptr = toxic_mmap.as_ptr();
 

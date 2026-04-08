@@ -3,7 +3,7 @@ import os
 import struct
 import time
 
-ORACLE_MMAP_FILE = "/dev/shm/beroun/oracle_state.bin"
+ORACLE_MMAP_FILE = "/dev/shm/sniper/oracle_state.bin"
 CACHE_LINE_SIZE = 64
 
 def init_oracle_mmap():

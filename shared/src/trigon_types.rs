@@ -17,8 +17,8 @@ pub const TRIGON_MAX_TRIANGLES: usize = 24;
 pub const TRIGON_LEGS: usize = 3;
 
 /// mmap file paths
-pub const TRIGON_ENGINE_PATH: &str = "/dev/shm/beroun/trigon_engine.bin";
-pub const TRIGON_RISK_PATH: &str = "/dev/shm/beroun/trigon_risk.bin";
+pub const TRIGON_ENGINE_PATH: &str = "/dev/shm/sniper/trigon_engine.bin";
+pub const TRIGON_RISK_PATH: &str = "/dev/shm/sniper/trigon_risk.bin";
 
 // ═══════════════════════════════════════════════════════════
 // Leg State — one side of the triangle (e.g., tBTCUSD)

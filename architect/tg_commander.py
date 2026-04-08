@@ -298,7 +298,7 @@ def build_report(period="hourly"):
 
     # ── AI Reasoning from Cortex L2 ──
     try:
-        reasoning_path = "/dev/shm/beroun/l2_reasoning.txt"
+        reasoning_path = "/dev/shm/sniper/l2_reasoning.txt"
         if os.path.exists(reasoning_path):
             with open(reasoning_path) as f:
                 content = f.read().strip()
@@ -317,7 +317,7 @@ def build_report(period="hourly"):
     # ── Latency Sparkline ──
     try:
         import mmap as _mmap
-        l2_path = "/dev/shm/beroun/l2_command.bin"
+        l2_path = "/dev/shm/sniper/l2_command.bin"
         if os.path.exists(l2_path):
             with open(l2_path, 'rb') as f:
                 mm = _mmap.mmap(f.fileno(), 0, access=_mmap.ACCESS_READ)
@@ -341,7 +341,7 @@ def build_report(period="hourly"):
     # ── ML Shield Sparkline ──
     try:
         import mmap as _mmap
-        eng_path = "/dev/shm/beroun/engine_state.bin"
+        eng_path = "/dev/shm/sniper/engine_state.bin"
         if os.path.exists(eng_path):
             with open(eng_path, 'rb') as f:
                 mm = _mmap.mmap(f.fileno(), 0, access=_mmap.ACCESS_READ)
@@ -558,7 +558,7 @@ def cmd_fees(message):
     if not auth(message): return
     try:
         import struct as _st
-        FEE_PATH = "/dev/shm/beroun/fee_state.bin"
+        FEE_PATH = "/dev/shm/sniper/fee_state.bin"
 
         if not os.path.exists(FEE_PATH):
             bot.reply_to(message, "❌ fee\\_state.bin nenalezen.\nSpusť `python3 architect/fee_monitor.py`")
@@ -611,7 +611,7 @@ def cmd_spread(message):
     try:
         import mmap as _mmap
 
-        CROSS_PATH = "/dev/shm/beroun/cross_exchange.bin"
+        CROSS_PATH = "/dev/shm/sniper/cross_exchange.bin"
         PS = 100_000_000
         PAIR_NAMES = ["BTC", "ETH", "XRP", "SOL", "DOGE", "ADA", "AVAX", "LTC", "LINK", "DOT"]
 
@@ -672,7 +672,7 @@ def cmd_ml(message):
     try:
         import mmap as _mmap
 
-        ENGINE_PATH = "/dev/shm/beroun/engine_state.bin"
+        ENGINE_PATH = "/dev/shm/sniper/engine_state.bin"
         PS = 100_000_000
 
         if not os.path.exists(ENGINE_PATH):
@@ -757,7 +757,7 @@ def cmd_wallet(message):
     try:
         import mmap as _mmap
         import struct as _st
-        ENGINE_PATH = "/dev/shm/beroun/engine_state.bin"
+        ENGINE_PATH = "/dev/shm/sniper/engine_state.bin"
         
         if not os.path.exists(ENGINE_PATH):
             bot.reply_to(message, "❌ Engine mmap neexistuje. (Zadny bot nebezi)")
@@ -823,7 +823,7 @@ def cmd_nexus(message):
                 result = start_bot("nexus")
             elif subcmd == "pause":
                 # Write emergency_pause to cross_exchange mmap
-                CROSS_PATH = "/dev/shm/beroun/cross_exchange.bin"
+                CROSS_PATH = "/dev/shm/sniper/cross_exchange.bin"
                 if os.path.exists(CROSS_PATH):
                     with open(CROSS_PATH, 'r+b') as f:
                         mm = _mmap.mmap(f.fileno(), 0)
@@ -839,7 +839,7 @@ def cmd_nexus(message):
             return
 
         # Status display
-        CROSS_PATH = "/dev/shm/beroun/cross_exchange.bin"
+        CROSS_PATH = "/dev/shm/sniper/cross_exchange.bin"
         if not os.path.exists(CROSS_PATH):
             bot.reply_to(message, "🪐 NEXUS — cross\\_exchange.bin nenalezen\\nSpusť `price_bridge.py`")
             return
@@ -1378,7 +1378,7 @@ def main():
                                 alert(f"💀 *BOT CRASH*\n`{bname.upper()}` process not running!\nExpected mode: {bmode}\n\n`/{bname} restart` to recover")
 
                 # 2. Cross-exchange arb > 20bps
-                cross_path = "/dev/shm/beroun/cross_exchange.bin"
+                cross_path = "/dev/shm/sniper/cross_exchange.bin"
                 if os.path.exists(cross_path):
                     try:
                         with open(cross_path, 'rb') as f:
@@ -1409,7 +1409,7 @@ def main():
                         pass
 
                 # 3. Latency degradation > 500µs
-                l2_path = "/dev/shm/beroun/l2_command.bin"
+                l2_path = "/dev/shm/sniper/l2_command.bin"
                 if os.path.exists(l2_path):
                     try:
                         with open(l2_path, 'rb') as f:

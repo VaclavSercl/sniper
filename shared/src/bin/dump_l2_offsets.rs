@@ -17,13 +17,10 @@ fn main() {
     out.push_str(&format!("L2_TOTAL_SIZE = {}\n\n", size_of::<L2SharedState>()));
 
     out.push_str("# Specific Global Paused Offsets in Risk Mmaps\n");
-    
-    // Specific Global Paused Offsets
     out.push_str(&format!("MOONSHOT_PAUSED_OFFSET = {}\n", std::mem::offset_of!(MoonshotRiskState, global_paused)));
     out.push_str(&format!("GRID_PAUSED_OFFSET = {}\n", std::mem::offset_of!(GridRiskState, global_paused)));
     out.push_str(&format!("TRIGON_PAUSED_OFFSET = {}\n", std::mem::offset_of!(TrigonRiskState, global_paused)));
 
-    // Write to architect folder — ML Shield Offsets (engine_state.bin)
     out.push_str("\n# EngineState Offsets (engine_state.bin)\n");
     out.push_str(&format!("OFF_L1_SKEW = {}\n", std::mem::offset_of!(sniper_types::EngineState, l1_skew_adjustment)));
     out.push_str(&format!("OFF_L1_CONF = {}\n", std::mem::offset_of!(sniper_types::EngineState, l1_confidence_score)));
@@ -43,6 +40,7 @@ fn main() {
     out.push_str(&format!("OFF_MACRO_BIAS = {}\n", std::mem::offset_of!(sniper_types::EngineState, macro_bias)));
     out.push_str(&format!("OFF_WALLET_USD = {}\n", std::mem::offset_of!(sniper_types::EngineState, wallet_usd)));
     out.push_str(&format!("OFF_WALLET_BTC = {}\n", std::mem::offset_of!(sniper_types::EngineState, wallet_btc)));
+    out.push_str(&format!("OFF_AI_BIAS = {}\n", std::mem::offset_of!(sniper_types::EngineState, current_ai_bias)));
     out.push_str(&format!("ENGINE_STATE_SIZE = {}\n", size_of::<sniper_types::EngineState>()));
 
     let out_path = std::env::current_dir()

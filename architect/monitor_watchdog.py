@@ -21,7 +21,7 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MONITOR_MD = os.path.join(PROJECT_ROOT, "logs", "Monitor.md")
 STATE_FILE = os.path.join(PROJECT_ROOT, "state", "armada_state.json")
 PNL_DB = os.path.expanduser("~/.local/share/sniper/pnl.db")
-MMAP_DIR = "/dev/shm/beroun"
+MMAP_DIR = "/dev/shm/sniper"
 MONITOR_JSONL = os.path.join(PROJECT_ROOT, "logs", "system_monitor.jsonl")
 
 DURATION_H = 24
@@ -197,7 +197,7 @@ def run_check(cycle, elapsed_min):
     mmap = get_mmap_state()
     missing_mmap = [f for f in EXPECTED_MMAP if f not in mmap]
     extra_mmap = [f for f in mmap if f not in EXPECTED_MMAP and f not in ["state.json", "l2_reasoning.txt"]]
-    lines.append(f"**mmap:** {len(mmap)} souborů v `/dev/shm/beroun/`")
+    lines.append(f"**mmap:** {len(mmap)} souborů v `/dev/shm/sniper/`")
     if missing_mmap:
         lines.append(f"  - ❌ Chybí: {', '.join(missing_mmap)}")
         alerts.append(f"❌ Chybí mmap: {', '.join(missing_mmap)}")

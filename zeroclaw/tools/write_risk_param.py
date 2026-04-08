@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ZeroClaw Tool: write_risk_param
-Writes risk parameters to mmap /dev/shm/beroun/risk_state.bin
+Writes risk parameters to mmap /dev/shm/sniper/risk_state.bin
 
 Usage: python3 write_risk_param.py <field> <value>
 
@@ -51,7 +51,7 @@ def main():
     offset, dtype, converter = FIELD_MAP[field]
     value = converter(raw_value)
 
-    path = "/dev/shm/beroun/risk_state.bin"
+    path = "/dev/shm/sniper/risk_state.bin"
     if not os.path.exists(path):
         print(json.dumps({"error": "Risk state mmap not found", "path": path}))
         return

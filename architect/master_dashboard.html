@@ -114,9 +114,255 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
 .health-info { display:flex; gap:16px; justify-content:center; margin-top:12px; flex-wrap:wrap; }
 .health-info .hi { font-size:0.7em; color:var(--text-muted); font-family:'JetBrains Mono',monospace; }
 .health-info .hi-val { color:var(--text); font-weight:600; }
+
+/* THE CROWN STYLES */
+.crown-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #0d1117;
+    border-bottom: 2px solid #30363d;
+    padding: 15px 25px;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    font-family: 'Courier New', Courier, monospace;
+    transition: all 0.3s ease;
+}
+
+.crown-container.emergency {
+    background: #4a0000;
+    border-bottom: 2px solid #ff0000;
+    box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+}
+
+.crown-section {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.indicator { display: flex; align-items: center; gap: 8px; font-size: 14px; color: #8b949e; margin-top:0; }
+.led { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 5px currentColor; }
+.led.green { background: #238636; color: #238636; }
+.led.red { background: #da3633; color: #da3633; }
+.led.yellow { background: #d29922; color: #d29922; }
+
+.macro-box { text-align: center; background: #161b22; padding: 10px 20px; border-radius: 6px; border: 1px solid #30363d; }
+.macro-label { font-size: 12px; color: #8b949e; letter-spacing: 1px; margin-bottom: 5px; }
+.macro-value { font-size: 24px; font-weight: bold; color: #c9d1d9; }
+.vault { border-color: #1f6feb; background: #0d1a2b; }
+.vault-text { color: #58a6ff; }
+
+.btn-kill {
+    background: #21262d;
+    color: #da3633;
+    border: 1px solid #da3633;
+    padding: 15px 25px;
+    font-size: 16px;
+    font-weight: bold;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+}
+.btn-kill:hover { background: #da3633; color: white; box-shadow: 0 0 15px #da3633; }
+.btn-kill.armed { background: #ff0000; color: white; animation: pulse 1s infinite; }
+
+@keyframes pulse {
+    0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7); }
+    70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(255, 0, 0, 0); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
+}
+
+/* --- OMNI LAYOUT --- */
+.omni-layout {
+    display: flex;
+    height: calc(100vh - 66px); /* 100vh minus výška The Crown */
+    overflow: hidden;
+}
+
+/* THE BRAIN (Levý panel) */
+.brain-panel {
+    width: 350px;
+    background: var(--bg-card);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    overflow-y: auto;
+    flex-shrink: 0;
+}
+
+/* THE CANVAS (Pravý panel) */
+.canvas-panel {
+    flex-grow: 1;
+    overflow-y: auto;
+}
+
+/* Sekce v mozku */
+.brain-section {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 20px;
+}
+.section-title {
+    font-size: 0.85em;
+    font-weight: 700;
+    color: var(--text);
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    padding-bottom: 10px;
+    margin-top: 0;
+    margin-bottom: 15px;
+    letter-spacing: 0.5px;
+}
+
+/* AI Metriky */
+.oracle-metric { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.85em; }
+.metric-label { color: var(--text-muted); }
+.metric-val { font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+.metric-val.bull { color: var(--green); }
+.metric-val.bear { color: var(--red); }
+.metric-val.neutral { color: var(--text-dim); }
+.metric-val.safe { color: var(--green); }
+.metric-val.danger { color: var(--red); animation: pulse 1s infinite; }
+
+.bias-meter {
+    height: 8px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 4px;
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+.bias-fill {
+    height: 100%;
+    width: 50%;
+    transition: width 0.3s ease, background 0.3s ease;
+}
+.bias-fill.bull { background: var(--green); }
+.bias-fill.bear { background: var(--red); }
+.bias-fill.neutral { background: var(--text-dim); }
+
+/* Kelly Sliders */
+.routing-desc { font-size: 0.75em; color: var(--text-muted); margin-bottom: 15px; }
+.slider-group { margin-bottom: 15px; }
+.slider-header { display: flex; justify-content: space-between; font-size: 0.8em; margin-bottom: 6px; font-weight:600;}
+.kelly-slider { 
+    width: 100%; 
+    cursor: pointer; 
+    accent-color: var(--purple); /* Moderní podpora pro zabarvení slideru */
+}
+.slider-value { color: var(--cyan); font-family: 'JetBrains Mono', monospace; }
+
+.btn-action {
+    width: 100%;
+    background: rgba(124,58,237,0.2);
+    color: var(--purple);
+    border: 1px solid var(--border-accent);
+    padding: 10px;
+    font-family: inherit;
+    font-weight: 700;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    margin-top: 10px;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    font-size:0.85em;
+}
+.btn-action:hover { background: var(--purple); color: white; }
+
+@keyframes blink { 50% { opacity: 0.5; } }
+.pulse { animation: pulse 1s infinite !important; }
+
+.btn-view {
+    width: 100%;
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    padding: 10px;
+    font-family: inherit;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    margin-bottom: 8px;
+    text-align: left;
+    transition: all 0.2s;
+}
+.btn-view:hover { background: rgba(255,255,255,0.05); color: var(--text); }
+.btn-view.active { background: rgba(59,130,246,0.15); border-color: var(--blue); color: var(--blue); }
+
+/* Skrývání a zobrazování kontejnerů na plátně */
+.canvas-view { display: none; }
+.canvas-view.active { display: block; animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 </style>
 </head>
 <body>
+
+<header id="the-crown" class="crown-container">
+    <div class="crown-section health-grid">
+        <div class="indicator"><span id="led-mmap" class="led green"></span> <span class="led-label">L0 MMap</span></div>
+        <div class="indicator"><span id="led-ai" class="led green"></span> <span class="led-label">AI Link</span></div>
+        <div class="indicator"><span id="led-socket" class="led green"></span> <span class="led-label">Socket (10Hz)</span></div>
+    </div>
+
+    <div class="crown-section macro-telemetry">
+        <div class="macro-box">
+            <div class="macro-label">TOTAL EQUITY</div>
+            <div id="crown-equity" class="macro-value">$0.00</div>
+        </div>
+        <div class="macro-box vault">
+            <div class="macro-label">❄️ COLD VAULT</div>
+            <div id="crown-vault" class="macro-value vault-text">0.0000 BTC</div>
+        </div>
+    </div>
+
+    <div class="crown-section kill-zone">
+        <button id="btn-kill-switch" class="btn-kill">☢️ ENGAGE KILL-SWITCH</button>
+    </div>
+</header>
+
+<div class="omni-layout">
+    
+    <aside id="the-brain" class="brain-panel">
+        
+        <div class="brain-section ai-oracle">
+            <h2 class="section-title">🧠 L1 ORACLE (SGD)</h2>
+            <div class="oracle-metric">
+                <span class="metric-label">Current Bias:</span>
+                <span id="ai-bias-val" class="metric-val neutral">0.00</span>
+            </div>
+            <div class="bias-meter">
+                <div id="bias-fill" class="bias-fill neutral"></div>
+            </div>
+            <div class="oracle-metric">
+                <span class="metric-label">Toxic Storm:</span>
+                <span id="ai-storm-val" class="metric-val safe">INACTIVE</span>
+            </div>
+        </div>
+
+        <div class="brain-section capital-routing">
+            <h2 class="section-title">⚖️ AI SOVEREIGN ROUTING</h2>
+            <div class="routing-desc">Automatická Mmap distribuce kapitálu (čtení živě)</div>
+
+            <div id="kelly-sliders-container">
+            </div>
+            
+        </div>
+
+        <div class="brain-section view-routing">
+            <h2 class="section-title">👁️ TACTICAL VIEWS</h2>
+            <button class="btn-view active" onclick="switchView('master')">📊 MASTER VIEW</button>
+            <button class="btn-view" onclick="switchView('nexus')">🪐 NEXUS (Arbitrage)</button>
+            <button class="btn-view" onclick="switchView('hydra')">🐍 HYDRA (Market Maker)</button>
+        </div>
+    </aside>
+
+    <main id="tactical-canvas" class="canvas-panel">
+
+        <div id="view-master" class="canvas-view active">
 
 <div class="header">
     <div class="header-left">
@@ -143,18 +389,28 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
 
 <!-- Wallet Overview -->
 <div class="summary" id="wallet-row" style="padding-top:0">
-    <div class="summary-card" style="border-left:2px solid var(--yellow)">
-        <div class="label">💰 Portfolio Value</div>
-        <div class="value yellow" id="w-total" style="font-size:1.6em">—</div>
+    <!-- Bitfinex -->
+    <div class="summary-card" style="border-left:2px solid var(--blue)">
+        <div class="label" style="color:var(--blue)">🟦 Bitfinex Value</div>
+        <div class="value blue" id="w-bfx-total" style="font-size:1.3em">—</div>
+        <div style="font-size: 0.7em; margin-top: 5px; color: var(--text-muted);">
+            BTC: <span id="w-bfx-btc" style="color:var(--text)">—</span> | USD: <span id="w-bfx-usd" style="color:var(--text)">—</span>
+        </div>
     </div>
+    <!-- Binance -->
+    <div class="summary-card" style="border-left:2px solid #f97316">
+        <div class="label" style="color:#f97316">🟧 Binance Value</div>
+        <div class="value orange" id="w-bnb-total" style="font-size:1.3em">—</div>
+        <div style="font-size: 0.7em; margin-top: 5px; color: var(--text-muted);">
+            BTC: <span id="w-bnb-btc" style="color:var(--text)">—</span> | USD: <span id="w-bnb-usd" style="color:var(--text)">—</span>
+        </div>
+    </div>
+    
     <div class="summary-card">
-        <div class="label">₿ BTC Balance</div>
-        <div class="value orange" id="w-btc">—</div>
+        <div class="label">💰 Global Total Equity</div>
+        <div class="value yellow" id="w-global-total" style="font-size:1.6em">—</div>
     </div>
-    <div class="summary-card">
-        <div class="label">💵 USD Balance</div>
-        <div class="value green" id="w-usd">—</div>
-    </div>
+    
     <div class="summary-card">
         <div class="label">BTC/USD Price</div>
         <div class="value" id="w-price" style="color:var(--text-muted)">—</div>
@@ -240,12 +496,79 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
         <div class="gauge-card" id="gc-disk-root"><div class="gauge-svg" id="g-disk-root"></div><div class="gauge-label">SSD /</div><div class="gauge-detail" id="gd-disk-root">—</div></div>
         <div class="gauge-card" id="gc-disk-data"><div class="gauge-svg" id="g-disk-data"></div><div class="gauge-label">HDD /data</div><div class="gauge-detail" id="gd-disk-data">—</div></div>
     </div>
-    </div>
+
     <div class="health-info" id="health-info">
         <div class="hi">Uptime: <span class="hi-val" id="hi-uptime">—</span></div>
         <div class="hi">Load: <span class="hi-val" id="hi-load">—</span></div>
         <div class="hi" id="hi-monitor" style="margin-left:auto">🔬 Monitor: <span class="hi-val" id="hi-mon-status">—</span></div>
     </div>
+</div>
+
+        </div>
+
+        <div id="view-nexus" class="canvas-view">
+            <div class="header" style="background:linear-gradient(135deg,#0d1117,#1f1305);">
+                <div class="header-left">
+                    <div class="logo" style="background:linear-gradient(135deg,#f97316,#fbbf24);-webkit-background-clip:text;">🪐 NEXUS ARBITRAGE</div>
+                    <span class="version">TACTICAL CANVAS</span>
+                </div>
+            </div>
+            
+            <div class="panels" style="margin-top:20px;">
+                <div class="panel" style="grid-column: 1 / -1;">
+                    <div class="panel-title"><span class="accent">📊</span> LIVE DEPTH-CHART & SPREAD</div>
+                    <div style="height: 300px; width: 100%; padding: 10px; box-sizing: border-box; background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border);">
+                        <canvas id="nexus-depth-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="summary" style="padding-top:0">
+                 <div class="summary-card">
+                    <div class="label">Top-of-Book Spread</div>
+                    <div id="nx-raw-spread" class="value blue">0.0 bps</div>
+                </div>
+                <div class="summary-card" style="border-color: var(--purple);">
+                    <div class="label">Volume Weighted Spread (VWS)</div>
+                    <div id="nx-vw-spread" class="value purple">0.0 bps</div>
+                </div>
+                 <div class="summary-card">
+                    <div class="label">Cross-Arb Cost (Fees)</div>
+                    <div id="nx-fees" class="value orange">0.0 bps</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-hydra" class="canvas-view">
+             <div class="header" style="background:linear-gradient(135deg,#0d1117,#051f11);">
+                <div class="header-left">
+                    <div class="logo" style="background:linear-gradient(135deg,#22c55e,#06b6d4);-webkit-background-clip:text;">🐍 HYDRA MARKET MAKER</div>
+                    <span class="version">TACTICAL CANVAS</span>
+                </div>
+            </div>
+            
+            <div class="panels" style="margin-top:20px;">
+                <div class="panel" style="grid-column: 1 / -1;">
+                    <div class="panel-title"><span class="accent">⚖️</span> OBI TACHOMETER (Order Book Imbalance)</div>
+                    <div style="height: 250px; width: 100%; padding: 10px; box-sizing: border-box; background: var(--bg-card); border-radius: var(--radius); border: 1px solid var(--border);">
+                        <canvas id="hydra-obi-canvas" style="width: 100%; height: 100%; display: block;"></canvas>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="summary" style="padding-top:0">
+                 <div class="summary-card">
+                    <div class="label">Current OBI</div>
+                    <div id="hy-obi-val" class="value" style="color:var(--text)">0.00</div>
+                </div>
+                <div class="summary-card">
+                    <div class="label">Quoted Spread</div>
+                    <div id="hy-spread-val" class="value cyan">0.0 bps</div>
+                </div>
+            </div>
+        </div>
+
+    </main>
 </div>
 
 <div class="footer">
@@ -254,7 +577,6 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
 
 <script>
 const ICONS = {hydra:'🐍', moonshot:'🌙', grid:'📐', trigon:'🔺', nexus:'🪐'};
-const PORTS = {hydra:3000, moonshot:3001, grid:3002, trigon:3003, nexus:3004};
 let pnlHistory = [];
 let feeHistory = [];
 let botHistory = {};
@@ -309,9 +631,7 @@ function renderBots(bots) {
         const icon = ICONS[b.name] || '🤖';
         const st = b.online ? (b.paused ? 'paused' : 'live') : 'offline';
         const stLabel = b.online ? (b.paused ? 'PAUSED' : 'LIVE') : 'OFF';
-        const port = PORTS[b.name] || 3000;
-        const host = location.hostname || 'localhost';
-        const href = b.name === 'hydra' ? `http://${host}:${port}` : `/bot?name=${b.name}`;
+        const href = `/bot/${b.name}`;
         const target = '_blank';
         const spark = renderSvgSparkline(botHistory[b.name], 80, 20, (b.pnl>=0?'#22c55e':'#ef4444'), false);
         return `<a href="${href}" target="_blank" style="text-decoration:none;color:inherit" title="Open ${b.name.toUpperCase()} dedicated dashboard">
@@ -408,8 +728,21 @@ function renderL2(l2, gpu) {
 function update(state) {
     const snap = state.snapshot || {};
     const bots = snap.bots || [];
-    const gpu = state.gpu || {};
+    const warRoom = state.war_room || {};
+    const fleet = warRoom.fleet || [];
+
+    // Map Phase 7 V2 data over legacy bots payload
+    bots.forEach(b => {
+        const wrBot = fleet.find(f => f.name.toLowerCase() === b.name.toLowerCase());
+        if (wrBot && wrBot.venues && wrBot.venues[0]) {
+            b.pnl = wrBot.venues[0].daily_pnl || b.pnl;
+            b.grid_step = wrBot.venues[0].allocated_capital || b.grid_step; // Use Grid column for Capital visually
+            if (wrBot.venues[0].allocated_capital > 0) b.online = true;
+        }
+    });
+
     const l2 = state.l2 || {};
+    const gpu = state.gpu || {};
 
     // Health bar
     const cortexAlive = bots.length > 0;
@@ -434,12 +767,30 @@ function update(state) {
     document.getElementById('s-time').textContent = new Date().toLocaleTimeString('cs-CZ');
 
     // Wallet
-    const w = snap.wallet || {};
-    const wTotal = w.total_usd || 0;
-    document.getElementById('w-total').textContent = wTotal > 0 ? '$' + wTotal.toFixed(2) : '—';
-    document.getElementById('w-btc').textContent = (w.btc || 0) > 0 ? (w.btc).toFixed(6) + ' ₿' : '—';
-    document.getElementById('w-usd').textContent = (w.usd || 0) > 0 ? '$' + (w.usd).toFixed(2) : '—';
-    document.getElementById('w-price').textContent = (w.btc_price || 0) > 0 ? '$' + (w.btc_price).toFixed(0) : '—';
+    const w_bfx = snap.wallet_bfx || {};
+    const w_bnb = snap.wallet_bnb || {};
+    const btc_price = w_bfx.btc_price || (snap.wallet || {}).btc_price || 0;
+
+    const wBfxTotal = document.getElementById('w-bfx-total');
+    if (wBfxTotal) wBfxTotal.innerText = typeof w_bfx.total_usd !== 'undefined' ? `$${w_bfx.total_usd.toFixed(2)}` : '—';
+    const wBfxBtc = document.getElementById('w-bfx-btc');
+    if (wBfxBtc) wBfxBtc.innerText = typeof w_bfx.btc !== 'undefined' ? w_bfx.btc.toFixed(4) : '—';
+    const wBfxUsd = document.getElementById('w-bfx-usd');
+    if (wBfxUsd) wBfxUsd.innerText = typeof w_bfx.usd !== 'undefined' ? `$${w_bfx.usd.toFixed(0)}` : '—';
+
+    const wBnbTotal = document.getElementById('w-bnb-total');
+    if (wBnbTotal) wBnbTotal.innerText = typeof w_bnb.total_usd !== 'undefined' ? `$${w_bnb.total_usd.toFixed(2)}` : '—';
+    const wBnbBtc = document.getElementById('w-bnb-btc');
+    if (wBnbBtc) wBnbBtc.innerText = typeof w_bnb.btc !== 'undefined' ? w_bnb.btc.toFixed(4) : '—';
+    const wBnbUsd = document.getElementById('w-bnb-usd');
+    if (wBnbUsd) wBnbUsd.innerText = typeof w_bnb.usd !== 'undefined' ? `$${w_bnb.usd.toFixed(0)}` : '—';
+    
+    const globalTotal = (w_bfx.total_usd || 0) + (w_bnb.total_usd || 0);
+    const globalTotalEl = document.getElementById('w-global-total');
+    if (globalTotalEl) globalTotalEl.innerText = `$${globalTotal.toFixed(2)}`;
+
+    const wPrice = document.getElementById('w-price');
+    if (wPrice) wPrice.innerText = `$${btc_price.toFixed(2)}`;
 
     // PnL history for sparkline
     if (totalPnl !== 0 || pnlHistory.length > 0) {
@@ -463,6 +814,9 @@ function update(state) {
     const nexusOnline = state.nexus && state.nexus.online;
     const hNexus = document.getElementById('h-nexus');
     if (hNexus) hNexus.className = 'dot ' + (nexusOnline ? 'on pulse' : 'off');
+
+    updateNexusCanvas(state);
+    updateHydraCanvas(state);
 }
 
 function renderCrossExchange(cx) {
@@ -636,10 +990,10 @@ function renderFees(nexus) {
     const el = document.getElementById('fee-content');
     if (!el) return;
 
-    const bfxMaker = nexus.bfx_fee_bps || 10;
-    const bfxTaker = nexus.bfx_fee_bps || 10;
-    const bnbMaker = nexus.bnb_fee_bps || 10;
-    const bnbTaker = nexus.bnb_fee_bps || 10;
+    const bfxMaker = nexus.bfx_maker_bps !== undefined ? nexus.bfx_maker_bps : 10;
+    const bfxTaker = nexus.bfx_taker_bps !== undefined ? nexus.bfx_taker_bps : 10;
+    const bnbMaker = nexus.bnb_maker_bps !== undefined ? nexus.bnb_maker_bps : 10;
+    const bnbTaker = nexus.bnb_taker_bps !== undefined ? nexus.bnb_taker_bps : 10;
     const crossCost = bfxTaker + bnbTaker;
 
     feeHistory.push(crossCost);
@@ -648,6 +1002,10 @@ function renderFees(nexus) {
     let html = `<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:10px">
         <div style="padding:10px;background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:var(--radius-sm)">
             <div style="font-size:0.6em;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">🔵 Bitfinex</div>
+            <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:0.85em;margin-bottom:4px">
+                <span style="color:var(--text-muted)">Maker</span>
+                <span style="color:var(--blue)">${bfxMaker.toFixed(1)} bps</span>
+            </div>
             <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:0.85em">
                 <span style="color:var(--text-muted)">Taker</span>
                 <span style="color:var(--blue);font-weight:600">${bfxTaker.toFixed(1)} bps</span>
@@ -655,6 +1013,10 @@ function renderFees(nexus) {
         </div>
         <div style="padding:10px;background:rgba(249,115,22,0.06);border:1px solid rgba(249,115,22,0.15);border-radius:var(--radius-sm)">
             <div style="font-size:0.6em;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">🟠 Binance</div>
+            <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:0.85em;margin-bottom:4px">
+                <span style="color:var(--text-muted)">Maker</span>
+                <span style="color:var(--orange)">${bnbMaker.toFixed(1)} bps</span>
+            </div>
             <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:0.85em">
                 <span style="color:var(--text-muted)">Taker</span>
                 <span style="color:var(--orange);font-weight:600">${bnbTaker.toFixed(1)} bps</span>
@@ -789,8 +1151,516 @@ function renderMonitor(mon) {
 
 // SSE Connection
 const es = new EventSource('/events');
-es.onmessage = e => { try { update(JSON.parse(e.data)); } catch(err) { console.error(err); } };
-es.onerror = () => { document.getElementById('h-cortex').className = 'dot off'; };
+es.onmessage = e => { 
+    try { 
+        const data = JSON.parse(e.data);
+        update(data); 
+        updateCrown(data);
+        updateBrain(data);
+    } catch(err) { console.error(err); } 
+};
+es.onerror = () => { 
+    document.getElementById('h-cortex').className = 'dot off'; 
+    const ledSocket = document.getElementById('led-socket');
+    if (ledSocket) ledSocket.className = 'led red';
+};
+
+// --- LOGIKA THE BRAIN (Levý Panel) ---
+let slidersInitialized = false;
+let currentWeights = {};
+
+function updateBrain(payload) {
+    const ml = payload.ml_shield || {};
+    const bots = (payload.snapshot && payload.snapshot.bots) ? payload.snapshot.bots : [];
+
+    // 1. Oživení AI Telemetrie (napojeno na ML Shield)
+    const skew = ml.skew || 0; // Kladný = Bullish, Záporný = Bearish
+    const isStorm = ml.toxic_hits > 10; // Simple fallback pro bouři (nebo vezmi flag z payloadu)
+
+    const biasValEl = document.getElementById('ai-bias-val');
+    const biasFillEl = document.getElementById('bias-fill');
+    const stormValEl = document.getElementById('ai-storm-val');
+
+    biasValEl.innerText = (skew > 0 ? '+' : '') + skew.toFixed(4);
+    
+    // Mapování Skew (předpokládáme např. -0.5 až +0.5 jako rozsah)
+    let widthPercent = 50 + (skew * 100); 
+    widthPercent = Math.max(0, Math.min(100, widthPercent));
+    biasFillEl.style.width = `${widthPercent}%`;
+
+    if (skew > 0.01) {
+        biasValEl.className = 'metric-val bull';
+        biasFillEl.className = 'bias-fill bull';
+    } else if (skew < -0.01) {
+        biasValEl.className = 'metric-val bear';
+        biasFillEl.className = 'bias-fill bear';
+    } else {
+        biasValEl.className = 'metric-val neutral';
+        biasFillEl.className = 'bias-fill neutral';
+    }
+
+    if (isStorm) {
+        stormValEl.innerText = "ACTIVE 🌩️";
+        stormValEl.className = 'metric-val danger';
+    } else {
+        stormValEl.innerText = "INACTIVE";
+        stormValEl.className = 'metric-val safe';
+    }
+
+    // 2. Dynamický update sliderů
+    if (bots.length > 0) {
+        if (!slidersInitialized) {
+            initKellySliders(bots);
+            slidersInitialized = true;
+        }
+        
+        const warRoom = payload.war_room || {};
+        const fleet = warRoom.fleet || [];
+        
+        let totalCapital = 0;
+        fleet.forEach(f => {
+            if (f.venues && f.venues[0]) totalCapital += f.venues[0].allocated_capital || 0;
+        });
+
+        bots.forEach(bot => {
+            const wrBot = fleet.find(f => f.name.toLowerCase() === bot.name.toLowerCase());
+            let currentCap = 0;
+            if (wrBot && wrBot.venues && wrBot.venues[0]) currentCap = wrBot.venues[0].allocated_capital || 0;
+            
+            let pct = totalCapital > 0 ? Math.round((currentCap / totalCapital) * 100) : 0;
+            const slider = document.getElementById(`slider-${bot.name}`);
+            const valLabel = document.getElementById(`weight-val-${bot.name}`);
+            if (slider && valLabel && currentWeights[bot.name] !== pct) {
+                currentWeights[bot.name] = pct;
+                slider.value = pct;
+                valLabel.innerText = `${pct}% ($${currentCap.toFixed(2)})`;
+            }
+        });
+    }
+}
+
+function initKellySliders(bots) {
+    const container = document.getElementById('kelly-sliders-container');
+    container.innerHTML = '';
+
+    // Rozdělíme 100% spravedlivě jako výchozí bod (nebo načteme z backendu, pokud to posíláš)
+    const defaultWeight = Math.floor(100 / bots.length);
+
+    bots.forEach(bot => {
+        currentWeights[bot.name] = defaultWeight;
+
+        const group = document.createElement('div');
+        group.className = 'slider-group';
+        const icon = ICONS[bot.name] || '🤖';
+        
+        group.innerHTML = `
+            <div class="slider-header">
+                <span>${icon} ${bot.name.toUpperCase()}</span>
+                <span id="weight-val-${bot.name}" class="slider-value">${currentWeights[bot.name]}%</span>
+            </div>
+            <input type="range" id="slider-${bot.name}" class="kelly-slider" min="0" max="100" value="${currentWeights[bot.name]}" disabled style="opacity: 0.8; cursor: default;">
+        `;
+        container.appendChild(group);
+    });
+}
+
+// API volání přesměrováno nativně v Rustu. Html formát smazán.
+es.onerror = () => { 
+    document.getElementById('h-cortex').className = 'dot off'; 
+    const ledSocket = document.getElementById('led-socket');
+    if (ledSocket) ledSocket.className = 'led red';
+};
+
+// --- LOGIKA THE CROWN ---
+let socketTimeout;
+
+function updateCrown(payload) {
+    const sys = payload.system || {};
+    const w_bfx = payload.snapshot ? (payload.snapshot.wallet_bfx || {}) : {};
+    const w_bnb = payload.snapshot ? (payload.snapshot.wallet_bnb || {}) : {};
+    const global_usd = (w_bfx.total_usd || 0) + (w_bnb.total_usd || 0);
+    const global_btc = (w_bfx.btc || 0) + (w_bnb.btc || 0);
+    
+    // 1. Oživení Makro Metrik
+    const crownEq = document.getElementById('crown-equity');
+    if (crownEq) crownEq.innerText = `$${global_usd.toFixed(2)}`;
+    
+    const crownVault = document.getElementById('crown-vault');
+    if (crownVault) crownVault.innerText = `${global_btc.toFixed(4)} BTC`;
+
+    // 2. Health Diody
+    const ledSocket = document.getElementById('led-socket');
+    ledSocket.className = 'led green';
+    clearTimeout(socketTimeout);
+    socketTimeout = setTimeout(() => { ledSocket.className = 'led red'; }, 500);
+
+    const ledMmap = document.getElementById('led-mmap');
+    if (payload.snapshot && payload.snapshot.bots && payload.snapshot.bots.length > 0) {
+        ledMmap.className = 'led green';
+    } else {
+        ledMmap.className = 'led red';
+    }
+
+    const ledAi = document.getElementById('led-ai');
+    if (payload.gpu && payload.gpu.total_inferences > 0) {
+        ledAi.className = 'led green';
+    } else {
+        ledAi.className = 'led red';
+    }
+
+    // 3. Detekce Nouzového Stavu (Kill-Switch)
+    const crownContainer = document.getElementById('the-crown');
+    if (sys.kill_switch === true || sys.kill_switch === 1) {
+        crownContainer.classList.add('emergency');
+        document.getElementById('btn-kill-switch').innerText = "⚠️ SYSTEM HALTED";
+    } else {
+        crownContainer.classList.remove('emergency');
+        document.getElementById('btn-kill-switch').innerText = "☢️ ENGAGE KILL-SWITCH";
+    }
+}
+
+// 4. Obsluha tlačítka Kill-Switch
+const btnKill = document.getElementById('btn-kill-switch');
+btnKill.addEventListener('click', async () => {
+    if (!btnKill.classList.contains('armed')) {
+        btnKill.classList.add('armed');
+        btnKill.innerText = "⚠️ CONFIRM KILL?";
+        setTimeout(() => { 
+            btnKill.classList.remove('armed'); 
+            btnKill.innerText = "☢️ ENGAGE KILL-SWITCH";
+        }, 3000);
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/kill', { method: 'POST' });
+        if (response.ok) {
+            console.log("Kritický signál odeslán!");
+            btnKill.classList.remove('armed');
+        }
+    } catch (error) {
+        console.error("Selhalo spojení pro Kill-Switch!", error);
+    }
+});
+// --- VIEW ROUTING ---
+function switchView(viewName) {
+    // 1. Aktualizace tlačítek v levém panelu
+    document.querySelectorAll('.btn-view').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.innerText.toLowerCase().includes(viewName.toLowerCase())) {
+            btn.classList.add('active');
+        }
+    });
+
+    // 2. Přepnutí kontejnerů na plátně
+    document.querySelectorAll('.canvas-view').forEach(view => {
+        view.classList.remove('active');
+    });
+    document.getElementById(`view-${viewName}`).classList.add('active');
+    
+    console.log(`Tactical Canvas switched to: ${viewName}`);
+}
+
+// --- NEXUS TACTICAL CANVAS LOGIC ---
+function updateNexusCanvas(payload) {
+    const cx = payload.cross_exchange || {};
+    const nexus = payload.nexus || {};
+    
+    // Získání elementů na plátně Nexusu
+    const rawSpreadEl = document.getElementById('nx-raw-spread');
+    const vwSpreadEl = document.getElementById('nx-vw-spread');
+    const feesEl = document.getElementById('nx-fees');
+
+    // 1. Zpracování Poplatků (Fees)
+    const bfxFee = nexus.bfx_fee_bps || 0;
+    const bnbFee = nexus.bnb_fee_bps || 0;
+    const slippage = 3.0; // Pevný skluz (pokud neposíláš dynamicky z backendu)
+    const totalFees = bfxFee + bnbFee + slippage;
+    
+    if (feesEl) {
+        feesEl.innerText = `${totalFees.toFixed(1)} bps`;
+    }
+
+    // 2. Zpracování Spreadu
+    // Pokud backend posílá pole 'pairs', najdeme hlavní pár (např. BTC)
+    if (cx.pairs && cx.pairs.length > 0) {
+        // Zjednodušeně vezmeme první pár (BTC)
+        const btcPair = cx.pairs[0]; 
+        const rawSpread = btcPair.spread_bps || 0;
+        
+        // VWS (Volume Weighted Spread) = Raw Spread - Total Fees
+        // Pokud je VWS > 0, arbitráž je zisková!
+        const vwSpread = rawSpread - totalFees;
+
+        if (rawSpreadEl) {
+            rawSpreadEl.innerText = `${rawSpread.toFixed(2)} bps`;
+            rawSpreadEl.style.color = rawSpread > totalFees ? "var(--green)" : "var(--blue)";
+        }
+        
+        if (vwSpreadEl) {
+            vwSpreadEl.innerText = `${vwSpread.toFixed(2)} bps`;
+            // Extrémní vizuální upozornění, když VWS přejde do zisku!
+            vwSpreadEl.style.color = vwSpread > 0 ? "var(--green)" : "var(--red)";
+            if (vwSpread > 0) {
+                vwSpreadEl.classList.add("pulse"); // Přidáme CSS pulzování
+            } else {
+                vwSpreadEl.classList.remove("pulse");
+            }
+        }
+    } else {
+        if (rawSpreadEl) rawSpreadEl.innerText = "0.00 bps";
+        if (vwSpreadEl) vwSpreadEl.innerText = "0.00 bps";
+    }
+
+    // Spuštění překreslení Canvasu
+    renderDepthChart(cx);
+}
+
+// --- HTML5 CANVAS DEPTH CHART ENGINE ---
+let depthChartCanvas = null;
+let depthChartCtx = null;
+
+function renderDepthChart(cx) {
+    if (!depthChartCanvas) {
+        depthChartCanvas = document.getElementById('nexus-depth-canvas');
+        if (!depthChartCanvas) return;
+        depthChartCtx = depthChartCanvas.getContext('2d');
+    }
+
+    // 1. Zajištění High-DPI (Retina) ostrosti
+    const rect = depthChartCanvas.parentElement.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    
+    // Zabráníme rozmazání na monitorech s vyšší hustotou pixelů
+    if (width === 0 || height === 0) return;
+    
+    if (depthChartCanvas.width !== width || depthChartCanvas.height !== height) {
+        depthChartCanvas.width = width;
+        depthChartCanvas.height = height;
+    }
+
+    const ctx = depthChartCtx;
+    ctx.clearRect(0, 0, width, height);
+
+    // Pokud nemáme data, napíšeme hlášku
+    if (!cx.pairs || cx.pairs.length === 0) {
+        ctx.fillStyle = '#4b5563';
+        ctx.font = '14px JetBrains Mono';
+        ctx.textAlign = 'center';
+        ctx.fillText('NO PAIR DATA AVAILABLE', width / 2, height / 2);
+        return;
+    }
+
+    const pair = cx.pairs[0]; // Kreslíme hlavní pár (BTC)
+    
+    // 2. Syntéza Orderbook Data Points
+    // Z Top-of-book vygenerujeme "zubatou" křivku likvidity
+    const centerPrice = (pair.bfx_bid + pair.bfx_ask + pair.bnb_bid + pair.bnb_ask) / 4;
+    const spreadRange = Math.abs(pair.bfx_ask - pair.bnb_bid) || 10;
+    
+    // Zoom: zobrazení +- n dolarů od středu (dynamicky podle spreadu)
+    const zoomLevel = Math.max(spreadRange * 5, 20); 
+    const minPrice = centerPrice - zoomLevel;
+    const maxPrice = centerPrice + zoomLevel;
+
+    // Helper pro převod Ceny(X) a Objemu(Y) na pixely
+    const getX = (price) => ((price - minPrice) / (maxPrice - minPrice)) * width;
+    const getY = (volume, maxVol) => height - ((volume / maxVol) * (height - 20));
+
+    // Syntetické Body: BFX (Modrá) a BNB (Oranžová)
+    const generateSide = (bestPrice, isBid, maxVol, volatility) => {
+        let points = [];
+        let cumVol = 0;
+        // Začneme na Top-of-book
+        points.push({ x: getX(bestPrice), y: getY(0, maxVol) });
+        
+        // Vygenerujeme 10 hlubších úrovní
+        let currentPrice = bestPrice;
+        for(let i = 0; i < 10; i++) {
+            currentPrice = isBid ? currentPrice - (Math.random() * volatility) : currentPrice + (Math.random() * volatility);
+            cumVol += (Math.random() * 5) + 1; // Kumulativní objem roste
+            points.push({ x: getX(currentPrice), y: getY(cumVol, maxVol) });
+        }
+        return points;
+    };
+
+    // Generování 4 stran (Bid/Ask pro BFX a BNB)
+    const bfxBids = generateSide(pair.bfx_bid, true, 60, 2);
+    const bfxAsks = generateSide(pair.bfx_ask, false, 60, 2);
+    const bnbBids = generateSide(pair.bnb_bid, true, 60, 2);
+    const bnbAsks = generateSide(pair.bnb_ask, false, 60, 2);
+
+    // 3. Vykreslovací Funce pro Polygon s gradientem
+    const drawSide = (points, isBid, colorStr, opacity) => {
+        if(points.length === 0) return;
+        
+        ctx.beginPath();
+        // Start na dně
+        ctx.moveTo(points[0].x, height);
+        
+        // Cesta přes body
+        points.forEach(p => ctx.lineTo(p.x, p.y));
+        
+        // Zpět na dno (pro vyplnění pod křivkou)
+        const lastX = isBid ? 0 : width; // Bids jdou doleva, Asks doprava
+        ctx.lineTo(lastX, points[points.length-1].y);
+        ctx.lineTo(lastX, height);
+        ctx.closePath();
+
+        // Gradient výplně
+        const gradient = ctx.createLinearGradient(0, 0, 0, height);
+        gradient.addColorStop(0, `rgba(${colorStr}, ${opacity})`);
+        gradient.addColorStop(1, `rgba(${colorStr}, 0.0)`);
+        ctx.fillStyle = gradient;
+        ctx.fill();
+
+        // Horní čára
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        points.forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.strokeStyle = `rgba(${colorStr}, 0.8)`;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+    };
+
+    // 4. Kreslení: Modrá = BFX (59, 130, 246), Oranžová = BNB (249, 115, 22)
+    // Zelenkavý nádech pro Bids, Červenkavý pro Asks (jen lehce mixnuto do hlavní barvy)
+    drawSide(bfxBids, true, '59, 130, 246', 0.3); // BFX Bid
+    drawSide(bfxAsks, false, '59, 130, 246', 0.15); // BFX Ask
+    
+    drawSide(bnbBids, true, '249, 115, 22', 0.3); // BNB Bid
+    drawSide(bnbAsks, false, '249, 115, 22', 0.15); // BNB Ask
+
+    // 5. Středová osa a cenovky Best Bid/Ask
+    ctx.beginPath();
+    ctx.moveTo(getX(centerPrice), 0);
+    ctx.lineTo(getX(centerPrice), height);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.setLineDash([5, 5]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.font = '11px JetBrains Mono';
+    ctx.fillStyle = '#9ca3af';
+    ctx.textAlign = 'center';
+    ctx.fillText(`Mid: $${centerPrice.toFixed(1)}`, getX(centerPrice), 15);
+}
+
+// --- HYDRA TACTICAL CANVAS LOGIC ---
+
+function updateHydraCanvas(payload) {
+    const ml = payload.ml_shield || {};
+    // Pokud backend zatím OBI neposílá, odvodíme ho vizuálně ze Skew parametru
+    // V produkci by ml_shield měl posílat exaktní OBI (-1.0 do 1.0)
+    let obi = ml.obi !== undefined ? ml.obi : (ml.skew || 0) * 2; 
+    
+    // Omezení do hranic -1 až +1
+    obi = Math.max(-1.0, Math.min(1.0, obi));
+
+    const obiEl = document.getElementById('hy-obi-val');
+    if (obiEl) {
+        obiEl.innerText = obi.toFixed(3);
+        obiEl.style.color = obi > 0.2 ? 'var(--green)' : (obi < -0.2 ? 'var(--red)' : 'var(--text)');
+    }
+
+    renderObiGauge(obi);
+}
+
+let obiCanvas = null;
+let obiCtx = null;
+let currentGaugeValue = 0; // Pro plynulou animaci ručičky
+
+function renderObiGauge(targetObi) {
+    if (!obiCanvas) {
+        obiCanvas = document.getElementById('hydra-obi-canvas');
+        if (!obiCanvas) return;
+        obiCtx = obiCanvas.getContext('2d');
+    }
+
+    const rect = obiCanvas.parentElement.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+    
+    if (width === 0 || height === 0) return;
+    
+    if (obiCanvas.width !== width || obiCanvas.height !== height) {
+        obiCanvas.width = width;
+        obiCanvas.height = height;
+    }
+
+    const ctx = obiCtx;
+    ctx.clearRect(0, 0, width, height);
+
+    const cx = width / 2;
+    const cy = height - 20; // Střed dole
+    const radius = Math.min(width / 2, height) - 40;
+
+    // 1. Vykreslení pozadí tachometru (Oblouk)
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, Math.PI, 0); // Polokruh
+    ctx.lineWidth = 30;
+    
+    // Gradient: Červená (levo) -> Šedá (střed) -> Zelená (pravo)
+    const gradient = ctx.createLinearGradient(cx - radius, 0, cx + radius, 0);
+    gradient.addColorStop(0, 'rgba(239, 68, 68, 0.8)'); // Red
+    gradient.addColorStop(0.4, 'rgba(139, 148, 158, 0.2)'); // Neutral
+    gradient.addColorStop(0.6, 'rgba(139, 148, 158, 0.2)'); // Neutral
+    gradient.addColorStop(1, 'rgba(34, 197, 94, 0.8)'); // Green
+    
+    ctx.strokeStyle = gradient;
+    ctx.stroke();
+
+    // Vyznačení neutrální zóny
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius, Math.PI * 1.4, Math.PI * 1.6);
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.lineWidth = 32;
+    ctx.stroke();
+
+    // 2. Interpolace ručičky (Plynulý pohyb místo skákání)
+    // Posuneme stávající hodnotu o 10% směrem k cíli (smoothing)
+    currentGaugeValue += (targetObi - currentGaugeValue) * 0.1;
+
+    // Převod OBI (-1 až 1) na úhly (Math.PI až 0)
+    // OBI -1 = Math.PI (vlevo), OBI 0 = Math.PI/2 (nahoře), OBI 1 = 0 (vpravo)
+    const normalized = (currentGaugeValue + 1) / 2; // 0 do 1
+    const angle = Math.PI - (normalized * Math.PI);
+
+    // 3. Vykreslení Ručičky
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+
+    ctx.beginPath();
+    ctx.moveTo(0, -5); // Základna
+    ctx.lineTo(radius - 10, 0); // Špička
+    ctx.lineTo(0, 5); // Základna
+    ctx.fillStyle = '#e1e5ee'; // Bílá ručička
+    ctx.fill();
+
+    // Středový čep
+    ctx.beginPath();
+    ctx.arc(0, 0, 10, 0, Math.PI * 2);
+    ctx.fillStyle = '#0f1319';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#e1e5ee';
+    ctx.stroke();
+
+    ctx.restore();
+
+    // 4. Popisky
+    ctx.font = '12px JetBrains Mono';
+    ctx.fillStyle = '#8b949e';
+    ctx.textAlign = 'center';
+    ctx.fillText('HEAVY SELL', cx - radius, cy + 15);
+    ctx.fillText('HEAVY BUY', cx + radius, cy + 15);
+    
+    ctx.font = '18px JetBrains Mono';
+    ctx.fillStyle = currentGaugeValue > 0.2 ? '#22c55e' : (currentGaugeValue < -0.2 ? '#ef4444' : '#e1e5ee');
+    ctx.fillText(`OBI: ${currentGaugeValue.toFixed(2)}`, cx, cy - radius - 15);
+}
 </script>
 </body>
 </html>

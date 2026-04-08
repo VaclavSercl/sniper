@@ -2,7 +2,7 @@ use memmap2::MmapOptions;
 use crate::ml_types::MlWeightsState; // Tvá struktura z Kroku 1
 
 pub fn load_ml_weights_ro() -> &'static MlWeightsState {
-    let path = "/dev/shm/beroun/ml_weights.bin";
+    let path = "/dev/shm/sniper/ml_weights.bin";
     let file = match std::fs::File::open(path) {
         Ok(f) => f,
         Err(_) => {

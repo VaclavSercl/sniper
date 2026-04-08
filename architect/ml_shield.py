@@ -25,9 +25,9 @@ log = logging.getLogger("ml_shield")
 # ═══════════════════════════════════════════════════════════
 # KONFIGURACE PAMĚTI A STRUKTUR
 # ═══════════════════════════════════════════════════════════
-L2_CMD_PATH = '/dev/shm/beroun/l2_command.bin'
-TOXIC_STORM_PATH = '/dev/shm/beroun/toxic_storm.bin'
-ENGINE_PATH = '/dev/shm/beroun/engine_state.bin'
+L2_CMD_PATH = '/dev/shm/sniper/l2_command.bin'
+TOXIC_STORM_PATH = '/dev/shm/sniper/toxic_storm.bin'
+ENGINE_PATH = '/dev/shm/sniper/engine_state.bin'
 
 PRICE_SCALE = 1e8
 L2_BOOK_LEVELS = 25  # Na základě striktní verifikace C struktur Rust jádra (50 úr. je pro větší paměti)
@@ -145,7 +145,7 @@ def run_oracle():
     spread_tracker = DynamicThreshold(alpha=0.01) # Pomalá adaptace na volatilitu
     
     # === PARAMETRICKÁ INJEKCE LEVEL 5 ===
-    PARAMS_PATH = '/dev/shm/beroun/oracle_params.bin'
+    PARAMS_PATH = '/dev/shm/sniper/oracle_params.bin'
     
     if not os.path.exists(PARAMS_PATH):
         with open(PARAMS_PATH, 'wb') as f:
@@ -155,6 +155,12 @@ def run_oracle():
     mm_params = mmap.mmap(fd_params, 24, access=mmap.ACCESS_READ)
     params_view = np.frombuffer(mm_params, dtype=np.float64, count=3)
     # ====================================
+
+    # === TELEMETRY GATHERING (Pro trénink ML Injektoru) ===
+    BUFFER_SIZE = 5000
+    feature_buffer = np.zeros((BUFFER_SIZE, 10), dtype=np.float32)
+    buffer_idx = 0
+    TELEMETRY_PATH = '/dev/shm/sniper/ml_telemetry.npy'
 
     log.info("L2 Oracle v3.0 (NumPy Zero-Copy | Dynamic Parameters) ONLINE. Čekám na trh...")
     
@@ -218,6 +224,19 @@ def run_oracle():
             total_score = trending_raw + ranging_raw
             trending_score = (trending_raw / total_score) if total_score > 0 else 0.0
             ranging_score = (ranging_raw / total_score) if total_score > 0 else 1.0
+            
+            # --- ZÁZNAM TELEMETRIE PRO AI ---
+            feature_buffer[buffer_idx] = [
+                spread, current_vpin, obi, ranging_score, trending_score,
+                buy_pressure, sell_pressure, weighted_bids, weighted_asks, mid_price
+            ]
+            buffer_idx += 1
+            
+            # Pokud je buffer plný, dumpneme ho do paměti a jedeme od znova
+            if buffer_idx >= BUFFER_SIZE:
+                np.save(TELEMETRY_PATH, feature_buffer)
+                buffer_idx = 0
+            # --------------------------------
             
             # DETEKCE TOXICKÉ BOUŘE S AUTONOMNÍMI LIMITY
             is_storm = 1 if (spread_z > current_z_threshold and current_vpin > current_vpin_threshold and abs(obi) > 0.7) else 0
