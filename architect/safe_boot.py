@@ -176,8 +176,8 @@ class SafeBootPipeline:
                 
             elif bot_type == RiskClass.ARBITRAGE:
                 log.info(f"[{self.bot}] ARBITRAGE Bypass: Executing API Latency & Inventory Sync...")
-                fallback_mode = state[self.bot].get("mode", "LIVE")
-                if fallback_mode in ("OFFLINE", "STOPPED"): fallback_mode = "LIVE"
+                fallback_mode = state[self.bot].get("mode", "PAPER")
+                if fallback_mode in ("OFFLINE", "STOPPED"): fallback_mode = "PAPER"
                 
             elif bot_type == RiskClass.MARKET_MAKER:
                 log.info(f"[{self.bot}] PAUSED: Initiating 60s L2 Orderbook Reconstruction.")

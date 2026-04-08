@@ -173,7 +173,7 @@ impl BotManifest {
             json.push('\n');
         }
         json.push_str("  ]\n");
-        json.push_str("}");
+        json.push('}');
         json
     }
 }

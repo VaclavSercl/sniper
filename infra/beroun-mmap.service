@@ -1,0 +1,19 @@
+[Unit]
+Description=Beroun MMap Allocator — Shared Memory Foundation
+Documentation=https://github.com/VaclavSercl/HFT-Sniper
+# We only need the filesystem to be mounted
+After=local-fs.target
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=wwwenda
+Group=wwwenda
+ExecStart=/home/wwwenda/sniper/infra/init_mmap.sh
+
+# Fast timeout — this script only does dd writes
+TimeoutStartSec=15
+
+[Install]
+WantedBy=multi-user.target

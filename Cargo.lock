@@ -2284,6 +2284,7 @@ name = "moonshot"
 version = "21.1.0"
 dependencies = [
  "anyhow",
+ "arrayvec",
  "axum",
  "bytes",
  "chrono",

@@ -99,6 +99,7 @@ pub struct L1TelemetryRing {
 // ═══ MASTER STRUCT (v12.0) ═══
 /// unified mmap layout, eliminating manual pointer arithmetic.
 #[repr(C, align(64))]
+#[derive(Default)]
 pub struct L2SharedState {
     pub cmd: L2CommandMatrix,           // Offset 0 (CL1)
     pub as_mat: L2ASMatrix,             // Offset 64 (CL2)
@@ -191,7 +192,7 @@ impl Default for L1TelemetryRing {
 #[inline(always)]
 pub fn l2cmd_version_check(cmd: &L2CommandMatrix) -> (u64, bool) {
     let v = cmd.config_version.load(Ordering::Acquire);
-    (v, v % 2 == 0)
+    (v, v.is_multiple_of(2))
 }
 
 #[inline(always)]
@@ -345,18 +346,6 @@ pub fn clear_flash_crash(risk: &L2GlobalRiskMatrix) {
     risk.flash_crash_drop_bps.store(0, Ordering::Relaxed);
 }
 
-impl Default for L2SharedState {
-    fn default() -> Self {
-        Self {
-            cmd: L2CommandMatrix::default(),
-            as_mat: L2ASMatrix::default(),
-            grid_warp: L2GridWarpMatrix::default(),
-            global_risk: L2GlobalRiskMatrix::default(),
-            portfolio: L2PortfolioTelemetry::default(),
-            latency_ring: L1TelemetryRing::default(),
-        }
-    }
-}
 
 /// Total mmap size is simply the size of the Master Struct (896B)
 pub const L2_COMMAND_FILE_SIZE: usize = std::mem::size_of::<L2SharedState>();

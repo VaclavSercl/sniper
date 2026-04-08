@@ -1,15 +1,18 @@
 #!/bin/bash
-# 🛡️ SNIPER ARMADA — OS-Level Watchdog (Minimal)
+# 🛡️ SNIPER ARMADA — OS-Level Watchdog v2.0 (Sovereign)
 # Runs via cron every minute.
 #
 # This script ONLY monitors if key processes are alive.
 # All other monitoring (GPU, disk, RAM, trading, AI) is handled
 # by Sentinel inside sovereign-cortex (Rust).
 #
-# This exists because if Cortex crashes, the Rust sentinel dies too.
-# The bash watchdog is the last line of defense.
+# v2.0 Changes:
+#   - Boot guard raised to 180s (Cortex cold-start safety)
+#   - fee_monitor REMOVED (managed by its own cron with flock)
+#   - Duplicate cleanup runs BEFORE any respawn attempts
+#   - Added strict singleton enforcement via flock on this script itself
 #
-# Install: crontab -e → * * * * * /home/wwwenda/sniper/watchdog.sh >> /home/wwwenda/sniper/logs/watchdog.log 2>&1
+# Install: crontab -e → * * * * * flock -n /tmp/sniper_watchdog.lock /home/wwwenda/sniper/watchdog.sh >> /home/wwwenda/sniper/logs/watchdog.log 2>&1
 
 set -uo pipefail
 
@@ -22,14 +25,14 @@ mkdir -p "$LOCK_DIR" "$LOG_DIR"
 
 # ═══ BOOT GUARD (lockfile-based) ═══
 # deploy_armada.sh writes a lockfile with epoch timestamp at boot.
-# Watchdog skips its cycle for 120s after boot to prevent duplicates.
+# Watchdog skips its cycle for 180s after boot to prevent duplicates.
 BOOT_LOCK="/tmp/sniper_boot.lock"
 if [ -f "$BOOT_LOCK" ]; then
     BOOT_TS=$(cat "$BOOT_LOCK" 2>/dev/null || echo 0)
     NOW=$(date +%s)
     BOOT_AGE=$(( NOW - BOOT_TS ))
-    if [ "$BOOT_AGE" -lt 120 ]; then
-        echo "[$(date '+%H:%M:%S')] ⏳ Boot guard: boot ${BOOT_AGE}s ago (<120s), skipping"
+    if [ "$BOOT_AGE" -lt 180 ]; then
+        echo "[$(date '+%H:%M:%S')] ⏳ Boot guard: boot ${BOOT_AGE}s ago (<180s), skipping"
         exit 0
     fi
 fi
@@ -67,13 +70,19 @@ kill_dupes() {
     if [ "$count" -gt 1 ]; then
         echo "[$(date '+%H:%M:%S')] ⚠️ $pattern has $count instances, killing extras"
         # Keep the oldest PID, kill the rest
-        local oldest=$(pgrep -f "$pattern" 2>/dev/null | head -1)
         pgrep -f "$pattern" 2>/dev/null | tail -n +2 | xargs -r kill -9 2>/dev/null
         tg_alert "dupe_${pattern}" "⚠️ WATCHDOG: Duplikát $pattern ($count×) → vyčištěn"
     fi
 }
 
 ALERTS=0
+
+# ═══ DUPLICATE CLEANUP (MUST run BEFORE respawns) ═══
+for proc in tg_commander pnl_daemon price_bridge market_recorder sovereign-cortex \
+            hydra-core moonshot-core grid-core trigon-core nexus-core \
+            armada-core hydra-dashboard ml_shield fee_monitor; do
+    kill_dupes "$proc"
+done
 
 # ═══ PROCESS HEALTH ═══
 
@@ -144,17 +153,8 @@ if ! is_alive "ml_shield"; then
     ALERTS=$((ALERTS + 1))
 fi
 
-if ! is_alive "fee_monitor"; then
-    tg_alert "feemon_down" "⚠️ WATCHDOG: Fee Monitor spadl → restartuji"
-    cd "$ARMADA_ROOT" && nohup python3 architect/fee_monitor.py >> "$LOG_DIR/fee_monitor.log" 2>&1 &
-    ALERTS=$((ALERTS + 1))
-fi
-
-# ═══ DUPLICATE CLEANUP ═══
-# Note: watchdog.sh is NOT checked — cron creates new bash instances each minute, pgrep sees them all
-for proc in tg_commander pnl_daemon price_bridge market_recorder sovereign-cortex hydra-core moonshot-core grid-core trigon-core nexus-core armada-core hydra-dashboard; do
-    kill_dupes "$proc"
-done
+# fee_monitor is managed EXCLUSIVELY by its own cron job (*/33 * * * *)
+# Watchdog does NOT respawn it — this prevents the 26x duplication bug.
 
 # ═══ LOG ═══
 if [ "$ALERTS" -gt 0 ]; then

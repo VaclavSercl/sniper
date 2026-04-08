@@ -120,17 +120,26 @@ fi
 echo ""
 echo "🧠 Starting infrastructure (trading bots stay OFFLINE)..."
 
-# 0. Pre-create mmap files (Cortex requires them on startup)
-echo "  [T+0s]  Pre-creating mmap files..."
-for mfile in engine_state.bin risk_state.bin moonshot_engine.bin moonshot_risk.bin grid_engine.bin grid_risk.bin trigon_engine.bin trigon_risk.bin l2_command.bin cross_exchange.bin pnl_state.bin fee_state.bin state.json; do
-    [ ! -f "/dev/shm/beroun/$mfile" ] && dd if=/dev/zero of="/dev/shm/beroun/$mfile" bs=4096 count=1 2>/dev/null
-done
+# 0. MMap files — managed by beroun-mmap.service (SystemD Iron Sequence)
+#    Verify they exist (safety net for manual runs outside SystemD)
+if [ ! -f "/dev/shm/beroun/oracle_state.bin" ]; then
+    echo "  [T+0s]  MMap not pre-created by SystemD — running init_mmap.sh as fallback..."
+    "$ARMADA_ROOT/infra/init_mmap.sh"
+else
+    echo "  [T+0s]  ✅ MMap files verified (pre-created by beroun-mmap.service)"
+fi
 
-# 1. Cortex (Sentinel + GPU + UDS server)
-echo "  [T+1s]  Starting Cortex..."
-taskset -c 3 "$BIN_DIR/sovereign-cortex" >> "$LOG_DIR/sovereign-cortex.log" 2>&1 &
-CORTEX_PID=$!
-sleep 10
+# 1. Cortex — managed by sovereign-cortex.service (SystemD Iron Sequence)
+#    Verify it's running (safety net for manual runs outside SystemD)
+if pgrep -f sovereign-cortex > /dev/null 2>&1; then
+    CORTEX_PID=$(pgrep -f sovereign-cortex | head -1)
+    echo "  [T+0s]  ✅ Cortex already running (PID $CORTEX_PID, managed by SystemD)"
+else
+    echo "  [T+1s]  Starting Cortex (manual mode — not via SystemD)..."
+    taskset -c 3 "$BIN_DIR/sovereign-cortex" >> "$LOG_DIR/sovereign-cortex.log" 2>&1 &
+    CORTEX_PID=$!
+    sleep 5
+fi
 
 # 2. Market Recorder & PnL Daemon
 echo "  [T+10s] Starting Market Recorder..."
@@ -171,7 +180,7 @@ ZEROCLAW_BIN=$(command -v zeroclaw 2>/dev/null || echo "")
 if [ -n "$ZEROCLAW_BIN" ] && [ -n "${GEMINI_API_KEY:-}" ]; then
     echo "  ✅ ZeroClaw found: $ZEROCLAW_BIN (API key: ${#GEMINI_API_KEY} chars)"
     "$ZEROCLAW_BIN" onboard --api-key "$GEMINI_API_KEY" --provider gemini --model gemini-3.1-pro-preview --quick --force >/dev/null 2>&1
-    "$ZEROCLAW_BIN" daemon >> "$LOG_DIR/zeroclaw.log" 2>&1 &
+    flock -n /tmp/zeroclaw.lock "$ZEROCLAW_BIN" daemon >> "$LOG_DIR/zeroclaw.log" 2>&1 &
     ZEROCLAW_PID=$!
     echo "  ✅ ZeroClaw L2: PID $ZEROCLAW_PID (Gemini 3.1 Pro)"
 else
@@ -183,8 +192,8 @@ fi
 
 echo ""
 echo "🐺 ═════════════════════════════════════════════"
-echo "   INFRASTRUCTURE ONLINE (v19.0)"
-echo "   🧠 Cortex:    PID $CORTEX_PID"
+echo "   INFRASTRUCTURE ONLINE (v21.0 — Iron Sequence)"
+echo "   🧠 Cortex:    PID $CORTEX_PID (SystemD managed)"
 echo "   📈 Recorder:  PID $RECORDER_PID"
 echo "   💰 PnL:       PID $PNL_PID"
 echo "   📊 Dashboard: PID $DASHBOARD_PID"

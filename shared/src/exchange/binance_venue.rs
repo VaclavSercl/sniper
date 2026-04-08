@@ -44,11 +44,10 @@ impl BinanceVenue {
     /// Register a symbol for hash↔string mapping.
     pub fn register_symbol(&mut self, symbol: &str) {
         let hash = binance::Binance::symbol_to_hash(symbol);
-        if !self.symbols.iter().any(|(h, _)| *h == hash) {
-            if let Ok(s) = arrayvec::ArrayString::try_from(symbol) {
+        if !self.symbols.iter().any(|(h, _)| *h == hash)
+            && let Ok(s) = arrayvec::ArrayString::try_from(symbol) {
                 let _ = self.symbols.try_push((hash, s));
             }
-        }
     }
 
     /// Submit a batch of orders via REST API.
@@ -60,13 +59,11 @@ impl BinanceVenue {
         let physics = self.physics();
 
         // Cancel phase
-        if let Some(sym_hash) = batch.cancel_symbol {
-            if let Some(sym) = self.symbol_for_hash(sym_hash) {
-                if let Some(req) = self.rest.cancel_all_orders(sym) {
+        if let Some(sym_hash) = batch.cancel_symbol
+            && let Some(sym) = self.symbol_for_hash(sym_hash)
+                && let Some(req) = self.rest.cancel_all_orders(sym) {
                     requests.push(req);
                 }
-            }
-        }
 
         // Place new orders
         for order in &batch.orders {

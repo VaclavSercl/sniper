@@ -142,7 +142,19 @@ def run_oracle():
     vpin_engine = VolumeBucketedVPIN(bucket_size_btc=2.0) # Velrybí objemový kyblík
     spread_tracker = DynamicThreshold(alpha=0.01) # Pomalá adaptace na volatilitu
     
-    log.info("L2 Oracle v3.0 (NumPy Zero-Copy) ONLINE. Čekám na trh...")
+    # === PARAMETRICKÁ INJEKCE LEVEL 5 ===
+    PARAMS_PATH = '/dev/shm/beroun/oracle_params.bin'
+    
+    if not os.path.exists(PARAMS_PATH):
+        with open(PARAMS_PATH, 'wb') as f:
+            f.write(struct.pack('<ddd', 2.0, 3.5, 0.8)) # Default: bucket, z_score, vpin
+            
+    fd_params = os.open(PARAMS_PATH, os.O_RDONLY)
+    mm_params = mmap.mmap(fd_params, 24, access=mmap.ACCESS_READ)
+    params_view = np.frombuffer(mm_params, dtype=np.float64, count=3)
+    # ====================================
+
+    log.info("L2 Oracle v3.0 (NumPy Zero-Copy | Dynamic Parameters) ONLINE. Čekám na trh...")
     
     last_mid = 0.0
     
@@ -156,6 +168,14 @@ def run_oracle():
             if best_bid == 0 or best_ask == 0:
                 time.sleep(0.01)
                 continue
+                
+            # === AKTUALIZOVAT UVNITŘ SMYČKY (LIVE TUNING) ===
+            current_bucket_size = params_view[0]
+            current_z_threshold = params_view[1]
+            current_vpin_threshold = params_view[2]
+            
+            vpin_engine.bucket_size = current_bucket_size
+            # ================================================
                 
             mid_price = (best_bid + best_ask) / 2.0
             spread = best_ask - best_bid
@@ -197,10 +217,10 @@ def run_oracle():
             trending_score = (trending_raw / total_score) if total_score > 0 else 0.0
             ranging_score = (ranging_raw / total_score) if total_score > 0 else 1.0
             
-            # DETEKCE TOXICKÉ BOUŘE (Dynamické limity!)
-            is_storm = 1 if (spread_z > 3.5 and current_vpin > 0.8 and abs(obi) > 0.7) else 0
+            # DETEKCE TOXICKÉ BOUŘE S AUTONOMNÍMI LIMITY
+            is_storm = 1 if (spread_z > current_z_threshold and current_vpin > current_vpin_threshold and abs(obi) > 0.7) else 0
             if is_storm == 1:
-                log.warning(f"🌩️ TOXIC STORM ACTIVATED — vpin={current_vpin:.3f} spread_z={spread_z:.2f} obi={obi:.3f}")
+                log.warning(f"🌩️ TOXIC STORM ACTIVATED — vpin={current_vpin:.3f} spread_z={spread_z:.2f} obi={obi:.3f} (Limity: {current_z_threshold:.1f}/{current_vpin_threshold:.2f})")
             
             # 4. ZÁPIS DO SDÍLENÉ PAMĚTI (Přesně na bajty)
             ranging_scaled = int(ranging_score * PRICE_SCALE)

@@ -248,7 +248,7 @@ class PnlDatabase:
 
     def __init__(self, db_path: str = DB_PATH):
         os.makedirs(os.path.dirname(db_path), exist_ok=True)
-        self.conn = sqlite3.connect(db_path, timeout=30)
+        self.conn = sqlite3.connect(db_path, timeout=30, check_same_thread=False)
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.execute("PRAGMA synchronous=NORMAL")
         self.conn.executescript(SCHEMA_SQL)

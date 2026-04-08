@@ -1,8 +1,13 @@
 [Unit]
-Description=Sniper Armada v19.0 — Sovereign HFT Trading System
-Documentation=https://github.com/VaclavSercl/sniper
-After=network-online.target
-Wants=network-online.target
+Description=Sniper Armada v21.0 — Sovereign HFT Trading System
+Documentation=https://github.com/VaclavSercl/HFT-Sniper
+
+# ═══ IRON SEQUENCE (Železná Posloupnost) ═══
+# Armada starts ONLY after Cortex is fully running.
+# Cortex itself waits for MMap allocation.
+# Dependency chain: network → mmap → cortex → armada
+Requires=sovereign-cortex.service
+After=sovereign-cortex.service
 
 [Service]
 # ═══ TYPE: oneshot + RemainAfterExit ═══
@@ -22,7 +27,7 @@ ExecStart=/home/wwwenda/sniper/deploy_armada.sh
 ExecStop=/home/wwwenda/sniper/infra/stop_armada.sh
 
 # ═══ TIMEOUTS ═══
-# deploy_armada.sh takes ~30s for boot sequence (23s + margin), but keeping 180s to be strictly safe.
+# deploy_armada.sh takes ~30s for boot sequence, but keeping 180s to be safe.
 TimeoutStartSec=180
 TimeoutStopSec=30
 

@@ -299,7 +299,8 @@ class L2OracleAsync:
                         "capital_usd": bot_total_usd,
                         "order_usd": bot_order_usd,
                         "max_pos_btc": bot_max_btc,
-                        "grid_step": 3.0
+                        "grid_step": 3.0,
+                        "kelly_weight": risk["port_pct"]
                     }
                     self._write_risk_params(bot_name, tier)
 
@@ -525,6 +526,28 @@ class L2OracleAsync:
         except Exception:
             pass
 
+        # Multi-Agent Sentiment Fusion (Issue #16/17 Phase 4)
+        sentiment_section = ""
+        try:
+            import os
+            sg_path = "/home/wwwenda/beroun-brain/short_term/news_sentiment.log"
+            ai_path = "/home/wwwenda/beroun-brain/short_term/ai_intelligence.log"
+            
+            fused = []
+            if os.path.exists(ai_path):
+                with open(ai_path, "r") as fa:
+                    lines = fa.readlines()
+                    fused.append("AI Intel: " + "".join(lines[-3:]).strip())
+            if os.path.exists(sg_path):
+                with open(sg_path, "r") as fs:
+                    lines = fs.readlines()
+                    fused.append("Sentiment: " + "".join(lines[-3:]).strip())
+                    
+            if fused:
+                sentiment_section = f"\n═══ LLM SENTIMENT FUSION ═══\n{chr(10).join(fused)}\n"
+        except Exception:
+            pass
+
         return f"""You are SNIPER, the Sovereign AI Oracle managing an automated multi-bot trading Armada.
 You have FULL AUTHORITY over ALL bots. Analyze macro, fees, and each bot's state.
 Make coordinated, profit-maximizing decisions across the entire system.
@@ -565,11 +588,13 @@ News Sentiment: {bias:+.4f} ({bias_label})
 Cycle: #{self.cycle} (every 5 min)
 {fee_info}{feedback}
 ═══ PHI-3.5 GPU INTELLIGENCE ═══{self._format_gpu_section(gpu_data)}
-═══ ARMADA STATE ═══{bot_states}{portfolio_section}{server_section}{latency_section}{brain_section}
+═══ ARMADA STATE ═══{bot_states}{portfolio_section}{server_section}{latency_section}{brain_section}{sentiment_section}
 ═══ RESPOND WITH THIS JSON ═══
 {{"global_reasoning": "Analyze macro + cross-bot correlations + fees + GPU telemetry here FIRST...",
   "global_regime": "BEARISH_SHOCK|BULLISH_TREND|CHOPPING_RANGE",
   "vpin_toxicity": float,
+  "cold_vault_allocate_btc": float_or_null,
+  "netting_offsets_btc": {{"hydra": float, "grid": float, "moonshot": float, "trigon": float}},
   \"hydra\": {{
     \"os_action\": \"START|STOP|IGNORE\",
     \"recommended_grid_step\": float,
@@ -621,6 +646,8 @@ Cycle: #{self.cycle} (every 5 min)
 
 PARAMETER CONSTRAINTS:
   vpin_toxicity: -1.0 to +1.0 (-1=massive dump detected, +1=massive buy, 0=neutral. From order flow imbalance)
+  cold_vault_allocate_btc: 0.0 to 10.0 (Amount of BTC to freeze in cold storage, independent of bot limits)
+  netting_offsets_btc: Opposing positions to cross internally. Negative for short, positive for long. (e.g. {{"grid": 0.1, "hydra": -0.1}})
   hydra.grid_step: {GRID_FLOOR}-{GRID_CEIL} USD
   hydra.max_position: {MAX_POS_FLOOR}-{MAX_POS_CEIL} BTC
   hydra.bid_fade_bps: 0-20 (0=no fade, 10=defensive, 20=maximum retreat)
@@ -718,6 +745,9 @@ PARAMETER CONSTRAINTS:
                 self.cortex.unpause(bot_name)
                 log.info(f"  ✅ {bot_name.upper()} shifted to LIVE by AI")
 
+        # ═══ ARMADA V2 GLOBAL LOGIC (Cold Vault & Netting) ═══
+        self._write_v2_global_logic(decision)
+
         # ═══ HYDRA ═══
         hydra = decision.get("hydra", {})
         
@@ -801,6 +831,45 @@ PARAMETER CONSTRAINTS:
             self._save_bot_state("nexus", "PAPER")
             self.cortex.pause("nexus")
         self._apply_nexus(nexus)
+
+    def _write_v2_global_logic(self, decision):
+        """Write global orchestration logic (Netting & Cold Vault) to ArmadaStateV2."""
+        V2_PATH = "/dev/shm/beroun/armada_state_v2.bin"
+        if not os.path.exists(V2_PATH):
+            return
+
+        try:
+            with open(V2_PATH, "r+b") as f:
+                import mmap
+                import struct
+                mm = mmap.mmap(f.fileno(), 0)
+                
+                # Cold Vault
+                cold_vault_btc = decision.get("cold_vault_allocate_btc")
+                if cold_vault_btc is not None:
+                    cv = int(cold_vault_btc * 100_000_000)
+                    struct.pack_into('<q', mm, 32, cv)
+                
+                # Netting
+                netting = decision.get("netting_offsets_btc", {})
+                bots = ["hydra", "moonshot", "grid", "trigon", "nexus"]
+                changed = False
+                for i, b in enumerate(bots):
+                    if b in netting:
+                        val = float(netting[b])
+                        struct.pack_into('<q', mm, 72 + (i*8), int(val * 100_000_000))
+                        changed = True
+                
+                if changed:
+                    # Bump netting epoch
+                    epoch = struct.unpack_from('<Q', mm, 64)[0]
+                    struct.pack_into('<Q', mm, 64, epoch + 1)
+                
+                mm.flush()
+                mm.close()
+            log.info(f"  💾 (V2) Global updated: Cold Vault={cold_vault_btc}, Netting updated={changed}")
+        except Exception as e:
+            log.error(f"  ❌ (V2) Global write failed: {e}")
 
         # ═══ L2 COMMAND MATRIX (Issue #18 Quick Wins) ═══
         self._write_l2_command(decision, bots=None)
@@ -1822,6 +1891,9 @@ Respond with EXACTLY one JSON object:
             self._graduated_live = {}
         
         tier = self.GRADUATED_TIERS[0]
+        # Include baseline kelly weight for tier 0
+        tier["kelly_weight"] = 0.05
+        
         self._graduated_live[bot_name] = {
             "current_tier": 0,
             "tier_start_ts": datetime.now(timezone.utc),
@@ -1890,6 +1962,7 @@ Respond with EXACTLY one JSON object:
                 next_idx = tier_idx + 1
                 if next_idx < len(self.GRADUATED_TIERS):
                     next_tier = self.GRADUATED_TIERS[next_idx]
+                    next_tier["kelly_weight"] = 0.05 + (next_idx * 0.02) # progressive kelly
                     log.info(f"🔼 [SBP3] {bot_name}: Tier {tier['name']} → {next_tier['name']} "
                              f"[{tier_fills} fills, PnL=${pnl_delta:+.4f}]")
                     
@@ -1971,7 +2044,8 @@ Respond with EXACTLY one JSON object:
             "capital_usd": bot_total_usd,
             "order_usd": bot_order_usd,
             "max_pos_btc": bot_max_btc,
-            "grid_step": 3.0
+            "grid_step": 3.0,
+            "kelly_weight": float(risk["port_pct"])
         }
         self._write_risk_params(bot_name, full_tier)
         
@@ -2051,6 +2125,30 @@ Respond with EXACTLY one JSON object:
                      f"grid=${tier['grid_step']}")
         except Exception as e:
             log.error(f"  ❌ Risk mmap write failed for {bot_name}: {e}")
+            
+        # V2 Matrix population (For Issue #17 2D matrix)
+        v2_path = "/dev/shm/beroun/armada_state_v2.bin"
+        if os.path.exists(v2_path):
+            try:
+                with open(v2_path, "r+b") as f_v2:
+                    mm_v2 = _mmap.mmap(f_v2.fileno(), 0)
+                    
+                    bot_idx = {"hydra": 0, "moonshot": 1, "grid": 2, "trigon": 3, "nexus": 4}.get(bot_name, -1)
+                    if bot_idx != -1:
+                        venue = 0
+                        idx = bot_idx * 8 + venue
+                        cap_offset = 128 + (idx * 8)
+                        kelly_offset = 448 + (idx * 4)
+                        
+                        _struct.pack_into('<Q', mm_v2, cap_offset, capital)
+                        kelly_weight = float(tier.get("kelly_weight", 0.1))
+                        _struct.pack_into('<f', mm_v2, kelly_offset, kelly_weight)
+                        
+                    mm_v2.flush()
+                    mm_v2.close()
+                log.info(f"  💾 (V2) {bot_name} matrix explicitly populated (Capital: {capital}, Kelly: {kelly_weight:.2f})")
+            except Exception as e:
+                log.error(f"  ❌ (V2) Matrix explicitly population failed for {bot_name}: {e}")
 
     def _get_bot_pnl(self, bot_name):
         """Get current realized PnL for bot from pnl.db."""

@@ -1,10 +1,21 @@
 use memmap2::MmapOptions;
-use std::fs::File;
 use crate::ml_types::MlWeightsState; // Tvá struktura z Kroku 1
 
 pub fn load_ml_weights_ro() -> &'static MlWeightsState {
-    let file = File::open("/dev/shm/beroun/ml_weights.bin")
-        .expect("Kritická chyba: ML Weights soubor neexistuje. Spustil jsi Python injektor?");
+    let path = "/dev/shm/beroun/ml_weights.bin";
+    let file = match std::fs::File::open(path) {
+        Ok(f) => f,
+        Err(_) => {
+            eprintln!("⚠️ [ML Shield] ml_weights.bin not found — creating zero-initialized placeholder");
+            let size = std::mem::size_of::<MlWeightsState>();
+            if let Ok(mut f) = std::fs::File::create(path) {
+                use std::io::Write;
+                let _ = f.write_all(&vec![0u8; size]);
+            }
+            std::fs::File::open(path)
+                .expect("Cannot open ml_weights.bin even after creating it")
+        }
+    };
     
     // Otevřeme POUZE PRO ČTENÍ
     let mmap = unsafe { MmapOptions::new().map(&file).unwrap() };

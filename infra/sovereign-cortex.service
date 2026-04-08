@@ -1,0 +1,50 @@
+[Unit]
+Description=Sovereign Cortex — L1 GPU Brain + Sentinel + UDS Server
+Documentation=https://github.com/VaclavSercl/HFT-Sniper
+
+# ═══ IRON SEQUENCE: Cortex starts ONLY after mmap is ready ═══
+Requires=beroun-mmap.service
+After=beroun-mmap.service network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=wwwenda
+Group=wwwenda
+WorkingDirectory=/home/wwwenda/sniper
+
+ExecStart=/usr/bin/taskset -c 3 /home/wwwenda/sniper/target/release/sovereign-cortex
+
+# ═══ RESTART POLICY ═══
+Restart=on-failure
+RestartSec=5
+
+# ═══ RESOURCE LIMITS ═══
+LimitNOFILE=65535
+LimitMEMLOCK=infinity
+Nice=-15
+CPUAffinity=3
+
+# ═══ ENVIRONMENT ═══
+Environment=HOME=/home/wwwenda
+Environment=RUST_LOG=info
+EnvironmentFile=/home/wwwenda/sniper/.env
+
+# ═══ LOGGING ═══
+StandardOutput=append:/home/wwwenda/sniper/logs/sovereign-cortex.log
+StandardError=append:/home/wwwenda/sniper/logs/sovereign-cortex.log
+
+# ═══ MEMORY ═══
+OOMPolicy=continue
+OOMScoreAdjust=-900
+
+# ═══ SECURITY ═══
+ProtectSystem=strict
+ReadWritePaths=/home/wwwenda/sniper /dev/shm/beroun /tmp
+PrivateTmp=false
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,3 +1,7 @@
+# Hydra (Issue 11) Source Code
+
+## hydra/src/main.rs
+```rust
 // 🐉 Hydra L0 Engine — Advanced Neural Cross Bot
 // Framework: SovereignDualRunner (Dual-WS)
 use std::sync::atomic::{Ordering, fence};
@@ -176,7 +180,6 @@ struct HydraEngine {
     toxic_storm_ptr: *const u8,
     ml_shield: sniper_types::ml_shield::MlShield,
     armada_state: &'static sniper_types::armada_types::ArmadaState,
-    armada_v2: &'static sniper_types::armada_types::ArmadaStateV2,
 }
 
 unsafe impl Send for HydraEngine {}
@@ -225,8 +228,7 @@ impl SovereignEngine for HydraEngine {
         let risk = unsafe { &*self.risk };
         let is_paused = risk.paused.load(Ordering::Relaxed) != 0;
         let config_shadow = std::fs::read_to_string("config.yaml").unwrap_or_default().contains("is_shadow: true");
-        let v2_kill = self.armada_v2.global.global_kill_switch.load(Ordering::Acquire) == 1; // is_shadow = true -> nestřílej ostrými
-        is_paused || config_shadow || v2_kill
+        is_paused || config_shadow
     }
 
     // Pro debug dashboard na UI posunuto pomocí L2 Ring konverze (přípustné)
@@ -642,8 +644,7 @@ impl SovereignEngine for HydraEngine {
         if in_liquidity_hole && !self.was_in_hole { self.was_in_hole = true; }
         else if hole_recovering && self.was_in_hole { self.was_in_hole = false; }
 
-        let c_idx = sniper_types::armada_types::capital_index(0, 0); // bot=hydra(0), venue=BFX(0)
-        let auth_cap_total = FixedPrice::new(self.armada_v2.capital.authorized_capital[c_idx].load(Ordering::Acquire) as i64);
+        let auth_cap_total = FixedPrice::new(self.armada_state.authorized_capital[0].load(Ordering::Acquire) as i64);
         let current_pos_abs = engine.net_position.load(Ordering::Acquire).abs();
         let current_exposure = FixedPrice::new(current_pos_abs) * micro;
         let cap_95 = auth_cap_total * FixedPrice::new(95_000_000);
@@ -662,33 +663,19 @@ impl SovereignEngine for HydraEngine {
             }
         }
         
-        // === NOVÝ EXPONENCIÁLNÍ SKEWING (Issue #11) ===
-        let trending_fp = FixedPrice::new(l2risk.trending_score.load(Ordering::Relaxed) as i64);
-        let one_fp = FixedPrice::new(sniper_types::PRICE_SCALE_I);
-        let min_multiplier = FixedPrice::new(10_000_000); // Max útlum na 10 %
-        let max_multiplier = FixedPrice::new(300_000_000); // Max boost na 300 %
+        let fp_0_5 = FixedPrice::new(50_000_000);
+        let fp_1_5 = FixedPrice::new(150_000_000);
+        let fp_2_0 = FixedPrice::new(200_000_000);
+        let fp_0_7 = FixedPrice::new(70_000_000);
 
-        // Výpočet Kvadratického OBI (zachování znaménka) pro exponenciální reakci
-        let obi_abs = FixedPrice::new(obi.0.abs());
-        let obi_sq = (obi_abs * obi_abs) / one_fp;
-        let mut skew_factor = (obi_sq * trending_fp) / one_fp;
-        if obi.0 < 0 { skew_factor.0 = -skew_factor.0; }
-
-        let mut buy_skew_multiplier = one_fp + skew_factor;
-        let mut sell_skew_multiplier = one_fp - skew_factor;
-
-        // Ochrana proti přílišnému ztenčení nebo přepálení sítě
-        if buy_skew_multiplier < min_multiplier { buy_skew_multiplier = min_multiplier; }
-        if buy_skew_multiplier > max_multiplier { buy_skew_multiplier = max_multiplier; }
-        if sell_skew_multiplier < min_multiplier { sell_skew_multiplier = min_multiplier; }
-        if sell_skew_multiplier > max_multiplier { sell_skew_multiplier = max_multiplier; }
-
-        // V Liquidity Hole plošně přiškrtíme základní velikost mřížky
-        let mut active_base_usd = base_usd;
-        if in_liquidity_hole { active_base_usd = base_usd * FixedPrice::new(50_000_000); }
-
-        let final_order_usd = active_base_usd; // Slouží jako základ, skewing se násobí níže
-        // ==============================================
+        let final_order_usd: FixedPrice = if in_liquidity_hole { base_usd * fp_0_5 }
+        else if (obi > FixedPrice::new(20_000_000) && micro_bias > 0) || (obi < FixedPrice::new(-20_000_000) && micro_bias < 0) { 
+            (base_usd * fp_1_5).max(base_usd * fp_0_5).min(base_usd * fp_2_0)
+        }
+        else if (obi > FixedPrice::new(10_000_000) && micro_bias < 0) || (obi < FixedPrice::new(-10_000_000) && micro_bias > 0) { 
+            (base_usd * fp_0_7).max(base_usd * fp_0_5).min(base_usd * fp_2_0)
+        }
+        else { base_usd };
 
         let trending_score = l2risk.trending_score.load(Ordering::Relaxed) as f64 / 1e8;
         let base_grid = risk.grid_step.load(Ordering::Acquire) as f64;
@@ -806,15 +793,14 @@ impl SovereignEngine for HydraEngine {
             let w_btc = FixedPrice::new(engine.wallet_btc.load(Ordering::Relaxed) as i64); 
             let w_usd = FixedPrice::new(engine.wallet_usd.load(Ordering::Relaxed) as i64);
 
-            // ARMADA KŘEMÍKOVÁ ZEĎ V2 🛡️
-            if self.armada_v2.global.global_kill_switch.load(Ordering::Acquire) == 1 {
+            // ARMADA KŘEMÍKOVÁ ZEĎ 🛡️
+            if self.armada_state.is_kill_switch_active() {
                 self.last_upd = now;
                 return;
             }
 
-            // 1. Čtení limitu a expozice (Armada Orchestrator - V2 Read-Path)
-            let c_idx = sniper_types::armada_types::capital_index(0, 0);
-            let auth_cap_usd = FixedPrice::new(self.armada_v2.capital.authorized_capital[c_idx].load(Ordering::Acquire) as i64);
+            // 1. Čtení limitu a expozice (Armada Orchestrator)
+            let auth_cap_usd = FixedPrice::new(self.armada_state.authorized_capital[0].load(Ordering::Acquire) as i64);
             let pos_fp = FixedPrice::new(current_pos);
             let mut abs_pos = pos_fp;
             if abs_pos.0 < 0 { abs_pos.0 = -abs_pos.0; }
@@ -834,7 +820,13 @@ impl SovereignEngine for HydraEngine {
             let n_public_sell = gc.n_public_sell;
             let ghost_mode = gc.ghost_mode;
 
-            // OBI Kvadratický skewing již spočítán výše v kontextu (Issue #11)
+            // === L1 ORACLE HYPER-SKEWING ===
+            // obi ukazuje směr (Kupci dominují = >0). trending_score ukazuje sílu VPIN (od 0 do 1)
+            let trending_fp = FixedPrice::new(l2risk.trending_score.load(Ordering::Relaxed) as i64);
+            let skew_factor = obi * trending_fp;
+            let one_fp = FixedPrice::new(sniper_types::PRICE_SCALE_I);
+            let buy_skew_multiplier = one_fp + skew_factor;
+            let sell_skew_multiplier = one_fp - skew_factor;
             // ===============================
 
             let base_bp = (micro_i + final_bias_with_l1).max(0).min(ba_i - MIN_TICK);
@@ -905,14 +897,11 @@ impl SovereignEngine for HydraEngine {
                     amt.0 = -amt.0; // Short order = negative amount
 
                     // 5. WALLET BALANCE GUARD: Sell limit on exchange requires BTC in wallet
-                    // V2 Cold Vault ochrana: Pokud Orchestrátor zmrazil BTC, nesmíme je prodat!
+                    // Available = wallet_btc (we use GID cancel so old order balance is freed)
                     let w_btc_raw = engine.wallet_btc.load(Ordering::Relaxed) as i64;
-                    let cold_vault_btc = self.armada_v2.global.cold_vault_btc.load(Ordering::Acquire);
-                    let sellable_btc = (w_btc_raw - cold_vault_btc).max(0);
-                    
                     // Divide wallet evenly across sell levels, leave 10% buffer
                     let n_sell_levels = n_sell.max(1) as i64;
-                    let max_sell_per_level = (sellable_btc * 90 / 100) / n_sell_levels;
+                    let max_sell_per_level = (w_btc_raw * 90 / 100) / n_sell_levels;
                     if amt.0.unsigned_abs() as i64 > max_sell_per_level {
                         if max_sell_per_level < 15000 { continue; } // less than 0.00015 BTC min
                         amt.0 = -(max_sell_per_level);
@@ -994,7 +983,6 @@ async fn async_main() -> Result<()> {
     let ml_weights_ro = sniper_types::ml_shield::load_ml_weights_ro();
     let ml_shield = sniper_types::ml_shield::MlShield::new(ml_weights_ro);
     let armada_state = sniper_types::armada_types::load_armada_state_ro();
-    let armada_v2 = sniper_types::armada_types::load_armada_state_v2_ro();
 
     tokio::spawn(async move {
         let mut report_interval = tokio::time::interval(Duration::from_secs(3600));
@@ -1038,7 +1026,6 @@ async fn async_main() -> Result<()> {
         toxic_storm_ptr: toxic_storm_mmap.as_ptr(),
         ml_shield,
         armada_state,
-        armada_v2,
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();
@@ -1050,3 +1037,1115 @@ async fn async_main() -> Result<()> {
     }
     Ok(())
 }
+
+```
+
+## hydra/src/book.rs
+```rust
+// ═════════════════════════════════════════════════════════════
+// 📚 L2 Orderbook Management — OBI + Checksum
+// ═════════════════════════════════════════════════════════════
+
+use std::sync::atomic::{fence, Ordering};
+use crc32fast::Hasher;
+use tracing::info;
+
+#[inline]
+fn write_bfx(w: &mut impl std::fmt::Write, val: f64) -> std::fmt::Result {
+    if val == val.trunc() {
+        write!(w, "{:.0}", val)
+    } else {
+        let mut buf = [0u8; 32];
+        let n = {
+            use std::io::Write;
+            let mut cursor = std::io::Cursor::new(&mut buf[..]);
+            let _ = write!(cursor, "{:.12}", val);
+            cursor.position() as usize
+        };
+        let s = unsafe { std::str::from_utf8_unchecked(&buf[..n]) };
+        let trimmed = s.trim_end_matches('0').trim_end_matches('.');
+        w.write_str(trimmed)
+    }
+}
+
+pub fn update_book(levels: *mut [sniper_types::OrderBookLevel; sniper_types::BOOK_LEVELS], price: u64, amount: i64, count: u64) {
+    let levels = unsafe { &*levels };
+    if count > 0 {
+        let mut found = false;
+        for lvl in levels.iter() {
+            if lvl.price.load(Ordering::SeqCst) == price {
+                lvl.amount.store(amount, Ordering::SeqCst);
+                lvl.count.store(count, Ordering::SeqCst);
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            for lvl in levels.iter() {
+                if lvl.count.load(Ordering::SeqCst) == 0 {
+                    lvl.price.store(price, Ordering::SeqCst);
+                    lvl.amount.store(amount, Ordering::SeqCst);
+                    lvl.count.store(count, Ordering::SeqCst);
+                    break;
+                }
+            }
+        }
+    } else {
+        for lvl in levels.iter() {
+            if lvl.price.load(Ordering::SeqCst) == price {
+                lvl.price.store(0, Ordering::SeqCst);
+                lvl.amount.store(0, Ordering::SeqCst);
+                lvl.count.store(0, Ordering::SeqCst);
+                break;
+            }
+        }
+    }
+}
+
+pub fn sort_book(levels: *mut [sniper_types::OrderBookLevel; sniper_types::BOOK_LEVELS], is_bid: bool) {
+    let levels = unsafe { &mut *levels };
+    levels.sort_unstable_by(|a, b| {
+        let pa = a.price.load(Ordering::Acquire);
+        let pb = b.price.load(Ordering::Acquire);
+        if pa == 0 && pb == 0 { return std::cmp::Ordering::Equal; }
+        if pa == 0 { return std::cmp::Ordering::Greater; }
+        if pb == 0 { return std::cmp::Ordering::Less; }
+        if is_bid { pb.cmp(&pa) } else { pa.cmp(&pb) }
+    });
+}
+
+pub fn calculate_checksum(engine: &sniper_types::EngineState, debug: bool) -> i32 {
+    fence(Ordering::SeqCst);
+    let mut hasher = Hasher::new();
+    let mut levels_found: u32 = 0;
+    // Stack-only scratch buffer for write_bfx formatting (no heap)
+    let mut fmt_buf = arrayvec::ArrayString::<64>::new();
+
+    for i in 0..25 {
+        let bid = &engine.bids[i];
+        let ask = &engine.asks[i];
+        let bp = bid.price.load(Ordering::SeqCst);
+        let bc = bid.count.load(Ordering::SeqCst);
+        let ap = ask.price.load(Ordering::SeqCst);
+        let ac = ask.count.load(Ordering::SeqCst);
+
+        if bc > 0 && bp > 0 {
+            if levels_found > 0 { hasher.update(b":"); }
+            levels_found += 1;
+            let p = bp as f64 / sniper_types::PRICE_SCALE;
+            let a = bid.amount.load(Ordering::SeqCst) as f64 / sniper_types::PRICE_SCALE;
+            fmt_buf.clear();
+            let _ = write_bfx(&mut fmt_buf, p);
+            hasher.update(fmt_buf.as_bytes());
+            hasher.update(b":");
+            fmt_buf.clear();
+            let _ = write_bfx(&mut fmt_buf, a);
+            hasher.update(fmt_buf.as_bytes());
+        }
+        if ac > 0 && ap > 0 {
+            if levels_found > 0 { hasher.update(b":"); }
+            levels_found += 1;
+            let p = ap as f64 / sniper_types::PRICE_SCALE;
+            let a = ask.amount.load(Ordering::SeqCst) as f64 / sniper_types::PRICE_SCALE;
+            fmt_buf.clear();
+            let _ = write_bfx(&mut fmt_buf, p);
+            hasher.update(fmt_buf.as_bytes());
+            hasher.update(b":");
+            fmt_buf.clear();
+            let _ = write_bfx(&mut fmt_buf, a);
+            hasher.update(fmt_buf.as_bytes());
+        }
+    }
+
+    if debug || levels_found == 0 {
+        info!(event = "checksum_debug", levels = levels_found,
+              bids0_p = engine.bids[0].price.load(Ordering::SeqCst),
+              bids0_c = engine.bids[0].count.load(Ordering::SeqCst),
+              asks0_p = engine.asks[0].price.load(Ordering::SeqCst),
+              asks0_c = engine.asks[0].count.load(Ordering::SeqCst));
+    }
+
+    hasher.finalize() as i32
+}
+
+```
+
+## shared/src/exchange/bitfinex_venue.rs
+```rust
+// ═══════════════════════════════════════════════════════════
+// 🔵 BitfinexVenue — VenueAdapter implementation for Bitfinex
+// Sniper Armada · v20.0 Hexagonal Architecture
+//
+// Migrates all Bitfinex-specific logic into a single VenueAdapter
+// implementation. No bot code references Bitfinex directly.
+//
+// Covers: auth, ticker parsing, book parsing, fill normalization,
+//         order encoding (ox_multi), cancel, physics.
+// ═══════════════════════════════════════════════════════════
+
+use super::types::*;
+use super::venue::*;
+use crate::moonshot_types::str_to_symbol_hash;
+
+/// Maximum channels we track (ticker + book per symbol, + auth channel)
+const MAX_CHANNELS: usize = 64;
+
+/// Bitfinex VenueAdapter — Zero-cost exchange abstraction.
+///
+/// Tracks channel→symbol mappings for incoming market data.
+/// All parsing, encoding, and physics are encapsulated here.
+pub struct BitfinexVenue {
+    /// Channel ID → symbol hash mapping (populated on subscribe confirmation)
+    chan_to_symbol: [(i64, u64); MAX_CHANNELS],
+    /// Number of active channel mappings
+    chan_count: usize,
+    /// Symbol hash → BFX native string (e.g., hash → "tBTCUSD")
+    symbols: arrayvec::ArrayVec<(u64, arrayvec::ArrayString<16>), 32>,
+}
+
+impl BitfinexVenue {
+    pub fn new() -> Self {
+        Self {
+            chan_to_symbol: [(0, 0); MAX_CHANNELS],
+            chan_count: 0,
+            symbols: arrayvec::ArrayVec::new(),
+        }
+    }
+
+    /// Register a symbol for hash↔string mapping.
+    pub fn register_symbol(&mut self, symbol: &str) {
+        let hash = str_to_symbol_hash(symbol);
+        if !self.symbols.iter().any(|(h, _)| *h == hash)
+            && let Ok(s) = arrayvec::ArrayString::try_from(symbol) {
+                let _ = self.symbols.try_push((hash, s));
+            }
+    }
+
+    /// Find symbol hash for a channel ID.
+    #[inline]
+    fn symbol_for_chan(&self, chan_id: i64) -> Option<u64> {
+        self.chan_to_symbol[..self.chan_count]
+            .iter()
+            .find(|(c, _)| *c == chan_id)
+            .map(|(_, s)| *s)
+    }
+
+    /// Register a channel→symbol mapping.
+    fn register_channel(&mut self, chan_id: i64, symbol_hash: u64) {
+        if self.chan_count < MAX_CHANNELS {
+            self.chan_to_symbol[self.chan_count] = (chan_id, symbol_hash);
+            self.chan_count += 1;
+        }
+    }
+
+    /// Parse BFX ticker array: [chanId, [BID, BID_SIZE, ASK, ASK_SIZE, ...]]
+    /// Reuses the fast zero-copy parser from exchange/mod.rs
+    fn parse_ticker(&self, data: &[u8]) -> Option<VenueMessage> {
+        let (chan_id, bid, ask) = super::fast_parse_ticker(data)?;
+        let symbol = self.symbol_for_chan(chan_id)?;
+        Some(VenueMessage::Tick(UnifiedTick {
+            exchange: ExchangeId::Bitfinex,
+            symbol,
+            bid,
+            ask,
+            bid_vol: 0,
+            ask_vol: 0,
+            exchange_ts: 0,
+        }))
+    }
+
+    /// Parse BFX execution reports from auth channel.
+    /// Format: [0, "tu", [ID, PAIR, MTS, ORDER_ID, EXEC_AMOUNT, EXEC_PRICE, ...FEE, FEE_CURRENCY...]]
+    /// Format: [0, "on", [...]] / [0, "ou", [...]] / [0, "oc", [...]]
+    fn parse_execution(&self, data: &[u8]) -> Option<VenueMessage> {
+        // Minimal check: must start with [0,"
+        if data.len() < 10 || data[0] != b'[' { return None; }
+
+        // Check for trade execution: "tu" (trade update)
+        if data.len() > 6 && &data[1..5] == b"0,\"t" {
+            return self.parse_fill(data);
+        }
+
+        // Check for order updates: "on" (new), "ou" (update), "oc" (cancel)
+        if data.len() > 6 && &data[1..5] == b"0,\"o" {
+            return self.parse_order_update(data);
+        }
+
+        None
+    }
+
+    /// Parse a BFX fill (trade execution).
+    /// [0,"tu",[ID, PAIR, MTS_CREATE, ORDER_ID, EXEC_AMOUNT, EXEC_PRICE, TYPE, ...FEE, FEE_CURRENCY]]
+    fn parse_fill(&self, data: &[u8]) -> Option<VenueMessage> {
+        // Parse using serde_json for fill messages (not hot path — fills are rare)
+        let v: serde_json::Value = serde_json::from_slice(data).ok()?;
+        let arr = v.get(2)?.as_array()?;
+        if arr.len() < 10 { return None; }
+
+        let pair = arr.get(1)?.as_str().unwrap_or_default();
+        let exec_amount = arr.get(4)?.as_f64()?;
+        let exec_price = arr.get(5)?.as_f64()?;
+        let fee = arr.get(9)?.as_f64().unwrap_or(0.0);
+        let fee_cur = arr.get(10)?.as_str().unwrap_or("");
+        let order_id = arr.get(3)?.as_u64().unwrap_or(0);
+
+        let side = if exec_amount > 0.0 { OrderSide::Buy } else { OrderSide::Sell };
+
+        Some(VenueMessage::Fill(UnifiedFill {
+            exchange: ExchangeId::Bitfinex,
+            client_id: order_id,
+            symbol_hash: str_to_symbol_hash(pair),
+            side,
+            price: (exec_price * crate::PRICE_SCALE) as i64,
+            amount: exec_amount.abs(),
+            fee,
+            fee_currency: str_to_symbol_hash(fee_cur),
+            exchange_ts: arr.get(2)?.as_u64().unwrap_or(0),
+        }))
+    }
+
+    /// Parse a BFX order update (on/ou/oc).
+    fn parse_order_update(&self, data: &[u8]) -> Option<VenueMessage> {
+        let v: serde_json::Value = serde_json::from_slice(data).ok()?;
+        let type_str = v.get(1)?.as_str()?;
+        let arr = v.get(2)?.as_array()?;
+        if arr.len() < 5 { return None; }
+
+        let order_id = arr.first()?.as_u64().unwrap_or(0);
+        let remaining = arr.get(6)?.as_f64().unwrap_or(0.0).abs();
+        let status_str = arr.get(13)?.as_str().unwrap_or("");
+
+        let status = match type_str {
+            "on" => OrderStatus::Accepted,
+            "ou" => {
+                if status_str.contains("PARTIALLY") { OrderStatus::PartiallyFilled }
+                else { OrderStatus::Accepted }
+            }
+            "oc" => {
+                if status_str.contains("CANCELED") { OrderStatus::Canceled }
+                else if status_str.contains("EXECUTED") { OrderStatus::Filled }
+                else { OrderStatus::Canceled }
+            }
+            _ => return None,
+        };
+
+        Some(VenueMessage::OrderUpdate(UnifiedOrderUpdate {
+            exchange: ExchangeId::Bitfinex,
+            client_id: order_id,
+            exchange_order_id: order_id,
+            status,
+            remaining,
+        }))
+    }
+
+    /// Encode symbol hash back to BFX native string for order placement.
+    fn symbol_str(&self, hash: u64) -> &str {
+        self.symbols.iter()
+            .find(|(h, _)| *h == hash)
+            .map(|(_, s)| s.as_str())
+            .unwrap_or("tBTCUSD")
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Zero-Alloc Order Builders (for L0 hot path)
+//
+// These write BFX wire format directly to out_buf without heap
+// allocations. Bots call these instead of manual extend_from_slice.
+// This centralizes ALL Bitfinex encoding in one file.
+// ═══════════════════════════════════════════════════════════
+
+impl BitfinexVenue {
+    // ── ox_multi batch builders ──
+
+    /// Write the opening of an ox_multi batch with cancel-by-symbol.
+    /// Pattern: `[0,"ox_multi",null,[["oc_multi",{"symbol":"tBTCUSD"}]`
+    #[inline]
+    pub fn write_batch_open_cancel_sym(buf: &mut bytes::BytesMut, symbol: &[u8]) {
+        buf.extend_from_slice(b"[0,\"ox_multi\",null,[[\"oc_multi\",{\"symbol\":\"");
+        buf.extend_from_slice(symbol);
+        buf.extend_from_slice(b"\"}]");
+    }
+
+    /// Write the opening of an ox_multi batch with cancel-by-gid.
+    /// Pattern: `[0,"ox_multi",null,[["oc_multi",{"gid":[3000]}]`
+    #[inline]
+    pub fn write_batch_open_cancel_gid(buf: &mut bytes::BytesMut, gid: u32) {
+        buf.extend_from_slice(b"[0,\"ox_multi\",null,[[\"oc_multi\",{\"gid\":[");
+        let mut itoa_buf = itoa::Buffer::new();
+        buf.extend_from_slice(itoa_buf.format(gid).as_bytes());
+        buf.extend_from_slice(b"]}]");
+    }
+
+    /// Write the opening of an ox_multi batch without cancel.
+    /// Pattern: `[0,"ox_multi",null,[`
+    #[inline]
+    pub fn write_batch_open(buf: &mut bytes::BytesMut) {
+        buf.extend_from_slice(b"[0,\"ox_multi\",null,[");
+    }
+
+    /// Write a LIMIT order into the batch (comma-separated).
+    /// Pattern: `,[\"on\",{\"gid\":3000,\"symbol\":\"tBTCUSD\",\"amount\":\"0.001\",\"price\":\"68000.0\",\"type\":\"EXCHANGE LIMIT\"}]`
+    #[inline]
+    pub fn write_limit_order(
+        buf: &mut bytes::BytesMut,
+        gid: u32,
+        symbol: &[u8],
+        amount: &str,   // pre-formatted by ryu
+        price: &str,    // pre-formatted by ryu
+    ) {
+        buf.extend_from_slice(b",[\"on\",{\"gid\":");
+        let mut itoa_buf = itoa::Buffer::new();
+        buf.extend_from_slice(itoa_buf.format(gid).as_bytes());
+        buf.extend_from_slice(b",\"symbol\":\"");
+        buf.extend_from_slice(symbol);
+        buf.extend_from_slice(b"\",\"amount\":\"");
+        buf.extend_from_slice(amount.as_bytes());
+        buf.extend_from_slice(b"\",\"price\":\"");
+        buf.extend_from_slice(price.as_bytes());
+        buf.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\"}]");
+    }
+
+    /// Write a LIMIT POST-ONLY order into the batch.
+    #[inline]
+    pub fn write_limit_postonly_order(
+        buf: &mut bytes::BytesMut,
+        gid: u32,
+        symbol: &[u8],
+        amount: &str,
+        price: &str,
+    ) {
+        buf.extend_from_slice(b",[\"on\",{\"gid\":");
+        let mut itoa_buf = itoa::Buffer::new();
+        buf.extend_from_slice(itoa_buf.format(gid).as_bytes());
+        buf.extend_from_slice(b",\"symbol\":\"");
+        buf.extend_from_slice(symbol);
+        buf.extend_from_slice(b"\",\"amount\":\"");
+        buf.extend_from_slice(amount.as_bytes());
+        buf.extend_from_slice(b"\",\"price\":\"");
+        buf.extend_from_slice(price.as_bytes());
+        buf.extend_from_slice(b"\",\"type\":\"EXCHANGE LIMIT\",\"flags\":4096}]");
+    }
+
+    /// Write an IOC order into the batch.
+    #[inline]
+    pub fn write_ioc_order(
+        buf: &mut bytes::BytesMut,
+        gid: u32,
+        symbol: &[u8],
+        amount: &str,
+        price: &str,
+    ) {
+        buf.extend_from_slice(b",[\"on\",{\"gid\":");
+        let mut itoa_buf = itoa::Buffer::new();
+        buf.extend_from_slice(itoa_buf.format(gid).as_bytes());
+        buf.extend_from_slice(b",\"symbol\":\"");
+        buf.extend_from_slice(symbol);
+        buf.extend_from_slice(b"\",\"amount\":\"");
+        buf.extend_from_slice(amount.as_bytes());
+        buf.extend_from_slice(b"\",\"price\":\"");
+        buf.extend_from_slice(price.as_bytes());
+        buf.extend_from_slice(b"\",\"type\":\"EXCHANGE IOC\"}]");
+    }
+
+    /// Write a standalone IOC order (not inside ox_multi batch).
+    /// Pattern: `[0,"on",null,{"gid":2001,"symbol":"tBTCUSD","amount":"0.001","price":"68000","type":"EXCHANGE IOC"}]`
+    #[inline]
+    pub fn write_standalone_ioc(
+        buf: &mut bytes::BytesMut,
+        gid: u32,
+        symbol: &[u8],
+        amount: &str,
+        price: &str,
+    ) {
+        buf.extend_from_slice(b"[0,\"on\",null,{\"gid\":");
+        let mut itoa_buf = itoa::Buffer::new();
+        buf.extend_from_slice(itoa_buf.format(gid).as_bytes());
+        buf.extend_from_slice(b",\"symbol\":\"");
+        buf.extend_from_slice(symbol);
+        buf.extend_from_slice(b"\",\"amount\":\"");
+        buf.extend_from_slice(amount.as_bytes());
+        buf.extend_from_slice(b"\",\"price\":\"");
+        buf.extend_from_slice(price.as_bytes());
+        buf.extend_from_slice(b"\",\"type\":\"EXCHANGE IOC\"}]");
+    }
+
+    /// Close the ox_multi batch.
+    /// Pattern: `]]`
+    #[inline]
+    pub fn write_batch_close(buf: &mut bytes::BytesMut) {
+        buf.extend_from_slice(b"]]");
+    }
+
+    /// Write a cancel-all-by-gid standalone message.
+    #[inline]
+    pub fn write_cancel_gid_standalone(buf: &mut bytes::BytesMut, gid: u32) {
+        buf.extend_from_slice(b"[0,\"oc_multi\",null,{\"gid\":[");
+        let mut itoa_buf = itoa::Buffer::new();
+        buf.extend_from_slice(itoa_buf.format(gid).as_bytes());
+        buf.extend_from_slice(b"]}]");
+    }
+}
+
+impl Default for BitfinexVenue {
+    fn default() -> Self { Self::new() }
+}
+
+// ═══════════════════════════════════════════════════════════
+// VenueAdapter Implementation
+// ═══════════════════════════════════════════════════════════
+
+impl VenueAdapter for BitfinexVenue {
+    fn id(&self) -> ExchangeId { ExchangeId::Bitfinex }
+    fn name(&self) -> &str { "Bitfinex" }
+    fn env_prefix(&self) -> &str { "BITFINEX" }
+    fn ws_url(&self) -> &str { "wss://api.bitfinex.com/ws/2" }
+
+    fn physics(&self) -> ExchangePhysics {
+        ExchangePhysics {
+            maker_fee_bps: -2.0,    // Bitfinex maker rebate
+            taker_fee_bps: 5.5,     // Bitfinex taker fee
+            tick_size: 0.1,         // BTC/USD minimum price increment
+            lot_size: 0.00001,      // Minimum BTC quantity
+            min_order_size: 0.00004, // Minimum order size
+            max_orders_per_sec: 90, // Rate limit
+        }
+    }
+
+    fn auth_message(&self, creds: &ExchangeCredentials) -> Option<String> {
+        Some(super::bitfinex_auth_message(&creds.api_key, &creds.api_secret))
+    }
+
+    fn subscribe_ticker(&self, symbol: &str) -> String {
+        super::bitfinex_subscribe_ticker(symbol)
+    }
+
+    fn subscribe_book(&self, symbol: &str, precision: &str, depth: u32) -> String {
+        super::bitfinex_subscribe_book(symbol, precision, depth)
+    }
+
+    fn parse_raw(&mut self, raw: &[u8]) -> VenueMessage {
+        if raw.is_empty() { return VenueMessage::Unknown; }
+
+        match raw[0] {
+            // JSON object: system events (auth, subscribe, info)
+            b'{' => {
+                let v: serde_json::Value = match serde_json::from_slice(raw) {
+                    Ok(v) => v,
+                    Err(_) => return VenueMessage::Unknown,
+                };
+
+                if let Some(event) = v.get("event").and_then(|e| e.as_str()) {
+                    match event {
+                        "auth" => {
+                            let success = v.get("status")
+                                .and_then(|s| s.as_str())
+                                .map(|s| s == "OK")
+                                .unwrap_or(false);
+                            return VenueMessage::Authenticated { success };
+                        }
+                        "subscribed" => {
+                            let chan_id = v.get("chanId")
+                                .and_then(|c| c.as_i64())
+                                .unwrap_or(0);
+                            // Extract symbol from "symbol" or "key" field
+                            let sym_str = v.get("symbol")
+                                .or_else(|| v.get("key"))
+                                .and_then(|s| s.as_str())
+                                .unwrap_or("");
+                            let sym_hash = str_to_symbol_hash(sym_str);
+                            self.register_channel(chan_id, sym_hash);
+                            return VenueMessage::Subscribed {
+                                chan_id,
+                                symbol: sym_hash,
+                            };
+                        }
+                        _ => {}
+                    }
+                }
+                VenueMessage::Unknown
+            }
+
+            // JSON array: market data or execution reports
+            b'[' => {
+                // Check for heartbeat: [chanId, "hb"]
+                if raw.len() > 5 {
+                    // Fast check for "hb" pattern
+                    let mut i = 1;
+                    while i < raw.len() && raw[i] != b',' { i += 1; }
+                    if i + 4 < raw.len() && raw[i+1] == b'"' && raw[i+2] == b'h' && raw[i+3] == b'b' {
+                        return VenueMessage::Heartbeat;
+                    }
+                }
+
+                // Channel 0 = auth channel (fills, orders)
+                if raw.len() > 3 && raw[1] == b'0' && raw[2] == b',' {
+                    if let Some(msg) = self.parse_execution(raw) {
+                        return msg;
+                    }
+                    return VenueMessage::Unknown;
+                }
+
+                // Market data channel (ticker)
+                if let Some(msg) = self.parse_ticker(raw) {
+                    return msg;
+                }
+
+                VenueMessage::Unknown
+            }
+
+            _ => VenueMessage::Unknown,
+        }
+    }
+
+    fn encode_batch(&self, batch: &VenueBatchOrder, buf: &mut bytes::BytesMut) {
+        use std::fmt::Write;
+
+        if batch.orders.is_empty() && batch.cancel_gid.is_none() && batch.cancel_cids.is_empty() {
+            return;
+        }
+
+        let mut msg = String::with_capacity(512);
+        msg.push_str("[0,\"ox_multi\",null,[");
+
+        // Cancel section
+        if let Some(gid) = batch.cancel_gid {
+            if let Some(sym_hash) = batch.cancel_symbol {
+                let sym = self.symbol_str(sym_hash);
+                let _ = write!(msg, "[\"oc_multi\",{{\"symbol\":\"{}\",\"all\":1}}],", sym);
+            } else {
+                let _ = write!(msg, "[\"oc_multi\",{{\"gid\":[{}]}}],", gid);
+            }
+        }
+
+        // Orders section
+        let physics = self.physics();
+        for (i, order) in batch.orders.iter().enumerate() {
+            let sym = self.symbol_str(order.symbol_hash);
+            let raw_price = order.price as f64 / crate::PRICE_SCALE;
+            let is_bid = matches!(order.side, OrderSide::Buy);
+            let aligned_price = physics.align_price(raw_price, is_bid);
+            let aligned_qty = physics.align_qty(order.amount);
+
+            let signed_amount = match order.side {
+                OrderSide::Buy => aligned_qty,
+                OrderSide::Sell => -aligned_qty,
+            };
+
+            let type_str = match order.order_type {
+                OrderType::Limit => "EXCHANGE LIMIT",
+                OrderType::LimitPostOnly => "EXCHANGE LIMIT",
+                OrderType::Ioc => "EXCHANGE IOC",
+                OrderType::Market => "EXCHANGE MARKET",
+            };
+
+            let flags = match order.order_type {
+                OrderType::LimitPostOnly => 4096, // post-only
+                _ => 0,
+            };
+
+            if flags > 0 {
+                let _ = write!(
+                    msg,
+                    "[\"on\",{{\"gid\":{},\"symbol\":\"{}\",\"amount\":\"{:.5}\",\"price\":\"{:.2}\",\"type\":\"{}\",\"flags\":{}}}]",
+                    order.gid, sym, signed_amount, aligned_price, type_str, flags
+                );
+            } else {
+                let _ = write!(
+                    msg,
+                    "[\"on\",{{\"gid\":{},\"symbol\":\"{}\",\"amount\":\"{:.5}\",\"price\":\"{:.2}\",\"type\":\"{}\"}}]",
+                    order.gid, sym, signed_amount, aligned_price, type_str
+                );
+            }
+
+            if i + 1 < batch.orders.len() {
+                msg.push(',');
+            }
+        }
+
+        msg.push_str("]]");
+        buf.extend_from_slice(msg.as_bytes());
+    }
+
+    fn encode_cancel_gid(&self, gid: u32, buf: &mut bytes::BytesMut) {
+        let msg = format!("[0,\"oc_multi\",null,{{\"gid\":[{}]}}]", gid);
+        buf.extend_from_slice(msg.as_bytes());
+    }
+
+    fn encode_cancel_all(&self, buf: &mut bytes::BytesMut) {
+        buf.extend_from_slice(b"[0,\"oc_multi\",null,{\"all\":1}]");
+    }
+
+    fn symbol_for_hash(&self, hash: u64) -> Option<&str> {
+        self.symbols.iter()
+            .find(|(h, _)| *h == hash)
+            .map(|(_, s)| s.as_str())
+    }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Tests
+// ═══════════════════════════════════════════════════════════
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_physics_align_price() {
+        let venue = BitfinexVenue::new();
+        let p = venue.physics();
+        // Bid: round down
+        assert_eq!(p.align_price(68451.23, true), 68451.2);
+        // Ask: round up
+        assert_eq!(p.align_price(68451.23, false), 68451.3);
+    }
+
+    #[test]
+    fn test_physics_align_qty() {
+        let venue = BitfinexVenue::new();
+        let p = venue.physics();
+        assert!((p.align_qty(0.001234) - 0.00123).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_parse_auth() {
+        let mut venue = BitfinexVenue::new();
+        let raw = br#"{"event":"auth","status":"OK","chanId":0}"#;
+        match venue.parse_raw(raw) {
+            VenueMessage::Authenticated { success } => assert!(success),
+            _ => panic!("Expected Authenticated"),
+        }
+    }
+
+    #[test]
+    fn test_parse_auth_fail() {
+        let mut venue = BitfinexVenue::new();
+        let raw = br#"{"event":"auth","status":"FAILED","msg":"invalid key"}"#;
+        match venue.parse_raw(raw) {
+            VenueMessage::Authenticated { success } => assert!(!success),
+            _ => panic!("Expected Authenticated"),
+        }
+    }
+
+    #[test]
+    fn test_parse_subscribed() {
+        let mut venue = BitfinexVenue::new();
+        let raw = br#"{"event":"subscribed","channel":"ticker","symbol":"tBTCUSD","chanId":42}"#;
+        match venue.parse_raw(raw) {
+            VenueMessage::Subscribed { chan_id, symbol } => {
+                assert_eq!(chan_id, 42);
+                assert_eq!(symbol, str_to_symbol_hash("tBTCUSD"));
+            }
+            _ => panic!("Expected Subscribed"),
+        }
+        // Verify channel mapping registered
+        assert_eq!(venue.symbol_for_chan(42), Some(str_to_symbol_hash("tBTCUSD")));
+    }
+
+    #[test]
+    fn test_parse_heartbeat() {
+        let mut venue = BitfinexVenue::new();
+        let raw = b"[42,\"hb\"]";
+        match venue.parse_raw(raw) {
+            VenueMessage::Heartbeat => {}
+            _ => panic!("Expected Heartbeat"),
+        }
+    }
+
+    #[test]
+    fn test_encode_batch() {
+        let mut venue = BitfinexVenue::new();
+        venue.register_symbol("tBTCUSD");
+        let hash = str_to_symbol_hash("tBTCUSD");
+
+        let mut batch = VenueBatchOrder::default();
+        batch.cancel_gid = Some(2000);
+        batch.orders.push(VenueOrderRequest {
+            client_id: 1,
+            gid: 2000,
+            symbol_hash: hash,
+            side: OrderSide::Buy,
+            price: (68000.0 * crate::PRICE_SCALE) as i64,
+            amount: 0.001,
+            order_type: OrderType::LimitPostOnly,
+        });
+
+        let mut buf = bytes::BytesMut::new();
+        venue.encode_batch(&batch, &mut buf);
+        let result = String::from_utf8(buf.to_vec()).unwrap();
+        assert!(result.contains("ox_multi"));
+        assert!(result.contains("tBTCUSD"));
+        assert!(result.contains("4096"));  // post-only flag
+    }
+}
+
+```
+
+## shared/src/l2_command.rs
+```rust
+// ═══════════════════════════════════════════════════════════
+// L2 Command Matrix v6 — Phase 1 + 2 + 3 Complete
+// "Thin L1, Fat L2" Sovereign Intelligence Architecture
+//
+// SIX cache-line highways:
+//   CL1 (64B): L2→L1 Tactical Defense (fade, latency, moonshot)
+//   CL2 (64B): L2→L1 A-S Offense (inventory skew, spread)
+//   CL3 (64B): L2→L1 Grid Warp (quadratic topology)
+//   CL4 (64B): L2→L1 Global Risk (VPIN, Aegis hedger)
+//   CL5 (64B): L1→L2 Portfolio Telemetry (all bot inventories)
+//   CL6+ (576B): L1→L2 Latency Ring Buffer
+//
+// mmap: /dev/shm/beroun/l2_command.bin (896 bytes)
+// ═══════════════════════════════════════════════════════════
+
+use std::sync::atomic::{AtomicI64, AtomicU64, AtomicUsize, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+pub const L2_COMMAND_PATH: &str = "/dev/shm/beroun/l2_command.bin";
+pub const LATENCY_RING_SIZE: usize = 64;
+pub const LATENCY_RING_MASK: usize = LATENCY_RING_SIZE - 1;
+pub const MIN_AMEND_THRESHOLD_BPS: i64 = 3;
+pub const BTC_SCALE: i64 = 100_000_000;
+
+// ═══ CL1: Tactical Defense (Phase 1) ═══
+#[repr(C, align(64))]
+pub struct L2CommandMatrix {
+    pub config_version: AtomicU64,
+    pub bid_fade_bps: AtomicI64,
+    pub ask_fade_bps: AtomicI64,
+    pub latency_padding_bps: AtomicI64,
+    pub latency_killswitch: AtomicI64,
+    pub moonshot_trigger_price: AtomicI64,
+    pub moonshot_armed: AtomicI64,
+    _pad_cl1: [u8; 8],
+}
+
+// ═══ CL2: A-S Offense (Phase 2a) ═══
+#[repr(C, align(64))]
+pub struct L2ASMatrix {
+    pub as_target_inventory: AtomicI64,
+    pub as_skew_factor_bps: AtomicI64,
+    pub as_half_spread_bps: AtomicI64,
+    pub current_inventory: AtomicI64,
+    _pad_cl2: [u8; 32],
+}
+
+// ═══ CL3: Grid Gaussian Warp (Phase 2b) ═══
+#[repr(C, align(64))]
+pub struct L2GridWarpMatrix {
+    pub grid_config_version: AtomicU64,
+    pub grid_dynamic_anchor: AtomicI64,
+    pub grid_base_step_bps: AtomicI64,
+    pub grid_warp_factor: AtomicI64,
+    pub grid_max_bid_levels: AtomicI64,
+    pub grid_max_ask_levels: AtomicI64,
+    _pad_cl3: [u8; 16],
+}
+
+// ═══ CL4: Global Risk & Aegis Hedger (Phase 3) + Cross-Bot Signals ═══
+#[repr(C, align(64))]
+pub struct L2GlobalRiskMatrix {
+    /// Independent SeqLock for macro risk
+    pub risk_config_version: AtomicU64,
+    /// VPIN directional toxicity × PRICE_SCALE: -1e8 (dump) to +1e8 (pump)
+    pub global_vpin_toxicity: AtomicI64,
+    /// Aegis target delta × PRICE_SCALE (negative = short perps)
+    pub aegis_target_delta: AtomicI64,
+    /// 1 = portfolio hedged via perps, Grid stops buying
+    pub portfolio_is_hedged: AtomicI64,
+    /// Cross-bot: epoch ms when flash crash detected by Moonshot (0 = clear)
+    pub flash_crash_epoch_ms: AtomicU64,
+    /// Cross-bot: magnitude of drop in bps (e.g., -300 = -3%)
+    pub flash_crash_drop_bps: AtomicI64,
+    /// Pravděpodobnost klidného trhu (0.0 až 1.0) v u64 (škálováno 1e8)
+    pub ranging_score: AtomicU64,
+    /// Pravděpodobnost silného trendu/průrazu (0.0 až 1.0) v u64 (škálováno 1e8)
+    pub trending_score: AtomicU64,
+}
+
+// ═══ CL5: Portfolio Telemetry (L1 → L2, Phase 3) ═══
+#[repr(C, align(64))]
+pub struct L2PortfolioTelemetry {
+    pub hydra_inventory: AtomicI64,
+    pub grid_inventory: AtomicI64,
+    pub moonshot_inventory: AtomicI64,
+    pub aegis_current_delta: AtomicI64,
+    _pad_cl5: [u8; 32],
+}
+
+// ═══ CL6+: Latency Ring Buffer ═══
+#[repr(C, align(64))]
+pub struct L1TelemetryRing {
+    pub latency_head: AtomicUsize,
+    _pad_head: [u8; 56],
+    pub latency_ring_us: [AtomicU64; LATENCY_RING_SIZE],
+}
+
+// ═══ MASTER STRUCT (v12.0) ═══
+/// unified mmap layout, eliminating manual pointer arithmetic.
+#[repr(C, align(64))]
+#[derive(Default)]
+pub struct L2SharedState {
+    pub cmd: L2CommandMatrix,           // Offset 0 (CL1)
+    pub as_mat: L2ASMatrix,             // Offset 64 (CL2)
+    pub grid_warp: L2GridWarpMatrix,    // Offset 128 (CL3)
+    pub global_risk: L2GlobalRiskMatrix,// Offset 192 (CL4)
+    pub portfolio: L2PortfolioTelemetry,// Offset 256 (CL5)
+    pub latency_ring: L1TelemetryRing,  // Offset 320 (CL6+)
+}
+
+// ═══════════════════════════════════════════════════════════
+// Defaults
+// ═══════════════════════════════════════════════════════════
+
+impl Default for L2CommandMatrix {
+    fn default() -> Self {
+        Self {
+            config_version: AtomicU64::new(0),
+            bid_fade_bps: AtomicI64::new(0),
+            ask_fade_bps: AtomicI64::new(0),
+            latency_padding_bps: AtomicI64::new(0),
+            latency_killswitch: AtomicI64::new(0),
+            moonshot_trigger_price: AtomicI64::new(0),
+            moonshot_armed: AtomicI64::new(0),
+            _pad_cl1: [0u8; 8],
+        }
+    }
+}
+
+impl Default for L2ASMatrix {
+    fn default() -> Self {
+        Self {
+            as_target_inventory: AtomicI64::new(0),
+            as_skew_factor_bps: AtomicI64::new(5),
+            as_half_spread_bps: AtomicI64::new(3),
+            current_inventory: AtomicI64::new(0),
+            _pad_cl2: [0u8; 32],
+        }
+    }
+}
+
+impl Default for L2GridWarpMatrix {
+    fn default() -> Self {
+        Self {
+            grid_config_version: AtomicU64::new(0),
+            grid_dynamic_anchor: AtomicI64::new(0),
+            grid_base_step_bps: AtomicI64::new(10),
+            grid_warp_factor: AtomicI64::new(0),
+            grid_max_bid_levels: AtomicI64::new(15),
+            grid_max_ask_levels: AtomicI64::new(15),
+            _pad_cl3: [0u8; 16],
+        }
+    }
+}
+
+impl Default for L2GlobalRiskMatrix {
+    fn default() -> Self {
+        Self {
+            risk_config_version: AtomicU64::new(0),
+            global_vpin_toxicity: AtomicI64::new(0),
+            aegis_target_delta: AtomicI64::new(0),
+            portfolio_is_hedged: AtomicI64::new(0),
+            flash_crash_epoch_ms: AtomicU64::new(0),
+            flash_crash_drop_bps: AtomicI64::new(0),
+            ranging_score: AtomicU64::new(0),
+            trending_score: AtomicU64::new(0),
+        }
+    }
+}
+
+impl Default for L2PortfolioTelemetry {
+    fn default() -> Self {
+        Self {
+            hydra_inventory: AtomicI64::new(0),
+            grid_inventory: AtomicI64::new(0),
+            moonshot_inventory: AtomicI64::new(0),
+            aegis_current_delta: AtomicI64::new(0),
+            _pad_cl5: [0u8; 32],
+        }
+    }
+}
+
+impl Default for L1TelemetryRing {
+    fn default() -> Self { unsafe { std::mem::zeroed() } }
+}
+
+// ═══════════════════════════════════════════════════════════
+// L1 Hot-Path Helpers (all #[inline(always)], zero allocation)
+// ═══════════════════════════════════════════════════════════
+
+#[inline(always)]
+pub fn l2cmd_version_check(cmd: &L2CommandMatrix) -> (u64, bool) {
+    let v = cmd.config_version.load(Ordering::Acquire);
+    (v, v.is_multiple_of(2))
+}
+
+#[inline(always)]
+pub fn record_latency(ring: &L1TelemetryRing, send_ts: std::time::Instant) {
+    let latency_us = send_ts.elapsed().as_micros() as u64;
+    let head = ring.latency_head.load(Ordering::Relaxed);
+    let idx = head & LATENCY_RING_MASK;
+    ring.latency_ring_us[idx].store(latency_us, Ordering::Relaxed);
+    ring.latency_head.store(head.wrapping_add(1), Ordering::Release);
+}
+
+#[inline(always)]
+pub fn can_execute_arb(cmd: &L2CommandMatrix, gross_profit_bps: i64, base_fee_bps: i64) -> bool {
+    if cmd.latency_killswitch.load(Ordering::Acquire) == 1 { return false; }
+    let padding = cmd.latency_padding_bps.load(Ordering::Relaxed);
+    gross_profit_bps >= (base_fee_bps + padding)
+}
+
+#[inline(always)]
+pub fn should_amend(current_price: i64, target_price: i64, fair_price: i64) -> bool {
+    if fair_price == 0 { return false; }
+    let diff_bps = ((current_price - target_price).abs() * 10_000) / fair_price;
+    diff_bps >= MIN_AMEND_THRESHOLD_BPS
+}
+
+/// Moonshot CAS Single Bullet
+#[inline(always)]
+pub fn moonshot_check_and_disarm(
+    cmd: &L2CommandMatrix, current_price_scaled: i64,
+    recent_volume_scaled: i64, avg_volume_scaled: i64,
+) -> Option<i64> {
+    if cmd.moonshot_armed.load(Ordering::Relaxed) != 1 { return None; }
+    let trigger = cmd.moonshot_trigger_price.load(Ordering::Relaxed);
+    if trigger == 0 || current_price_scaled > trigger { return None; }
+    if avg_volume_scaled > 0 && recent_volume_scaled < (avg_volume_scaled * 5) { return None; }
+    match cmd.moonshot_armed.compare_exchange(1, 0, Ordering::Acquire, Ordering::Relaxed) {
+        Ok(_) => Some(trigger), Err(_) => None,
+    }
+}
+
+/// A-S + Fade fusion quote calculator
+#[inline(always)]
+pub fn calculate_as_quotes(
+    cmd: &L2CommandMatrix, as_mat: &L2ASMatrix,
+    fair_price: i64, current_inventory: i64,
+) -> (i64, i64) {
+    as_mat.current_inventory.store(current_inventory, Ordering::Relaxed);
+    let mut seq;
+    let (mut bid_fade, mut ask_fade, mut target_inv, mut skew_bps, mut half_spread);
+    loop {
+        seq = cmd.config_version.load(Ordering::Acquire);
+        if seq % 2 != 0 { std::hint::spin_loop(); continue; }
+        bid_fade = cmd.bid_fade_bps.load(Ordering::Relaxed);
+        ask_fade = cmd.ask_fade_bps.load(Ordering::Relaxed);
+        target_inv = as_mat.as_target_inventory.load(Ordering::Relaxed);
+        skew_bps = as_mat.as_skew_factor_bps.load(Ordering::Relaxed);
+        half_spread = as_mat.as_half_spread_bps.load(Ordering::Relaxed);
+        std::sync::atomic::fence(Ordering::Acquire);
+        if seq == cmd.config_version.load(Ordering::Relaxed) { break; }
+    }
+    let inventory_delta = current_inventory - target_inv;
+    let as_shift_bps = (inventory_delta * skew_bps) / BTC_SCALE;
+    let bps_val = fair_price / 10_000;
+    let reservation = fair_price - (as_shift_bps * bps_val);
+    let target_bid = reservation - (half_spread * bps_val) - (bid_fade * bps_val);
+    let target_ask = reservation + (half_spread * bps_val) + (ask_fade * bps_val);
+    (target_bid, target_ask)
+}
+
+/// Grid Gaussian Warp: quadratic level calculator
+#[inline(always)]
+pub fn calculate_warped_grid_level(
+    grid: &L2GridWarpMatrix, level_index: i64, is_bid: bool,
+) -> Option<i64> {
+    let mut seq;
+    let (mut anchor, mut base_step, mut warp, mut max_bid, mut max_ask);
+    loop {
+        seq = grid.grid_config_version.load(Ordering::Acquire);
+        if seq % 2 != 0 { std::hint::spin_loop(); continue; }
+        anchor = grid.grid_dynamic_anchor.load(Ordering::Relaxed);
+        base_step = grid.grid_base_step_bps.load(Ordering::Relaxed);
+        warp = grid.grid_warp_factor.load(Ordering::Relaxed);
+        max_bid = grid.grid_max_bid_levels.load(Ordering::Relaxed);
+        max_ask = grid.grid_max_ask_levels.load(Ordering::Relaxed);
+        std::sync::atomic::fence(Ordering::Acquire);
+        if seq == grid.grid_config_version.load(Ordering::Relaxed) { break; }
+    }
+    if is_bid && level_index > max_bid { return None; }
+    if !is_bid && level_index > max_ask { return None; }
+    let n_sq = level_index * level_index;
+    let distance_bps = (base_step * level_index) + (warp * n_sq);
+    let bps_val = anchor / 10_000;
+    if bps_val == 0 { return None; }
+    let price_delta = distance_bps * bps_val;
+    if is_bid { Some(anchor - price_delta) } else { Some(anchor + price_delta) }
+}
+
+// ═══════════════════════════════════════════════════════════
+// Phase 3: Global Risk Helpers
+// ═══════════════════════════════════════════════════════════
+
+/// Grid hedge check: false = portfolio shield active, don't place bids
+#[inline(always)]
+pub fn should_grid_place_bid(risk: &L2GlobalRiskMatrix) -> bool {
+    risk.portfolio_is_hedged.load(Ordering::Relaxed) != 1
+}
+
+/// VPIN shift in bps (branchless). ±30 bps max.
+/// Negative VPIN (dump) → negative shift → bids retreat, asks drop
+#[inline(always)]
+pub fn vpin_shift_bps(risk: &L2GlobalRiskMatrix) -> i64 {
+    let toxicity = risk.global_vpin_toxicity.load(Ordering::Relaxed);
+    (toxicity * 30) / BTC_SCALE
+}
+
+// ═══════════════════════════════════════════════════════════
+// Phase 3.3: Cross-Bot Flash Crash Signal Helpers
+// ═══════════════════════════════════════════════════════════
+
+/// Flash crash signal TTL — auto-expires after 30 seconds (stale protection)
+pub const FLASH_CRASH_TTL_MS: u64 = 30_000;
+
+/// Check if a cross-bot flash crash signal is currently active and not stale.
+/// Called by Hydra every tick — zero-cost when no crash (single atomic load).
+#[inline(always)]
+pub fn is_flash_crash_active(risk: &L2GlobalRiskMatrix) -> bool {
+    let ts = risk.flash_crash_epoch_ms.load(Ordering::Acquire);
+    if ts == 0 { return false; }
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+    now_ms.saturating_sub(ts) < FLASH_CRASH_TTL_MS
+}
+
+/// Write a flash crash signal (called by Moonshot when wick detected).
+#[inline(always)]
+pub fn signal_flash_crash(risk: &L2GlobalRiskMatrix, drop_bps: i64) {
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64;
+    risk.flash_crash_drop_bps.store(drop_bps, Ordering::Relaxed);
+    risk.flash_crash_epoch_ms.store(now_ms, Ordering::Release);
+}
+
+/// Clear the flash crash signal (called by Moonshot after recovery / TTL).
+#[inline(always)]
+pub fn clear_flash_crash(risk: &L2GlobalRiskMatrix) {
+    risk.flash_crash_epoch_ms.store(0, Ordering::Release);
+    risk.flash_crash_drop_bps.store(0, Ordering::Relaxed);
+}
+
+
+/// Total mmap size is simply the size of the Master Struct (896B)
+pub const L2_COMMAND_FILE_SIZE: usize = std::mem::size_of::<L2SharedState>();
+
+pub fn load_l2_shared_state_ro() -> &'static L2SharedState {
+    let file = std::fs::File::open(L2_COMMAND_PATH)
+        .expect("🔥 L2 Command State neexistuje.");
+    
+    let mmap = unsafe { memmap2::MmapOptions::new().map(&file).unwrap() };
+    let mmap_ref = Box::leak(Box::new(mmap));
+    
+    let state_ptr = mmap_ref.as_ptr() as *const L2SharedState;
+    unsafe { &*state_ptr }
+}
+
+```
+
