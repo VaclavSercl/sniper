@@ -1614,6 +1614,36 @@ PARAMETER CONSTRAINTS:
         except Exception:
             return "unknown"
 
+    def _fetch_last_will(self) -> dict | None:
+        """Fetch the most recent decision mapped in Tribunal SQLite max 60 minutes old."""
+        try:
+            import sqlite3
+            import json
+            from datetime import datetime, timezone
+            db_path = os.path.expanduser("~/.local/share/sniper/pnl.db")
+            if not os.path.exists(db_path):
+                return None
+                
+            conn = sqlite3.connect(db_path, uri=True, timeout=1.0)
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT ts_ms, params_json FROM decision_history 
+                ORDER BY id DESC LIMIT 1
+            """)
+            row = cur.fetchone()
+            conn.close()
+            
+            if row:
+                ts_ms, params_json = row
+                age_minutes = (int(datetime.now(timezone.utc).timestamp() * 1000) - ts_ms) / 60000.0
+                if age_minutes <= 60:
+                    return json.loads(params_json)
+                else:
+                    log.info(f"🧠 Warm-Boot aborted: Last Oracle Will is too old ({age_minutes:.1f} mins)")
+        except Exception as e:
+            log.error(f"Failed to fetch Oracle Will: {e}")
+        return None
+
     def _sovereign_recovery(self):
         """First cycle after reboot: restore pre-crash bot states."""
         log.info("🧠 ═══ SOVEREIGN RECOVERY — Cycle #1 ═══")
@@ -1648,29 +1678,44 @@ PARAMETER CONSTRAINTS:
             lines.append(f"  {emoji} {bot.upper()}: {mode}")
         lines.append("\n🔄 *Obnovuji...*")
 
+        # Check for recent Oracle decision to enable Instant Warm-Boot
+        last_will = self._fetch_last_will()
+        has_warm_boot = last_will is not None
+
+        if has_warm_boot:
+            log.info("🧠 🔥 WARM BOOT: Restoring previous Oracle Will (Bypassing 66-min gate for LIVE bots)")
+            lines.insert(3, "🔥 *WARM BOOT ACTIVE*")
+            
         try:
             self.send_telegram("\n".join(lines))
         except Exception:
             pass
 
-        # Progressively restore bots — ALL go through PAPER TRIAL first
+        # Progressively restore bots
         restored = []
         fills_snapshot = self._get_total_fills()
         
         for bot, mode in bot_states.items():
             if mode == "LIVE":
-                # WAS LIVE → Start in PAPER TRIAL (Phase 4)
-                # After 66 min of safe paper operation, AI evaluates → promote if OK
-                log.info(f"  🧪 Starting {bot} → PAPER TRIAL (was LIVE, 66 min gate)")
-                start_bot(bot)
-                time.sleep(10)
-                self._pause_bot(bot)  # Safety: paused=1 during trial
-                self._save_bot_state(bot, "PAPER")
-                self._start_paper_trial(bot, "LIVE", fills_snapshot)
-                restored.append(f"🧪 {bot.upper()} → PAPER TRIAL (66 min)")
+                if has_warm_boot:
+                    # WARM BOOT: Bypass Paper Purgatory, restore directly to LIVE
+                    log.info(f"  🔥 Starting {bot} → LIVE (Instant Warm Boot)")
+                    self._save_bot_state(bot, "LIVE")
+                    start_bot(bot)
+                    time.sleep(2)
+                    self.cortex.unpause(bot)
+                    restored.append(f"🔥 {bot.upper()} → LIVE (Instant)")
+                else:
+                    # COLD BOOT: WAS LIVE → Start in PAPER TRIAL (Phase 4)
+                    log.info(f"  🧪 Starting {bot} → PAPER TRIAL (was LIVE, 66 min gate)")
+                    start_bot(bot)
+                    time.sleep(10)
+                    self._pause_bot(bot)  # Safety: paused=1 during trial
+                    self._save_bot_state(bot, "PAPER")
+                    self._start_paper_trial(bot, "LIVE", fills_snapshot)
+                    restored.append(f"🧪 {bot.upper()} → PAPER TRIAL (66 min)")
             elif mode == "PAPER":
                 # SBP v3.1 FIX: PAPER bots MUST go through Paper Trial (Shadow Trading)
-                # Previously they were silently ignored → permanent PAPER deadlock
                 log.info(f"  🧪 Starting {bot} → PAPER TRIAL (was PAPER, 66 min gate)")
                 start_bot(bot)
                 time.sleep(10)
@@ -1688,6 +1733,14 @@ PARAMETER CONSTRAINTS:
             else:
                 log.info(f"  🔴 {bot} → stays OFFLINE")
                 restored.append(f"🔴 {bot.upper()} → OFFLINE")
+
+        # If Warm Boot is active, flush the last known decision into mmap and UDS
+        if has_warm_boot:
+            try:
+                self._apply_decision(last_will)
+                log.info("🧠 🔥 WARM BOOT: Oracle Will successfully applied into mmap risk state.")
+            except Exception as e:
+                log.error(f"Failed to apply warm-boot decision: {e}")
 
         # Final Telegram report
         final = [
