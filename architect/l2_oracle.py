@@ -1541,6 +1541,22 @@ PARAMETER CONSTRAINTS:
         except Exception:
             pass
 
+        # ── ZeroClaw Telemetry (Daily/Monthly) ──
+        if report_type in ("daily", "weekly", "monthly"):
+            try:
+                import sys
+                from os.path import dirname, abspath, join
+                sys.path.append(dirname(abspath(__file__)))
+                from zeroclaw_stats import get_zeroclaw_usage
+                zc = get_zeroclaw_usage()
+                
+                if not zc.get("error"):
+                    lines.append(f"\n🧠 *L2 TELEMETRIE*")
+                    lines.append(f"Tokens (24h): ~{(zc.get('daily_tokens', 0) / 1000):.1f}k (${zc.get('daily_cost', 0):.2f})")
+                    lines.append(f"Tokens (30d): ~{(zc.get('monthly_tokens', 0) / 1000000):.2f}m (${zc.get('monthly_cost', 0):.2f})")
+            except Exception as e:
+                log.error(f"Failed to append L2 telemetry to TG report: {e}")
+
         return "\n".join(lines)
 
     # ═══════════════════════════════════════════════════════════

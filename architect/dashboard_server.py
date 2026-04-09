@@ -227,8 +227,34 @@ def _build_dashboard_state():
     # 10. War Room payload (Phase 7 V2 Dashboard)
     state["war_room"] = _get_war_room_state()
 
+    # 11. ZeroClaw Telemetry
+    state["zeroclaw"] = _get_zeroclaw_state()
+
     return state
 
+
+# ═══════════════════════════════════════════════════════════
+# ZeroClaw Telemetry Reader
+# ═══════════════════════════════════════════════════════════
+_zc_cache = {}
+_zc_cache_ts = 0
+_ZC_TTL = 60.0
+
+def _get_zeroclaw_state():
+    global _zc_cache, _zc_cache_ts
+    import time
+    now = time.time()
+    if now - _zc_cache_ts < _ZC_TTL:
+        return _zc_cache
+        
+    try:
+        from zeroclaw_stats import get_zeroclaw_usage
+        _zc_cache = get_zeroclaw_usage()
+    except Exception as e:
+        log.error(f"Zeroclaw stats failed: {e}")
+        
+    _zc_cache_ts = now
+    return _zc_cache
 
 # ═══════════════════════════════════════════════════════════
 # War Room State Reader (Phase 7 V2 Dashboard)

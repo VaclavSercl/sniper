@@ -709,7 +709,7 @@ function renderGpu(gpu) {
     document.getElementById('gpu-content').innerHTML = html;
 }
 
-function renderL2(l2, gpu) {
+function renderL2(l2, gpu, zc) {
     const regime = (l2 && l2.regime) || 'UNKNOWN';
     const reasoning = (l2 && l2.reasoning) || '';
     const r = regime.toUpperCase();
@@ -722,6 +722,21 @@ function renderL2(l2, gpu) {
     // PnL sparkline
     html += `<div style="margin-top:12px"><div style="font-size:0.7em;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Armada PnL Trend</div>
         <div class="sparkline-container">${renderSvgSparkline(pnlHistory, 400, 80, '#22c55e')}</div></div>`;
+    
+    // ZeroClaw Telemetry
+    if (zc && !zc.error && (zc.daily_tokens > 0 || zc.monthly_tokens > 0)) {
+        html += `<div style="margin-top:16px; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px;">
+            <div style="font-size:0.7em;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                <span class="accent">🧠</span> ZERO-CLAW MEMORY USAGE (L2 API)
+            </div>
+            <div class="l2-tuning" style="grid-template-columns: 1fr 1fr;">
+                <div class="l2-param"><div class="pl">Tokens (24h)</div><div class="pv" style="color:var(--cyan)">${(zc.daily_tokens / 1000).toFixed(1)}k <span style="font-size:0.65em;color:var(--text-dim);">($${zc.daily_cost.toFixed(2)})</span></div></div>
+                <div class="l2-param"><div class="pl">Tokens (30d)</div><div class="pv" style="color:var(--purple)">${(zc.monthly_tokens / 1000000).toFixed(2)}M <span style="font-size:0.65em;color:var(--text-dim);">($${zc.monthly_cost.toFixed(2)})</span></div></div>
+            </div>
+        </div>`;
+    }
+
+
     document.getElementById('l2-content').innerHTML = html;
 }
 
@@ -800,7 +815,7 @@ function update(state) {
 
     renderBots(bots);
     renderGpu(gpu);
-    renderL2(l2, gpu);
+    renderL2(l2, gpu, state.zeroclaw);
     renderCrossExchange(state.cross_exchange || {});
     renderNexus(state.cross_exchange || {}, state.nexus || {});
     renderMlShield(state.ml_shield || {});
