@@ -28,6 +28,9 @@ import json
 import time
 import sqlite3
 import logging
+import argparse
+import glob
+import pandas as pd
 import mmap
 import struct
 import numpy as np
@@ -73,24 +76,47 @@ def load_fills(hours=24):
     return rows
 
 
-def load_candles(hours=24):
-    """Load 1m candles from market_data.db for feature reconstruction."""
-    if not os.path.exists(MARKET_DB):
-        log.warning(f"Market DB not found: {MARKET_DB} — skipping candle data")
-        return []
-
-    conn = sqlite3.connect(MARKET_DB)
-    cutoff_ms = int((time.time() - hours * 3600) * 1000)
+def load_candles(hours=24, months=0):
+    """Load 1m candles from market_data.db or Parquet Data Lake."""
+    LAKE_DIR = "/data/sniper_lake/candles_1m"
+    rows = []
     
-    rows = conn.execute(
-        """SELECT ts, open, high, low, close, volume 
-           FROM candles_1m WHERE ts >= ? ORDER BY ts""",
-        (cutoff_ms,)
-    ).fetchall()
-    conn.close()
+    if months > 0:
+        # Load from Parquet Data Lake for N months
+        log.info(f"Loading {months} months of Big Data from {LAKE_DIR}...")
+        cutoff_ms = int((time.time() - months * 30 * 24 * 3600) * 1000)
+        
+        if os.path.exists(LAKE_DIR):
+            parquet_files = sorted(glob.glob(os.path.join(LAKE_DIR, "*.parquet")))
+            for pf in parquet_files:
+                try:
+                    df = pd.read_parquet(pf)
+                    df = df[df['ts'] >= cutoff_ms]
+                    if not df.empty:
+                        for _, r in df.iterrows():
+                            rows.append((int(r['ts']), float(r['open']), float(r['high']), float(r['low']), float(r['close']), float(r['volume'])))
+                except Exception as e:
+                    log.error(f"Error reading parquet {pf}: {e}")
+        else:
+            log.warning("Data Lake directory not found! Fallback to SQLite.")
+            
+    # Always append recent SQLite data
+    if os.path.exists(MARKET_DB):
+        conn = sqlite3.connect(MARKET_DB)
+        cutoff_ms = int((time.time() - hours * 3600) * 1000) if months == 0 else int((time.time() - 25 * 3600) * 1000)
+        recent_rows = conn.execute(
+            "SELECT ts, open, high, low, close, volume FROM candles_1m WHERE ts >= ? ORDER BY ts",
+            (cutoff_ms,)
+        ).fetchall()
+        conn.close()
+        rows.extend(recent_rows)
+        
+    # Deduplicate and sort by ts
+    unique_rows = {r[0]: r for r in rows}
+    sorted_rows = [unique_rows[ts] for ts in sorted(unique_rows.keys())]
     
-    log.info(f"Loaded {len(rows)} candles from last {hours}h")
-    return rows
+    log.info(f"Loaded {len(sorted_rows)} candles (Lake + SQLite).")
+    return sorted_rows
 
 
 def extract_features_from_candles(candles):
@@ -351,11 +377,15 @@ def save_history(entry):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Nightly ML Shield Retrain")
+    parser.add_argument("--months", type=int, default=0, help="Number of months to load from Parquet Data Lake (default 0 = last 24h SQLite)")
+    args = parser.parse_args()
+
     log.info("═══ NIGHTLY RETRAIN — SIM v2.0 P2-A ═══")
-    log.info(f"Time: {datetime.now(timezone.utc).isoformat()}")
+    log.info(f"Time: {datetime.now(timezone.utc).isoformat()} | Target: {args.months} months")
     
     # 1. Load data
-    candles = load_candles(hours=24)
+    candles = load_candles(hours=24, months=args.months)
     if len(candles) < 100:
         log.error(f"Insufficient data: {len(candles)} candles (need 100+). Skipping retrain.")
         return

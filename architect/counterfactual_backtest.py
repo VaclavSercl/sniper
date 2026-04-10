@@ -121,36 +121,94 @@ def load_walk_forward_split():
 
 
 def load_candles(conn, exchange, symbol, start_ms, end_ms):
-    """Load 1m candles for a specific time range."""
-    rows = conn.execute(
-        "SELECT ts, open, high, low, close, volume FROM candles_1m "
-        "WHERE exchange=? AND symbol=? AND ts >= ? AND ts <= ? ORDER BY ts",
-        (exchange, symbol, start_ms, end_ms)
-    ).fetchall()
+    """Load 1m candles from Data Lake and SQLite combined."""
+    import glob
+    import pandas as pd
     
     candles = []
-    for r in rows:
-        candles.append({
-            "ts": r[0], "open": r[1], "high": r[2],
-            "low": r[3], "close": r[4], "volume": r[5],
-        })
-    return candles
+    LAKE_DIR = "/data/sniper_lake/candles_1m"
+    
+    # 1. Load from Data Lake (Parquet)
+    if os.path.exists(LAKE_DIR):
+        parquet_files = sorted(glob.glob(os.path.join(LAKE_DIR, "*.parquet")))
+        for pf in parquet_files:
+            try:
+                df = pd.read_parquet(pf)
+                df = df[(df['ts'] >= start_ms) & (df['ts'] <= end_ms)]
+                if not df.empty:
+                    for _, r in df.iterrows():
+                        candles.append({
+                            "ts": int(r['ts']), "open": float(r['open']),
+                            "high": float(r['high']), "low": float(r['low']),
+                            "close": float(r['close']), "volume": float(r['volume'])
+                        })
+            except Exception as e:
+                log.error(f"Error reading Lake Parquet {pf}: {e}")
+                
+    # 2. Load from Recent SQLite
+    try:
+        rows = conn.execute(
+            "SELECT ts, open, high, low, close, volume FROM candles_1m "
+            "WHERE exchange=? AND symbol=? AND ts >= ? AND ts <= ? ORDER BY ts",
+            (exchange, symbol, start_ms, end_ms)
+        ).fetchall()
+        for r in rows:
+            candles.append({
+                "ts": r[0], "open": r[1], "high": r[2],
+                "low": r[3], "close": r[4], "volume": r[5],
+            })
+    except Exception as e:
+        pass
+        
+    candles.sort(key=lambda x: x["ts"])
+    unique = {c["ts"]: c for c in candles}
+    return [unique[ts] for ts in sorted(unique.keys())]
 
 
 def load_trades(conn, exchange, symbol, start_ms, end_ms):
-    """Load historical trades for tick-level simulation."""
-    rows = conn.execute(
-        "SELECT ts_ms, price, qty, side FROM historical_trades "
-        "WHERE exchange=? AND symbol=? AND ts_ms >= ? AND ts_ms <= ? ORDER BY ts_ms",
-        (exchange, symbol, start_ms, end_ms)
-    ).fetchall()
+    """Load historical trades for tick-level simulation (from SQLite and Data Lake)."""
+    import glob
+    import pandas as pd
     
     trades = []
-    for r in rows:
-        trades.append({
-            "ts_ms": r[0], "price": r[1], "qty": r[2], "side": r[3],
-        })
-    return trades
+    LAKE_DIR = "/data/sniper_lake/ticks"
+    
+    # 1. Load from Data Lake (Parquet)
+    if os.path.exists(LAKE_DIR):
+        parquet_files = sorted(glob.glob(os.path.join(LAKE_DIR, "*.parquet")))
+        for pf in parquet_files:
+            try:
+                df = pd.read_parquet(pf)
+                if 'ts_ms' in df.columns:
+                    df = df[(df['ts_ms'] >= start_ms) & (df['ts_ms'] <= end_ms)]
+                    if not df.empty:
+                        for _, r in df.iterrows():
+                            trades.append({
+                                "ts_ms": int(r['ts_ms']), "price": float(r['price']),
+                                "qty": float(r['qty']), "side": r['side']
+                            })
+            except Exception as e:
+                log.error(f"Error reading Lake Parquet {pf}: {e}")
+                
+    # 2. Load from Recent SQLite (Table 'ticks')
+    try:
+        rows = conn.execute(
+            "SELECT ts_ms, price, qty, side FROM ticks "
+            "WHERE exchange=? AND symbol=? AND ts_ms >= ? AND ts_ms <= ? ORDER BY ts_ms",
+            (exchange, symbol, start_ms, end_ms)
+        ).fetchall()
+        for r in rows:
+            trades.append({
+                "ts_ms": r[0], "price": r[1], "qty": r[2], "side": r[3],
+            })
+    except Exception as e:
+        log.warning(f"Failed to load from ticks table: {e}")
+        
+    trades.sort(key=lambda x: x["ts_ms"])
+    
+    # Deduplicate
+    unique_trades = {t["ts_ms"]: t for t in trades}
+    return [unique_trades[ts] for ts in sorted(unique_trades.keys())]
 
 
 # ═══════════════════════════════════════════════════════════

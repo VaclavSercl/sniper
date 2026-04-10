@@ -282,6 +282,29 @@ async def monitor():
         await asyncio.sleep(60)
         log.info(f"STATUS: Queue size: {tick_queue.qsize()} | Binance pairs: {len(current_binance_pairs)} | Bitfinex pairs: {len(current_bitfinex_pairs)}")
 
+async def db_prune_loop():
+    """Delegates archiving and pruning to data_archiver.py for the 1TB Data Lake."""
+    await asyncio.sleep(180)  # Start 3 min after boot to not interfere with ws connects
+    while running:
+        log.info("Triggering Parquet Archiver Dump for the Data Lake...")
+        try:
+            archiver_path = os.path.join(ARMADA_ROOT, "architect", "data_archiver.py")
+            process = await asyncio.create_subprocess_exec(
+                "python3", archiver_path,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+            if process.returncode == 0:
+                log.info(f"Archiver finished successfully. Output:\\n{stdout.decode().strip()}")
+            else:
+                log.error(f"Archiver failed: {stderr.decode()}")
+        except Exception as e:
+            log.error(f"Failed to spawn archiver: {e}")
+            
+        # Run and check every 6 hours
+        await asyncio.sleep(21600)
+
 def handle_sigint():
     global running
     log.info("Shutdown signal received")
@@ -300,7 +323,8 @@ async def main():
         asyncio.create_task(config_watcher()),
         asyncio.create_task(binance_ws()),
         asyncio.create_task(bitfinex_ws()),
-        asyncio.create_task(monitor())
+        asyncio.create_task(monitor()),
+        asyncio.create_task(db_prune_loop())
     ]
     
     await asyncio.gather(*tasks)
