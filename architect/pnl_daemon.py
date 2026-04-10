@@ -93,65 +93,9 @@ def fetch_wallets_sync():
     return wallets
 
 # ── GLOBAL FEE STATE ───────────────────────────────────────
-FEE_STATE_PATH = "/dev/shm/sniper/fee_state.bin"
+# Note: FeeStateWriter and fetch_and_update_fees_sync have been removed to prevent
+# race conditions. Fee fetching is now exclusively handled by architect/fee_monitor.py.
 
-class FeeStateWriter:
-    def __init__(self):
-        self.mm = None
-        try:
-            os.makedirs(os.path.dirname(FEE_STATE_PATH), exist_ok=True)
-            fd = os.open(FEE_STATE_PATH, os.O_RDWR | os.O_CREAT)
-            os.ftruncate(fd, 64)
-            import mmap
-            self.mm = mmap.mmap(fd, 64)
-            os.close(fd)
-            if self.mm[:8] == b'\x00' * 8:
-                self.write(maker_bps=1000, taker_bps=2000, deriv_maker=200, deriv_taker=650)
-            log.info(f"FeeStateWriter: mmap opened at {FEE_STATE_PATH}")
-        except Exception as e:
-            log.error(f"Fee write init fail: {e}")
-
-    def write(self, maker_bps=None, taker_bps=None, deriv_maker=None, deriv_taker=None, volume_usd=None, tier=None):
-        if not self.mm: return
-        now_ms = int(time.time() * 1000)
-        if maker_bps is not None: struct.pack_into('<Q', self.mm, 0, int(maker_bps))
-        if taker_bps is not None: struct.pack_into('<Q', self.mm, 8, int(taker_bps))
-        if deriv_maker is not None: struct.pack_into('<Q', self.mm, 16, int(deriv_maker))
-        if deriv_taker is not None: struct.pack_into('<Q', self.mm, 24, int(deriv_taker))
-        struct.pack_into('<Q', self.mm, 32, now_ms)
-        if volume_usd is not None: struct.pack_into('<q', self.mm, 40, int(volume_usd))
-        if tier is not None: struct.pack_into('<Q', self.mm, 48, int(tier))
-        struct.pack_into('<Q', self.mm, 56, now_ms)
-        self.mm.flush()
-
-    def read(self):
-        if not self.mm: return {}
-        return {"maker_bps": struct.unpack_from('<Q', self.mm, 0)[0] / 100.0,
-                "taker_bps": struct.unpack_from('<Q', self.mm, 8)[0] / 100.0}
-
-    def close(self):
-        if self.mm: self.mm.close()
-
-def fetch_and_update_fees_sync(fee_writer):
-    result = bfx_authenticated_sync("v2/auth/r/summary")
-    if result and isinstance(result, list) and len(result) >= 2:
-        try:
-            vol_30d = int(result[0]) if isinstance(result[0], (int, float)) else 0
-            maker_pct, taker_pct = 0.001, 0.002
-            if isinstance(result[1], list) and len(result[1]) >= 4:
-                maker_pct = abs(float(result[1][0] or maker_pct))
-                taker_pct = abs(float(result[1][2] or taker_pct))
-            deriv_m, deriv_t = 0.0002, 0.00065
-            if len(result) >= 3 and isinstance(result[2], list) and len(result[2]) >= 4:
-                deriv_m = abs(float(result[2][0] or deriv_m))
-                deriv_t = abs(float(result[2][2] or deriv_t))
-            
-            fee_writer.write(int(maker_pct * 1e6), int(taker_pct * 1e6), int(deriv_m * 1e6), int(deriv_t * 1e6), vol_30d)
-            log.info(f"💰 Fee update: maker={maker_pct*100:.3f}% taker={taker_pct*100:.3f}% vol=${vol_30d:,.0f}")
-            return True
-        except Exception as e:
-            log.error(f"Fee parse err: {e}")
-    return False
 
 # ── FILL PROCESSOR ──────────────────────────────────────────
 class FillProcessor:
@@ -433,7 +377,7 @@ class ShadowDropCopyUDP(asyncio.DatagramProtocol):
         except Exception as e:
             log.error(f"UDP Shadow Drop Copy Error: {e}")
 
-async def periodic_jobs_loop(processor, fee_writer):
+async def periodic_jobs_loop(processor):
     """Runs periodic slow REST tasks via asyncio.to_thread"""
     cycle = 0
     while running:
@@ -445,9 +389,6 @@ async def periodic_jobs_loop(processor, fee_writer):
             if cycle % 10 == 0:
                 await asyncio.to_thread(processor._refresh_order_gid_cache_sync)
                 
-            # Every 30 min: fee check
-            if cycle % 60 == 0:
-                await asyncio.to_thread(fetch_and_update_fees_sync, fee_writer)
                 
             # Every 1 hr: wallet snapshot and hourly summary
             if cycle % 120 == 0:
@@ -474,11 +415,9 @@ def main():
         sys.exit(1)
         
     processor = FillProcessor()
-    fee_writer = FeeStateWriter()
     
     # Init tasks
     processor.record_wallet_snapshot_sync()
-    fetch_and_update_fees_sync(fee_writer)
     processor.process_historical_backlog() # fetch any fills that happened while we were offline
     processor.update_mmap()
     
@@ -500,7 +439,7 @@ def main():
         
         tasks = [
             asyncio.create_task(bitfinex_drop_copy_ws(processor)),
-            asyncio.create_task(periodic_jobs_loop(processor, fee_writer))
+            asyncio.create_task(periodic_jobs_loop(processor))
         ]
         await asyncio.gather(*tasks)
         transport.close()
@@ -509,7 +448,6 @@ def main():
     
     processor.db.close()
     processor.mmap_writer.close()
-    fee_writer.close()
 
 if __name__ == "__main__":
     main()
