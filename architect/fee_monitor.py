@@ -135,11 +135,11 @@ def fetch_bitfinex_fees():
                 taker = abs(taker_arr[0]) if isinstance(taker_arr, list) and len(taker_arr) > 0 else 0
                 log.info(f"Bitfinex raw: maker_arr={maker_arr}, taker_arr={taker_arr}")
             else:
-                maker = 0.001
-                taker = 0.002
+                log.warning(f"Unrecognized Bitfinex array format: {fee_pair}")
+                return None
         else:
-            maker = 0.001
-            taker = 0.002
+            log.warning(f"Unrecognized Bitfinex response format: {data}")
+            return None
 
         # Convert to bps × 100 (e.g., 0.001 = 10 bps = 1000)
         maker_bps100 = int(maker * 1_000_000)

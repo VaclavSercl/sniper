@@ -1,7 +1,7 @@
 // 💰 Global Fee State — Single Source of Truth for ALL bots & AI
 // Part of sniper-shared crate
 //
-// Written by: PnL Daemon (Python) — fetches from Bitfinex /v2/auth/r/summary
+// Written by: Fee Monitor Daemon (architect/fee_monitor.py) — fetches from Bitfinex /v2/auth/r/summary
 // Read by: Hydra, Moonshot, Grid, Trigon, Cortex, L1, L2
 //
 // mmap path: /dev/shm/beroun/fee_state.bin
