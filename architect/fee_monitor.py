@@ -228,11 +228,7 @@ def update_fees():
     if bfx:
         write_venue_fee(mm, VENUE_BITFINEX, bfx['maker'], bfx['taker'], now_ms, 1)
     else:
-        # Fallback na 20 bps pokud burza neodpovídá a hodnoty dříve byly 0
-        prev_maker_bfx = prev_fees[VENUE_BITFINEX][0]
-        if prev_maker_bfx == 0:
-            log.warning("Bitfinex offline and no previous fee state. Activating 20 bps safety brake!")
-            write_venue_fee(mm, VENUE_BITFINEX, 2000, 2000, now_ms, 1)
+        log.warning("Bitfinex offline. Keeping previous fee state unchanged.")
 
     # ── Fetch & Write: Binance (for Nexus cross-exchange) ──
     bnb = fetch_binance_fees()
