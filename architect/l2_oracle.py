@@ -760,16 +760,20 @@ PARAMETER CONSTRAINTS:
         elif os_action == "START":
             _safe_ai_ignition("hydra")
 
+        # SBP v3.1 Anti-Stagnation Override
+        if hydra.get("pause_trading") is True and "hydra" in self._paper_trials:
+            trial = self._paper_trials["hydra"]
+            trial_fills = self._get_total_fills() - trial["initial_fills"]
+            if trial_fills < self.PAPER_TRIAL_MIN_EVENT_FILLS:
+                log.info(f"  🛡️ Hydra Anti-Stagnation: Overriding AI PAUSE to FALSE (Needs {self.PAPER_TRIAL_MIN_EVENT_FILLS} fills, has {trial_fills})")
+                hydra["pause_trading"] = False
+
         if hydra.get("pause_trading") is True:
             r = self.cortex.pause("hydra")
             log.info(f"  ⏸️ HYDRA PAUSED: {r}")
         elif hydra.get("pause_trading") is False and os_action != "STOP":
-            current_hydra_mode = self._armada_state.get("hydra", {}).get("mode", "OFFLINE")
-            if current_hydra_mode == "PAPER":
-                log.info("  🔒 [SHADOW LOCK] Refusing to unpause Hydra — Bot is in PAPER Purgatory.")
-            else:
-                self.cortex.unpause("hydra")
-                log.info("  ▶️ HYDRA UNPAUSED by AI")
+            self.cortex.unpause("hydra")
+            log.info("  ▶️ HYDRA UNPAUSED (MMap emergency_pause cleared)")
 
         grid = hydra.get("recommended_grid_step") or hydra.get("grid_step")
         if grid is not None:
@@ -1177,15 +1181,20 @@ PARAMETER CONSTRAINTS:
             os.close(fd)
 
             # Pause/unpause
+            # SBP v3.1 Anti-Stagnation Override
+            if cfg.get("pause_trading") is True and "moonshot" in self._paper_trials:
+                trial = self._paper_trials["moonshot"]
+                trial_fills = self._get_total_fills() - trial["initial_fills"]
+                if trial_fills < self.PAPER_TRIAL_MIN_EVENT_FILLS:
+                    log.info(f"  🛡️ Moonshot Anti-Stagnation: Overriding AI PAUSE to FALSE (Needs {self.PAPER_TRIAL_MIN_EVENT_FILLS} fills, has {trial_fills})")
+                    cfg["pause_trading"] = False
+
             if cfg.get("pause_trading") is True:
                 _st.pack_into('<Q', mm, GLOBAL_OFF, 1)
                 log.info("  ⏸️ Moonshot PAUSED")
             elif cfg.get("pause_trading") is False:
-                if self._is_paper("moonshot"):
-                    log.info("  🛡️ Moonshot unpause BLOCKED — PAPER mode")
-                else:
-                    _st.pack_into('<Q', mm, GLOBAL_OFF, 0)
-                    log.info("  ▶️ Moonshot UNPAUSED")
+                _st.pack_into('<Q', mm, GLOBAL_OFF, 0)
+                log.info("  ▶️ Moonshot UNPAUSED (MMap emergency_pause cleared)")
 
             # Per-pair order_usd override (all pairs)
             order_usd = cfg.get("order_usd")
@@ -1235,15 +1244,20 @@ PARAMETER CONSTRAINTS:
             start_bot("grid")
             self.cortex.unpause("grid")
             
+        # SBP v3.1 Anti-Stagnation Override
+        if cfg.get("pause_trading") is True and "grid" in self._paper_trials:
+            trial = self._paper_trials["grid"]
+            trial_fills = self._get_total_fills() - trial["initial_fills"]
+            if trial_fills < self.PAPER_TRIAL_MIN_EVENT_FILLS:
+                log.info(f"  🛡️ Grid Anti-Stagnation: Overriding AI PAUSE to FALSE (Needs {self.PAPER_TRIAL_MIN_EVENT_FILLS} fills, has {trial_fills})")
+                cfg["pause_trading"] = False
+
         if cfg.get("pause_trading") is True:
             self.cortex.pause("grid")
             log.info("  ⏸️ Grid PAUSED")
         elif cfg.get("pause_trading") is False:
-            if self._is_paper("grid"):
-                log.info("  🛡️ Grid unpause BLOCKED — PAPER mode")
-            else:
-                self.cortex.unpause("grid")
-                log.info("  ▶️ Grid UNPAUSED")
+            self.cortex.unpause("grid")
+            log.info("  ▶️ Grid UNPAUSED (MMap emergency_pause cleared)")
 
         spacing = cfg.get("grid_spacing")
         if spacing is not None:
@@ -1290,15 +1304,20 @@ PARAMETER CONSTRAINTS:
             GLOBAL_OFF = 24 * 128  # 3072
 
             # global_paused at GLOBAL_OFF + 0
+            # SBP v3.1 Anti-Stagnation Override
+            if cfg.get("pause_trading") is True and "trigon" in self._paper_trials:
+                trial = self._paper_trials["trigon"]
+                trial_fills = self._get_total_fills() - trial["initial_fills"]
+                if trial_fills < self.PAPER_TRIAL_MIN_EVENT_FILLS:
+                    log.info(f"  🛡️ Trigon Anti-Stagnation: Overriding AI PAUSE to FALSE (Needs {self.PAPER_TRIAL_MIN_EVENT_FILLS} fills, has {trial_fills})")
+                    cfg["pause_trading"] = False
+
             if cfg.get("pause_trading") is True:
                 _st.pack_into('<Q', mm, GLOBAL_OFF, 1)
                 log.info("  ⏸️ Trigon PAUSED")
             elif cfg.get("pause_trading") is False:
-                if self._is_paper("trigon"):
-                    log.info("  🛡️ Trigon unpause BLOCKED — PAPER mode")
-                else:
-                    _st.pack_into('<Q', mm, GLOBAL_OFF, 0)
-                    log.info("  ▶️ Trigon UNPAUSED")
+                _st.pack_into('<Q', mm, GLOBAL_OFF, 0)
+                log.info("  ▶️ Trigon UNPAUSED (MMap clear)")
 
             # min_profit_bps: write to each triangle's min_profit_bps field
             # TrigonTriangleRisk layout: leg_symbols[3](24) + leg_directions[3](12) = 36,
@@ -1372,14 +1391,19 @@ PARAMETER CONSTRAINTS:
             # Read from cross_types.rs for exact layout
             # For now, use emergency_pause and log the intention
 
+            # SBP v3.1 Anti-Stagnation Override
+            if cfg.get("pause_trading") is True and "nexus" in self._paper_trials:
+                trial = self._paper_trials["nexus"]
+                trial_fills = self._get_total_fills() - trial["initial_fills"]
+                if trial_fills < self.PAPER_TRIAL_MIN_EVENT_FILLS:
+                    log.info(f"  🛡️ Nexus Anti-Stagnation: Overriding AI PAUSE to FALSE (Needs {self.PAPER_TRIAL_MIN_EVENT_FILLS} fills, has {trial_fills})")
+                    cfg["pause_trading"] = False
+
             if cfg.get("pause_trading") is True:
                 log.info("  ⏸️ Nexus PAUSED by AI (emergency_pause set)")
                 # Will be applied next time Nexus scans — it checks emergency_pause
             elif cfg.get("pause_trading") is False:
-                if self._is_paper("nexus"):
-                    log.info("  🛡️ Nexus unpause BLOCKED — PAPER mode")
-                else:
-                    log.info("  ▶️ Nexus UNPAUSED by AI")
+                log.info("  ▶️ Nexus UNPAUSED by AI (emergency_pause clear)")
 
             mpb = cfg.get("min_profit_bps")
             if mpb is not None:

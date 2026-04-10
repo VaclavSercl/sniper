@@ -4,6 +4,8 @@ use tokio::time::interval;
 use anyhow::{Context, Result};
 use sniper_types::armada_types::{ArmadaState, ArmadaStateV2, load_oracle_state_ro, capital_index, MAX_BOTS, MAX_VENUES};
 use sniper_types::mmap_utils::{init_mmap, open_mmap_readonly};
+use std::os::unix::fs::FileExt;
+use std::fs::OpenOptions;
 
 const ARMADA_STATE_V1_PATH: &str = "/dev/shm/sniper/armada_state.bin";
 const ARMADA_STATE_V2_PATH: &str = "/dev/shm/sniper/armada_state_v2.bin";
@@ -26,11 +28,7 @@ async fn main() -> Result<()> {
     let oracle_state = load_oracle_state_ro();
     let l2_state = sniper_types::l2_command::load_l2_shared_state_ro();
 
-    // ═══ Toxic Storm: mmap pointer (ZERO-ALLOCATION read in hot loop) ═══
-    // Fix B5: Replaced std::fs::read() + vec![0] with mmap pointer
-    let toxic_mmap = open_mmap_readonly("/dev/shm/sniper/toxic_storm.bin")
-        .context("Failed to mmap toxic_storm.bin")?;
-    let toxic_ptr = toxic_mmap.as_ptr();
+
 
     // ═══ V2 Initial Config ═══
     state_v2.global.active_bots.store(MAX_BOTS as u8, Ordering::Relaxed);
@@ -40,8 +38,15 @@ async fn main() -> Result<()> {
     println!("[ARMADA] V2 state: {ARMADA_STATE_V2_PATH} ({}B = {} CL)", 
              std::mem::size_of::<ArmadaStateV2>(),
              std::mem::size_of::<ArmadaStateV2>() / 64);
-    println!("[ARMADA] Toxic storm: mmap pointer (zero-alloc)");
+    println!("[ARMADA] Toxic storm: File read (stack-allocated)");
     println!("[ARMADA] Entering 10 Hz control loop...");
+
+    // Before the 100ms loop: Open the file once (Zero-Allocation in the loop)
+    let toxic_file_path = "/dev/shm/sniper/toxic_storm.bin";
+    let toxic_file = OpenOptions::new()
+        .read(true)
+        .open(toxic_file_path)
+        .expect("Failed to open toxic_storm.bin");
 
     // ═══ 10 Hz Heartbeat (100ms) ═══
     let mut ticker = interval(Duration::from_millis(100));
@@ -49,7 +54,7 @@ async fn main() -> Result<()> {
     loop {
         ticker.tick().await;
         
-        recalculate_kelly_matrix(state_v1, state_v2, oracle_state, l2_state, toxic_ptr);
+        recalculate_kelly_matrix(state_v1, state_v2, oracle_state, l2_state, &toxic_file);
     }
 }
 
@@ -81,7 +86,7 @@ fn recalculate_kelly_matrix(
     state_v2: &mut ArmadaStateV2,
     _oracle: &sniper_types::armada_types::OracleState,
     l2_state: &sniper_types::l2_command::L2SharedState,
-    toxic_ptr: *const u8,
+    toxic_file: &std::fs::File,
 ) {
     // ═══ GLOBAL KILL SWITCH (Check both V1 and V2) ═══
     if state_v1.is_kill_switch_active() || state_v2.is_kill_switch_active() {
@@ -109,9 +114,12 @@ fn recalculate_kelly_matrix(
     raw_weights[3] = 1.0;            // Trigon: venue-neutral arb
     raw_weights[4] = trending * 3.0; // Nexus: cross-venue arb
 
-    // ═══ TOXIC STORM CHECK (Zero-allocation mmap read) ═══
-    // Fix B5: Was std::fs::read() + vec![0] = heap alloc every 100ms
-    let is_toxic = unsafe { std::ptr::read_volatile(toxic_ptr) } == 1;
+    // ═══ TOXIC STORM CHECK (Zero-allocation stack buffer read) ═══
+    let mut toxic_buf = [0u8; 1];
+    let is_toxic = match toxic_file.read_at(&mut toxic_buf, 0) {
+        Ok(1) => toxic_buf[0] == 1,
+        _ => false, // If file is truncated (0 bytes) or read fails, default to false (safe)
+    };
     if is_toxic {
         raw_weights[0] = 0.0; // Hydra: pause market making in storm
         raw_weights[2] = 0.0; // Grid: pause grid making in storm
