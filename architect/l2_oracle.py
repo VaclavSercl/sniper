@@ -318,6 +318,22 @@ class L2OracleAsync:
             except Exception as e:
                 log.error(f"Failed dynamic MMap capital route for {bot_name}: {e}")
 
+        # Vynulování MMapů pro neaktivní boty (aby UI ani systém nedržely duchy kapitálu)
+        inactive_bots = [b for b, s in state.items() if isinstance(s, dict) and s.get("mode") not in ("LIVE", "PAPER", "PAUSED")]
+        for bot_name in inactive_bots:
+            if bot_name not in RISK_STRATEGY: continue
+            tier_data = {
+                "capital_usd": 0.0,
+                "order_usd": 0.0,
+                "max_pos_btc": 0.0,
+                "grid_step": 0.0,
+                "kelly_weight": 0.0
+            }
+            try:
+                self._write_risk_params(bot_name, tier_data)
+            except Exception:
+                pass
+
     def _evaluate_auto_compounding(self, bots):
         """
         Dynamický Auto-Compounding protokol.
