@@ -79,7 +79,7 @@ for proc in tg_commander.py pnl_daemon.py sovereign-cortex hydra-core hydra-dash
             moonshot-core grid-core trigon-core nexus-core armada-core price_bridge.py market_recorder.py zeroclaw; do
     pkill -f "$proc" 2>/dev/null || true
 done
-fuser -k 3004/tcp 2>/dev/null || true
+fuser -k 3000/tcp 2>/dev/null || true
 sleep 2
 
 # Second pass: SIGKILL (force) — catch anything that survived SIGTERM
@@ -152,7 +152,11 @@ python3 "$ARMADA_ROOT/architect/pnl_daemon.py" >> "$LOG_DIR/pnl_daemon.log" 2>&1
 PNL_PID=$!
 sleep 5
 
-
+# 3. Dashboard Server
+echo "  [T+17s] Starting Dashboard Server..."
+python3 "$ARMADA_ROOT/architect/dashboard_server.py" >> "$LOG_DIR/dashboard_server.log" 2>&1 &
+DASH_PID=$!
+sleep 2
 
 # 4. Price Bridge (cross_exchange.bin for Nexus)
 echo "  [T+20s] Starting Price Bridge..."
@@ -178,7 +182,9 @@ if [ -n "$ZEROCLAW_BIN" ] && [ -n "${GEMINI_API_KEY:-}" ]; then
     "$ZEROCLAW_BIN" onboard --api-key "$GEMINI_API_KEY" --provider gemini --model gemini-3.1-pro-preview --quick --force >/dev/null 2>&1
     flock -n /tmp/zeroclaw.lock "$ZEROCLAW_BIN" daemon >> "$LOG_DIR/zeroclaw.log" 2>&1 &
     ZEROCLAW_PID=$!
-    echo "  ✅ ZeroClaw L2: PID $ZEROCLAW_PID (Gemini 3.1 Pro)"
+    ACTUAL_MODEL=$(grep "default_model" ~/.zeroclaw/config.toml 2>/dev/null | head -n 1 | cut -d'"' -f2)
+    [ -z "$ACTUAL_MODEL" ] && ACTUAL_MODEL="Gemini"
+    echo "  ✅ ZeroClaw L2: PID $ZEROCLAW_PID ($ACTUAL_MODEL)"
 else
     ZEROCLAW_PID="N/A"
     [ -z "$ZEROCLAW_BIN" ] && echo "  ⚠️  zeroclaw binary not found in PATH ($PATH)"
@@ -202,7 +208,7 @@ echo "════════════════════════�
 
 tg_alert "🐺 *SOVEREIGN BOOT v21.0*
 🧠 Candle L1: Logit Sniping
-🐝 ZeroClaw L2: Gemini 3.1 Pro
+🐝 ZeroClaw L2: $ACTUAL_MODEL
 🐍 Trading bots: ALL OFFLINE
 🤖 L2 Oracle deciding in ~15s...
 $(date '+%H:%M:%S')"

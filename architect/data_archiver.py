@@ -32,13 +32,27 @@ def archive_and_prune():
         conn = sqlite3.connect(DB_PATH)
         success = True
         
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+        
         # --- 1. Ticks ---
         log.info(f"Querying ticks older than {cutoff_dt}...")
-        df_ticks = pd.read_sql_query(f"SELECT * FROM ticks WHERE ts_ms < {threshold_ms}", conn)
-        if not df_ticks.empty:
-            out_file = os.path.join(LAKE_DIR, "ticks", f"{file_prefix}_ticks.parquet")
-            df_ticks.to_parquet(out_file, engine='pyarrow', compression='snappy')
-            log.info(f"✅ Archived {len(df_ticks)} ticks to {out_file}")
+        df_iter = pd.read_sql_query(f"SELECT * FROM ticks WHERE ts_ms < {threshold_ms}", conn, chunksize=500_000)
+        
+        writer = None
+        out_file = os.path.join(LAKE_DIR, "ticks", f"{file_prefix}_ticks.parquet")
+        total_rows = 0
+        
+        for df_ticks in df_iter:
+            table = pa.Table.from_pandas(df_ticks, preserve_index=False)
+            if writer is None:
+                writer = pq.ParquetWriter(out_file, table.schema, compression='snappy')
+            writer.write_table(table)
+            total_rows += len(df_ticks)
+            
+        if writer is not None:
+            writer.close()
+            log.info(f"✅ Archived {total_rows} ticks to {out_file}")
             
             # Prune AFTER safe export
             cur = conn.cursor()
@@ -49,15 +63,24 @@ def archive_and_prune():
             log.info("No old ticks to archive.")
             
         # --- 2. Candles 1s ---
-        df_1s = pd.read_sql_query(f"SELECT * FROM candles_1s WHERE ts < {threshold_ms}", conn)
-        if not df_1s.empty:
-            out_file = os.path.join(LAKE_DIR, "candles_1s", f"{file_prefix}_1s.parquet")
-            df_1s.to_parquet(out_file, engine='pyarrow', compression='snappy')
+        df_1s_iter = pd.read_sql_query(f"SELECT * FROM candles_1s WHERE ts < {threshold_ms}", conn, chunksize=500_000)
+        out_file_1s = os.path.join(LAKE_DIR, "candles_1s", f"{file_prefix}_1s.parquet")
+        writer_1s = None
+        total_1s = 0
+        
+        for df_1s in df_1s_iter:
+            table = pa.Table.from_pandas(df_1s, preserve_index=False)
+            if writer_1s is None:
+                writer_1s = pq.ParquetWriter(out_file_1s, table.schema, compression='snappy')
+            writer_1s.write_table(table)
+            total_1s += len(df_1s)
             
+        if writer_1s is not None:
+            writer_1s.close()
             cur = conn.cursor()
             cur.execute(f"DELETE FROM candles_1s WHERE ts < {threshold_ms}")
             conn.commit()
-            log.info(f"✅ Archived and pruned {len(df_1s)} 1s candles.")
+            log.info(f"✅ Archived and pruned {total_1s} 1s candles.")
             
         # SQLite Vacuum is deferred to avoid locking during trading
         conn.close()

@@ -26,8 +26,8 @@ from sse_starlette.sse import EventSourceResponse
 
 log = logging.getLogger("dashboard_sse")
 
-DASHBOARD_PORT = 3004
-SSE_INTERVAL = 0.1  # 100ms between updates (10Hz)
+DASHBOARD_PORT = 3000
+SSE_INTERVAL = 0.5  # Dashboard refresh rates (10Hz)
 
 app = FastAPI(title="Sniper Master Dashboard API")
 app.add_middleware(

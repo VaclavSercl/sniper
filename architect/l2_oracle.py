@@ -581,6 +581,9 @@ class L2OracleAsync:
                     
             if fused:
                 sentiment_section = f"\n═══ LLM SENTIMENT FUSION ═══\n{chr(10).join(fused)}\n"
+        except Exception:
+            pass
+            
         if brave_news:
             sentiment_section += f"\n═══ LIVE MACRO NEWS (Brave Search) ═══\n{brave_news}\n"
 
