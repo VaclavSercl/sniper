@@ -54,11 +54,17 @@ def archive_and_prune():
             writer.close()
             log.info(f"✅ Archived {total_rows} ticks to {out_file}")
             
-            # Prune AFTER safe export
+            # Prune AFTER safe export in small chunks to prevent SQLite 'database is locked' errors!
             cur = conn.cursor()
-            cur.execute(f"DELETE FROM ticks WHERE ts_ms < {threshold_ms}")
-            conn.commit()
-            log.info(f"🗑️ Pruned ticks < {cutoff_dt}")
+            deleted_ticks = 0
+            while True:
+                cur.execute(f"DELETE FROM ticks WHERE ts_ms < {threshold_ms} LIMIT 100000")
+                if cur.rowcount == 0:
+                    break
+                conn.commit()
+                deleted_ticks += cur.rowcount
+                time.sleep(0.1) # Yield lock to market_recorder.py
+            log.info(f"🗑️ Pruned {deleted_ticks} ticks < {cutoff_dt}")
         else:
             log.info("No old ticks to archive.")
             
@@ -78,9 +84,15 @@ def archive_and_prune():
         if writer_1s is not None:
             writer_1s.close()
             cur = conn.cursor()
-            cur.execute(f"DELETE FROM candles_1s WHERE ts < {threshold_ms}")
-            conn.commit()
-            log.info(f"✅ Archived and pruned {total_1s} 1s candles.")
+            deleted_1s = 0
+            while True:
+                cur.execute(f"DELETE FROM candles_1s WHERE ts < {threshold_ms} LIMIT 100000")
+                if cur.rowcount == 0:
+                    break
+                conn.commit()
+                deleted_1s += cur.rowcount
+                time.sleep(0.1)
+            log.info(f"✅ Archived and pruned {total_1s} (+ {deleted_1s} deleted) 1s candles.")
             
         # SQLite Vacuum is deferred to avoid locking during trading
         conn.close()
