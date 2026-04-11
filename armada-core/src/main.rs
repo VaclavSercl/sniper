@@ -106,13 +106,23 @@ fn recalculate_kelly_matrix(
     let ranging = l2_state.global_risk.ranging_score.load(Ordering::Relaxed) as f64 / 1e8;
     let trending = l2_state.global_risk.trending_score.load(Ordering::Relaxed) as f64 / 1e8;
 
-    // ═══ BOT WEIGHT MATRIX (Regime-Aware) ═══
+    // ═══ BOT WEIGHT MATRIX (Regime-Aware & Active-Only) ═══
     let mut raw_weights = [0.0f64; MAX_BOTS];
-    raw_weights[0] = ranging * 2.0;  // Hydra: excels in range
-    raw_weights[1] = trending * 3.0; // Moonshot: excels in trend
-    raw_weights[2] = ranging * 1.5;  // Grid: excels in range
-    raw_weights[3] = 1.0;            // Trigon: venue-neutral arb
-    raw_weights[4] = trending * 3.0; // Nexus: cross-venue arb
+    for bot in 0..MAX_BOTS {
+        let kw = f32::from_bits(state_v2.kelly.kelly_weight[bot * MAX_VENUES].load(Ordering::Relaxed));
+        if kw > 0.0 {
+            raw_weights[bot] = match bot {
+                0 => ranging * 2.0,  // Hydra: excels in range
+                1 => trending * 3.0, // Moonshot: excels in trend
+                2 => ranging * 1.5,  // Grid: excels in range
+                3 => 1.0,            // Trigon: venue-neutral arb
+                4 => trending * 3.0, // Nexus: cross-venue arb
+                _ => 0.0,
+            };
+        } else {
+            raw_weights[bot] = 0.0;  // OFFLINE: Ignore in dynamic capital distribution
+        }
+    }
 
     // ═══ TOXIC STORM CHECK (Zero-allocation stack buffer read) ═══
     let mut toxic_buf = [0u8; 1];
