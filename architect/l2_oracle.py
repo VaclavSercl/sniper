@@ -156,11 +156,25 @@ class L2OracleAsync:
                      f"pos={b['position']:.6f} pnl=${b['pnl']:.4f} "
                      f"grid=${b['grid_step']:.2f} fills={b['fills']}")
 
+        # 1.8 Fetch Brave Search macro news asynchronously
+        brave_news = await asyncio.to_thread(self._fetch_brave_news_sync)
+
         # 2. Build Gemini prompt
-        prompt = self._build_prompt(bots, gpu_data)
+        prompt = self._build_prompt(bots, gpu_data, brave_news)
+
+        # Read the actual model dynamically from config
+        actual_model = "Unknown Model"
+        try:
+            with open(os.path.join(PROJECT_ROOT, "zeroclaw", "config.toml"), "r") as f:
+                for line in f:
+                    if "default_model" in line:
+                        actual_model = line.split("=")[1].strip().strip('"').strip("'")
+                        break
+        except Exception:
+            pass
 
         # 3. Call ZeroClaw L2 Oracle
-        log.info("  🐝 Calling ZeroClaw agent (Gemini 3.1 Pro)...")
+        log.info(f"  🐝 Calling ZeroClaw agent ({actual_model})...")
         try:
             # ZeroClaw agent: routes through sovereign constitution + Gemini
             process = await asyncio.create_subprocess_exec(
@@ -318,7 +332,29 @@ class L2OracleAsync:
         except Exception as e:
             log.error(f"Auto-Compounding error: {e}")
 
-    def _build_prompt(self, bots, gpu_data=None):
+    def _fetch_brave_news_sync(self):
+        try:
+            import urllib.request
+            import os
+            from dotenv import load_dotenv
+            load_dotenv()
+            api_key = os.environ.get("BRAVE_API_KEY")
+            if not api_key: return "Brave Search API Key missing."
+            
+            url = "https://api.search.brave.com/res/v1/news/search?q=Bitcoin+crypto+macro+economy&count=3&freshness=pd"
+            req = urllib.request.Request(url, headers={
+                "Accept": "application/json",
+                "X-Subscription-Token": api_key
+            })
+            with urllib.request.urlopen(req, timeout=4) as resp:
+                data = json.loads(resp.read().decode())
+                results = data.get("results", [])
+                snippets = [f"- {res.get('title', '')}: {res.get('description', '')}" for res in results]
+                return "\n".join(snippets) if snippets else "No fresh news."
+        except Exception as e:
+            return f"Brave Search error: {e}"
+
+    def _build_prompt(self, bots, gpu_data=None, brave_news=""):
         """Build the Gemini prompt with macro context, feedback loop, and GPU telemetry."""
         hydra = next((b for b in bots if b["name"] == "hydra"), None)
         fg = hydra.get("fear_greed", 50) if hydra else 50
@@ -545,8 +581,8 @@ class L2OracleAsync:
                     
             if fused:
                 sentiment_section = f"\n═══ LLM SENTIMENT FUSION ═══\n{chr(10).join(fused)}\n"
-        except Exception:
-            pass
+        if brave_news:
+            sentiment_section += f"\n═══ LIVE MACRO NEWS (Brave Search) ═══\n{brave_news}\n"
 
         return f"""You are SNIPER, the Sovereign AI Oracle managing an automated multi-bot trading Armada.
 You have FULL AUTHORITY over ALL bots. Analyze macro, fees, and each bot's state.

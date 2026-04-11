@@ -160,6 +160,7 @@ struct HydraEngine {
     
     // Eliminováno Plovoucí desetinna čárka v proměnných 
     chan_id: Option<i64>,
+    trades_chan_id: Option<i64>,
     last_upd: Instant,
     snapshot_loaded: bool,
     cs_debug_count: u32,
@@ -185,7 +186,8 @@ impl SovereignEngine for HydraEngine {
     fn subscriptions(&mut self) -> Vec<String> {
         vec![
             json!({"event":"conf","flags":131072|536870912}).to_string(),
-            json!({"event":"subscribe","channel":"book","symbol":sniper_types::TRADING_SYMBOL,"prec":"P0","freq":"F0","len":"25"}).to_string()
+            json!({"event":"subscribe","channel":"book","symbol":sniper_types::TRADING_SYMBOL,"prec":"P0","freq":"F0","len":"25"}).to_string(),
+            json!({"event":"subscribe","channel":"trades","symbol":sniper_types::TRADING_SYMBOL}).to_string()
         ]
     }
 
@@ -212,10 +214,16 @@ impl SovereignEngine for HydraEngine {
 
     fn on_system_event(&mut self, value: &serde_json::Value, _out_buf: &mut bytes::BytesMut) {
         if value["event"] == "subscribed" {
-            self.chan_id = value["chanId"].as_i64();
-            self.snapshot_loaded = false;
-            println!("[HYDRA DEBUG] SUCCESSFULLY SUBSCRIBED TO CHANNEL ID: {:?}", self.chan_id);
-            info!(event = "mdata_subscribed", chan_id = ?self.chan_id);
+            let channel = value["channel"].as_str().unwrap_or("");
+            if channel == "book" {
+                self.chan_id = value["chanId"].as_i64();
+                self.snapshot_loaded = false;
+                println!("[HYDRA DEBUG] SUCCESSFULLY SUBSCRIBED TO BOOK CHANNEL: {:?}", self.chan_id);
+            } else if channel == "trades" {
+                self.trades_chan_id = value["chanId"].as_i64();
+                println!("[HYDRA DEBUG] SUCCESSFULLY SUBSCRIBED TO TRADES CHANNEL: {:?}", self.trades_chan_id);
+            }
+            info!(event = "mdata_subscribed", chan_id = value["chanId"].as_i64(), channel = channel);
         } else if value["event"] == "error" {
             info!(event = "mdata_error", msg = ?value["msg"], code = ?value["code"]);
         }
@@ -483,6 +491,43 @@ impl SovereignEngine for HydraEngine {
                         }
                 }
             }
+            // ── MARKET DATA STREAM (Public Trades for VPIN) ──
+            else if arr[0].as_i64() == self.trades_chan_id && self.trades_chan_id.is_some() {
+                if let Some(msg_type) = arr[1].as_str() {
+                    // Update VPIN logic on public trade (mt = "te")
+                    if msg_type == "te" || msg_type == "tu" {
+                        if let Some(trade) = arr.get(2).and_then(|e| e.as_array()) {
+                            if let Some(amt) = extract_fixed(&trade[2]) {
+                                let vol_usd = amt.0.abs() as u64; 
+                                if amt.0 > 0 {
+                                    engine.vpin_buy_volume_bucket.fetch_add(vol_usd, Ordering::Relaxed);
+                                } else {
+                                    engine.vpin_sell_volume_bucket.fetch_add(vol_usd, Ordering::Relaxed);
+                                }
+
+                                let buy_vol = engine.vpin_buy_volume_bucket.load(Ordering::Relaxed);
+                                let sell_vol = engine.vpin_sell_volume_bucket.load(Ordering::Relaxed);
+                                let total_vol = buy_vol + sell_vol;
+
+                                // VPIN bucket size threshold (e.g. 50 BTC translated to scaled volume)
+                                // 50 * PRICE_SCALE_I = 5_000_000_000
+                                const VPIN_BUCKET_SIZE: u64 = 10_000_000_000; 
+
+                                if total_vol >= VPIN_BUCKET_SIZE {
+                                    let imb = if buy_vol > sell_vol { buy_vol - sell_vol } else { sell_vol - buy_vol };
+                                    let vpin = (imb as u128 * 10000 / total_vol as u128) as u64; // 0..10000
+                                    engine.vpin_score.store(vpin, Ordering::Release);
+                                    
+                                    // Reset pro další bucket (overlapping/rolling by byl lepší, 
+                                    // ale toto je čistý zero-alloc přístup doporučený akademicky)
+                                    engine.vpin_buy_volume_bucket.store(0, Ordering::Relaxed);
+                                    engine.vpin_sell_volume_bucket.store(0, Ordering::Relaxed);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -662,6 +707,30 @@ impl SovereignEngine for HydraEngine {
             }
         }
         
+        // === HWM & Kelly Fractional Drawdown Guard ===
+        let wallet_usd_fw = engine.wallet_usd.load(Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE;
+        let wallet_btc_fw = engine.wallet_btc.load(Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE;
+        let best_bid_fw = best_bid as f64 / sniper_types::PRICE_SCALE;
+        let total_wallet = wallet_usd_fw + (wallet_btc_fw * best_bid_fw);
+        
+        if total_wallet > 10.0 {
+            let hwm = engine.high_water_mark_usd.load(Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE;
+            if total_wallet > hwm {
+                engine.high_water_mark_usd.store((total_wallet * sniper_types::PRICE_SCALE) as u64, Ordering::Relaxed);
+            } else {
+                let kelly = risk.kelly_fraction.load(Ordering::Relaxed) as f64 / 10000.0;
+                let max_drawdown = hwm * kelly.max(0.01); 
+                if hwm - total_wallet > max_drawdown {
+                    self.notifier.alert(format!("🚨 *DRAWDOWN GUARD*: Fractional Kelly Hit (Drop > ${:.2}) — Pausing Hydra!", max_drawdown));
+                    out_buf.extend_from_slice(b"[0,\"oc_multi\",null,{\"all\":1}]");
+                    engine.sweep_freeze_until.store(now_ms + 300_000, Ordering::Release); // 5 minute freeze
+                    self.last_upd = now;
+                    return;
+                }
+            }
+        }
+
+        
         // === NOVÝ EXPONENCIÁLNÍ SKEWING (Issue #11) ===
         let trending_fp = FixedPrice::new(l2risk.trending_score.load(Ordering::Relaxed) as i64);
         let one_fp = FixedPrice::new(sniper_types::PRICE_SCALE_I);
@@ -692,8 +761,16 @@ impl SovereignEngine for HydraEngine {
 
         let trending_score = l2risk.trending_score.load(Ordering::Relaxed) as f64 / 1e8;
         let base_grid = risk.grid_step.load(Ordering::Acquire) as f64;
+        
+        let l0_vpin = engine.vpin_score.load(Ordering::Relaxed);
+        let vpin_expansion = if l0_vpin > 6000 {
+            1.0 + (((l0_vpin - 6000) as f64 / 4000.0) * 3.0) // linearly scale up to 4x expansion
+        } else {
+            1.0
+        };
+        
         let expansion_multiplier = 1.0 + (trending_score.max(0.0) * 2.0);
-        let mut grid = (base_grid * expansion_multiplier) as i64;
+        let mut grid = (base_grid * expansion_multiplier * vpin_expansion) as i64;
         if in_liquidity_hole { grid = (grid * 3).min(2_000_000_000); }
         let current_pos = engine.net_position.load(Ordering::Acquire);
         let max_pos = risk.max_inv_delta.load(Ordering::Acquire) as i64;
@@ -1023,6 +1100,7 @@ async fn async_main() -> Result<()> {
         l2portfolio: &l2_shared.portfolio,
         l1ring: &l2_shared.latency_ring,
         chan_id: None,
+        trades_chan_id: None,
         last_upd: Instant::now(),
         snapshot_loaded: false,
         cs_debug_count: 0,

@@ -168,6 +168,14 @@ pub struct EngineState {
     pub taker_fee_bps: AtomicU64,          // Taker fee × 10000
     pub fee_last_checked_ms: AtomicU64,    // Epoch ms of last API check
     pub fee_kills: AtomicU64,              // Counter: trades skipped due to fee > profit
+
+    // --- VPIN TOXICITY (v11.4 Volume-Synchronized Probability of Informed Trading) ---
+    pub vpin_score: AtomicU64,             // 0..10000 = 0.0000..1.0000 (probability of toxicity)
+    pub vpin_buy_volume_bucket: AtomicU64, // Accumulator for buy volume × PRICE_SCALE
+    pub vpin_sell_volume_bucket: AtomicU64, // Accumulator for sell volume × PRICE_SCALE
+
+    // --- DYNAMIC DRAWDOWN (v11.4 Kelly Criterion) ---
+    pub high_water_mark_usd: AtomicU64,    // Maximum wallet value reached today × PRICE_SCALE
 }
 
 impl Default for OrderBookLevel {
@@ -267,6 +275,11 @@ impl Default for EngineState {
             taker_fee_bps: AtomicU64::new(0),      // 0 = free
             fee_last_checked_ms: AtomicU64::new(0),
             fee_kills: AtomicU64::new(0),
+            // v11.4 VPIN and Drawdown
+            vpin_score: AtomicU64::new(0),
+            vpin_buy_volume_bucket: AtomicU64::new(0),
+            vpin_sell_volume_bucket: AtomicU64::new(0),
+            high_water_mark_usd: AtomicU64::new(400 * PRICE_SCALE_I as u64), // default initial HWM
         }
     }
 }
@@ -285,7 +298,7 @@ pub struct RiskState {
     pub bias_offset: AtomicI64,
     pub authorized_capital: AtomicU64,  // Capital Guard: max USD the bot may use (0 = unlimited)
     pub daily_loss_limit: AtomicU64,    // Daily Loss Limit: auto-pause if PnL drops below -this (0 = disabled)
-    pub _padding: [u8; 8],
+    pub kelly_fraction: AtomicU64,      // 0..10000: fractional part of max safe drawdown
 }
 
 impl Default for RiskState {
@@ -300,7 +313,7 @@ impl Default for RiskState {
             bias_offset: AtomicI64::new(0),
             authorized_capital: AtomicU64::new(400 * PRICE_SCALE_I as u64), // $400 default
             daily_loss_limit: AtomicU64::new(20 * PRICE_SCALE_I as u64),    // $20 default
-            _padding: [0; 8],
+            kelly_fraction: AtomicU64::new(2000), // Default 20% fractional Kelly base
         }
     }
 }
