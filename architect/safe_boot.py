@@ -183,11 +183,13 @@ class SafeBootPipeline:
                 log.info(f"[{self.bot}] PAUSED: Initiating 60s L2 Orderbook Reconstruction.")
                 fallback_mode = "PAUSED"
                 
-                # Asynchronní task po 60s interně přepne do LIVE
+                # Asynchronní task po 60s interně přepne do cílového módu
                 try:
+                    intended_mode = state[self.bot].get("mode", "PAPER")
+                    log.info(f"[{self.bot}] WARMUP Spawner: Read intended_mode='{intended_mode}' from armada_state.json")
                     warmup_script = os.path.join(PROJECT_ROOT, "architect", "l2_warmup.py")
                     subprocess.Popen(
-                        [sys.executable, warmup_script, self.bot, "60"],
+                        [sys.executable, warmup_script, self.bot, "60", intended_mode],
                         cwd=PROJECT_ROOT,
                         start_new_session=True,
                         stdout=subprocess.DEVNULL,

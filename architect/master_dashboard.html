@@ -47,6 +47,7 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
 .bot-name { font-weight:700; font-size:1.05em; }
 .bot-status { font-size:0.65em; font-weight:600; padding:2px 8px; border-radius:10px; margin-left:auto; }
 .bot-status.live { background:rgba(34,197,94,0.12); color:var(--green); border:1px solid rgba(34,197,94,0.2); }
+.bot-status.paper { background:rgba(6,182,212,0.12); color:var(--cyan); border:1px solid rgba(6,182,212,0.2); }
 .bot-status.offline { background:rgba(239,68,68,0.12); color:var(--red); border:1px solid rgba(239,68,68,0.2); }
 .bot-status.paused { background:rgba(251,191,36,0.12); color:var(--yellow); border:1px solid rgba(251,191,36,0.2); }
 .bot-metrics { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
@@ -629,13 +630,28 @@ function renderBots(bots) {
     // Render Grid
     document.getElementById('bot-grid').innerHTML = bots.map(b => {
         const icon = ICONS[b.name] || '🤖';
-        const st = b.online ? (b.paused ? 'paused' : 'live') : 'offline';
-        const stLabel = b.online ? (b.paused ? 'PAUSED' : 'LIVE') : 'OFF';
+        let st = b.online ? (b.paused ? 'paused' : 'live') : 'offline';
+        let stLabel = b.online ? (b.paused ? 'PAUSED' : 'LIVE') : 'OFF';
+
+        if (b.mode === 'OFFLINE' || b.mode === 'STOPPED') {
+            st = 'offline';
+            stLabel = 'OFF';
+            b.online = false; // Force offline visual
+        } else if (b.mode === 'PAPER') {
+            st = 'paper';
+            stLabel = 'PAPER';
+        } else if (b.mode === 'PAUSED' || b.paused) {
+            st = 'paused';
+            stLabel = b.mode === 'PAUSED' ? 'WARMUP' : 'PAUSED';
+        } else if (!b.online) {
+            st = 'offline';
+            stLabel = 'OFF';
+        }
         const href = `/bot/${b.name}`;
         const target = '_blank';
         const spark = renderSvgSparkline(botHistory[b.name], 80, 20, (b.pnl>=0?'#22c55e':'#ef4444'), false);
-        return `<a href="${href}" target="_blank" style="text-decoration:none;color:inherit" title="Open ${b.name.toUpperCase()} dedicated dashboard">
-            <div class="bot-card">
+        return `<div class="bot-card">
+            <a href="${href}" target="_blank" style="text-decoration:none;color:inherit;display:block;" title="Open ${b.name.toUpperCase()} dedicated dashboard">
             <div class="bot-header">
                 <span class="bot-icon">${icon}</span>
                 <span class="bot-name">${b.name.toUpperCase()}</span>
@@ -649,7 +665,12 @@ function renderBots(bots) {
                 <div class="bm"><div class="bl">Fills</div><div class="bv">${b.fills||0}</div></div>
                 <div class="bm"><div class="bl">Toxic</div><div class="bv ${(b.toxic||0)>10?'red':'green'}">${b.toxic||0}</div></div>
             </div>
-        </div></a>`;
+            </a>
+            <div style="display:flex; gap:6px; margin-top:12px;">
+                <button onclick="controlBot('${b.name}', 'on')" style="flex:1; padding:6px; font-size:0.65em; font-weight:bold; background:rgba(34,197,94,0.2); color:var(--green); border:1px solid rgba(34,197,94,0.4); border-radius:4px; cursor:pointer; text-transform:uppercase;">▶️ ON (Test)</button>
+                <button onclick="controlBot('${b.name}', 'off')" style="flex:1; padding:6px; font-size:0.65em; font-weight:bold; background:rgba(239,68,68,0.2); color:var(--red); border:1px solid rgba(239,68,68,0.4); border-radius:4px; cursor:pointer; text-transform:uppercase;">🛑 OFF</button>
+            </div>
+        </div>`;
     }).join('');
 
     // Render Leaderboard (D1)
@@ -1675,6 +1696,31 @@ function renderObiGauge(targetObi) {
     ctx.font = '18px JetBrains Mono';
     ctx.fillStyle = currentGaugeValue > 0.2 ? '#22c55e' : (currentGaugeValue < -0.2 ? '#ef4444' : '#e1e5ee');
     ctx.fillText(`OBI: ${currentGaugeValue.toFixed(2)}`, cx, cy - radius - 15);
+}
+
+// Přímé ovládání botů z Dashboardu (HTTP POST na API)
+function controlBot(botName, action) {
+    let confirmMsg = action === 'on' 
+        ? `Zahájit tréninkový režim pro bota ${botName.toUpperCase()}? Bot najede v módu PAPER a převezme si ho AI.` 
+        : `Opravdu chcete kompletně odstavit bota ${botName.toUpperCase()}? Umělá inteligence nad ním ztratí moc.`;
+        
+    if (!confirm(confirmMsg)) {
+        return;
+    }
+    fetch(`/api/bot/${botName}/${action}`, {
+        method: 'POST'
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'success') {
+            console.log(`Command sent: ${action} to ${botName}`);
+        } else {
+            alert(`Chyba: ${data.message}`);
+        }
+    })
+    .catch(err => {
+        console.error("Control API error:", err);
+    });
 }
 </script>
 </body>

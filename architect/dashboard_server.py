@@ -161,8 +161,19 @@ def _build_dashboard_state():
             w_bnb["total_usd"] = (w_bnb.get("usd") or 0.0) + ((w_bnb.get("btc") or 0.0) * btc_price)
             w_bnb["btc_price"] = btc_price
             
-            state["snapshot"]["wallet_bfx"] = w_bfx
             state["snapshot"]["wallet_bnb"] = w_bnb
+            
+            # Přečtení modes (LIVE/PAPER/PAUSED/OFFLINE) z armada_state.json
+            try:
+                state_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "state", "armada_state.json")
+                if os.path.exists(state_file):
+                    with open(state_file) as f:
+                        a_state = json.load(f)
+                    for bot in state["snapshot"].get("bots", []):
+                        b_mode = a_state.get(bot["name"].lower(), {}).get("mode", "LIVE")
+                        bot["mode"] = b_mode
+            except Exception as e:
+                log.debug(f"Could not read armada_state.json for bot modes: {e}")
             
     except Exception as e:
         log.error(f"Error in dashboard state fetch: {e}")
@@ -279,10 +290,10 @@ def _get_war_room_state():
         fmt_capital = '<40Q'
         capital_data = struct.unpack_from(fmt_capital, mm_v2, 128)
 
-        # 3. Přečtení PnL Matrix CL9-13 (Offset 576, 320 bajtů)
+        # 3. Přečtení PnL Matrix CL10-14 (Offset 640, 320 bajtů)
         # 40 * i64 (Malé 'q' pro záporné PnL)
         fmt_pnl = '<40q'
-        pnl_data = struct.unpack_from(fmt_pnl, mm_v2, 576)
+        pnl_data = struct.unpack_from(fmt_pnl, mm_v2, 640)
 
         # Rekonstrukce matice pro frontend
         fleet_matrix = []
@@ -801,13 +812,56 @@ async def handle_routing(weights_data: dict):
                     for v_idx in range(1, 8):
                          struct.pack_into('<Q', mm, idx_base + (v_idx * 8), 0)
 
+            mm.flush()
             mm.close()
+            log.info(f"⚖️ CAPITAL ROUTED: Zapsány nové váhy flotily na základě {total_equity} USD.")
+            return {"status": "success", "message": "Capital distributed"}
             
-        log.info(f"⚖️ CAPITAL ROUTED: Zapsány nové váhy flotily na základě {total_equity} USD.")
-        return {"status": "success"}
-
     except Exception as e:
         log.error(f"Routing Error: {e}")
+        return {"status": "error", "message": str(e)}
+
+@app.post("/api/bot/{bot_name}/{action}")
+async def api_bot_action(bot_name: str, action: str):
+    """Handles actions invoked from the dashboard buttons."""
+    # Write command out to a fast local pipe/file for tg_commander to pick up, 
+    # or just call deploy_armada.sh natively. 
+    # The safest way is to use the shared function from orchestration.py
+    try:
+        import sys, os
+        # Need to allow dashboard to import orchestration
+        arch_path = os.path.dirname(os.path.abspath(__file__))
+        if arch_path not in sys.path:
+            sys.path.append(arch_path)
+            
+        from orchestration import start_bot, stop_bot, save_bot_state
+        from cortex_client import CortexClient
+        cortex = CortexClient()
+        
+        bot_name = bot_name.lower()
+        action = action.lower()
+        valid_bots = {"hydra", "moonshot", "grid", "trigon", "nexus"}
+        if bot_name not in valid_bots:
+            return {"status": "error", "message": "Invalid bot"}
+            
+        if action in ("live", "start"):
+            save_bot_state(bot_name, "LIVE")
+            start_bot(bot_name)
+            cortex.unpause(bot_name)
+        elif action in ("paper", "on"):
+            save_bot_state(bot_name, "PAPER")
+            start_bot(bot_name)
+            cortex.pause(bot_name) # Ensure no firing
+        elif action in ("off", "stop"):
+            save_bot_state(bot_name, "OFFLINE")
+            stop_bot(bot_name)
+        else:
+            return {"status": "error", "message": "Invalid action"}
+            
+        return {"status": "success", "message": f"{bot_name.upper()} -> {action.upper()}"}
+    except Exception as e:
+        log.error(f"Bot Action API failed: {e}")
+        return {"status": "error", "message": str(e)}
         # Assuming FastAPI returning JSON 500 equivalent structure
         return Response(content='{"status": "error", "message": "'+str(e)+'"}', status_code=500)
 

@@ -30,7 +30,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("l2_warmup")
 
-def trigger_l2_warmup_task(bot_name: str, duration_sec: int):
+def trigger_l2_warmup_task(bot_name: str, duration_sec: int, intended_mode: str = "LIVE"):
     log.info(f"⏳ [WARMUP] Starting L2 Orderbook Reconstruction for {bot_name} ({duration_sec}s)...")
     time.sleep(duration_sec)
     
@@ -46,25 +46,31 @@ def trigger_l2_warmup_task(bot_name: str, duration_sec: int):
         log.error(f"❌ [WARMUP] Failed reading state for {bot_name}: {e}")
         return
 
+    # DEBUG: Log exact received intended mode
+    log.info(f"🔍 [WARMUP DEBUG] {bot_name} received intended_mode='{intended_mode}'")
+    
+    final_mode = intended_mode.upper().strip() if intended_mode and intended_mode.upper().strip() in ("LIVE", "PAPER") else "PAPER"
+
     # Flip Armada State
     try:
-        save_bot_state(bot_name, "LIVE")
+        save_bot_state(bot_name, final_mode)
     except Exception as e:
-        log.error(f"❌ [WARMUP] Failed to save LIVE state for {bot_name}: {e}")
+        log.error(f"❌ [WARMUP] Failed to save {final_mode} state for {bot_name}: {e}")
         return
 
-    # Flip Risk IPC MMap Offset
+    # Flip Risk IPC MMap Offset ONLY IF LIVE
     risk_entry = BOT_RISK_MAP.get(bot_name)
     if risk_entry:
         risk_path, offset = risk_entry
         if os.path.exists(risk_path):
             try:
-                with open(risk_path, 'r+b') as rf:
-                    mm = mmap.mmap(rf.fileno(), 0)
-                    struct.pack_into('<Q', mm, offset, 0)
-                    mm.flush()
-                    mm.close()
-                log.info(f"✅ [WARMUP] {bot_name} L2 Reconstruction Complete -> Transitioned to LIVE.")
+                if final_mode == "LIVE":
+                    with open(risk_path, 'r+b') as rf:
+                        mm = mmap.mmap(rf.fileno(), 0)
+                        struct.pack_into('<Q', mm, offset, 0)
+                        mm.flush()
+                        mm.close()
+                log.info(f"✅ [WARMUP] {bot_name} L2 Reconstruction Complete -> Transitioned to {final_mode.upper()}.")
             except Exception as e:
                 log.error(f"❌ [WARMUP] Failed to write mmap offset for {bot_name}: {e}")
         else:
@@ -76,6 +82,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("bot_name", help="Name of the bot to warmup")
     parser.add_argument("duration", type=int, help="Duration of warmup in seconds")
+    parser.add_argument("intended_mode", nargs="?", default="PAPER", help="The mode to transition to after warmup")
     args = parser.parse_args()
     
-    trigger_l2_warmup_task(args.bot_name, args.duration)
+    trigger_l2_warmup_task(args.bot_name, args.duration, args.intended_mode)
