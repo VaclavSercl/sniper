@@ -170,7 +170,13 @@ python3 "$ARMADA_ROOT/architect/tg_commander.py" >> "$LOG_DIR/tg_commander.log" 
 COMMANDER_PID=$!
 sleep 2
 
-# 6. ZeroClaw L2 Daemon (replaces l2_oracle.py)
+# 6. Armada Core (Sovereign Routing & Netting Engine)
+echo "  [T+24s] Starting Armada Core Engine..."
+nohup "$HOME/.cargo/bin/armada-core" >> "$LOG_DIR/armada-core.log" 2>&1 &
+ARMADA_PID=$!
+sleep 1
+
+# 7. ZeroClaw L2 Daemon (replaces l2_oracle.py)
 echo "  [T+25s] Starting ZeroClaw L2 Oracle..."
 # Safety: strip any stray quotes from GEMINI_API_KEY (.env already source'd at L36)
 if [ -n "${GEMINI_API_KEY:-}" ]; then
@@ -198,9 +204,11 @@ echo "   INFRASTRUCTURE ONLINE (v21.0 — Iron Sequence)"
 echo "   🧠 Cortex:    PID $CORTEX_PID (SystemD managed)"
 echo "   📈 Recorder:  PID $RECORDER_PID"
 echo "   💰 PnL:       PID $PNL_PID"
-
 echo "   🌐 Bridge:    PID $BRIDGE_PID"
 echo "   📱 Commander: PID $COMMANDER_PID"
+echo "   ⚙️ Armada:    PID $ARMADA_PID"
+echo "   🤖 ZeroClaw:  PID $ZEROCLAW_PID"
+echo "   🐍 Dashboard: PID $DASH_PID (Port 3000, 3004)"
 echo ""
 echo "   🤖 L2 Oracle will read pre-crash state in ~15s"
 echo "   🐍 Trading bots: ALL OFFLINE (Oracle decides)"
