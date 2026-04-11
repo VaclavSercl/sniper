@@ -799,12 +799,10 @@ PARAMETER CONSTRAINTS:
         elif os_action == "START":
             _safe_ai_ignition("hydra")
 
-        # SBP v3.1 Anti-Stagnation Override
-        if hydra.get("pause_trading") is True and "hydra" in self._paper_trials:
-            trial = self._paper_trials["hydra"]
-            trial_fills = self._get_total_fills() - trial["initial_fills"]
-            if trial_fills < self.PAPER_TRIAL_MIN_EVENT_FILLS:
-                log.info(f"  🛡️ Hydra Anti-Stagnation: Overriding AI PAUSE to FALSE (Needs {self.PAPER_TRIAL_MIN_EVENT_FILLS} fills, has {trial_fills})")
+        # WFA Paper Mode Override
+        if hydra.get("pause_trading") is True and hasattr(self, "_armada_state"):
+            if self._armada_state.get("hydra", {}).get("mode") == "PAPER":
+                log.info("  🛡️ Hydra Anti-Stagnation: Overriding AI PAUSE to FALSE (Bot is in PAPER mode WFA)")
                 hydra["pause_trading"] = False
 
         if hydra.get("pause_trading") is True:
@@ -1220,12 +1218,10 @@ PARAMETER CONSTRAINTS:
             os.close(fd)
 
             # Pause/unpause
-            # SBP v3.1 Anti-Stagnation Override
-            if cfg.get("pause_trading") is True and "moonshot" in self._paper_trials:
-                trial = self._paper_trials["moonshot"]
-                trial_fills = self._get_total_fills() - trial["initial_fills"]
-                if trial_fills < self.PAPER_TRIAL_MIN_EVENT_FILLS:
-                    log.info(f"  🛡️ Moonshot Anti-Stagnation: Overriding AI PAUSE to FALSE (Needs {self.PAPER_TRIAL_MIN_EVENT_FILLS} fills, has {trial_fills})")
+            # WFA Paper Mode Override
+            if cfg.get("pause_trading") is True and hasattr(self, "_armada_state"):
+                if self._armada_state.get("moonshot", {}).get("mode") == "PAPER":
+                    log.info("  🛡️ Moonshot Anti-Stagnation: Overriding AI PAUSE to FALSE (Bot is in PAPER mode WFA)")
                     cfg["pause_trading"] = False
 
             if cfg.get("pause_trading") is True:
@@ -1283,12 +1279,10 @@ PARAMETER CONSTRAINTS:
             start_bot("grid")
             self.cortex.unpause("grid")
             
-        # SBP v3.1 Anti-Stagnation Override
-        if cfg.get("pause_trading") is True and "grid" in self._paper_trials:
-            trial = self._paper_trials["grid"]
-            trial_fills = self._get_total_fills() - trial["initial_fills"]
-            if trial_fills < self.PAPER_TRIAL_MIN_EVENT_FILLS:
-                log.info(f"  🛡️ Grid Anti-Stagnation: Overriding AI PAUSE to FALSE (Needs {self.PAPER_TRIAL_MIN_EVENT_FILLS} fills, has {trial_fills})")
+        # WFA Paper Mode Override
+        if cfg.get("pause_trading") is True and hasattr(self, "_armada_state"):
+            if self._armada_state.get("grid", {}).get("mode") == "PAPER":
+                log.info("  🛡️ Grid Anti-Stagnation: Overriding AI PAUSE to FALSE (Bot is in PAPER mode WFA)")
                 cfg["pause_trading"] = False
 
         if cfg.get("pause_trading") is True:
@@ -1343,12 +1337,10 @@ PARAMETER CONSTRAINTS:
             GLOBAL_OFF = 24 * 128  # 3072
 
             # global_paused at GLOBAL_OFF + 0
-            # SBP v3.1 Anti-Stagnation Override
-            if cfg.get("pause_trading") is True and "trigon" in self._paper_trials:
-                trial = self._paper_trials["trigon"]
-                trial_fills = self._get_total_fills() - trial["initial_fills"]
-                if trial_fills < self.PAPER_TRIAL_MIN_EVENT_FILLS:
-                    log.info(f"  🛡️ Trigon Anti-Stagnation: Overriding AI PAUSE to FALSE (Needs {self.PAPER_TRIAL_MIN_EVENT_FILLS} fills, has {trial_fills})")
+            # WFA Paper Mode Override
+            if cfg.get("pause_trading") is True and hasattr(self, "_armada_state"):
+                if self._armada_state.get("trigon", {}).get("mode") == "PAPER":
+                    log.info("  🛡️ Trigon Anti-Stagnation: Overriding AI PAUSE to FALSE (Bot is in PAPER mode WFA)")
                     cfg["pause_trading"] = False
 
             if cfg.get("pause_trading") is True:
@@ -1430,12 +1422,10 @@ PARAMETER CONSTRAINTS:
             # Read from cross_types.rs for exact layout
             # For now, use emergency_pause and log the intention
 
-            # SBP v3.1 Anti-Stagnation Override
-            if cfg.get("pause_trading") is True and "nexus" in self._paper_trials:
-                trial = self._paper_trials["nexus"]
-                trial_fills = self._get_total_fills() - trial["initial_fills"]
-                if trial_fills < self.PAPER_TRIAL_MIN_EVENT_FILLS:
-                    log.info(f"  🛡️ Nexus Anti-Stagnation: Overriding AI PAUSE to FALSE (Needs {self.PAPER_TRIAL_MIN_EVENT_FILLS} fills, has {trial_fills})")
+            # WFA Paper Mode Override
+            if cfg.get("pause_trading") is True and hasattr(self, "_armada_state"):
+                if self._armada_state.get("nexus", {}).get("mode") == "PAPER":
+                    log.info("  🛡️ Nexus Anti-Stagnation: Overriding AI PAUSE to FALSE (Bot is in PAPER mode WFA)")
                     cfg["pause_trading"] = False
 
             if cfg.get("pause_trading") is True:
