@@ -179,7 +179,7 @@ fi
 ZEROCLAW_BIN=$(command -v zeroclaw 2>/dev/null || echo "")
 if [ -n "$ZEROCLAW_BIN" ] && [ -n "${GEMINI_API_KEY:-}" ]; then
     echo "  ✅ ZeroClaw found: $ZEROCLAW_BIN (API key: ${#GEMINI_API_KEY} chars)"
-    "$ZEROCLAW_BIN" onboard --api-key "$GEMINI_API_KEY" --provider gemini --model gemini-3.1-pro-preview --quick --force >/dev/null 2>&1
+    "$ZEROCLAW_BIN" onboard --api-key "$GEMINI_API_KEY" --provider gemini --model gemini-3.1-flash-lite-preview --quick --force >/dev/null 2>&1
     flock -n /tmp/zeroclaw.lock "$ZEROCLAW_BIN" daemon >> "$LOG_DIR/zeroclaw.log" 2>&1 &
     ZEROCLAW_PID=$!
     ACTUAL_MODEL=$(grep "default_model" ~/.zeroclaw/config.toml 2>/dev/null | head -n 1 | cut -d'"' -f2)
