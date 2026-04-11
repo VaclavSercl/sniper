@@ -243,7 +243,80 @@ class L2OracleAsync:
             self.prev_toxic = hydra["toxic"]
         self.prev_decision = decision
 
+        # 8. Sovereign Routing (Continuous MMap Capital Scale)
+        self._enforce_dynamic_sovereign_routing()
+
         log.info(f"═══ L2 CYCLE #{self.cycle} COMPLETE ═══")
+
+    def _enforce_dynamic_sovereign_routing(self):
+        """Redistribute 100% of the capital pool among ACTIVE bots proportionally to Kelly weights."""
+        try:
+            with open(STATE_FILE, 'r') as f:
+                state = json.load(f)
+            global_limit = state.get("global_capital_limit", 400.0)
+        except Exception:
+            return
+            
+        RISK_STRATEGY = {
+            "nexus":    {"port_pct": 0.25, "order_pct": 0.50},
+            "trigon":   {"port_pct": 0.25, "order_pct": 0.50},
+            "hydra":    {"port_pct": 0.20, "order_pct": 0.05},
+            "grid":     {"port_pct": 0.10, "order_pct": 0.20},
+            "moonshot": {"port_pct": 0.10, "order_pct": 0.50}
+        }
+        
+        active_bots = [b for b, s in state.items() if isinstance(s, dict) and s.get("mode") in ("LIVE", "PAPER", "PAUSED")]
+        if not active_bots:
+            return
+            
+        sum_weights = sum(RISK_STRATEGY.get(b, {}).get("port_pct", 0) for b in active_bots)
+        if sum_weights <= 0:
+            return
+            
+        # Přečteme aktuální tržní cenu např. z Hydry
+        current_price = 70000.0
+        try:
+            snap = self.cortex.get_snapshot()
+            if snap.get("ok"):
+                for b in snap["data"].get("bots", []):
+                    if b.get("price", 0) > 0:
+                        current_price = b["price"]
+                        break
+        except Exception:
+            pass
+            
+        # Aktualizujeme riziko u všech aktivních botů
+        for bot_name in active_bots:
+            risk = RISK_STRATEGY.get(bot_name)
+            if not risk: continue
+            
+            dynamic_weight = risk["port_pct"] / sum_weights
+            target_usd = global_limit * dynamic_weight
+            
+            grad_state = self._graduated_live.get(bot_name)
+            tier_limit = None
+            if grad_state:
+                tier_idx = grad_state.get("tier_idx", 0)
+                if hasattr(self, "GRADUATED_TIERS") and tier_idx < len(self.GRADUATED_TIERS):
+                    tier_limit = self.GRADUATED_TIERS[tier_idx]["capital_usd"]
+            
+            if tier_limit is not None and target_usd > tier_limit:
+                target_usd = tier_limit
+                
+            bot_order_usd = target_usd * risk["order_pct"]
+            bot_max_btc = target_usd / current_price if current_price > 0 else 0.005
+            
+            tier_data = {
+                "capital_usd": target_usd,
+                "order_usd": bot_order_usd,
+                "max_pos_btc": bot_max_btc,
+                "grid_step": 3.0,
+                "kelly_weight": dynamic_weight
+            }
+            try:
+                self._write_risk_params(bot_name, tier_data)
+            except Exception as e:
+                log.error(f"Failed dynamic MMap capital route for {bot_name}: {e}")
 
     def _evaluate_auto_compounding(self, bots):
         """
@@ -766,16 +839,11 @@ PARAMETER CONSTRAINTS:
         except Exception:
             self._armada_state = {}
 
-        # Pomocná funkce pro bezpečné probuzení přes Paper Purgatory
         def _safe_ai_ignition(bot_name):
             current_mode = self._armada_state.get(bot_name, {}).get("mode", "OFFLINE")
             if current_mode in ("OFFLINE", "STOPPED", "LOCKED"):
-                log.warning(f"  🧠 [TRIBUNAL] {bot_name.upper()} awakening: AI overriding OFFLINE state. Routing through PAPER Purgatory (SBP Phase 4).")
-                self._save_bot_state(bot_name, "PAPER")
-                start_bot(bot_name)
-                self.cortex.pause(bot_name) # Force scanner/paper mode
-                fills_snapshot = self.pnl_db.get_all_bots_pnl().get(bot_name, {}).get('24h', {}).get('fills', 0) if hasattr(self, 'pnl_db') else 0
-                self._start_paper_trial(bot_name, current_mode, fills_snapshot)
+                log.warning(f"  🧠 [TRIBUNAL] {bot_name.upper()} AI START ignored: Bot is OFFLINE (Requires manual /paper or /live)")
+                return
             elif current_mode == "PAPER":
                 log.info(f"  🛡️ [TRIBUNAL] {bot_name.upper()} is already in PAPER Trial. AI START command acknowledged but MUST complete 66min gate. Ignoring unpause.")
             else:
@@ -789,6 +857,10 @@ PARAMETER CONSTRAINTS:
 
         # ═══ HYDRA ═══
         hydra = decision.get("hydra", {})
+        if self._armada_state.get("hydra", {}).get("mode", "OFFLINE") in ("OFFLINE", "STOPPED", "LOCKED"):
+            hydra = {}
+            if decision.get("hydra"):
+                log.info("  🐍 Hydra AI control ignored (Bot is OFFLINE)")
         
         os_action = hydra.get("os_action")
         if os_action == "STOP":
@@ -1193,6 +1265,9 @@ PARAMETER CONSTRAINTS:
         """Apply AI decisions to Moonshot risk mmap."""
         if not cfg:
             return
+        if getattr(self, "_armada_state", {}).get("moonshot", {}).get("mode", "OFFLINE") in ("OFFLINE", "STOPPED", "LOCKED"):
+            log.info("  🌙 Moonshot AI control ignored (Bot is OFFLINE)")
+            return
         try:
             import struct as _st
             MOONSHOT_RISK_PATH = "/dev/shm/sniper/moonshot_risk.bin"
@@ -1267,6 +1342,9 @@ PARAMETER CONSTRAINTS:
         """Apply AI decisions to Grid via Cortex UDS."""
         if not cfg:
             return
+        if getattr(self, "_armada_state", {}).get("grid", {}).get("mode", "OFFLINE") in ("OFFLINE", "STOPPED", "LOCKED"):
+            log.info("  📐 Grid AI control ignored (Bot is OFFLINE)")
+            return
             
         os_action = cfg.get("os_action")
         if os_action == "STOP":
@@ -1298,17 +1376,11 @@ PARAMETER CONSTRAINTS:
             log.info(f"  📐 Grid spacing: ${spacing}")
 
     def _apply_trigon(self, cfg):
-        """Apply AI decisions to Trigon risk mmap.
-        
-        TrigonRiskState layout (from trigon_types.rs):
-          triangles[24]:     24 × TrigonTriangleRisk@128B = 3072 bytes
-          global_paused:     offset 3072 (u64)
-          daily_loss_limit:  offset 3080 (i64)
-          max_concurrent:    offset 3088 (u32)
-          fee_bps:           offset 3092 (+pad4) = 3096 (u64)
-          ai_heartbeat_ms:   offset 3104 (u64)
-        """
+        """Apply AI decisions to Trigon risk mmap."""
         if not cfg:
+            return
+        if getattr(self, "_armada_state", {}).get("trigon", {}).get("mode", "OFFLINE") in ("OFFLINE", "STOPPED", "LOCKED"):
+            log.info("  🔺 Trigon AI control ignored (Bot is OFFLINE)")
             return
             
         os_action = cfg.get("os_action")
@@ -1387,6 +1459,9 @@ PARAMETER CONSTRAINTS:
     def _apply_nexus(self, cfg):
         """Apply AI decisions to Nexus via cross_exchange.bin mmap."""
         if not cfg:
+            return
+        if getattr(self, "_armada_state", {}).get("nexus", {}).get("mode", "OFFLINE") in ("OFFLINE", "STOPPED", "LOCKED"):
+            log.info("  🪐 Nexus AI control ignored (Bot is OFFLINE)")
             return
 
         os_action = cfg.get("os_action")
