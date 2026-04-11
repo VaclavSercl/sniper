@@ -377,11 +377,11 @@ def cmd_help(message):
 🧠 `/ml` — ML Shield inference metriky
 
 🎮 *Ovládání:*
-`/hydra start` · `stop` · `restart` · `pause`
-`/moonshot start` · `stop` · `restart`
-`/grid start` · `stop` · `restart`
-`/trigon start` · `stop` · `restart`
-`/nexus start` · `stop` · `restart` · `pause`
+`/hydra live` · `paper` · `off` · `pause`
+`/moonshot live` · `paper` · `off`
+`/grid live` · `paper` · `off`
+`/trigon live` · `paper` · `off`
+`/nexus live` · `paper` · `off` · `pause`
 
 🤖 *AI:*
 `/gpu` — Phi-3.5 evaluace (win rate, toxic fills)
@@ -931,16 +931,19 @@ def cmd_bot(message):
     log.info(f"Command: /{bot_name} {action}")
 
     # State persistence mapping
-    state_map = {"start": "LIVE", "stop": "OFFLINE", "restart": "LIVE",
-                 "pause": "PAUSED", "unpause": "LIVE", "resume": "LIVE"}
+    state_map = {"start": "LIVE", "live": "LIVE", "stop": "OFFLINE", "off": "OFFLINE", "restart": "LIVE",
+                 "pause": "PAUSED", "unpause": "LIVE", "resume": "LIVE", "paper": "PAPER"}
 
     actions = {
         "start": lambda: start_bot(bot_name),
+        "live": lambda: start_bot(bot_name),
         "stop": lambda: stop_bot(bot_name),
+        "off": lambda: stop_bot(bot_name),
         "restart": lambda: restart_bot(bot_name),
         "pause": lambda: pause_bot(bot_name),
         "unpause": lambda: unpause_bot(bot_name),
         "resume": lambda: unpause_bot(bot_name),
+        "paper": lambda: start_bot(bot_name),
         "status": lambda: _bot_status(bot_name),
     }
 
@@ -952,7 +955,7 @@ def cmd_bot(message):
             save_bot_state(bot_name, state_map[action])
         bot.reply_to(message, result)
     else:
-        bot.reply_to(message, f"❌ Neznámá akce: `{action}`\nPoužij: `start`, `stop`, `restart`, `pause`, `unpause`, `status`")
+        bot.reply_to(message, f"❌ Neznámá akce: `{action}`\nPoužij: `live`/`start`, `paper`, `off`/`stop`, `pause`, `unpause`, `status`")
 
 def _bot_status(name):
     info = BOTS[name]
