@@ -197,6 +197,7 @@ struct MoonshotEngine {
     bids: [[sniper_types::OrderBookLevel; 25]; MOONSHOT_MAX_PAIRS],
     asks: [[sniper_types::OrderBookLevel; 25]; MOONSHOT_MAX_PAIRS],
     snapshot_loaded: [bool; MOONSHOT_MAX_PAIRS],
+    paper_flag: bool,
 }
 
 unsafe impl Send for MoonshotEngine {}
@@ -241,7 +242,7 @@ impl SovereignEngine for MoonshotEngine {
         let is_paused = risk.global_paused.load(Ordering::Acquire) != 0;
         let config_shadow = std::fs::read_to_string("config.yaml").unwrap_or_default().contains("is_shadow: true");
         let v2_kill = self.armada_v2.global.global_kill_switch.load(Ordering::Acquire) == 1;
-        is_paused || config_shadow || v2_kill
+        is_paused || config_shadow || v2_kill || self.paper_flag
     }
 
     fn best_bid_ask(&self) -> (f64, f64) {
@@ -610,6 +611,7 @@ async fn main() -> Result<()> {
         bids: core::array::from_fn(|_| core::array::from_fn(|_| sniper_types::OrderBookLevel::default())),
         asks: core::array::from_fn(|_| core::array::from_fn(|_| sniper_types::OrderBookLevel::default())),
         snapshot_loaded: [false; MOONSHOT_MAX_PAIRS],
+        paper_flag: std::env::args().any(|arg| arg == "--paper"),
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();

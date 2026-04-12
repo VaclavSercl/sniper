@@ -367,6 +367,7 @@ class ShadowDropCopyUDP(asyncio.DatagramProtocol):
     def datagram_received(self, data, addr):
         try:
             payload = json.loads(data.decode("utf-8"))
+            log.info(f"UDP Packet received: {payload}")
             if payload.get("event") == "shadow_fill":
                 self.processor.process_shadow_fill(
                     bot=payload["bot"], symbol=payload.get("symbol", "tBTCUSD"),

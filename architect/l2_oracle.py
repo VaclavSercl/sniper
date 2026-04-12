@@ -253,9 +253,21 @@ class L2OracleAsync:
         try:
             with open(STATE_FILE, 'r') as f:
                 state = json.load(f)
-            global_limit = state.get("global_capital_limit", 400.0)
         except Exception:
             return
+
+        try:
+            import json, os
+            w_path = "/dev/shm/sniper/wallets.json"
+            global_limit = 400.0  # Fallback
+            if os.path.exists(w_path):
+                with open(w_path, "r") as wt:
+                    wd = json.load(wt)
+                    real_eq = wd.get("GLOBAL", {}).get("total_usd", 0)
+                    if real_eq > 10.0:
+                        global_limit = real_eq
+        except Exception:
+            pass
             
         RISK_STRATEGY = {
             "nexus":    {"port_pct": 0.25, "order_pct": 0.50},
@@ -293,7 +305,7 @@ class L2OracleAsync:
             dynamic_weight = risk["port_pct"] / sum_weights
             target_usd = global_limit * dynamic_weight
             
-            grad_state = self._graduated_live.get(bot_name)
+            grad_state = getattr(self, "_graduated_live", {}).get(bot_name) if getattr(self, "_graduated_live", None) is not None else {}
             tier_limit = None
             if grad_state:
                 tier_idx = grad_state.get("tier_idx", 0)
@@ -356,6 +368,11 @@ class L2OracleAsync:
                 wallet_btc = _st.unpack_from('<Q', mm, 1424)[0] / PRICE_SCALE
                 wallet_usd = _st.unpack_from('<Q', mm, 1432)[0] / PRICE_SCALE
                 mm.close()
+            try:
+                with open(STATE_FILE, 'r') as f:
+                    state = json.load(f)
+            except Exception:
+                state = {}
 
             # 2. Výpočet celkové tržní Equity v USD
             current_price = next((b.get("price", 0) for b in bots if b.get("price", 0) > 0), 69000.0)
@@ -363,14 +380,19 @@ class L2OracleAsync:
 
             if total_equity < 100: return # Bezpečnostní pojistka proti chybnému čtení
 
-            # 3. Načtení aktuálně schváleného limitu z mozku L2
-            try:
-                with open(STATE_FILE, 'r') as f:
-                    state = json.load(f)
-            except Exception:
-                state = {}
-
+            # 3. Načtení aktuálně schváleného limitu z walet paměti L2
             current_limit = state.get("global_capital_limit", 400.0)
+            try:
+                import json, os
+                w_path = "/dev/shm/sniper/wallets.json"
+                if os.path.exists(w_path):
+                    with open(w_path, "r") as wt:
+                        wd = json.load(wt)
+                        real_eq = wd.get("GLOBAL", {}).get("total_usd", 0)
+                        if real_eq > 10.0:
+                            current_limit = real_eq
+            except Exception:
+                pass
 
             # 4. Detekce průrazu nové úrovně (zarovnáme equity na stovky dolů, např. $645 -> $600)
             new_limit = float(int(total_equity // 100) * 100)
@@ -553,13 +575,19 @@ class L2OracleAsync:
                 vol_multiplier = max(1.0, spread_val / 2.0)  # norm: spread $2 = 1x
                 
                 # Dynamic max exposure: 15% of equity / vol_multiplier
-                # Equity proxy: Načtení z permanentní paměti AI (Auto-Compounding)
+                # Equity proxy: Načtení z walet.json (Auto-Compounding)
+                EQUITY_USD = 2000.0  # Fallback
                 try:
-                    with open(STATE_FILE, 'r') as f:
-                        state_cfg = json.load(f)
-                    EQUITY_USD = state_cfg.get("global_capital_limit", 2000.0)
+                    import json, os
+                    w_path = "/dev/shm/sniper/wallets.json"
+                    if os.path.exists(w_path):
+                        with open(w_path, "r") as wt:
+                            wd = json.load(wt)
+                            real_eq = wd.get("GLOBAL", {}).get("total_usd", 0)
+                            if real_eq > 10.0:
+                                EQUITY_USD = real_eq
                 except Exception:
-                    EQUITY_USD = 2000.0
+                    pass
 
                 RISK_PCT = 0.15      # Povolujeme 15% alokaci z celkového účtu
                 HARD_MAX_BTC = 1.5   # Absolutní systémový strop zvýšen na 1.5 BTC
@@ -701,6 +729,9 @@ RULES:
   * Rule 1: If expected inactive period is LONG (Deep BEARISH_SHOCK) or SERVER LOAD/RAM is HIGH (>80%), use "STOP".
   * Rule 2: If expected inactive period is SHORT (Flash VOLATILITY) and SERVER LOAD is OK, use "START" + pause_trading:true.
   * Rule 3: For TRENDING markets, "START" + pause_trading:false to actively trade.
+  * Rule 4 (PAPER OVERRIDE): If a bot is running in PAPER mode, DO NOT STOP and force pause_trading:false even during BEARISH_SHOCK or high toxicity (>6000). Paper testing carries ZERO financial risk and REQUIRES max volume to generate SQLite Fills.
+  * Rule 4 (PAPER OVERRIDE): If a bot is running in PAPER mode, DO NOT STOP and force pause_trading:false even during BEARISH_SHOCK or high toxicity (>6000). Paper testing carries ZERO financial risk and REQUIRES max volume to generate SQLite Fills.
+  * Rule 4 (PAPER OVERRIDE): If a bot is running in PAPER mode, DO NOT STOP and force pause_trading:false even during BEARISH_SHOCK or high toxicity (>6000). Paper testing carries ZERO financial risk and REQUIRES max volume to generate SQLite Fills.
 - PERFORMANCE GOVERNANCE (7d PnL check):
   * If a bot has consistently negative 7d PnL (e.g., < -$0.50), you MUST intervene.
   * Intervention 1 (Bleeding): Expand grid_spacing, shrink max_position, increase defensive parameters.
@@ -2102,6 +2133,8 @@ Respond with EXACTLY one JSON object:
         # Initialize graduated state
         if not hasattr(self, '_graduated_live'):
             self._graduated_live = {}
+        if self._graduated_live is None:
+            self._graduated_live = {}
         
         tier = self.GRADUATED_TIERS[0]
         # Include baseline kelly weight for tier 0
@@ -2219,12 +2252,19 @@ Respond with EXACTLY one JSON object:
         state_grad = self._graduated_live.pop(bot_name, {})
         
         # Načtení dynamického celkového limitu
+        # Try reading real equity from wallets.json directly
+        current_limit = 400.0
         try:
-            with open(STATE_FILE, 'r') as f:
-                state = json.load(f)
-            current_limit = state.get("global_capital_limit", 400.0)
+            import json, os
+            w_path = "/dev/shm/sniper/wallets.json"
+            if os.path.exists(w_path):
+                with open(w_path, "r") as wt:
+                    wd = json.load(wt)
+                    real_eq = wd.get("GLOBAL", {}).get("total_usd", 0)
+                    if real_eq > 10.0:
+                        current_limit = real_eq
         except Exception:
-            current_limit = 400.0
+            pass
 
         # Fractional Kelly matice
         RISK_STRATEGY = {

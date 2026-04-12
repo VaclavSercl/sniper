@@ -1082,7 +1082,19 @@ Analyze the following input:
 NL_INTENT_SUFFIX = """
 </user_input>"""
 
-@bot.message_handler(func=lambda m: True)
+@bot.message_handler(commands=["ai"])
+def cmd_ai_fallback(message):
+    """Explicit NLP command to bypass BotFather Privacy Mode."""
+    if not auth(message): return
+    # Strip the /ai prefix
+    parts = message.text.split(maxsplit=1)
+    if len(parts) < 2:
+        bot.reply_to(message, "🐺 Chybí text zprávy. Napiš například: `/ai nastav warp na 15`")
+        return
+    message.text = parts[1]
+    handle_natural_language(message)
+
+@bot.message_handler(func=lambda m: True, content_types=['text'])
 def handle_natural_language(message):
     """Catch-all: parse natural language via Gemini."""
     if not auth(message): return

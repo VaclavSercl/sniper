@@ -178,6 +178,7 @@ struct HydraEngine {
     ml_shield: sniper_types::ml_shield::MlShield,
     armada_state: &'static sniper_types::armada_types::ArmadaState,
     armada_v2: &'static sniper_types::armada_types::ArmadaStateV2,
+    paper_flag: bool,
 }
 
 unsafe impl Send for HydraEngine {}
@@ -234,7 +235,7 @@ impl SovereignEngine for HydraEngine {
         let is_paused = risk.paused.load(Ordering::Relaxed) != 0;
         let config_shadow = std::fs::read_to_string("config.yaml").unwrap_or_default().contains("is_shadow: true");
         let v2_kill = self.armada_v2.global.global_kill_switch.load(Ordering::Acquire) == 1; // is_shadow = true -> nestřílej ostrými
-        is_paused || config_shadow || v2_kill
+        is_paused || config_shadow || v2_kill || self.paper_flag
     }
 
     // Pro debug dashboard na UI posunuto pomocí L2 Ring konverze (přípustné)
@@ -1089,6 +1090,8 @@ async fn async_main() -> Result<()> {
     if !std::path::Path::new(storm_path).exists() { let _ = std::fs::write(storm_path, [0u8]); }
     let toxic_storm_mmap = sniper_types::mmap_utils::open_mmap_readonly(storm_path).unwrap();
 
+    let paper_flag = std::env::args().any(|arg| arg == "--paper");
+
     let hydra = HydraEngine {
         notifier: notifier.clone(),
         engine: engine_ptr,
@@ -1117,6 +1120,7 @@ async fn async_main() -> Result<()> {
         ml_shield,
         armada_state,
         armada_v2,
+        paper_flag,
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();

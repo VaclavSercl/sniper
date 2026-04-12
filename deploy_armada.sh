@@ -76,7 +76,7 @@ echo "🧹 Cleaning ALL old instances..."
 echo "$(date +%s)" > /tmp/sniper_boot.lock
 # First pass: SIGTERM (graceful)
 for proc in tg_commander.py pnl_daemon.py sovereign-cortex hydra-core hydra-dashboard \
-            moonshot-core grid-core trigon-core nexus-core armada-core price_bridge.py market_recorder.py zeroclaw; do
+            moonshot-core grid-core trigon-core nexus-core armada-core price_bridge.py market_recorder.py zeroclaw wallet_daemon.py; do
     pkill -f "$proc" 2>/dev/null || true
 done
 fuser -k 3000/tcp 2>/dev/null || true
@@ -84,7 +84,7 @@ sleep 2
 
 # Second pass: SIGKILL (force) — catch anything that survived SIGTERM
 for proc in tg_commander.py pnl_daemon.py sovereign-cortex hydra-core hydra-dashboard \
-            moonshot-core grid-core trigon-core nexus-core armada-core price_bridge.py market_recorder.py zeroclaw; do
+            moonshot-core grid-core trigon-core nexus-core armada-core price_bridge.py market_recorder.py zeroclaw wallet_daemon.py; do
     pkill -9 -f "$proc" 2>/dev/null || true
 done
 
@@ -162,6 +162,10 @@ sleep 2
 echo "  [T+20s] Starting Price Bridge..."
 python3 "$ARMADA_ROOT/architect/price_bridge.py" >> "$LOG_DIR/price_bridge.log" 2>&1 &
 BRIDGE_PID=$!
+
+echo "  [T+20s] Starting Wallet Sync Daemon..."
+python3 "$ARMADA_ROOT/architect/wallet_daemon.py" >> "$LOG_DIR/wallet_daemon.log" 2>&1 &
+
 sleep 3
 
 # 5. Commander (Telegram interface)

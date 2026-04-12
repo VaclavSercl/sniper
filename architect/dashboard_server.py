@@ -100,40 +100,8 @@ def _init_mmaps():
     except Exception as e: log.error(f"Armada V2 mmap err: {e}")
 
 
-import threading
-import sys
-
-_wallet_cache = {
-    "bnb": {"btc": 0.0, "usd": 0.0, "total_usd": 0.0}
-}
-_wallet_thread_started = False
-
-def _wallet_updater():
-    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-    try:
-        from balance_reconciler import read_binance_balances
-    except ImportError:
-        return
-
-    while True:
-        try:
-            bnb = read_binance_balances()
-            if bnb:
-                _wallet_cache["bnb"]["btc"] = bnb.get("BTC", {}).get("total", 0.0)
-                _wallet_cache["bnb"]["usd"] = bnb.get("USDT", {}).get("total", 0.0) + bnb.get("USDC", {}).get("total", 0.0)
-        except Exception as e:
-            pass
-        time.sleep(15)
-
-def _start_wallet_thread():
-    global _wallet_thread_started
-    if not _wallet_thread_started:
-        _wallet_thread_started = True
-        threading.Thread(target=_wallet_updater, daemon=True, name="wallet-updater").start()
-
 def _build_dashboard_state():
     """Fetch all data from Cortex and build a unified JSON state."""
-    _start_wallet_thread()
 
     if not _cortex:
         return {}
@@ -150,19 +118,6 @@ def _build_dashboard_state():
             wallet_legacy = state["snapshot"].get("wallet") or {}
             btc_price = wallet_legacy.get("btc_price", 0.0)
             
-            w_bfx = {
-                "btc": wallet_legacy.get("btc", 0.0),
-                "usd": wallet_legacy.get("usd", 0.0),
-                "total_usd": wallet_legacy.get("total_usd", 0.0),
-                "btc_price": btc_price
-            }
-            
-            w_bnb = _wallet_cache["bnb"].copy()
-            w_bnb["total_usd"] = (w_bnb.get("usd") or 0.0) + ((w_bnb.get("btc") or 0.0) * btc_price)
-            w_bnb["btc_price"] = btc_price
-            
-            state["snapshot"]["wallet_bnb"] = w_bnb
-            
             # Přečtení modes (LIVE/PAPER/PAUSED/OFFLINE) z armada_state.json
             try:
                 state_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "state", "armada_state.json")
@@ -176,6 +131,20 @@ def _build_dashboard_state():
                 log.debug(f"Could not read armada_state.json for bot modes: {e}")
             
     except Exception as e:
+        log.error(f"Error in dashboard state fetch: {e}")
+        import traceback
+        traceback.print_exc()
+        if "snapshot" not in state:
+            state["snapshot"] = {}
+            
+    try:
+        if os.path.exists("/dev/shm/sniper/wallets.json"):
+            with open("/dev/shm/sniper/wallets.json", "r") as f:
+                state["wallets"] = json.load(f)
+        else:
+            state["wallets"] = {}
+    except Exception as e:
+        state["wallets"] = {}
         log.error(f"Error in dashboard state fetch: {e}")
         import traceback
         traceback.print_exc()

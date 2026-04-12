@@ -211,6 +211,7 @@ struct TrigonEngine {
     last_exec_ms: [u64; TRIGON_MAX_TRIANGLES],
     toxic_storm_ptr: *const u8,
     armada_v2: &'static sniper_types::armada_types::ArmadaStateV2,
+    paper_flag: bool,
 }
 
 unsafe impl Send for TrigonEngine {}
@@ -278,7 +279,7 @@ impl SovereignEngine for TrigonEngine {
         let is_paused = risk.global_paused.load(Ordering::Acquire) != 0;
         let config_shadow = std::fs::read_to_string("config.yaml").unwrap_or_default().contains("is_shadow: true");
         let v2_kill = self.armada_v2.global.global_kill_switch.load(Ordering::Acquire) == 1;
-        is_paused || config_shadow || v2_kill
+        is_paused || config_shadow || v2_kill || self.paper_flag
     }
 
     fn best_bid_ask(&self) -> (f64, f64) {
@@ -542,6 +543,7 @@ async fn main() -> Result<()> {
         last_exec_ms: [0; TRIGON_MAX_TRIANGLES],
         toxic_storm_ptr: toxic_storm_mmap.as_ptr(),
         armada_v2: sniper_types::armada_types::load_armada_state_v2_ro(),
+        paper_flag: std::env::args().any(|arg| arg == "--paper"),
     };
 
     let venue = sniper_types::exchange::bitfinex_venue::BitfinexVenue::new();

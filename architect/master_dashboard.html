@@ -810,9 +810,11 @@ function update(state) {
     document.getElementById('s-time').textContent = new Date().toLocaleTimeString('cs-CZ');
 
     // Wallet
-    const w_bfx = snap.wallet_bfx || {};
-    const w_bnb = snap.wallet_bnb || {};
-    const btc_price = w_bfx.btc_price || (snap.wallet || {}).btc_price || 0;
+    const wallets = state.wallets || {};
+    const w_bfx = wallets.BITFINEX || {};
+    const w_bnb = wallets.BINANCE || {};
+    const w_global = wallets.GLOBAL || {};
+    const btc_price = wallets.btc_price || 0;
 
     const wBfxTotal = document.getElementById('w-bfx-total');
     if (wBfxTotal) wBfxTotal.innerText = typeof w_bfx.total_usd !== 'undefined' ? `$${w_bfx.total_usd.toFixed(2)}` : '—';
@@ -828,7 +830,8 @@ function update(state) {
     const wBnbUsd = document.getElementById('w-bnb-usd');
     if (wBnbUsd) wBnbUsd.innerText = typeof w_bnb.usd !== 'undefined' ? `$${w_bnb.usd.toFixed(0)}` : '—';
     
-    const globalTotal = (w_bfx.total_usd || 0) + (w_bnb.total_usd || 0);
+    // Master Total
+    const globalTotal = w_global.total_usd || 0;
     const globalTotalEl = document.getElementById('w-global-total');
     if (globalTotalEl) globalTotalEl.innerText = `$${globalTotal.toFixed(2)}`;
 
@@ -1319,10 +1322,9 @@ let socketTimeout;
 
 function updateCrown(payload) {
     const sys = payload.system || {};
-    const w_bfx = payload.snapshot ? (payload.snapshot.wallet_bfx || {}) : {};
-    const w_bnb = payload.snapshot ? (payload.snapshot.wallet_bnb || {}) : {};
-    const global_usd = (w_bfx.total_usd || 0) + (w_bnb.total_usd || 0);
-    const global_btc = (w_bfx.btc || 0) + (w_bnb.btc || 0);
+    const w_global = payload.wallets ? (payload.wallets.GLOBAL || {}) : {};
+    const global_usd = sys.total_equity_usd || w_global.total_usd || 0;
+    const global_btc = w_global.btc || 0;
     
     // 1. Oživení Makro Metrik
     const crownEq = document.getElementById('crown-equity');
