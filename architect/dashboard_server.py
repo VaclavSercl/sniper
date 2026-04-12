@@ -840,24 +840,47 @@ async def api_bot_action(bot_name: str, action: str):
         
         bot_name = bot_name.lower()
         action = action.lower()
-        valid_bots = {"hydra", "moonshot", "grid", "trigon", "nexus"}
+        valid_bots = {"hydra": 0, "moonshot": 1, "grid": 2, "trigon": 3, "nexus": 4}
         if bot_name not in valid_bots:
             return {"status": "error", "message": "Invalid bot"}
             
+        bot_idx = valid_bots[bot_name]
+        
+        # 1. Update orchestration state and start/stop processes
         if action in ("live", "start"):
             save_bot_state(bot_name, "LIVE")
             start_bot(bot_name)
             cortex.unpause(bot_name)
+            new_kelly = 0.05
         elif action in ("paper", "on"):
             save_bot_state(bot_name, "PAPER")
             start_bot(bot_name)
             cortex.pause(bot_name) # Ensure no firing
+            new_kelly = 0.05
         elif action in ("off", "stop"):
             save_bot_state(bot_name, "OFFLINE")
             stop_bot(bot_name)
+            new_kelly = 0.0
         else:
             return {"status": "error", "message": "Invalid action"}
             
+        # 2. Update ArmadaStateV2 MMap Kelly Matrix so `armada-core` knows active/offline status
+        def _update_mmap_kelly(idx: int, kelly: float):
+            v2_path = "/dev/shm/sniper/armada_state_v2.bin"
+            try:
+                if os.path.exists(v2_path):
+                    with open(v2_path, "r+b") as f:
+                        mm = mmap.mmap(f.fileno(), 1088)
+                        for venue_idx in range(8):
+                            kelly_offset = 448 + (idx * 32) + (venue_idx * 4)
+                            struct.pack_into('<f', mm, kelly_offset, kelly)
+                        mm.flush()
+                        mm.close()
+            except Exception as ex:
+                log.error(f"Failed to update ArmadaStateV2 MMap for {bot_name}: {ex}")
+
+        _update_mmap_kelly(bot_idx, new_kelly)
+        
         return {"status": "success", "message": f"{bot_name.upper()} -> {action.upper()}"}
     except Exception as e:
         log.error(f"Bot Action API failed: {e}")
