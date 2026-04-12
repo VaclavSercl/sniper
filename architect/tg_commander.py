@@ -377,11 +377,11 @@ def cmd_help(message):
 🧠 `/ml` — ML Shield inference metriky
 
 🎮 *Ovládání:*
-`/hydra live` · `paper` · `off` · `pause`
-`/moonshot live` · `paper` · `off`
-`/grid live` · `paper` · `off`
-`/trigon live` · `paper` · `off`
-`/nexus live` · `paper` · `off` · `pause`
+`/hydra on` · `off`
+`/moonshot on` · `off`
+`/grid on` · `off`
+`/trigon on` · `off`
+`/nexus on` · `off`
 
 🤖 *AI:*
 `/gpu` — Phi-3.5 evaluace (win rate, toxic fills)
@@ -931,31 +931,53 @@ def cmd_bot(message):
     log.info(f"Command: /{bot_name} {action}")
 
     # State persistence mapping
-    state_map = {"start": "LIVE", "live": "LIVE", "stop": "OFFLINE", "off": "OFFLINE", "restart": "LIVE",
-                 "pause": "PAUSED", "unpause": "LIVE", "resume": "LIVE", "paper": "PAPER"}
+    valid_bots = {"hydra": 0, "moonshot": 1, "grid": 2, "trigon": 3, "nexus": 4}
+    bot_idx = valid_bots.get(bot_name, -1)
+
+    def _sync_mmap_kelly(kelly: float):
+        if bot_idx == -1: return
+        try:
+            import mmap, struct, os
+            v2_path = "/dev/shm/sniper/armada_state_v2.bin"
+            if os.path.exists(v2_path):
+                with open(v2_path, "r+b") as f:
+                    mm = mmap.mmap(f.fileno(), 1088)
+                    for venue_idx in range(8):
+                        struct.pack_into('<f', mm, 448 + (bot_idx * 32) + (venue_idx * 4), kelly)
+                    mm.flush()
+                    mm.close()
+        except Exception as e:
+            log.error(f"Failed to sync MMap Kelly for telegram command: {e}")
+
+    def _do_on():
+        save_bot_state(bot_name, "PAPER")
+        res = start_bot(bot_name)
+        try:
+            from cortex_client import CortexClient
+            CortexClient().pause(bot_name)
+        except Exception:
+            pass
+        _sync_mmap_kelly(0.05)
+        return res
+
+    def _do_off():
+        save_bot_state(bot_name, "OFFLINE")
+        res = stop_bot(bot_name)
+        _sync_mmap_kelly(0.0)
+        return res
 
     actions = {
-        "start": lambda: start_bot(bot_name),
-        "live": lambda: start_bot(bot_name),
-        "stop": lambda: stop_bot(bot_name),
-        "off": lambda: stop_bot(bot_name),
-        "restart": lambda: restart_bot(bot_name),
-        "pause": lambda: pause_bot(bot_name),
-        "unpause": lambda: unpause_bot(bot_name),
-        "resume": lambda: unpause_bot(bot_name),
-        "paper": lambda: start_bot(bot_name),
+        "on": _do_on,
+        "off": _do_off,
         "status": lambda: _bot_status(bot_name),
     }
 
     handler = actions.get(action)
     if handler:
         result = handler()
-        # Persist state to disk for crash recovery
-        if action in state_map:
-            save_bot_state(bot_name, state_map[action])
         bot.reply_to(message, result)
     else:
-        bot.reply_to(message, f"❌ Neznámá akce: `{action}`\nPoužij: `live`/`start`, `paper`, `off`/`stop`, `pause`, `unpause`, `status`")
+        bot.reply_to(message, f"❌ Neznámá akce: `{action}`\nPoužij: `on`, `off`, `status`")
 
 def _bot_status(name):
     info = BOTS[name]
