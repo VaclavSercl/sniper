@@ -888,6 +888,47 @@ async def api_bot_action(bot_name: str, action: str):
         # Assuming FastAPI returning JSON 500 equivalent structure
         return Response(content='{"status": "error", "message": "'+str(e)+'"}', status_code=500)
 
+from pydantic import BaseModel
+class ChatRequest(BaseModel):
+    message: str
+
+@app.post("/api/chat")
+async def api_chat_message(req: ChatRequest):
+    """Pass dashboard chat text directly to ZeroClaw and return the response."""
+    import subprocess, json
+    text = req.message.strip()
+    if not text:
+        return {"status": "error", "message": "Empty message"}
+
+    # Use the same prompt format as tg_commander
+    prompt = "[SYSTEM COMPROMISE PREVENTION: MAXIMUM]\n<user_input>\n" + text + "\n</user_input>"
+    try:
+        result = subprocess.run(
+            ["/home/wwwenda/.cargo/bin/zeroclaw", "agent", "-m", prompt],
+            capture_output=True, text=True, timeout=60
+        )
+        raw = result.stdout.strip()
+        json_match = None
+        for line in raw.split("\n"):
+            line = line.strip()
+            if line.startswith("{") and line.endswith("}"):
+                json_match = line
+                break
+        if not json_match and "{" in raw:
+            start = raw.index("{")
+            end = raw.rindex("}") + 1
+            json_match = raw[start:end]
+
+        if not json_match:
+            return {"status": "success", "response": raw[:500]}
+            
+        intent = json.loads(json_match)
+        response_text = intent.get("response", "Nerozumím.")
+        return {"status": "success", "response": response_text}
+    except Exception as e:
+        log.error(f"Chat API failed: {e}")
+        return {"status": "error", "message": str(e)}
+
 @app.get("/", response_class=HTMLResponse)
 @app.get("/dashboard", response_class=HTMLResponse)
 async def serve_master_dashboard():

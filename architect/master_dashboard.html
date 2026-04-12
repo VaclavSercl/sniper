@@ -439,6 +439,13 @@ body { background:var(--bg); color:var(--text); font-family:'Inter',system-ui,sa
     <div class="panel" id="l2-panel">
         <div class="panel-title"><span class="accent">🧠</span> L2 ORACLE (Gemini)</div>
         <div id="l2-content"><span style="color:var(--text-muted);font-size:0.8em">Waiting for data...</span></div>
+        <div style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.05); padding-top: 10px;">
+            <div id="chat-output" style="margin-bottom: 8px; font-size: 0.8em; color: var(--text-dim); min-height: 20px;">Orákulum poslouchá...</div>
+            <div style="display: flex; gap: 8px;">
+                <input type="text" id="chat-input" placeholder="Napiš rozkaz generále (např. 'Nastav grid na 25')..." style="flex:1; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.1); color: var(--text-color); font-family: 'JetBrains Mono', monospace; font-size: 0.8em; padding: 6px 10px; border-radius: 4px;">
+                <button onclick="sendChatMessage()" style="background: rgba(139,92,246,0.2); color: var(--purple); border: 1px solid rgba(139,92,246,0.4); padding: 6px 12px; font-weight: bold; border-radius: 4px; cursor: pointer;">SEND</button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -1722,6 +1729,43 @@ function controlBot(botName, action) {
         console.error("Control API error:", err);
     });
 }
+
+function sendChatMessage() {
+    let inp = document.getElementById('chat-input');
+    let out = document.getElementById('chat-output');
+    let text = inp.value.trim();
+    if (!text) return;
+    
+    out.innerHTML = `<span style="color:var(--yellow)">🧠 Přemýšlím...</span>`;
+    inp.value = "";
+    
+    fetch('/api/chat', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({message: text})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'success') {
+            out.innerHTML = `<span style="color:var(--green)">🐺 ${data.response}</span>`;
+        } else {
+            out.innerHTML = `<span style="color:var(--red)">❌ Chyba: ${data.message}</span>`;
+        }
+    })
+    .catch(err => {
+        out.innerHTML = `<span style="color:var(--red)">❌ Server neodpověděl.</span>`;
+    });
+}
+
+// Support enter key for chat
+document.addEventListener("DOMContentLoaded", () => {
+    let inp = document.getElementById('chat-input');
+    if (inp) {
+        inp.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') { sendChatMessage(); }
+        });
+    }
+});
 </script>
 </body>
 </html>
