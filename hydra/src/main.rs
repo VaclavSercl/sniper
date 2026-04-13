@@ -712,7 +712,7 @@ impl SovereignEngine for HydraEngine {
                 engine.high_water_mark_usd.store((total_wallet * sniper_types::PRICE_SCALE) as u64, Ordering::Relaxed);
             } else {
                 let kelly = risk.kelly_fraction.load(Ordering::Relaxed) as f64 / 10000.0;
-                let max_drawdown = hwm * kelly.max(0.01); 
+                let max_drawdown = hwm * kelly.max(0.11); 
                 if hwm - total_wallet > max_drawdown {
                     self.notifier.alert(format!("🚨 *DRAWDOWN GUARD*: Fractional Kelly Hit (Drop > ${:.2}) — Pausing Hydra!", max_drawdown));
                     out_buf.extend_from_slice(b"[0,\"oc_multi\",null,{\"all\":1}]");
