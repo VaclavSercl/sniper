@@ -253,7 +253,7 @@ impl SovereignEngine for GridEngine {
                                     && let (Some(wt), Some(cur), Some(bal)) = (w_arr.get(0).and_then(|x| x.as_str()), w_arr.get(1).and_then(|x| x.as_str()), w_arr.get(2).and_then(|x| extract_u64_scaled(x)))
                                         && wt == "exchange" {
                                             if cur == sniper_types::TRADING_BASE { e.wallet_btc.store(bal, Ordering::SeqCst); }
-                                            else if cur == sniper_types::TRADING_QUOTE || cur == "UST" { e.wallet_usd.store(bal, Ordering::SeqCst); }
+                                            else if cur == sniper_types::TRADING_QUOTE { e.wallet_usd.store(bal, Ordering::SeqCst); }
                                         }
                             }
                         } else if mt == "os" || mt == "on" || mt == "ou" || mt == "oc" {
