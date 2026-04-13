@@ -1,7 +1,7 @@
 use std::fs::OpenOptions;
 
 fn main() {
-    let path = "/dev/shm/sniper/engine_state_hydra.bin";
+    let path = sniper_types::ENGINE_STATE_PATH;
     let file = OpenOptions::new()
         .read(true)
         .write(true)
