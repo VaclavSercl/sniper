@@ -51,7 +51,7 @@ fn main() -> Result<()> {
     // Open risk_state mmap
     let risk_file = OpenOptions::new()
         .read(true).write(true)
-        .open(&*RISK_STATE_PATH)
+        .open(RISK_STATE_PATH)
         .context("Nelze otevřít risk_state.bin. Běží bot?")?;
     let risk_mmap = unsafe { MmapMut::map_mut(&risk_file)? };
     let risk = unsafe { &*(risk_mmap.as_ptr() as *const RiskState) };
@@ -135,7 +135,7 @@ fn main() -> Result<()> {
         Commands::ExportJson => {
             // Read EngineState too
             let eng_file = OpenOptions::new().read(true)
-                .open(&*ENGINE_STATE_PATH)
+                .open(ENGINE_STATE_PATH)
                 .context("Nelze otevřít engine_state.bin")?;
             let eng_mmap = unsafe { memmap2::MmapOptions::new().map(&eng_file)? };
             let engine = unsafe { &*(eng_mmap.as_ptr() as *const EngineState) };

@@ -68,7 +68,7 @@ impl FixedFormat {
             val = -val;
         }
         let int_part = val / PRICE_SCALE_I;
-        let mut frac_part = val % PRICE_SCALE_I;
+        let frac_part = val % PRICE_SCALE_I;
         
         let mut itoa_buf = itoa::Buffer::new();
         let int_str = itoa_buf.format(int_part).as_bytes();
@@ -159,14 +159,14 @@ fn scan_for_arb(cross_state: &CrossExchangeState, args: &Args, latency_pad_100x:
     let paused = cross_state.emergency_pause.load(Ordering::Acquire) != 0;
     if paused || active == 0 { return None; }
 
-    let daily_pnl_raw = cross_state.daily_cross_pnl.load(Ordering::Acquire) as i64;
-    let daily_limit_raw = cross_state.daily_loss_limit.load(Ordering::Acquire) as i64;
+    let daily_pnl_raw = cross_state.daily_cross_pnl.load(Ordering::Acquire);
+    let daily_limit_raw = cross_state.daily_loss_limit.load(Ordering::Acquire);
     if daily_pnl_raw < -daily_limit_raw { return None; }
 
     let fee_matrix_ref = unsafe { &*args.fee_matrix_ptr };
     let bfx_fee = fee_matrix_ref.venues[sniper_types::fee_types::VENUE_BITFINEX].taker_fee_bps.load(Ordering::Relaxed) as i64;
     let bnb_fee = fee_matrix_ref.venues[sniper_types::fee_types::VENUE_BINANCE].taker_fee_bps.load(Ordering::Relaxed) as i64;
-    let total_fee_bps_100x = bfx_fee + bnb_fee + (args.slippage_bps * 100.0) as i64 + latency_pad_100x;
+    let _total_fee_bps_100x = bfx_fee + bnb_fee + (args.slippage_bps * 100.0) as i64 + latency_pad_100x;
     let min_profit_100x = (args.min_profit_bps * 100.0) as i64;
     let armada_trade_usd = armada_cap;
     
@@ -176,10 +176,10 @@ fn scan_for_arb(cross_state: &CrossExchangeState, args: &Args, latency_pad_100x:
         let pair = &cross_state.pairs[i];
         if pair.enabled.load(Ordering::Relaxed) == 0 { continue; }
 
-        let bfx_bid = pair.bitfinex.bid.load(Ordering::Relaxed) as i64;
-        let bfx_ask = pair.bitfinex.ask.load(Ordering::Relaxed) as i64;
-        let bnb_bid = pair.binance.bid.load(Ordering::Relaxed) as i64;
-        let bnb_ask = pair.binance.ask.load(Ordering::Relaxed) as i64;
+        let bfx_bid = pair.bitfinex.bid.load(Ordering::Relaxed);
+        let bfx_ask = pair.bitfinex.ask.load(Ordering::Relaxed);
+        let bnb_bid = pair.binance.bid.load(Ordering::Relaxed);
+        let bnb_ask = pair.binance.ask.load(Ordering::Relaxed);
 
         let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
         let bfx_age = now_ms.saturating_sub(pair.bitfinex.last_update_ms.load(Ordering::Relaxed));
@@ -220,8 +220,8 @@ fn scan_for_arb(cross_state: &CrossExchangeState, args: &Args, latency_pad_100x:
         let bnb_price = if direction == ArbDirection::BuyBfxSellBnb { sell_price_i } else { buy_price_i };
 
         let max_exposure = match direction {
-            ArbDirection::BuyBfxSellBnb => cross_state.max_exposure_bitfinex_usd.load(Ordering::Acquire) as i64,
-            ArbDirection::BuyBnbSellBfx => cross_state.max_exposure_binance_usd.load(Ordering::Acquire) as i64,
+            ArbDirection::BuyBfxSellBnb => cross_state.max_exposure_bitfinex_usd.load(Ordering::Acquire),
+            ArbDirection::BuyBnbSellBfx => cross_state.max_exposure_binance_usd.load(Ordering::Acquire),
         };
         let trade_size = armada_trade_usd.min(max_exposure).max(0);
 
@@ -236,7 +236,7 @@ fn scan_for_arb(cross_state: &CrossExchangeState, args: &Args, latency_pad_100x:
             size_usd: trade_size,
         };
 
-        if best.as_ref().map_or(true, |b| signal.net_bps_100x > b.net_bps_100x) {
+        if best.as_ref().is_none_or(|b| signal.net_bps_100x > b.net_bps_100x) {
             best = Some(signal);
         }
     }
@@ -306,8 +306,8 @@ impl SovereignEngine for NexusEngine {
         let cross_state = unsafe { &*self.cross };
         let bfx = &cross_state.pairs[0].bitfinex;
         (
-            bfx.bid.load(Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64,
-            bfx.ask.load(Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64
+            bfx.bid.load(Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE,
+            bfx.ask.load(Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE
         )
     }
 
@@ -338,7 +338,7 @@ impl SovereignEngine for NexusEngine {
             let (v2, ok2) = sniper_types::l2_command::l2cmd_version_check(l2cmd);
             if v1 == v2 && ok1 && ok2 {
                 if kill == 1 { return; }
-                pad.max(0) as i64 * 100
+                pad.max(0) * 100
             } else { 0 }
         };
 
@@ -346,7 +346,7 @@ impl SovereignEngine for NexusEngine {
         if now_ms - self.last_exec_ms < self.args.cooldown_ms { return; }
 
         // ═══ HIVE MIND: Toxic Storm check ═══
-        let storm_byte = unsafe { std::ptr::read_volatile(self.toxic_storm_ptr) };
+        let _storm_byte = unsafe { std::ptr::read_volatile(self.toxic_storm_ptr) };
         // if storm_byte == 1 { return; }
         
         // ARMADA KŘEMÍKOVÁ ZEĎ V2 🛡️

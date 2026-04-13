@@ -108,11 +108,10 @@ impl SentinelHistory {
     /// Check anti-spam cooldown. Returns true if alert should be sent.
     fn should_alert(&mut self, alert_type: &str) -> bool {
         let now = Instant::now();
-        if let Some(last) = self.last_alerts.get(alert_type) {
-            if now.duration_since(*last).as_secs() < COOLDOWN_SECS {
+        if let Some(last) = self.last_alerts.get(alert_type)
+            && now.duration_since(*last).as_secs() < COOLDOWN_SECS {
                 return false;
             }
-        }
         self.last_alerts.insert(alert_type.to_string(), now);
         true
     }
@@ -187,8 +186,8 @@ pub async fn run_sentinel(memory: Arc<ArmadaMemory>) {
             }
 
             // ── LAYER 3a: Position Drift ──
-            if snap.net_position.abs() > POSITION_DRIFT_BTC {
-                if history.should_alert(&format!("{}_drift", snap.name)) {
+            if snap.net_position.abs() > POSITION_DRIFT_BTC
+                && history.should_alert(&format!("{}_drift", snap.name)) {
                     let msg = format!(
                         "⚠️ SENTINEL: {} {} INVENTORY DRIFT\n\
                          📦 Pozice: {:.5} BTC (limit {:.3})\n\
@@ -198,11 +197,10 @@ pub async fn run_sentinel(memory: Arc<ArmadaMemory>) {
                     );
                     alerts.push(msg);
                 }
-            }
 
             // ── LAYER 3b: Spread Explosion ──
-            if snap.grid_step > 0.0 && snap.spread > snap.grid_step * SPREAD_EXPLOSION_MULT {
-                if history.should_alert(&format!("{}_spread", snap.name)) {
+            if snap.grid_step > 0.0 && snap.spread > snap.grid_step * SPREAD_EXPLOSION_MULT
+                && history.should_alert(&format!("{}_spread", snap.name)) {
                     let msg = format!(
                         "⚡ SENTINEL: {} {} SPREAD EXPLOZE\n\
                          Spread: ${:.2} > {:.0}x Grid ${:.2}\n\
@@ -212,7 +210,6 @@ pub async fn run_sentinel(memory: Arc<ArmadaMemory>) {
                     );
                     alerts.push(msg);
                 }
-            }
 
             // ── LAYER 3c: Toxic Rate Alert (delta-based) ──
             // Track toxic RATE (delta) not absolute counter.
@@ -229,8 +226,8 @@ pub async fn run_sentinel(memory: Arc<ArmadaMemory>) {
                 // Only alert if meaningful activity (>20 new fills) AND high toxic rate (>60%)
                 if fills_delta > 20 && toxic_delta > 0 {
                     let toxic_rate = toxic_delta as f64 / fills_delta as f64;
-                    if toxic_rate > 0.60 {
-                        if history.should_alert(&format!("{}_toxic", snap.name)) {
+                    if toxic_rate > 0.60
+                        && history.should_alert(&format!("{}_toxic", snap.name)) {
                             let msg = format!(
                                 "☠️ SENTINEL: {} {} TOXIC RATE HIGH\n\
                                  Toxic: {} / {} fills ({:.0}%) za posledni interval\n\
@@ -242,7 +239,6 @@ pub async fn run_sentinel(memory: Arc<ArmadaMemory>) {
                             );
                             alerts.push(msg);
                         }
-                    }
                 }
             }
         }
@@ -252,8 +248,8 @@ pub async fn run_sentinel(memory: Arc<ArmadaMemory>) {
             let total_pnl: f64 = snapshots.iter().map(|s| s.realized_pnl).sum();
             let pnl_delta = total_pnl - history.prev_pnl;
 
-            if pnl_delta < PNL_CRASH_THRESHOLD {
-                if history.should_alert("pnl_crash") {
+            if pnl_delta < PNL_CRASH_THRESHOLD
+                && history.should_alert("pnl_crash") {
                     let msg = format!(
                         "🚨 SENTINEL: VELKA ZTRATA\n\
                          ━━━━━━━━━━━━━━━━━━━\n\
@@ -264,7 +260,6 @@ pub async fn run_sentinel(memory: Arc<ArmadaMemory>) {
                     );
                     alerts.push(msg);
                 }
-            }
 
             // ── LAYER 3e: Zero Activity (1 hour of no fills) ──
             let total_fills: u64 = snapshots.iter().map(|s| s.session_fills).sum();
@@ -374,8 +369,8 @@ pub async fn run_sentinel(memory: Arc<ArmadaMemory>) {
                             use std::io::Write;
                             let _ = f.write_all(&[1u8]);
                         }
-                        if sweep_storm && !flash_crash {
-                            if history.should_alert("sweep_storm") {
+                        if sweep_storm && !flash_crash
+                            && history.should_alert("sweep_storm") {
                                 let msg = format!(
                                     "⚡ REGIME SENTINEL: SWEEP STORM\n\
                                      ━━━━━━━━━━━━━━━━━━━━━━\n\
@@ -385,7 +380,6 @@ pub async fn run_sentinel(memory: Arc<ArmadaMemory>) {
                                 );
                                 alerts.push(msg);
                             }
-                        }
                     }
                 } else {
                     history.regime_calm_counter += 1;
@@ -403,7 +397,7 @@ pub async fn run_sentinel(memory: Arc<ArmadaMemory>) {
         }
 
         // ═══ LAYER 5: System Resources (every 60s = 12th cycle) ═══
-        if cycle_count % 12 == 0 {
+        if cycle_count.is_multiple_of(12) {
             check_system_resources(&mut history).await;
         }
         cycle_count += 1;
@@ -587,7 +581,7 @@ fn disk_usage_pct() -> Option<u64> {
         .output()
         .ok()?;
     let s = String::from_utf8_lossy(&output.stdout);
-    for line in s.lines().skip(1) {
+    if let Some(line) = s.lines().skip(1).next() {
         let pct: u64 = line.trim().trim_end_matches('%').parse().ok()?;
         return Some(pct);
     }

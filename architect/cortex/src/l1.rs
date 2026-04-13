@@ -267,7 +267,7 @@ fn read_orderbook_levels(engine: &EngineState, is_bids: bool, n: usize) -> array
     let source = if is_bids { &engine.bids } else { &engine.asks };
     for i in 0..n {
         let price = source[i].price.load(Ordering::Relaxed) as i64;
-        let amount = source[i].amount.load(Ordering::Relaxed) as i64;
+        let amount = source[i].amount.load(Ordering::Relaxed);
         if price > 0 {
             levels.push(BookLevel { price: FixedPrice::new(price), amount: FixedPrice::new(amount.abs()) });
         }
@@ -443,7 +443,7 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
                     brain.record_consecutive_freeze();
                     brain.record_freeze_time(freeze_ms);
 
-                    let qty_fp = FixedPrice::new(engine.net_position.load(Ordering::Relaxed) as i64);
+                    let qty_fp = FixedPrice::new(engine.net_position.load(Ordering::Relaxed));
                     let qty_int = qty_fp.0 / PRICE_SCALE_I;
                     println!("  [L1] 🧹 SWEEP: Toxic surge detected! Panic selling {} BTC", qty_int);
                     
@@ -453,7 +453,7 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
 
                     brain.record_sweep(FixedPrice::zero(), FixedPrice::zero());
 
-                    if cycle % 100 == 0 {
+                    if cycle.is_multiple_of(100) {
                         let side = if bid_sweep { "BID" } else { "ASK" };
                         println!("  🚨 L1: Sweep ({side})! Freeze {freeze_ms}ms. Toxic: {new_toxic}");
                     }
@@ -464,8 +464,8 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
         }
 
         // ── GPU INFERENCE (fire-and-forget every ~2s = 40 cycles) ──
-        if let Some(ref tx) = gpu_tx {
-            if cycle % 40 == 0 {
+        if let Some(ref tx) = gpu_tx
+            && cycle.is_multiple_of(40) {
                 let regime = match engine.l2_regime_id.load(Ordering::Relaxed) {
                     1 => "TRENDING",
                     2 => "RANGING",
@@ -505,14 +505,13 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
                     toxic_hits: engine.toxic_flow_hits.load(Ordering::Relaxed),
                     sweeps_recent: brain.total_sweeps as u64,
                     confidence,
-                    net_position: FixedPrice::new(engine.net_position.load(Ordering::Relaxed) as i64),
+                    net_position: FixedPrice::new(engine.net_position.load(Ordering::Relaxed)),
                     regime,
                     fear_greed: engine.macro_fear_greed.load(Ordering::Relaxed),
-                    macro_bias: FixedPrice::new((engine.macro_bias.load(Ordering::Relaxed) as i64) * (PRICE_SCALE_I / 10000)),
+                    macro_bias: FixedPrice::new(engine.macro_bias.load(Ordering::Relaxed) * (PRICE_SCALE_I / 10000)),
                     portfolio_hedged: global_risk.portfolio_is_hedged.load(Ordering::Relaxed) == 1,
                 });
             }
-        }
 
         prev_bids = bids;
         prev_asks = asks;
@@ -522,12 +521,12 @@ pub fn run_l1_hydra(engine: &EngineState, gpu_tx: Option<mpsc::SyncSender<L1GpuR
         brain.adapt_threshold();
 
         // ── ANTI-FLAP CHECK (every 10s = 200 cycles) ──
-        if cycle % 200 == 0 {
+        if cycle.is_multiple_of(200) {
             brain.check_paralysis();
         }
 
         // ── ZERO-f64 LOGGING (every ~60s = 1200 cycles) ──
-        if cycle % 1200 == 0 {
+        if cycle.is_multiple_of(1200) {
             let toxic = engine.toxic_flow_hits.load(Ordering::Relaxed);
             let l2_regime = engine.l2_regime_id.load(Ordering::Relaxed);
 

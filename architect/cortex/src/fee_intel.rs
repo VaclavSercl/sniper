@@ -2,12 +2,11 @@
 use sniper_types::fee_types::{GlobalFeeMatrix, VENUE_BITFINEX, VENUE_BINANCE};
 use std::sync::atomic::Ordering;
 use std::time::Duration;
-use anyhow::Result;
 
 pub async fn run_global_fee_monitor(matrix_ptr_usize: usize) {
     println!("  💰 [FEE INTEL] Booting Unified Fee Fetcher (Bitfinex + Binance)...");
     let mut interval = tokio::time::interval(Duration::from_secs(3600)); // Update 1x za hodinu
-    let client = reqwest::Client::new();
+    let _client = reqwest::Client::new();
 
     loop {
         interval.tick().await;

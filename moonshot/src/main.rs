@@ -270,8 +270,8 @@ impl SovereignEngine for MoonshotEngine {
                         && arr.len() > 1 {
                             let mt = arr[1].as_str().unwrap_or("");
                             if mt == "tu" {
-                                if let Some(trade) = arr.get(2).and_then(|e| e.as_array()) {
-                                    if let (Some(exec_amount_val), Some(exec_price_val)) = (trade.get(4), trade.get(5)) {
+                                if let Some(trade) = arr.get(2).and_then(|e| e.as_array())
+                                    && let (Some(exec_amount_val), Some(exec_price_val)) = (trade.get(4), trade.get(5)) {
                                         let exec_amount_f64 = exec_amount_val.as_f64().unwrap_or(0.0);
                                         let exec_price_f64 = exec_price_val.as_f64().unwrap_or(0.0);
                                         let exec_amount = FixedPrice::new((exec_amount_f64 * sniper_types::PRICE_SCALE).round() as i64);
@@ -303,7 +303,6 @@ impl SovereignEngine for MoonshotEngine {
                                                 exec_price.as_f64(), exec_amount.as_f64(), tp_bps, target_sell_price.as_f64());
                                         }
                                     }
-                                }
                             } else if mt == "wu" || mt == "ws" {
                                 let iter: Box<dyn Iterator<Item = &BorrowedValue>> = if mt == "wu" {
                                     Box::new(std::iter::once(&arr[2]))

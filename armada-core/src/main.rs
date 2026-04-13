@@ -3,7 +3,7 @@ use std::time::Duration;
 use tokio::time::interval;
 use anyhow::{Context, Result};
 use sniper_types::armada_types::{ArmadaState, ArmadaStateV2, load_oracle_state_ro, capital_index, MAX_BOTS, MAX_VENUES};
-use sniper_types::mmap_utils::{init_mmap, open_mmap_readonly};
+use sniper_types::mmap_utils::init_mmap;
 use std::os::unix::fs::FileExt;
 use std::fs::OpenOptions;
 
