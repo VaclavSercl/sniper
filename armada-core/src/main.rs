@@ -99,8 +99,8 @@ fn recalculate_kelly_matrix(
     let v1_equity = state_v1.total_equity.load(Ordering::Relaxed) as f64 / 1e8;
     let total_equity = if v2_equity > 0.0 { v2_equity } else { v1_equity };
     
-    // Minimum operating capital (prevents division by zero, phantom 1000$)
-    let total_active_equity = if total_equity < 1000.0 { 1000.0 } else { total_equity };
+    // Minimum operating capital (prevents phantom $1000 allocations)
+    let total_active_equity = if total_equity < 1.0 { 0.0 } else { total_equity };
 
     // ═══ REGIME SCORES (from L2 command matrix) ═══
     let ranging = l2_state.global_risk.ranging_score.load(Ordering::Relaxed) as f64 / 1e8;
