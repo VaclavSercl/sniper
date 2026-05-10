@@ -40,7 +40,7 @@ impl FixedFormat {
             val = -val;
         }
         let int_part = val / PRICE_SCALE_I;
-        let mut frac_part = val % PRICE_SCALE_I;
+        let frac_part = val % PRICE_SCALE_I;
         
         let mut itoa_buf = itoa::Buffer::new();
         let int_str = itoa_buf.format(int_part).as_bytes();
@@ -285,8 +285,8 @@ impl SovereignEngine for TrigonEngine {
     fn best_bid_ask(&self) -> (f64, f64) {
         let engine = unsafe { &*self.engine };
         (
-            engine.triangles[0].legs[0].best_bid.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64,
-            engine.triangles[0].legs[0].best_ask.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64
+            engine.triangles[0].legs[0].best_bid.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE,
+            engine.triangles[0].legs[0].best_ask.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE
         )
     }
 
@@ -298,45 +298,39 @@ impl SovereignEngine for TrigonEngine {
     fn on_market_message(&mut self, payload: &mut [u8], out_buf: &mut bytes::BytesMut) {
         let loop_start = Instant::now();
         
-        if payload.len() > 2 && payload[0] == b'[' {
-            if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&payload) {
-                if let Some(arr) = v.as_array() {
-                    if let Some(0) = arr[0].as_i64() {
-                        if arr.len() > 1 {
+        if payload.len() > 2 && payload[0] == b'['
+            && let Ok(v) = serde_json::from_slice::<serde_json::Value>(payload)
+                && let Some(arr) = v.as_array()
+                    && let Some(0) = arr[0].as_i64()
+                        && arr.len() > 1 {
                             let mt = arr[1].as_str().unwrap_or("");
                             if mt == "wu" || mt == "ws" {
                                 // ZERO-BOX PURGE: Nativní iterace bez haldové alokace
                                 let process_wallet = |w: &serde_json::Value, e_global: &TrigonEngineState| {
                                     if let Some(w_arr) = w.as_array() {
                                         let get_f = |v: &serde_json::Value| -> Option<u64> {
-                                            v.as_f64().map(|f| (f * sniper_types::PRICE_SCALE as f64).round() as u64)
-                                                .or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok().map(|f| (f * sniper_types::PRICE_SCALE as f64).round() as u64)))
+                                            v.as_f64().map(|f| (f * sniper_types::PRICE_SCALE).round() as u64)
+                                                .or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok().map(|f| (f * sniper_types::PRICE_SCALE).round() as u64)))
                                         };
-                                        if let (Some(wt), Some(cur), Some(bal)) = (w_arr.get(0).and_then(|x| x.as_str()), w_arr.get(1).and_then(|x| x.as_str()), w_arr.get(2).and_then(get_f)) {
-                                            if wt == "exchange" {
+                                        if let (Some(wt), Some(cur), Some(bal)) = (w_arr.first().and_then(|x| x.as_str()), w_arr.get(1).and_then(|x| x.as_str()), w_arr.get(2).and_then(get_f))
+                                            && wt == "exchange" {
                                                 if cur == sniper_types::TRADING_BASE { e_global.wallet_btc.store(bal, Ordering::SeqCst); }
-                                                else if cur == sniper_types::TRADING_QUOTE || cur == "UST" { e_global.wallet_usd.store(bal, Ordering::SeqCst); }
+                                                else if cur == sniper_types::TRADING_QUOTE { e_global.wallet_usd.store(bal, Ordering::SeqCst); }
                                                 else if cur == "ETH" { e_global.wallet_eth.store(bal, Ordering::SeqCst); }
                                             }
-                                        }
                                     }
                                 };
                                 let e_global = unsafe { &*self.engine };
                                 if mt == "wu" {
                                     process_wallet(&arr[2], e_global); // Zpracování jednoho updatu
-                                } else if mt == "ws" {
-                                    if let Some(snapshot) = arr[2].as_array() {
+                                } else if mt == "ws"
+                                    && let Some(snapshot) = arr[2].as_array() {
                                         for w in snapshot {
                                             process_wallet(w, e_global); // Zpracování pole bez alokace pointeru
                                         }
                                     }
-                                }
                             }
                         }
-                    }
-                }
-            }
-        }
         
         if let Some((chan, bid, ask)) = sniper_types::exchange::fast_parse_ticker(payload) {
             let now_ms = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
@@ -402,7 +396,7 @@ impl SovereignEngine for TrigonEngine {
 
                         if profit > best_profit { best_profit = profit; }
 
-                        let min_profit = (tr.min_profit_bps.load(Ordering::Acquire) * 100) as i64;
+                        let min_profit = (tr.min_profit_bps.load(Ordering::Acquire) * 100);
                         let latency_pad = {
                             let l2_cmd = unsafe { &*self.l2_cmd };
                             let (v1, ok1) = sniper_types::l2_command::l2cmd_version_check(l2_cmd);
@@ -411,7 +405,7 @@ impl SovereignEngine for TrigonEngine {
                             let (v2, ok2) = sniper_types::l2_command::l2cmd_version_check(l2_cmd);
                             if v1 == v2 && ok1 && ok2 {
                                 if kill == 1 { continue; }
-                                (pad.max(0) * 100) as i64
+                                (pad.max(0) * 100)
                             } else { 0 }
                         };
                         let effective_min_profit = min_profit + latency_pad;
@@ -487,12 +481,11 @@ impl SovereignEngine for TrigonEngine {
     }
 
     fn on_system_event(&mut self, value: &serde_json::Value, _out_buf: &mut bytes::BytesMut) {
-        if value["event"] == "subscribed" && value["channel"] == "ticker" {
-            if let (Some(chan_id), Some(symbol_str)) = (value["chanId"].as_i64(), value["symbol"].as_str()) {
+        if value["event"] == "subscribed" && value["channel"] == "ticker"
+            && let (Some(chan_id), Some(symbol_str)) = (value["chanId"].as_i64(), value["symbol"].as_str()) {
                 self.chan_to_symbol.insert(chan_id, sniper_types::moonshot_types::str_to_symbol_hash(symbol_str));
                 info!(event = "ticker_subscribed", chan_id = chan_id, symbol = symbol_str);
             }
-        }
     }
 
     fn on_loop(&mut self, _out_buf: &mut bytes::BytesMut) {

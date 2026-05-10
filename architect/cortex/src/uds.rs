@@ -242,7 +242,7 @@ async fn handle_request<'a>(
                     p as f64 / PRICE_SCALE
                 }
                 BotRisk::Grid(r) => {
-                    let p = r.grid_spacing.swap(scaled as u64, Ordering::SeqCst);
+                    let p = r.grid_spacing.swap(scaled, Ordering::SeqCst);
                     p as f64 / PRICE_SCALE
                 }
                 _ => return UdsResponse::err("Setting grid step is unsupported for this bot mode"),

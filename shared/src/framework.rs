@@ -8,7 +8,6 @@ use dotenvy::dotenv;
 use crate::exchange::venue::VenueAdapter;
 use crate::exchange::ExchangeCredentials;
 
-use crate::EngineState;
 
 /// Fleet-wide Bitfinex notification parser.
 /// Intercepts [0, "n", [...]] messages and logs rejections/successes.
@@ -24,8 +23,8 @@ fn parse_bitfinex_notification(bytes: &[u8]) -> bool {
     let found = bytes[3..12.min(bytes.len())].windows(3).any(|w| w == needle);
     if !found { return false; }
     // Parse with serde_json for the notification payload
-    if let Ok(v) = serde_json::from_slice::<serde_json::Value>(bytes) {
-        if let Some(arr) = v.get(2).and_then(|a| a.as_array()) {
+    if let Ok(v) = serde_json::from_slice::<serde_json::Value>(bytes)
+        && let Some(arr) = v.get(2).and_then(|a| a.as_array()) {
             let status = arr.get(6).and_then(|s| s.as_str()).unwrap_or("");
             let msg = arr.get(7).and_then(|s| s.as_str()).unwrap_or("");
             if status.contains("ERROR") {
@@ -34,7 +33,6 @@ fn parse_bitfinex_notification(bytes: &[u8]) -> bool {
                 info!(event = "bitfinex_notification", status = status, msg = msg);
             }
         }
-    }
     true
 }
 use crate::math::FixedPrice;
@@ -270,12 +268,11 @@ impl<E: SovereignEngine, V: VenueAdapter> SovereignRunner<E, V> {
             let (mut write, mut read) = ws.split();
 
             // Auth via VenueAdapter
-            if let Some(auth_msg) = self.venue.auth_message(&creds) {
-                if let Err(e) = write.send(Message::Text(auth_msg.into())).await {
+            if let Some(auth_msg) = self.venue.auth_message(&creds)
+                && let Err(e) = write.send(Message::Text(auth_msg.into())).await {
                     error!("Auth send failed: {}", e);
                     continue;
                 }
-            }
 
             let mut _authed = false;
 
@@ -419,12 +416,11 @@ impl<E: SovereignEngine, V: VenueAdapter> SovereignDualRunner<E, V> {
 
             // Setup EXEC — auth via VenueAdapter
             let _ = exec_write.send(Message::Text(r#"{"event":"conf","flags":131072}"#.into())).await;
-            if let Some(auth_msg) = self.venue.auth_message(&creds) {
-                if let Err(e) = exec_write.send(Message::Text(auth_msg.into())).await {
+            if let Some(auth_msg) = self.venue.auth_message(&creds)
+                && let Err(e) = exec_write.send(Message::Text(auth_msg.into())).await {
                     error!("Auth send failed: {}", e);
                     continue;
                 }
-            }
 
             let mut _authed = false;
 
@@ -468,12 +464,11 @@ impl<E: SovereignEngine, V: VenueAdapter> SovereignDualRunner<E, V> {
                                 } else {
                                     self.engine.on_system_event(&v, &mut out_buf);
                                 }
-                            } else if bytes.first() == Some(&b'[') {
-                                if !parse_bitfinex_notification(bytes) {
+                            } else if bytes.first() == Some(&b'[')
+                                && !parse_bitfinex_notification(bytes) {
                                     let mut mut_bytes = bytes.to_vec();
                                     self.engine.on_market_message(&mut mut_bytes, &mut out_buf);
                                 }
-                            }
                         }
                         drain_out_buf!(self, exec_write, &mut out_buf);
                     }
@@ -584,12 +579,11 @@ impl<E: CrossVenueEngine, V1: VenueAdapter, V2: VenueAdapter> SovereignCrossVenu
             let (mut primary_write, mut primary_read) = ws_primary.split();
 
             // Auth on primary
-            if let Some(auth_msg) = self.primary.auth_message(&primary_creds) {
-                if let Err(e) = primary_write.send(Message::Text(auth_msg.into())).await {
+            if let Some(auth_msg) = self.primary.auth_message(&primary_creds)
+                && let Err(e) = primary_write.send(Message::Text(auth_msg.into())).await {
                     error!("Primary auth send failed: {}", e);
                     continue;
                 }
-            }
 
             // Build secondary venue URL with subscriptions baked in.
             // For Binance: combined streams via URL path (btcusdt@bookTicker/ethusdt@bookTicker).

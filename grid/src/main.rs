@@ -40,7 +40,7 @@ impl FixedFormat {
             val = -val;
         }
         let int_part = val / PRICE_SCALE_I;
-        let mut frac_part = val % PRICE_SCALE_I;
+        let frac_part = val % PRICE_SCALE_I;
         
         let mut itoa_buf = itoa::Buffer::new();
         let int_str = itoa_buf.format(int_part).as_bytes();
@@ -81,9 +81,9 @@ fn extract_u64_scaled(v: &BorrowedValue) -> Option<u64> {
         if i >= 0 { return Some((i * PRICE_SCALE_I) as u64); }
         None
     } else if let Some(f) = v.as_f64() {
-        Some((f * sniper_types::PRICE_SCALE as f64).round() as u64)
+        Some((f * sniper_types::PRICE_SCALE).round() as u64)
     } else if let Some(s) = v.as_str() {
-        s.parse::<f64>().ok().map(|f| (f * sniper_types::PRICE_SCALE as f64).round() as u64)
+        s.parse::<f64>().ok().map(|f| (f * sniper_types::PRICE_SCALE).round() as u64)
     } else {
         None
     }
@@ -136,7 +136,7 @@ fn calculate_grid_levels(
     
     // ZLATÉ PRAVIDLO: Inventory Skew Penalty (Pasivní akumulace)
     // Pokud držíme BTC, stavíme prodejní limity blíže k trhu pro rychlejší exit v zisku.
-    let inventory_btc = grid_inv as f64 / sniper_types::PRICE_SCALE as f64;
+    let inventory_btc = grid_inv as f64 / sniper_types::PRICE_SCALE;
     let inventory_penalty_factor = if inventory_btc > 0.0 {
         // Redukce sell spacingu úměrně k drženému BTC (až o 80 %)
         let penalty = 1.0 - inventory_btc.min(0.8);
@@ -211,8 +211,8 @@ impl SovereignEngine for GridEngine {
     fn best_bid_ask(&self) -> (f64, f64) {
         let engine = unsafe { &*self.engine };
         (
-            engine.best_bid.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64,
-            engine.best_ask.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE as f64
+            engine.best_bid.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE,
+            engine.best_ask.load(std::sync::atomic::Ordering::Relaxed) as f64 / sniper_types::PRICE_SCALE
         )
     }
 
@@ -233,10 +233,10 @@ impl SovereignEngine for GridEngine {
         if payload.len() > 2 && payload[0] == b'[' {
             // Keep a clone for JSON so we don't mess up fast_parse_ticker if it fails
             let mut pl_clone = payload.to_vec();
-            if let Ok(v) = simd_json::to_borrowed_value(&mut pl_clone) {
-                if let Some(arr) = v.as_array() {
-                    if let Some(0) = arr[0].as_i64() {
-                    if arr.len() > 1 {
+            if let Ok(v) = simd_json::to_borrowed_value(&mut pl_clone)
+                && let Some(arr) = v.as_array()
+                    && let Some(0) = arr[0].as_i64()
+                    && arr.len() > 1 {
                         let mt = arr[1].as_str().unwrap_or("");
                         if mt == "wu" || mt == "ws" {
                             let iter: Box<dyn Iterator<Item = &BorrowedValue>> = if mt == "wu" {
@@ -249,14 +249,12 @@ impl SovereignEngine for GridEngine {
                                 }
                             };
                             for w in iter {
-                                if let Some(w_arr) = w.as_array() {
-                                    if let (Some(wt), Some(cur), Some(bal)) = (w_arr.get(0).and_then(|x| x.as_str()), w_arr.get(1).and_then(|x| x.as_str()), w_arr.get(2).and_then(|x| extract_u64_scaled(x))) {
-                                        if wt == "exchange" {
+                                if let Some(w_arr) = w.as_array()
+                                    && let (Some(wt), Some(cur), Some(bal)) = (w_arr.get(0).and_then(|x| x.as_str()), w_arr.get(1).and_then(|x| x.as_str()), w_arr.get(2).and_then(|x| extract_u64_scaled(x)))
+                                        && wt == "exchange" {
                                             if cur == sniper_types::TRADING_BASE { e.wallet_btc.store(bal, Ordering::SeqCst); }
-                                            else if cur == sniper_types::TRADING_QUOTE || cur == "UST" { e.wallet_usd.store(bal, Ordering::SeqCst); }
+                                            else if cur == sniper_types::TRADING_QUOTE { e.wallet_usd.store(bal, Ordering::SeqCst); }
                                         }
-                                    }
-                                }
                             }
                         } else if mt == "os" || mt == "on" || mt == "ou" || mt == "oc" {
                             let e_mut = unsafe { &mut *(self.engine as *const GridEngineState as *mut GridEngineState) };
@@ -270,12 +268,11 @@ impl SovereignEngine for GridEngine {
                                                 o.get(6).and_then(|v| v.as_f64()),
                                                 o.get(13).and_then(|v| v.as_str())
                                             )
-                                            && sym == "tBTCUSD" {
-                                                if status.contains("ACTIVE") || status.contains("PARTIALLY") {
+                                            && sym == "tBTCUSD"
+                                                && (status.contains("ACTIVE") || status.contains("PARTIALLY")) {
                                                     if amt_val > 0.0 { store_order_slot(&e_mut.active_buy_ids, id); }
                                                     else { store_order_slot(&e_mut.active_sell_ids, id); }
                                                 }
-                                            }
                                     }
                                 }
                             } else {
@@ -298,13 +295,10 @@ impl SovereignEngine for GridEngine {
                             }
                         }
                     }
-                }
-            }
-        }
     }
 
-        if let Some((chan, bid, ask)) = sniper_types::exchange::fast_parse_ticker(payload) {
-            if Some(chan) == self.ticker_chan {
+        if let Some((chan, bid, ask)) = sniper_types::exchange::fast_parse_ticker(payload)
+            && Some(chan) == self.ticker_chan {
                 let mid = (bid + ask) / 2;
                 e.best_bid.store(bid as u64, Ordering::Release);
                 e.best_ask.store(ask as u64, Ordering::Release);
@@ -321,7 +315,7 @@ impl SovereignEngine for GridEngine {
                 let spacing_fp = FixedPrice::new(base_spacing_raw);
                 
                 // ZÁSAH 1: Skewed Delta-Trigger
-                let delta_price = (mid as i64 - self.last_anchor_price).abs();
+                let delta_price = (mid - self.last_anchor_price).abs();
                 let spacing_threshold = (spacing_fp.0 * 35) / 100; // 35% posun
                 let trend_delta = (trending_score_raw - self.last_trending_score).abs();
                 let time_elapsed = self.last_grid_calc.elapsed().as_secs();
@@ -329,11 +323,11 @@ impl SovereignEngine for GridEngine {
                 // Přepočítáme mřížku jen pokud se cena pohnula o 35% rozteče, 
                 // změnila se drasticky toxicita, nebo uběhlo 60 vteřin (Fallback)
                 if delta_price > spacing_threshold || trend_delta > 200_000 || time_elapsed > 60 {
-                    let mut new_anchor_price = mid as i64;
+                    let mut new_anchor_price = mid;
                     // One-Way Anchor Freeze (Zlaté pravidlo Bitcoinu): Nezlevňujeme při poklesu s plnou taškou
                     let c_idx = sniper_types::armada_types::capital_index(2, 0); // Grid = 2
                     let armada_cap = self.armada_v2.capital.authorized_capital[c_idx].load(Ordering::Acquire) as i64;
-                    let inventory_usd = (grid_inv as f64 / sniper_types::PRICE_SCALE as f64) * mid as f64;
+                    let inventory_usd = (grid_inv as f64 / sniper_types::PRICE_SCALE) * mid as f64;
                     let cap_pct = if armada_cap > 0 { inventory_usd / armada_cap as f64 } else { 0.0 };
                     if cap_pct > 0.5 && new_anchor_price < self.last_anchor_price {
                         new_anchor_price = self.last_anchor_price; // Zastaví kráčení dolů
@@ -361,7 +355,7 @@ impl SovereignEngine for GridEngine {
                     let base_qty = FixedPrice::new(r.order_qty.load(Ordering::Acquire) as i64);
                     let center_override_fp = FixedPrice::new(r.center_price_override.load(Ordering::Acquire) as i64);
 
-                    let mid_fp = FixedPrice::new(mid as i64);
+                    let mid_fp = FixedPrice::new(mid);
                     let center = if center_override_fp.0 > 0 { center_override_fp } else { FixedPrice::new(new_anchor_price) };
                     
                     // ZÁSAH 2: Zero-Bound Toxic Shrinking (Zlaté pravidlo Bitcoinu)
@@ -383,28 +377,26 @@ impl SovereignEngine for GridEngine {
                     let total_orders = (num_buy + num_sell) as i64;
                     if total_orders > 0 {
                         let max_total_qty = FixedPrice::new(armada_cap) / mid_fp;
-                        let max_qty_per_order = max_total_qty / FixedPrice::new(total_orders * sniper_types::PRICE_SCALE_I as i64);
+                        let max_qty_per_order = max_total_qty / FixedPrice::new(total_orders * sniper_types::PRICE_SCALE_I);
                         if buy_qty > max_qty_per_order { buy_qty = max_qty_per_order; }
                         if sell_qty > max_qty_per_order { sell_qty = max_qty_per_order; }
                     }
 
                     if spacing.0 > 0 && buy_qty.0 >= 15000 && center.0 > 0 {
                         let anchor = l2w.grid_dynamic_anchor.load(Ordering::Relaxed);
-                        let (mut buys, mut sells) = if anchor > 0 {
+                        let (buys, sells) = if anchor > 0 {
                             let mut warp_buys = GridLevels::new();
                             let mut warp_sells = GridLevels::new();
                             for lvl in 1..=30i64 {
-                                if !hedge_active {
-                                    if let Some(p) = sniper_types::l2_command::calculate_warped_grid_level(l2w, lvl, true) {
-                                        if p > 0 { let _ = warp_buys.try_push(FixedPrice::new(p as i64)); }
-                                    }
-                                }
+                                if !hedge_active
+                                    && let Some(p) = sniper_types::l2_command::calculate_warped_grid_level(l2w, lvl, true)
+                                        && p > 0 { let _ = warp_buys.try_push(FixedPrice::new(p)); }
                                 if let Some(p) = sniper_types::l2_command::calculate_warped_grid_level(l2w, lvl, false) {
-                                    let _ = warp_sells.try_push(FixedPrice::new(p as i64));
+                                    let _ = warp_sells.try_push(FixedPrice::new(p));
                                 }
                             }
                             warp_buys.sort_unstable_by(|a, b| b.cmp(a));
-                            warp_sells.sort_unstable_by(|a, b| a.cmp(b));
+                            warp_sells.sort_unstable();
                             (warp_buys, warp_sells)
                         } else {
                             calculate_grid_levels(center, spacing, num_buy, num_sell, mode, geo_pct, grid_inv)
@@ -505,16 +497,14 @@ impl SovereignEngine for GridEngine {
                     }
                 }
             }
-        }
     }
 
     fn on_system_event(&mut self, value: &serde_json::Value, _out_buf: &mut bytes::BytesMut) {
-        if value["event"] == "subscribed" && value["channel"] == "ticker" {
-            if let Some(cid) = value["chanId"].as_i64() {
+        if value["event"] == "subscribed" && value["channel"] == "ticker"
+            && let Some(cid) = value["chanId"].as_i64() {
                 self.ticker_chan = Some(cid);
                 info!(event = "ticker_subscribed", chan_id = cid);
             }
-        }
     }
 
     fn on_loop(&mut self, _out_buf: &mut bytes::BytesMut) {

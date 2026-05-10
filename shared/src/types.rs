@@ -313,7 +313,7 @@ impl Default for RiskState {
             bias_offset: AtomicI64::new(0),
             authorized_capital: AtomicU64::new(400 * PRICE_SCALE_I as u64), // $400 default
             daily_loss_limit: AtomicU64::new(20 * PRICE_SCALE_I as u64),    // $20 default
-            kelly_fraction: AtomicU64::new(2000), // Default 20% fractional Kelly base
+            kelly_fraction: AtomicU64::new(1100), // Default 11% fractional Kelly base
         }
     }
 }
