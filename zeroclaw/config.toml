@@ -5,11 +5,11 @@
 # Replaces: l2_oracle.py, tg_commander.py, pnl_daemon.py
 # ═══════════════════════════════════════════════════════════
 
-# ── Provider: Gemini 3.1 Flash Lite (L2 Orchestrator brain) ──
+# ── Provider: Gemini 3.6 Flash High (L2 Orchestrator brain) ──
 # Requires GEMINI_API_KEY in environment or .env
 # Fallback: OpenRouter with any model
 default_provider = "gemini"
-default_model = "gemini-3.1-flash-lite-preview"
+default_model = "gemini-3.6-flash"
 default_temperature = 0.3
 provider_timeout_secs = 120
 model_routes = []

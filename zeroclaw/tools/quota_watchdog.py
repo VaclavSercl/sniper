@@ -30,7 +30,7 @@ def load_env():
 
 def check_gemini_quota(api_key: str) -> dict:
     """Send a minimal request to Gemini to check quota status."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={api_key}"
     payload = json.dumps({
         "contents": [{"parts": [{"text": "1"}]}],
         "generationConfig": {"maxOutputTokens": 1}

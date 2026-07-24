@@ -98,7 +98,7 @@ from the past week and propose optimal L1 tuning parameters.
 
     try:
         result = subprocess.run(
-            ["gemini", "-m", "gemini-3.1-pro-preview", "--output-format=json", "-p", prompt],
+            ["gemini", "-m", "gemini-3.6-flash", "--output-format=json", "-p", prompt],
             capture_output=True, text=True, timeout=120
         )
         if result.returncode != 0:
