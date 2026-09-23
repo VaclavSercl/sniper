@@ -16,7 +16,8 @@ Backtest uses Probabilistic Queue Model:
     2. Queue position model estimates fill probability based on:
        - Volume traded at that price level
        - Historical fill rate statistics
-  - This prevents OHLCV-based "phantom fills" that inflate profits 80%+
+  - This heuristic is uncalibrated. Results cannot authorize deployment.
+  - Candle simulations do not establish intrabar ordering or real fills.
 
 Usage:
   from counterfactual_backtest import run_counterfactual_validation
@@ -30,6 +31,8 @@ import time
 import sqlite3
 import logging
 import statistics
+import math
+from pathlib import Path
 from dataclasses import dataclass, asdict
 from typing import Optional
 
@@ -40,14 +43,6 @@ LOG_DIR = os.path.join(PROJECT_ROOT, "logs")
 DB_PATH = os.path.expanduser("~/.local/share/sniper/market_data.db")
 WF_SPLIT_PATH = os.path.join(PROJECT_ROOT, "state", "wf_split.json")
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [BACKTEST] %(message)s",
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler(os.path.join(LOG_DIR, "counterfactual_backtest.log")),
-    ],
-)
 log = logging.getLogger("backtest")
 
 # ═══════════════════════════════════════════════════════════
@@ -103,9 +98,7 @@ GATE_MAX_DRAWDOWN = 5.0         # Max $5 drawdown
 GATE_TOXIC_RATE_MAX = 40.0      # Max 40% toxic fills
 GATE_MIN_FILLS = 50             # At least 50 simulated fills
 
-# Fee structure (Bitfinex maker/taker)
-BFX_MAKER_FEE = -0.0001         # Maker rebate (-1 bps)
-BFX_TAKER_FEE = 0.0005          # Taker fee (5 bps)
+# Fees must be supplied explicitly for the account and historical period.
 
 # ═══════════════════════════════════════════════════════════
 # Data Loading
@@ -120,95 +113,80 @@ def load_walk_forward_split():
         return json.load(f)
 
 
-def load_candles(conn, exchange, symbol, start_ms, end_ms):
-    """Load 1m candles from Data Lake and SQLite combined."""
+def _finite(value, name, positive=False):
+    number = float(value)
+    if not math.isfinite(number) or (positive and number <= 0):
+        raise ValueError("Invalid " + name)
+    return number
+
+
+def _lake_rows(kind):
+    """Read only present parquet files; missing readers/errors are explicit."""
     import glob
-    import pandas as pd
-    
-    candles = []
-    LAKE_DIR = "/data/sniper_lake/candles_1m"
-    
-    # 1. Load from Data Lake (Parquet)
-    if os.path.exists(LAKE_DIR):
-        parquet_files = sorted(glob.glob(os.path.join(LAKE_DIR, "*.parquet")))
-        for pf in parquet_files:
-            try:
-                df = pd.read_parquet(pf)
-                df = df[(df['ts'] >= start_ms) & (df['ts'] <= end_ms)]
-                if not df.empty:
-                    for _, r in df.iterrows():
-                        candles.append({
-                            "ts": int(r['ts']), "open": float(r['open']),
-                            "high": float(r['high']), "low": float(r['low']),
-                            "close": float(r['close']), "volume": float(r['volume'])
-                        })
-            except Exception as e:
-                log.error(f"Error reading Lake Parquet {pf}: {e}")
-                
-    # 2. Load from Recent SQLite
-    try:
-        rows = conn.execute(
-            "SELECT ts, open, high, low, close, volume FROM candles_1m "
-            "WHERE exchange=? AND symbol=? AND ts >= ? AND ts <= ? ORDER BY ts",
-            (exchange, symbol, start_ms, end_ms)
-        ).fetchall()
-        for r in rows:
-            candles.append({
-                "ts": r[0], "open": r[1], "high": r[2],
-                "low": r[3], "close": r[4], "volume": r[5],
-            })
-    except Exception as e:
-        pass
-        
-    candles.sort(key=lambda x: x["ts"])
-    unique = {c["ts"]: c for c in candles}
-    return [unique[ts] for ts in sorted(unique.keys())]
+    files = sorted(glob.glob("/data/sniper_lake/" + kind + "/*.parquet"))
+    if files:
+        import pandas as pd
+        for filename in files:
+            yield from pd.read_parquet(filename).to_dict("records")
+
+
+def _load_rows(conn, kind, exchange, symbol, start_ms, end_ms):
+    if not isinstance(start_ms, int) or not isinstance(end_ms, int) or start_ms >= end_ms:
+        raise ValueError("Invalid half-open data interval")
+    tick = kind == "ticks"
+    timestamp = "ts_ms" if tick else "ts"
+    fields = (["ts_ms", "price", "qty", "side", "trade_id"] if tick
+              else ["ts", "open", "high", "low", "close", "volume"])
+    # Table/column names come only from the two internal constants above.
+    query = ("SELECT " + ",".join(fields) + " FROM " + kind +
+             " WHERE exchange=? AND symbol=? AND " + timestamp +
+             ">=? AND " + timestamp + "<? ORDER BY " + timestamp)
+    rows = [dict(zip(fields, row)) for row in
+            conn.execute(query, (exchange, symbol, start_ms, end_ms)).fetchall()]
+    for row in _lake_rows(kind):
+        if "exchange" not in row or "symbol" not in row:
+            raise ValueError("Parquet instrument identity missing")
+        if row["exchange"] != exchange or row["symbol"] != symbol:
+            continue
+        if timestamp not in row:
+            raise ValueError("Parquet timestamp missing")
+        if start_ms <= row[timestamp] < end_ms:
+            rows.append({field: row[field] for field in fields})
+    unique = {}
+    for row in rows:
+        ts = row[timestamp]
+        if isinstance(ts, bool) or not isinstance(ts, int) or ts < 0:
+            raise ValueError("Invalid timestamp")
+        if tick:
+            identity = row["trade_id"]
+            if identity is None or not str(identity).strip():
+                raise ValueError("Trade identity missing")
+            row["trade_id"] = str(identity)
+            row["price"] = _finite(row["price"], "price", True)
+            row["qty"] = _finite(row["qty"], "quantity", True)
+            if row["side"] not in ("buy", "sell"):
+                raise ValueError("Unknown aggressor side")
+            key = row["trade_id"]
+        else:
+            for field in ("open", "high", "low", "close"):
+                row[field] = _finite(row[field], field, True)
+            row["volume"] = _finite(row["volume"], "volume")
+            if (row["volume"] < 0 or row["low"] > min(row["open"], row["close"])
+                    or row["high"] < max(row["open"], row["close"])):
+                raise ValueError("Invalid OHLC candle")
+            key = ts
+        if key in unique and unique[key] != row:
+            raise ValueError("Conflicting market-data identity")
+        unique[key] = row
+    return sorted(unique.values(), key=lambda row: (row[timestamp], row.get("trade_id", "")))
+
+
+def load_candles(conn, exchange, symbol, start_ms, end_ms):
+    return _load_rows(conn, "candles_1m", exchange, symbol, start_ms, end_ms)
 
 
 def load_trades(conn, exchange, symbol, start_ms, end_ms):
-    """Load historical trades for tick-level simulation (from SQLite and Data Lake)."""
-    import glob
-    import pandas as pd
-    
-    trades = []
-    LAKE_DIR = "/data/sniper_lake/ticks"
-    
-    # 1. Load from Data Lake (Parquet)
-    if os.path.exists(LAKE_DIR):
-        parquet_files = sorted(glob.glob(os.path.join(LAKE_DIR, "*.parquet")))
-        for pf in parquet_files:
-            try:
-                df = pd.read_parquet(pf)
-                if 'ts_ms' in df.columns:
-                    df = df[(df['ts_ms'] >= start_ms) & (df['ts_ms'] <= end_ms)]
-                    if not df.empty:
-                        for _, r in df.iterrows():
-                            trades.append({
-                                "ts_ms": int(r['ts_ms']), "price": float(r['price']),
-                                "qty": float(r['qty']), "side": r['side']
-                            })
-            except Exception as e:
-                log.error(f"Error reading Lake Parquet {pf}: {e}")
-                
-    # 2. Load from Recent SQLite (Table 'ticks')
-    try:
-        rows = conn.execute(
-            "SELECT ts_ms, price, qty, side FROM ticks "
-            "WHERE exchange=? AND symbol=? AND ts_ms >= ? AND ts_ms <= ? ORDER BY ts_ms",
-            (exchange, symbol, start_ms, end_ms)
-        ).fetchall()
-        for r in rows:
-            trades.append({
-                "ts_ms": r[0], "price": r[1], "qty": r[2], "side": r[3],
-            })
-    except Exception as e:
-        log.warning(f"Failed to load from ticks table: {e}")
-        
-    trades.sort(key=lambda x: x["ts_ms"])
-    
-    # Deduplicate
-    unique_trades = {t["ts_ms"]: t for t in trades}
-    return [unique_trades[ts] for ts in sorted(unique_trades.keys())]
+    return _load_rows(conn, "ticks", exchange, symbol, start_ms, end_ms)
 
 
 # ═══════════════════════════════════════════════════════════
@@ -221,8 +199,8 @@ class ProbabilisticQueueModel:
     A limit order at price P fills with probability:
       P(fill) = min(1.0, volume_at_P / (queue_depth × typical_order_size))
     
-    This prevents the classic "OHLCV phantom fill" problem where
-    backtests assume 100% fill rate whenever price touches the limit.
+    This is an uncalibrated research heuristic. It cannot establish executable
+    fills or qualify deployment without independent order-book evidence.
     """
     
     def __init__(self, fill_probability_factor=0.3):
@@ -273,32 +251,39 @@ def simulate_hydra(candles, trades, params):
     grid_step = params.get("grid_step", 4.0)
     max_pos = params.get("max_position", 0.005)
     gamma = params.get("gamma", 0.1)
-    
-    # State
-    position = 0.0
-    cash = 0.0
-    fills = []
-    pnl_curve = []
-    equity_curve = []
+    for name, value in (("grid_step", grid_step), ("max_position", max_pos)):
+        _finite(value, name, True)
+    _finite(gamma, "gamma")
+    if "maker_fee" not in params:
+        result = _empty_result("hydra", params)
+        result.fail_reasons = ["EXPLICIT_MAKER_FEE_REQUIRED"]
+        return result
+    maker_fee = _finite(params["maker_fee"], "maker fee")
     
     queue_model = ProbabilisticQueueModel(fill_probability_factor=0.3)
     
-    total_opportunities = 0
-    toxic_count = 0
-    
     if trades:
+        if any(b["ts_ms"] < a["ts_ms"] for a, b in zip(trades, trades[1:])):
+            raise ValueError("Trades must be chronological")
+        for trade in trades:
+            _finite(trade["price"], "price", True)
+            _finite(trade["qty"], "quantity", True)
+            if trade["side"] not in ("buy", "sell"):
+                raise ValueError("Unknown aggressor side")
         # ── TICK-LEVEL SIMULATION ──
         log.info(f"  Using tick-level simulation ({len(trades):,} trades)")
-        result = _simulate_hydra_tick_level(trades, grid_step, max_pos, gamma, queue_model)
+        result = _simulate_hydra_tick_level(trades, grid_step, max_pos, gamma, queue_model, maker_fee, params)
     else:
+        if any(b["ts"] <= a["ts"] for a, b in zip(candles, candles[1:])):
+            raise ValueError("Candles must be chronological and unique")
         # ── CANDLE-BASED SIMULATION (fallback) ──
         log.info(f"  Using candle-based simulation ({len(candles)} candles)")
-        result = _simulate_hydra_candle_level(candles, grid_step, max_pos, gamma, queue_model)
+        result = _simulate_hydra_candle_level(candles, grid_step, max_pos, gamma, queue_model, maker_fee, params)
     
     return result
 
 
-def _simulate_hydra_tick_level(trades, grid_step, max_pos, gamma, queue_model):
+def _simulate_hydra_tick_level(trades, grid_step, max_pos, gamma, queue_model, maker_fee=0.0, params=None):
     """Tick-level simulation with queue position model."""
     position = 0.0
     cash = 0.0
@@ -320,11 +305,12 @@ def _simulate_hydra_tick_level(trades, grid_step, max_pos, gamma, queue_model):
     
     # Running volume for queue model
     typical_minute_volume = 0
-    minute_volume = 0
+    minute_volume = trades[0]["qty"]
     minute_ts = trades[0]["ts_ms"] // 60000
     volume_samples = []
     
-    for trade in trades:
+    pnl_by_minute[(trades[0]["ts_ms"], 0)] = 0.0
+    for event_index, trade in enumerate(trades[1:], 1):
         price = trade["price"]
         qty = trade["qty"]
         side = trade["side"]
@@ -339,50 +325,47 @@ def _simulate_hydra_tick_level(trades, grid_step, max_pos, gamma, queue_model):
             minute_ts = trade_minute
         minute_volume += qty
         
-        # Update mid price (EWMA)
-        mid_price = 0.99 * mid_price + 0.01 * price
-        
-        # A-S reservation price adjustment
+        # Quotes use only observations preceding this event.
         reservation = mid_price - gamma * position * grid_step
         bid_level = reservation - grid_step / 2
         ask_level = reservation + grid_step / 2
         
         # Check if our bid fills
-        if price <= bid_level and position < max_pos:
+        if side == "sell" and price <= bid_level and position < max_pos:
             total_opps += 1
             tv = typical_minute_volume if typical_minute_volume > 0 else qty * 10
             if queue_model.will_fill(qty, tv):
-                fill_qty = min(0.001, max_pos - position)  # Standard lot
+                fill_qty = min(0.001, qty, max_pos - position)
                 position += fill_qty
                 cost = bid_level * fill_qty
-                fee = cost * BFX_MAKER_FEE  # Maker rebate
+                fee = cost * maker_fee
                 cash -= cost + fee
                 fills.append({"side": "buy", "price": bid_level, "qty": fill_qty, "fee": fee, "ts": trade["ts_ms"]})
                 
-                # Toxic detection: did price continue down?
-                # We mark it toxic if the very next trade is also a sell
-                if side == "sell":
+                # Contemporaneous adverse mark; not a forward toxicity estimate.
+                if price < bid_level:
                     toxic_count += 1
         
         # Check if our ask fills
-        elif price >= ask_level and position > -max_pos:
+        elif side == "buy" and price >= ask_level and position > -max_pos:
             total_opps += 1
             tv = typical_minute_volume if typical_minute_volume > 0 else qty * 10
             if queue_model.will_fill(qty, tv):
-                fill_qty = min(0.001, position + max_pos)
+                fill_qty = min(0.001, qty, position + max_pos)
                 if fill_qty > 0:
                     position -= fill_qty
                     revenue = ask_level * fill_qty
-                    fee = revenue * BFX_MAKER_FEE
+                    fee = revenue * maker_fee
                     cash += revenue - fee
                     fills.append({"side": "sell", "price": ask_level, "qty": fill_qty, "fee": fee, "ts": trade["ts_ms"]})
                     
-                    if side == "buy":
+                    if price > ask_level:
                         toxic_count += 1
         
         # Track PnL per minute
         mark_to_market = cash + position * price
-        pnl_by_minute[trade_minute] = mark_to_market
+        pnl_by_minute[(trade["ts_ms"], event_index)] = mark_to_market
+        mid_price = 0.99 * mid_price + 0.01 * price
     
     # Final mark-to-market
     final_price = trades[-1]["price"] if trades else 0
@@ -392,12 +375,12 @@ def _simulate_hydra_tick_level(trades, grid_step, max_pos, gamma, queue_model):
         "hydra", fills, pnl_by_minute, final_mtm, cash,
         position, final_price, total_opps, toxic_count,
         len(set(t["ts_ms"] // 60000 for t in trades)),
-        {"grid_step": grid_step, "max_position": max_pos, "gamma": gamma},
+        params or {"grid_step": grid_step, "max_position": max_pos, "gamma": gamma, "maker_fee": maker_fee},
         (trades[-1]["ts_ms"] - trades[0]["ts_ms"]) / (3600 * 1000) if len(trades) > 1 else 0
     )
 
 
-def _simulate_hydra_candle_level(candles, grid_step, max_pos, gamma, queue_model):
+def _simulate_hydra_candle_level(candles, grid_step, max_pos, gamma, queue_model, maker_fee=0.0, params=None):
     """Candle-level simulation (fallback when no tick data)."""
     position = 0.0
     cash = 0.0
@@ -412,14 +395,12 @@ def _simulate_hydra_candle_level(candles, grid_step, max_pos, gamma, queue_model
     
     mid_price = candles[0]["close"]
     
-    for i, candle in enumerate(candles):
+    pnl_by_minute[candles[0]["ts"]] = 0.0
+    for i, candle in enumerate(candles[1:], 1):
         price = candle["close"]
         volume = candle.get("volume", 0)
         
-        # Update mid
-        mid_price = 0.95 * mid_price + 0.05 * price
-        
-        # A-S reservation
+        # Quotes fixed before observing this candle.
         reservation = mid_price - gamma * position * grid_step
         bid_level = reservation - grid_step / 2
         ask_level = reservation + grid_step / 2
@@ -429,10 +410,10 @@ def _simulate_hydra_candle_level(candles, grid_step, max_pos, gamma, queue_model
             total_opps += 1
             # Queue model: use candle volume as proxy
             if queue_model.will_fill(volume * 0.5, volume):
-                fill_qty = 0.001
+                fill_qty = min(0.001, volume / 2, max_pos - position)
                 position += fill_qty
                 cost = bid_level * fill_qty
-                fee = cost * BFX_MAKER_FEE
+                fee = cost * maker_fee
                 cash -= cost + fee
                 fills.append({"side": "buy", "price": bid_level, "qty": fill_qty, "fee": fee, "ts": candle["ts"]})
                 
@@ -444,11 +425,11 @@ def _simulate_hydra_candle_level(candles, grid_step, max_pos, gamma, queue_model
         if candle["high"] >= ask_level and position > -max_pos:
             total_opps += 1
             if queue_model.will_fill(volume * 0.5, volume):
-                fill_qty = min(0.001, position + max_pos)
+                fill_qty = min(0.001, volume / 2, position + max_pos)
                 if fill_qty > 0:
                     position -= fill_qty
                     revenue = ask_level * fill_qty
-                    fee = revenue * BFX_MAKER_FEE
+                    fee = revenue * maker_fee
                     cash += revenue - fee
                     fills.append({"side": "sell", "price": ask_level, "qty": fill_qty, "fee": fee, "ts": candle["ts"]})
                     
@@ -456,17 +437,18 @@ def _simulate_hydra_candle_level(candles, grid_step, max_pos, gamma, queue_model
                         toxic_count += 1
         
         mark_to_market = cash + position * price
-        pnl_by_minute[i] = mark_to_market
+        pnl_by_minute[candle["ts"]] = mark_to_market
+        mid_price = 0.95 * mid_price + 0.05 * price
     
     final_price = candles[-1]["close"]
     final_mtm = cash + position * final_price
-    duration_h = len(candles) / 60.0
+    duration_h = (candles[-1]["ts"] - candles[0]["ts"]) / 3600000
     
     return _build_result(
         "hydra", fills, pnl_by_minute, final_mtm, cash,
         position, final_price, total_opps, toxic_count,
         len(candles),
-        {"grid_step": grid_step, "max_position": max_pos, "gamma": gamma},
+        params or {"grid_step": grid_step, "max_position": max_pos, "gamma": gamma, "maker_fee": maker_fee},
         duration_h
     )
 
@@ -483,23 +465,35 @@ def _build_result(bot_name, fills, pnl_by_minute, final_mtm, cash,
     buy_fills = sum(1 for f in fills if f["side"] == "buy")
     sell_fills = sum(1 for f in fills if f["side"] == "sell")
     total_fills = len(fills)
-    total_fees = sum(abs(f.get("fee", 0)) for f in fills)
+    total_fees = sum(_finite(f.get("fee", 0), "fee") for f in fills)
     
     # Gross PnL (without fees)
     gross_pnl = final_mtm + total_fees
     net_pnl = final_mtm
     
-    # Sharpe ratio from minute-level returns
-    pnl_values = sorted(pnl_by_minute.values()) if pnl_by_minute else [0]
-    if len(pnl_values) > 2:
-        returns = [pnl_values[i] - pnl_values[i-1] for i in range(1, len(pnl_values))]
-        mean_ret = statistics.mean(returns) if returns else 0
-        std_ret = statistics.stdev(returns) if len(returns) > 1 else 1
-        # Annualize: sqrt(1440 * 365) for minute data
-        sharpe = (mean_ret / std_ret) * (1440 * 365) ** 0.5 if std_ret > 0 else 0
-    else:
-        sharpe = 0.0
-    
+    # Event timestamps are milliseconds; tuple suffix preserves simultaneous ticks.
+    _finite(final_mtm, "final equity")
+    pnl_values = [_finite(pnl_by_minute[k], "equity")
+                  for k in sorted(pnl_by_minute)] if pnl_by_minute else [0]
+    sharpe = 0.0
+    sharpe_available = False
+    if "initial_capital" in params:
+        capital = _finite(params["initial_capital"], "initial capital", True)
+        daily = {}
+        for key in sorted(pnl_by_minute):
+            timestamp = key[0] if isinstance(key, tuple) else key
+            daily[timestamp // 86400000] = capital + pnl_by_minute[key]
+        days = sorted(daily)
+        # Drop the last partial day. Require consecutive observed daily closes.
+        days = days[:-1]
+        if (len(days) >= 3 and all(b - a == 1 for a, b in zip(days, days[1:]))
+                and all(daily[day] > 0 for day in days)):
+            returns = [daily[b] / daily[a] - 1 for a, b in zip(days, days[1:])]
+            deviation = statistics.stdev(returns)
+            if deviation > 0:
+                sharpe = statistics.mean(returns) / deviation * math.sqrt(365)
+                sharpe_available = True
+
     # Max drawdown
     peak = 0
     max_dd = 0
@@ -520,7 +514,9 @@ def _build_result(bot_name, fills, pnl_by_minute, final_mtm, cash,
     avg_trade = net_pnl / max(1, min(buy_fills, sell_fills))
     
     # Gate validation
-    fail_reasons = []
+    fail_reasons = ["UNVERIFIED_EXECUTION_MODEL"]
+    if not sharpe_available:
+        fail_reasons.append("DAILY_RETURN_EVIDENCE_MISSING")
     if net_pnl < GATE_NET_PNL_MIN:
         fail_reasons.append(f"PnL ${net_pnl:.4f} < ${GATE_NET_PNL_MIN}")
     if sharpe < GATE_SHARPE_MIN:
@@ -583,10 +579,19 @@ def run_counterfactual_validation(bot_name, params, partition="oos"):
     Returns:
         BacktestResult
     """
+    if bot_name != "hydra":
+        raise ValueError("Unsupported simulator")
+    if partition not in ("in_sample", "oos"):
+        raise ValueError("Unsupported partition")
     split = load_walk_forward_split()
     if not split:
         return _empty_result(bot_name, params)
     
+    boundaries = [split[k] for k in
+                  ("is_start_ms", "is_end_ms", "oos_start_ms", "oos_end_ms")]
+    if (any(isinstance(v, bool) or not isinstance(v, int) for v in boundaries)
+            or not (0 <= boundaries[0] < boundaries[1] <= boundaries[2] < boundaries[3])):
+        raise ValueError("Overlapping or invalid walk-forward split")
     if partition == "in_sample":
         start_ms = split["is_start_ms"]
         end_ms = split["is_end_ms"]
@@ -600,15 +605,17 @@ def run_counterfactual_validation(bot_name, params, partition="oos"):
         log.error("market_data.db not found!")
         return _empty_result(bot_name, params)
     
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(Path(DB_PATH).resolve().as_uri() + '?mode=ro', uri=True)
     
     # Load data
     exchange = "bitfinex"
     symbol = "tBTCUSD"
     
-    candles = load_candles(conn, exchange, symbol, start_ms, end_ms)
-    trades = load_trades(conn, exchange, symbol, start_ms, end_ms)
-    conn.close()
+    try:
+        candles = load_candles(conn, exchange, symbol, start_ms, end_ms)
+        trades = load_trades(conn, exchange, symbol, start_ms, end_ms)
+    finally:
+        conn.close()
     
     log.info(f"  Data: {len(candles)} candles, {len(trades):,} trades")
     
@@ -717,12 +724,17 @@ if __name__ == "__main__":
     parser.add_argument("--maxpos", type=float, default=0.005, help="Max position (BTC)")
     parser.add_argument("--gamma", type=float, default=0.1, help="Risk aversion")
     parser.add_argument("--partition", default="oos", choices=["in_sample", "oos", "full"])
+    parser.add_argument("--maker-fee", type=float, required=True, help="Signed decimal fee rate for tested account/period")
+    parser.add_argument("--initial-capital", type=float, required=True, help="Capital in USD for daily returns")
     args = parser.parse_args()
     
-    params = {"grid_step": args.grid, "max_position": args.maxpos, "gamma": args.gamma}
+    params = {"grid_step": args.grid, "max_position": args.maxpos, "gamma": args.gamma,
+              "maker_fee": args.maker_fee, "initial_capital": args.initial_capital}
     
     if args.partition == "full":
         is_r, oos_r = run_full_walk_forward(args.bot, params)
+        sys.exit(0 if is_r.passed and oos_r.passed else 1)
     else:
         result = run_counterfactual_validation(args.bot, params, args.partition)
         print(result.summary())
+        sys.exit(0 if result.passed else 1)
