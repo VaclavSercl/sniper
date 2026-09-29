@@ -1,0 +1,10 @@
+[Unit]
+Description=Sniper Binance funding capture hourly at minute 05 UTC
+
+[Timer]
+OnCalendar=*-*-* *:05:00 UTC
+Persistent=true
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
