@@ -1,5 +1,12 @@
 # 🐺 Sniper Armada v21.0 Omni-Interface
 
+> **Repository ownership (2026-09-29):** Sniper is the single trading system and
+> source repository; **Beroun is its server**. Python services previously spread
+> across Beroun directories now belong to [platform/](platform/README.md).
+> See [host cutover](infra/beroun/README.md) for the controlled source-path
+> migration. Existing database/account/socket names remain compatibility names.
+> Source consolidation does not qualify a strategy for live trading.
+
 **Sovereign HFT Trading System** — Pure Rust Hive with Omni-Router and in-process AI inference.
 
 [![Version](https://img.shields.io/badge/Version-v21.0-gold)]()
