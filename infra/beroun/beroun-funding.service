@@ -1,0 +1,15 @@
+[Unit]
+Description=Sniper Binance public funding-rate history capture
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=beroun
+Group=beroun
+ExecStart=/usr/bin/python3 /opt/sniper/current/platform/legacy/scripts/fetch_funding.py BTCUSDT 2
+ExecStart=/usr/bin/python3 /opt/sniper/current/platform/legacy/scripts/fetch_funding.py ETHUSDT 2
+ExecStart=/usr/bin/python3 /opt/sniper/current/platform/legacy/scripts/fetch_funding.py SOLUSDT 2
+TimeoutStartSec=180
+StandardOutput=journal
+StandardError=journal

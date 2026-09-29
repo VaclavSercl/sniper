@@ -1,5 +1,78 @@
 # Backtest integrity repair
 
+## Reconcile Hermes production changes — owner request 2026-09-29
+Goal: (1) preserve/reconcile production-only funding repairs into canonical Git
+and pass the full application gate; (2) restore truthful CPU checks and review
+the broad polkit grant; (3) audit current data and repair misleading monitors.
+Baseline c2dbed4c26d97f44f834c81b6cc214017a676980 on isolated local worktree
+repair/reconcile-production. Existing P014 WIP and server untracked prototypes
+remain untouched. Codex worktree tool reported Not a git repository at outer
+workspace; a Git-managed child worktree was created from the nested Sniper repo.
+
+Environment: Windows local; Beroun Linux with existing Python/PostgreSQL/Bash,
+Hermes 0.21.5 and agy CLIs. No installations, reboots, firmware writes, actual
+orders, new paper epoch, model deployment or deleting legacy files in scope.
+Owner explicitly requested both remote CLI agents as independent reviewers.
+Detect their actual interfaces; use bounded fresh read-only reviews with a
+sanitized evidence packet, no credentials or raw historical prompts. Preserve
+review outputs and distinguish executed reviewers from unavailable capabilities.
+
+File scope: legacy/scripts/fetch_funding.py, scripts/ingest_tri_venue.py and
+their tests; four funding systemd units under infra/beroun; source manifest;
+runtime/scripts/post_reboot_check.sh and focused CPU-state tests; later a
+canonical Hyperliquid monitor and P014 collection/wrapper tests after step 1.
+Deployment reconciliation/preview helpers, documentation and this plan may
+change. Do not silently adopt local prototypes or overwrite foreign work.
+
+Acceptance: persisted production diffs preserved in Git; complete reviewed
+manifest and staged tree stable; existing tests plus data/error regressions
+pass against private PostgreSQL; missing data, API/SQL failure, vulnerable CPU
+and failed authorization must remain visible. Snapshot funding is explicitly
+not settled funding. Reviewer findings resolved or reported before deployment.
+
+Exact checks: python3 -B tools/verify_platform.py in isolated Linux copy;
+bash -n on changed/new shell files; systemd-analyze verify on the four units;
+git diff --cached --check; candidate secret/integrity scan. Independent Hermes
+and agy review findings supplement, never replace, these tests. At most three
+evidence-driven repair cycles per failed gate, retain diagnostics.
+
+Recovery: retain deployed files/manifest/diffs and prior release; hash-bound
+source replacement only after complete verification and explicit privilege
+authorization. Never restore a known-inconsistent release as silently verified.
+Record publication/deployment separately; no push/merge without exact reviewed
+target approval. A.5 requires concrete sudo approval; prepare read-only SQL and
+policy inspection first. No production SQL writes are implied by a data audit.
+Full universal harness installation is outside this application repair scope.
+Deployment scope refinement: bind the actual previous release tree and record
+its known drift in update_release; recoverable exact-hash disabling of the one
+reviewed polkit grant, with temporary-fixture tests. These tools remain preview
+until separately authorized privilege use. No broad policy cleanup.
+
+Scope evidence update: repair missing Tuple import in the Hyperliquid connector
+(observed Python 3.12 import failure), bound its HTTP response, add canonical
+Hyperliquid monitor tests and preserve P014 pending work by copying its four
+reviewed files into this candidate; original WIP remains unchanged. Kernel GDS
+classification follows official kernel documented states. No mitigation change.
+Read-only sudo approval received for the exact policy read and existing SQL;
+both completed 2026-09-29 20:12 UTC with exit 0, no database writes.
+
+
+
+Current evidence and acceptance refinement:
+- Exact approved read-only SQL and polkit reads completed successfully.
+- Bitfinex official pair inventory confirms EURUSD absent; update both collectors
+  and expose unavailable_markets rather than inventing replacement FX data.
+- Deployment inventory found one original-byte-identical perfect_market_ingest.py.bak;
+  retain and hash it in the previous release, exclude it from the new source.
+- First Linux gate exposed old deployment fixture not supplying the new tree hash;
+  second exposed fixture file mode drift. Both fixture defects are repaired and
+  the affected deployment tests pass. Private SQL regression found expected psql
+  command tags, which its exact output assertion now accounts for. No checks removed.
+- Repairs consumed: two evidence-driven cycles; final integrated gate follows all
+  source, manifest and plan edits. Final gate outcome is recorded externally.
+- Independent reviews and accepted/rejected findings: infra/beroun/RECONCILIATION.md.
+- No production change, publication, dependency installation or live order occurred.
+
 ## Strategy lifecycle repair — owner request 2026-09-29
 Goal: repair proposal scheduling, reproducible evaluation, truthful status and
 promotion checks under the single Sniper repository. Baseline f360cd03900e6bbe93a3f02c6813f7ae6ebc3408;

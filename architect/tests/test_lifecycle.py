@@ -131,7 +131,7 @@ class LifecycleTests(unittest.TestCase):
     def test_source_update_and_health_failure_rollback(self):
         import os
         import subprocess
-        for fail in (False,True):
+        for fail, drift in ((False,False),(True,False),(True,True)):
             with tempfile.TemporaryDirectory() as directory:
                 base=Path(directory)/'installed';source=Path(directory)/'source'
                 previous=base/'releases'/('b'*40);previous.mkdir(parents=True)
@@ -139,7 +139,13 @@ class LifecycleTests(unittest.TestCase):
                 p=source/'platform/test.py';p.parent.mkdir(parents=True);p.write_bytes(b'pass\n')
                 meta={'commit':'a'*40,'files':{'platform/test.py':life.file_hash(p)},'modes':{'platform/test.py':0o644}}
                 raw=json.dumps(meta).encode();(source/'RELEASE.json').write_bytes(raw)
-                argv=['update','--source',str(source),'--expected-current','b'*40,'--manifest-sha256',life.sha(raw),'--apply']
+                old=previous/'platform/test.py';old.parent.mkdir();old.write_bytes(b'pass\n');old.chmod(0o644)
+                (previous/'RELEASE.json').write_bytes(raw)
+                if drift:old.write_bytes(b'# preserved production repair\n')
+                observed=update_release.inspect_release(previous)
+                argv=['update','--source',str(source),'--expected-current','b'*40,
+                      '--expected-current-tree-sha256',observed['tree_sha256'],
+                      '--manifest-sha256',life.sha(raw),'--apply']
                 def switch(target):
                     temp=base/'pending';temp.symlink_to(target);os.replace(temp,base/'current')
                 def health(*args):
@@ -149,7 +155,8 @@ class LifecycleTests(unittest.TestCase):
                         with self.assertRaises(subprocess.CalledProcessError):update_release.main()
                     else:update_release.main()
                 record=json.loads((base/'operations'/('a'*40+'-update.json')).read_text())
-                self.assertEqual(record['status'],'ROLLED_BACK' if fail else 'DEPLOYED_SOURCE_ONLY')
+                expected=('ROLLED_BACK_TO_KNOWN_DRIFT' if drift else 'ROLLED_BACK') if fail else 'DEPLOYED_SOURCE_ONLY'
+                self.assertEqual(record['status'],expected)
                 self.assertEqual((base/'current').readlink(),previous if fail else base/'releases'/('a'*40))
                 self.assertFalse((base/'operations'/'source-update.lock').exists())
 

@@ -1,0 +1,14 @@
+[Unit]
+Description=Sniper public ticker and funding snapshot capture
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=beroun
+Group=beroun
+WorkingDirectory=/opt/sniper/current/platform
+ExecStart=/usr/bin/python3 /opt/sniper/current/platform/scripts/ingest_tri_venue.py
+TimeoutStartSec=180
+StandardOutput=journal
+StandardError=journal

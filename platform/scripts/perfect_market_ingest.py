@@ -45,7 +45,7 @@ BINANCE_PAIRS = [
 
 BITFINEX_PAIRS = [
     "tBTCUSD", "tBTCEUR", "tBTCUST",
-    "tEURUSD", "tEURUST",
+    "tEURUST",  # tEURUSD absent from official pair inventory, 2026-09-29.
     "tUSTUSD", "tUDCUSD"
 ]
 
@@ -333,6 +333,7 @@ class PerfectMarketIngest:
     def run_incremental_cycle(self) -> Dict[str, int]:
         """Runs single incremental cycle to ingest latest closed bars across all venues."""
         stats = {"binance": 0, "bitfinex": 0, "hyperliquid": 0, "funding": 0, "errors": 0}
+        stats["unavailable_markets"] = {"bitfinex": ["tEURUSD"]}
 
         # 1. Binance Pairs
         for pair in BINANCE_PAIRS:

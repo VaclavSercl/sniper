@@ -24,7 +24,7 @@ import json
 import time
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 MAINNET_INFO_URL = "https://api.hyperliquid.xyz/info"
 TESTNET_INFO_URL = "https://api.hyperliquid-testnet.xyz/info"
@@ -52,7 +52,10 @@ class HyperliquidReadOnly:
             }
         )
         with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+            raw = resp.read(2_000_001)
+            if len(raw) > 2_000_000:
+                raise ValueError('Public response too large')
+            return json.loads(raw.decode("utf-8"))
 
     # ── Market Data Endpoints (Public) ──────────────────────────────────
 

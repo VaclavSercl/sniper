@@ -68,7 +68,7 @@
       "path": "platform/research/hyperliquid_connector.py",
       "source": "beroun@bdb3f444:research/hyperliquid_connector.py",
       "source_sha256": "a6e0da1ca76012a0b9c91b5765b2522d60d04a89d92e1fa2730849ee4de28989",
-      "sha256": "a6e0da1ca76012a0b9c91b5765b2522d60d04a89d92e1fa2730849ee4de28989",
+      "sha256": "433a8ec9bc7c3c8aaec577b78a2002019104c3c5fd3aaaaf2f44aa95f77dad31",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -236,7 +236,7 @@
       "path": "platform/scripts/ingest_tri_venue.py",
       "source": "beroun@bdb3f444:scripts/ingest_tri_venue.py",
       "source_sha256": "d833e14903f22f9a83aa52c01ec462174f0484969d9217925bf08dfb6b0267bf",
-      "sha256": "d833e14903f22f9a83aa52c01ec462174f0484969d9217925bf08dfb6b0267bf",
+      "sha256": "eef2bec4667d2cb9dba796f43af2cda8d52f6168a90ba5828c811b598a7f210e",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -268,7 +268,7 @@
       "path": "platform/scripts/perfect_market_ingest.py",
       "source": "beroun@bdb3f444:scripts/perfect_market_ingest.py",
       "source_sha256": "9f3da3328d02c1d747a1f7ffce83d20283b397ca3924dacb72d5a9c07e469bfc",
-      "sha256": "7e119e569e7aa725ac5dad0e99b620607e166320c39116c52a63ae3df32a6367",
+      "sha256": "5b8ad34794f0795773f7a873d87c94008e5f16ffeb4559be8bf3e8616b0a2378",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -630,7 +630,7 @@
       "path": "platform/legacy/scripts/fetch_funding.py",
       "source": "/opt/beroun/repo/scripts/fetch_funding.py",
       "source_sha256": "4a4745b42e765b69816112ca678571a8e0653d5c68fd2ae136bb9e056fd90c33",
-      "sha256": "4a4745b42e765b69816112ca678571a8e0653d5c68fd2ae136bb9e056fd90c33",
+      "sha256": "3c6268779676235b4de7c3ee4f3db3482c967b633a4c4d9741187a4542de1b5c",
       "mode": "100644"
     },
     {
@@ -777,7 +777,7 @@
       "path": "platform/runtime/scripts/post_reboot_check.sh",
       "source": "/opt/beroun/services/scripts/post_reboot_check.sh",
       "source_sha256": "d402cef0420b7a7bb60a799bfd15b777c27e3e2cdb0e1ed89921d90a26146c27",
-      "sha256": "d402cef0420b7a7bb60a799bfd15b777c27e3e2cdb0e1ed89921d90a26146c27",
+      "sha256": "ea7e14434fe56675a420e2e68a3b21fe34dedbcab03a657f3d2a0bf78ce7f940",
       "mode": "100755"
     },
     {
@@ -878,7 +878,7 @@
       "path": "platform/tests/unit/test_venues.py",
       "source": "beroun@bdb3f444:.synthbit/tests/test_venues.py",
       "source_sha256": "a06873f02b734fb4582e4c097260aeac89bc72387bc10c3a8f847fe5f4f04f1f",
-      "sha256": "a06873f02b734fb4582e4c097260aeac89bc72387bc10c3a8f847fe5f4f04f1f",
+      "sha256": "6c1fe08a5bd6208e2bec538452dae0ea65381df3b448afe720ddfb1ccd042c95",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -907,6 +907,54 @@
       "source": "Sniper lifecycle repair 2026-09-29",
       "sha256": "2419d9b5fcc2a90114a46016993cbd27dd819c2df1af530d66990ad80aa0b1dd",
       "mode": "100644"
+    },
+    {
+      "path": "platform/README.md",
+      "source": "owner-authorized reconciliation 2026-09-29",
+      "mode": "100644",
+      "sha256": "c32c8e2524bbdc8e4e09938b5bf00455991af4114c99bdebc02fad66bda53232"
+    },
+    {
+      "path": "platform/research/hyperliquid_monitor.py",
+      "source": "owner-authorized reconciliation 2026-09-29",
+      "mode": "100644",
+      "sha256": "bb56c72158325f006b70589e9ee7149fcacdbd7b4d1ae2ddb29debffac790960"
+    },
+    {
+      "path": "platform/research/p014_capture.py",
+      "source": "owner-authorized reconciliation 2026-09-29",
+      "mode": "100644",
+      "sha256": "f0cefe9887abfcf6f80835e308f1ca8fd28a7ef370993fa3512520011d8c1f05"
+    },
+    {
+      "path": "platform/runtime/scripts/check_gds.py",
+      "source": "owner-authorized reconciliation 2026-09-29",
+      "mode": "100644",
+      "sha256": "589992530043ac58dbc1a7a59304841c454564541ee32bf7a45d07cd5dcd8be9"
+    },
+    {
+      "path": "platform/tests/unit/test_cpu_status.py",
+      "source": "owner-authorized reconciliation 2026-09-29",
+      "mode": "100644",
+      "sha256": "2c2d486ee26dfa0d8785a57167a9df20ccb012817ae462dc2566d091e994a65e"
+    },
+    {
+      "path": "platform/tests/unit/test_funding_ingest_integrity.py",
+      "source": "owner-authorized reconciliation 2026-09-29",
+      "mode": "100644",
+      "sha256": "2740ff17cc49b68ef8202a36b937b5cd829ed3f9a104dbd849b4675e6897c948"
+    },
+    {
+      "path": "platform/tests/unit/test_hyperliquid_monitor.py",
+      "source": "owner-authorized reconciliation 2026-09-29",
+      "mode": "100644",
+      "sha256": "88bdfead9a1fc940f03b13856d025f57cb64dacc601bc220a894264b6eb3a4e7"
+    },
+    {
+      "path": "platform/tests/unit/test_p014_capture.py",
+      "source": "owner-authorized reconciliation 2026-09-29",
+      "mode": "100644",
+      "sha256": "327a2190514023c304e9516cf0a3fc74e5ba251336ad4ff13f7ee88657af51a3"
     }
   ]
 }
