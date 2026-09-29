@@ -89,7 +89,8 @@ class LifecycleTests(unittest.TestCase):
 
     def test_boot_missing_evidence_rejects(self):
         with patch.object(safe_boot,'PROJECT_ROOT',str(self.root)):
-            self.assertFalse(safe_boot.SafeBootPipeline('hydra').run_phase2_wfa()['ok'])
+            result = safe_boot.SafeBootPipeline('hydra').run_phase2_wfa()
+            self.assertFalse(result['ok'])
 
     def test_boot_pause_enforced_before_state_and_no_spawn(self):
         risk=self.root/'risk';risk.write_bytes(bytes(16))

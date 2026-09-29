@@ -49,9 +49,10 @@ class TestBinanceConnector(unittest.TestCase):
                 self.assertEqual(call_req.headers.get("X-mbx-apikey"), "test_key")
 
     def test_signed_without_credentials_raises(self):
-        client = binance_connector.BinanceReadOnly(api_key=None, api_secret=None)
-        with self.assertRaises(ValueError):
-            client.account()
+        with patch.dict(os.environ, {}, clear=True):
+            client = binance_connector.BinanceReadOnly(api_key=None, api_secret=None)
+            with self.assertRaises(ValueError):
+                client.account()
 
 
 class TestBitfinexConnector(unittest.TestCase):
