@@ -224,51 +224,15 @@ class T15CrossBasisEngine:
             "trade_count": len(self.trades),
             "ou_half_life_hours": round(half_life, 2),
             "falsification_gates": gates,
-            "verdict": "VERIFIED_PASS" if all_passed else "FALSIFIED"
+            "verdict": "UNQUALIFIED_LEGACY_MODEL",
+            "diagnostic_gates_passed": all_passed,
+            "live_eligible": False
         }
 
 
 def run_database_backtest() -> Dict[str, Any]:
-    """Runs T15 backtest directly using ground-truth data in PostgreSQL."""
-    def psql(sql: str) -> List[List[str]]:
-        cmd = ["sudo", "-u", "beroun", "psql", "-d", "beroun", "-t", "-A", "-F", "|", "-c", sql]
-        r = subprocess.run(cmd, capture_output=True, text=True)
-        return [l.split("|") for l in r.stdout.strip().splitlines() if l]
-
-    logger.info("Loading funding data from PostgreSQL market_funding...")
-    f_rows = psql(
-        "SELECT EXTRACT(EPOCH FROM funding_time), rate FROM market_funding "
-        "WHERE symbol='BTCUSDT' ORDER BY funding_time ASC;"
-    )
-    funding_data = [(float(r[0]), float(r[1])) for r in f_rows]
-
-    logger.info("Loading hourly downsampled price series from market_klines...")
-    k_rows = psql("""
-        SELECT
-            EXTRACT(EPOCH FROM date_trunc('hour', open_time)) AS ts,
-            (array_agg(close ORDER BY open_time DESC))[1] AS close_p
-        FROM market_klines
-        WHERE symbol='BTCUSDT' AND open_time >= NOW() - INTERVAL '365 days'
-        GROUP BY date_trunc('hour', open_time)
-        ORDER BY ts ASC;
-    """)
-
-    # Build multi-currency synthetic bars (using live FX triangulation)
-    bars_data = []
-    for r in k_rows:
-        ts = float(r[0])
-        btc_p = float(r[1])
-        eur_rate = 1.085  # baseline EUR/USD rate with typical micro-variance
-        bars_data.append({
-            "ts": ts,
-            "btc_usdc": btc_p,
-            "btc_eur": btc_p / eur_rate * (1.0 + 0.0008 * math.sin(ts / 3600.0)),
-            "eur_usdc": eur_rate * (1.0 + 0.0004 * math.cos(ts / 7200.0))
-        })
-
-    engine = T15CrossBasisEngine(initial_capital=1000.0)
-    res = engine.simulate(bars_data, funding_data)
-    return res
+    """Retired: the former path fabricated FX bars from BTC and trigonometry."""
+    raise RuntimeError("Legacy synthetic FX backtest retired; use validated multi-venue data and settled funding")
 
 
 if __name__ == "__main__":

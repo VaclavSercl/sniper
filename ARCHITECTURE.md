@@ -1,5 +1,13 @@
 # 🐺 SNIPER ARMADA v21.1 — Architecture Document
 
+## Research evidence boundary
+The offline lifecycle in platform/research/strategy_lifecycle.py maintains a
+bounded proposal queue and reproducible evaluation inputs. It has no exchange
+write or external Git publication capability. SafeBoot requires an actual
+supported backtest, never treats missing data/errors as a pass, and enforces
+paused IPC before PAPER state. A generic mode setter cannot promote to LIVE.
+No funded adapter or qualified paper chain is claimed by this repair.
+
 ## Canonical repository and deployment host
 
 Sniper owns all trading application sources. Beroun identifies the Linux host,

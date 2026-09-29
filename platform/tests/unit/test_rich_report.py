@@ -76,19 +76,33 @@ class TestRichReport(unittest.TestCase):
         report = reporter.build_full_report(mock_data, narrative, winning_tier)
 
         # Check required sections
-        self.assertIn("BEROUN RANNÍ EXECUTIVE REPORT", report)
+        self.assertIn("SNIPER — PROVOZNÍ REPORT / BEROUN", report)
         self.assertIn("STAV SYSTÉMU", report)
-        self.assertIn("Celkový kapitál", report)
-        self.assertIn("sats", report)
+        self.assertIn("Skutečný burzovní kapitál a PnL: NEOVĚŘENO", report)
         self.assertIn("T13: Basis & Funding Carry", report)
         self.assertIn("T14: Triangular FX Dislocation", report)
-        self.assertIn("Monitor stability stablecoinů", report)
-        self.assertIn("AI TRŽNÍ SYNTÉZA", report)
-        self.assertIn("RIZIKOVÝ PERIMETR & INVARIANTY (§14)", report)
-        self.assertIn("PŮVOD DAT (§14) & GLOBÁLNÍ AI HIERARCHIE", report)
-        self.assertIn("Claude Code (--yolo)", report)
-        self.assertIn("[AGY CLI]", report)
+        self.assertIn("T15: MiCA Cross-Basis Carry — stará evidence ZNEPLATNĚNA", report)
+        self.assertIn("Reconcile: NEOVĚŘENO", report)
+        self.assertNotIn("MATCHED_IN_TOLERANCE", report)
+        self.assertNotIn("Všechny testy OK", report)
+        self.assertNotIn("0% poplatek", report)
+        self.assertIn("AGY CLI", report)
         self.assertIn(narrative, report)
+
+    def test_legacy_t15_does_not_become_live_qualification(self):
+        report = reporter.build_full_report({'strategies': {'t15_cross_basis': {
+            'current_equity_usd': 999999, 'total_trades': 99999,
+            'started_at': '2020-01-01T00:00:00+00:00'}}}, '', 'DETERMINISTIC')
+        self.assertNotIn('999999', report)
+        self.assertNotIn('99999', report)
+        self.assertNotIn('/30', report)
+        self.assertIn('ZNEPLATNĚNA', report)
+
+    def test_commentary_does_not_launch_agents(self):
+        with patch.object(reporter.cascade_runner, 'execute_cascade', side_effect=AssertionError('agent')):
+            text, source = reporter.generate_ai_narrative({})
+        self.assertEqual(source, 'DETERMINISTIC')
+        self.assertIn('samostatné ověření', text)
 
     @patch("generate_rich_report.run_query")
     def test_save_report_to_outbox(self, mock_run_query):

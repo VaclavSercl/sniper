@@ -1,0 +1,20 @@
+[Unit]
+Description=Sniper bounded research proposal and evaluation cycle
+After=network.target
+
+[Service]
+Type=oneshot
+User=wwwenda
+Group=wwwenda
+StateDirectory=sniper/research
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=/usr/bin/python3 -B /opt/sniper/current/platform/research/strategy_lifecycle.py cycle --state-dir /var/lib/sniper/research --data /var/lib/sniper/research/market.sqlite3 --split /var/lib/sniper/research/split.json --policy /var/lib/sniper/research/cost-policy.json
+TimeoutStartSec=300
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/sniper/research
+RestrictAddressFamilies=AF_UNIX
+MemoryMax=1G

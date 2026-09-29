@@ -124,7 +124,7 @@
       "path": "platform/research/strategies/t15_mica_cross_basis.py",
       "source": "beroun@bdb3f444:research/strategies/t15_mica_cross_basis.py",
       "source_sha256": "9c9b70d943ae2f086311533d7c3c70d4bb2e3e9ae402ddc5fb6487e7d4565210",
-      "sha256": "b344e1482eb41d343044bcf6e577d0790f254b1e382254f838d2feed9e0350d9",
+      "sha256": "6608c813c29417a57e9c74ababe55cf2d07b4dec189b9ae077999dbea918af39",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -220,7 +220,7 @@
       "path": "platform/scripts/generate_rich_report.py",
       "source": "beroun@bdb3f444:scripts/generate_rich_report.py",
       "source_sha256": "e39b372feba51949322cda6859de734a91bf8f4bab45ef620160be92d1507d7d",
-      "sha256": "e39b372feba51949322cda6859de734a91bf8f4bab45ef620160be92d1507d7d",
+      "sha256": "664a498798e1791aee65bee682b93982db72ba1791922764b8763e2f6aecf869",
       "mode": "100755",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -268,7 +268,7 @@
       "path": "platform/scripts/perfect_market_ingest.py",
       "source": "beroun@bdb3f444:scripts/perfect_market_ingest.py",
       "source_sha256": "9f3da3328d02c1d747a1f7ffce83d20283b397ca3924dacb72d5a9c07e469bfc",
-      "sha256": "a2b181cb43288c553420285b4ba993731410526fc64ee5161e142577c674eb1c",
+      "sha256": "7e119e569e7aa725ac5dad0e99b620607e166320c39116c52a63ae3df32a6367",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -300,7 +300,7 @@
       "path": "platform/scripts/sync_strategy_registry.py",
       "source": "beroun@bdb3f444:scripts/sync_strategy_registry.py",
       "source_sha256": "efb886b2ab303ef6899c48b08b3117e9ca4a3ab453a01a8ad16ba0457375a67b",
-      "sha256": "efb886b2ab303ef6899c48b08b3117e9ca4a3ab453a01a8ad16ba0457375a67b",
+      "sha256": "84cd3f94fbe98af024c8d032b3818005e3380dd2208edc75c3a2eb19d7839921",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -637,7 +637,7 @@
       "path": "platform/legacy/scripts/fetch_klines.py",
       "source": "/opt/beroun/repo/scripts/fetch_klines.py",
       "source_sha256": "c255e3d44599b3be5bd27f6d60960927b77a2347fce4e8d44c4a1a0e8b4b4f98",
-      "sha256": "c255e3d44599b3be5bd27f6d60960927b77a2347fce4e8d44c4a1a0e8b4b4f98",
+      "sha256": "4e68654f25d123900ba0b66a48ae647578564a7444c1d99e42475f45ed4828dd",
       "mode": "100644"
     },
     {
@@ -838,7 +838,7 @@
       "path": "platform/tests/unit/test_rich_report.py",
       "source": "beroun@bdb3f444:.synthbit/tests/test_rich_report.py",
       "source_sha256": "ddd7ef196c5d8ac95359bb97476c324c8480eae3d9f664ed84a7a711198fd2fc",
-      "sha256": "ddd7ef196c5d8ac95359bb97476c324c8480eae3d9f664ed84a7a711198fd2fc",
+      "sha256": "3ab41d48381ebbd621bfd4ff85602bb14762950e699ad68f761c6a127c7b64b0",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -862,7 +862,7 @@
       "path": "platform/tests/unit/test_t15_strategy.py",
       "source": "beroun@bdb3f444:.synthbit/tests/test_t15_strategy.py",
       "source_sha256": "0941f99395f26c3ea2a6b19e972f6a04e82daeffe12926e97ce6a733fd233fd6",
-      "sha256": "1de0535153912a92192a0f4090433bf278b6aaf151fd0e83d38f89a3ac84de72",
+      "sha256": "6f6279e0fe006a6cb542e1b654c8a713e43bc482df21a2f09eb25e877f7349df",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -889,6 +889,24 @@
       "sha256": "92ea64dabb3025d405c60832ffabcdb29b11041c7dcf9b2a17aec2087e560baf",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/research/strategy_lifecycle.py",
+      "source": "Sniper lifecycle repair 2026-09-29",
+      "sha256": "42ed6101a9ef335111bae8ce610b0179a14983b790a8ae3faad907dc29c27160",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/research/LIFECYCLE.md",
+      "source": "Sniper lifecycle repair 2026-09-29",
+      "sha256": "1423728c994ea42a2ed17accf7d3ffe70b47682d1d2860eaa75d40641fcabf13",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/tests/unit/test_ingest_failure_reporting.py",
+      "source": "Sniper lifecycle repair 2026-09-29",
+      "sha256": "2419d9b5fcc2a90114a46016993cbd27dd819c2df1af530d66990ad80aa0b1dd",
+      "mode": "100644"
     }
   ]
 }

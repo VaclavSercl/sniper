@@ -53,7 +53,7 @@ class TestT15Strategy(unittest.TestCase):
         self.assertLess(half_life, 20.0)
 
     def test_simulation_run(self):
-        """Verifies full simulation returns verified gates and positive carry."""
+        """Legacy toy metrics must never qualify execution."""
         bars = [
             {
                 "ts": 1700000000 + i * 3600,
@@ -66,8 +66,9 @@ class TestT15Strategy(unittest.TestCase):
         funding = [(1700000000 + i * 3600, 0.0001) for i in range(100)]
         res = self.engine.simulate(bars, funding)
 
-        self.assertEqual(res["verdict"], "VERIFIED_PASS")
+        self.assertEqual(res["verdict"], "UNQUALIFIED_LEGACY_MODEL")
         self.assertGreater(res["funding_earned_usd"], 0.0)
+        self.assertFalse(res["live_eligible"])
         self.assertTrue(res["falsification_gates"]["F5_zero_delta_maintained"])
 
 

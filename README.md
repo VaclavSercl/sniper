@@ -1,5 +1,13 @@
 # 🐺 Sniper Armada v21.0 Omni-Interface
 
+> **Research repair:** [evidence-driven lifecycle](platform/research/LIFECYCLE.md)
+> documents actual capabilities and blockers. Legacy T15 metrics do not qualify
+> trading. The registry exporter no longer writes fabricated PASS results to
+> another repository. Daily parameter proposals and offline evaluation have a
+> repository-owned scheduler candidate; installation and live readiness must be
+> verified separately. Existing marketing descriptions below are not deployment
+> or profitability evidence.
+
 > **Repository ownership (2026-09-29):** Sniper is the single trading system and
 > source repository; **Beroun is its server**. Python services previously spread
 > across Beroun directories now belong to [platform/](platform/README.md).

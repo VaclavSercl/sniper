@@ -72,52 +72,24 @@ class SafeBootPipeline:
         return {"ok": True}
 
     def run_phase2_wfa(self) -> dict:
-        """Fáze 2: Walk-Forward Backtest Gate
-        Verifies that current market volatility doesn't critically violate
-        the bot's default configuration before allowing even PAPER mode execution.
-        """
-        log.info(f"🧪 [SBP] Phase 2 (WFA) starting for {self.bot}...")
-        
-        # We only check live volatility if market_data.db is online and has pandas
-        if not HAS_PANDAS or not os.path.exists(DB_PATH):
-            log.warning("⚠️ [SBP] market_data.db or pandas missing, bypassing WFA check.")
-            return {"ok": True, "warning": "Bypassed M5 volatility check"}
-
+        """Require an actual simulator result; volatility is not a backtest."""
+        from pathlib import Path
+        from counterfactual_backtest import run_full_walk_forward
+        config = Path(PROJECT_ROOT) / "state" / "backtest_parameters.json"
         try:
-            # Check last 30 minutes of 1s candles
-            conn = sqlite3.connect(DB_PATH)
-            thirty_mins_ago = int((time.time() - 1800) * 1000)
-            
-            df = pd.read_sql_query(
-                "SELECT ts, close FROM candles_1s WHERE symbol='tBTCUSD' AND ts > ?",
-                conn, params=(thirty_mins_ago,)
-            )
-            conn.close()
-            
-            if len(df) < 60:
-                log.warning("⚠️ [SBP] Not enough candle data for volatility calc (<60s). Passing via bypass.")
-                return {"ok": True}
-                
-            # Calculate rolling price standard deviation (volatility proxy)
-            std_dev = df['close'].std()
-            price = df['close'].iloc[-1]
-            
-            log.info(f"📊 [SBP] 30m BTC Volatility (StdDev): ${std_dev:.2f} at ${price:.0f}")
-            
-            # Risk Gate: If price is bouncing intensely, a tight grid will be destroyed.
-            # E.g., if std_dev > 100 (high chop), grid_step shouldn't be 1.0!
-            # Since we can't easily read mmap from here smoothly, we use a basic proxy check
-            if std_dev > 500.0:
-                return {
-                    "ok": False, 
-                    "error": f"Market Extreme Shock Detected (StdDev > 500: ${std_dev:.2f}). Refusing boot to protect capital."
-                }
-                
-        except Exception as e:
-            log.warning(f"⚠️ [SBP] Phase 2 evaluation error: {e}. Passing conservatively.")
-            
-        log.info(f"✅ [SBP] Phase 2 PASSED for {self.bot} -> Safe for Paper Trading")
-        return {"ok": True}
+            if config.is_symlink() or not config.is_file():
+                return {"ok": False, "error": "BLOCKED: tested parameters missing"}
+            parameters = json.loads(config.read_text())[self.bot]
+            if not isinstance(parameters, dict):
+                raise ValueError("Invalid parameter record")
+            ins, oos = run_full_walk_forward(self.bot, parameters)
+            reasons = list(ins.fail_reasons) + list(oos.fail_reasons)
+            if not ins.passed or not oos.passed or reasons:
+                return {"ok": False, "error": "BLOCKED: backtest not qualified",
+                        "reasons": sorted(set(reasons))}
+            return {"ok": True, "scope": "paper_start_only"}
+        except Exception as exc:
+            return {"ok": False, "error": "BLOCKED: " + type(exc).__name__}
 
     def run_pipeline(self) -> dict:
         """Execute the full start sequence."""
@@ -137,105 +109,44 @@ class SafeBootPipeline:
         return {"ok": True, "cmd": self.binary}
 
     def enforce_paper_state(self):
-        """Forces PAPER/PAUSED mode via BOTH armada_state.json AND mmap.
-        
-        CRITICAL: Rust bots read paused state from mmap (risk_state.bin),
-        NOT from armada_state.json. Writing only to JSON leaves bots in
-        LIVE mode. We must write to BOTH.
+        """Pause known Rust IPC before publishing PAPER; errors abort startup.
+
+        This is a startup interlock, not an execution-model qualification and
+        not an atomic transaction across Rust memory and JSON. A crash leaves
+        IPC paused. Unknown layouts cannot be started through this path.
         """
-        import mmap as _mmap
-        import struct as _struct
-        
-        # ═══ Per-bot mmap risk file paths and global_paused offsets ═══
-        # Each bot has its own risk mmap with global_paused at a different offset.
-        # Offsets derived from #[repr(C, align(64))] Rust struct layouts:
-        #   Hydra:    risk_state.bin, offset 0 (RiskState.paused is first field)
-        #   Moonshot: moonshot_risk.bin, offset 2560 (20 × MoonshotPairRisk@128B)
-        #   Grid:     grid_risk.bin, offset 72 (flat struct, after spacing/levels/qty/mode fields)
-        #   Trigon:   trigon_risk.bin, offset 3072 (24 × TrigonTriangleRisk@128B)
+        import mmap
+        import struct
+        import tempfile
+        from pathlib import Path
+        entry = BOT_RISK_MAP.get(self.bot)
+        if entry is None:
+            raise RuntimeError("Unverified risk IPC layout")
+        risk_path, offset = entry
+        risk = Path(risk_path)
+        target = Path(STATE_FILE)
+        if risk.is_symlink() or not risk.is_file() or target.is_symlink():
+            raise RuntimeError("Missing or unsafe state path")
+        state = json.loads(target.read_text()) if target.exists() else {}
+        if not isinstance(state, dict):
+            raise ValueError("Invalid state")
+        with risk.open("r+b") as stream:
+            if os.fstat(stream.fileno()).st_size < offset + 8:
+                raise RuntimeError("Truncated risk IPC")
+            with mmap.mmap(stream.fileno(), 0) as mapping:
+                struct.pack_into('<Q', mapping, offset, 1)
+                mapping.flush()
+        state[self.bot] = {"mode": "PAPER", "since": datetime.now(timezone.utc).isoformat()}
+        target.parent.mkdir(parents=True, exist_ok=True)
+        fd, name = tempfile.mkstemp(dir=target.parent, prefix=".paper-")
         try:
-            if os.path.exists(STATE_FILE):
-                with open(STATE_FILE, "r") as f:
-                    state = json.load(f)
-            else:
-                state = {}
-                
-            if self.bot not in state:
-                state[self.bot] = {}
-            
-            bot_type = BOTS.get(self.bot, {}).get("type", RiskClass.POSITIONAL)
-            log.info(f"🚀 [SBP] v20.0 Routing Sequence: {self.bot} ➔ [{bot_type.name}]")
+            with os.fdopen(fd, "w") as stream:
+                json.dump(state, stream, indent=2)
+                stream.flush(); os.fsync(stream.fileno())
+            os.replace(name, target)
+        finally:
+            if os.path.exists(name): os.unlink(name)
 
-            # Default fallback mode determined by RiskClass
-            fallback_mode = "PAPER"
-            
-            if bot_type == RiskClass.HEDGE_EXEC:
-                log.critical(f"🚨 EMERGENCY BYPASS: {self.bot} booting immediately to LIVE.")
-                fallback_mode = state[self.bot].get("mode", "LIVE")
-                if fallback_mode in ("OFFLINE", "STOPPED"): fallback_mode = "LIVE"
-                
-            elif bot_type == RiskClass.ARBITRAGE:
-                log.info(f"[{self.bot}] ARBITRAGE Bypass: Executing API Latency & Inventory Sync...")
-                fallback_mode = state[self.bot].get("mode", "PAPER")
-                if fallback_mode in ("OFFLINE", "STOPPED"): fallback_mode = "PAPER"
-                
-            elif bot_type == RiskClass.MARKET_MAKER:
-                log.info(f"[{self.bot}] PAUSED: Initiating 60s L2 Orderbook Reconstruction.")
-                fallback_mode = "PAUSED"
-                
-                # Asynchronní task po 60s interně přepne do cílového módu
-                try:
-                    intended_mode = state[self.bot].get("mode", "PAPER")
-                    log.info(f"[{self.bot}] WARMUP Spawner: Read intended_mode='{intended_mode}' from armada_state.json")
-                    warmup_script = os.path.join(PROJECT_ROOT, "architect", "l2_warmup.py")
-                    subprocess.Popen(
-                        [sys.executable, warmup_script, self.bot, "60", intended_mode],
-                        cwd=PROJECT_ROOT,
-                        start_new_session=True,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL
-                    )
-                except Exception as e:
-                    log.error(f"Failed to spawn async L2 warmup: {e}")
-                
-            elif bot_type == RiskClass.STAT_ARB:
-                log.info(f"[{self.bot}] PAPER: Verifying Mathematical Cointegration...")
-                fallback_mode = "PAPER"
-                
-            elif bot_type == RiskClass.POSITIONAL:
-                log.info(f"[{self.bot}] PAPER LOCKED: Requesting 8-Day Walk-Forward Analysis from L2 Oracle.")
-                fallback_mode = "PAPER"
-
-            # Override mode safely
-            if state[self.bot].get("mode") == "LIVE" and fallback_mode in ("PAPER", "PAUSED"):
-                log.warning(f"🛡️ [SBP] Downgrading {self.bot} from LIVE -> {fallback_mode} for Phase 3")
-                
-            state[self.bot]["mode"] = fallback_mode
-            state[self.bot]["since"] = datetime.now().isoformat()
-            
-            with open(STATE_FILE, "w") as f:
-                json.dump(state, f, indent=2)
-            
-            # ═══ CRITICAL: Write paused=1 to bot-specific mmap risk file ═══
-            # Rust bots check ONLY their own mmap field, not the JSON file.
-            risk_entry = BOT_RISK_MAP.get(self.bot)
-            if risk_entry and fallback_mode in ("PAPER", "PAUSED"):
-                risk_path, pause_offset = risk_entry
-                if os.path.exists(risk_path):
-                    try:
-                        with open(risk_path, "r+b") as rf:
-                            mm = _mmap.mmap(rf.fileno(), 0)
-                            _struct.pack_into('<Q', mm, pause_offset, 1)  # paused = 1
-                            mm.flush()
-                            mm.close()
-                        log.info(f"🛡️ [SBP] {self.bot}: {os.path.basename(risk_path)}[{pause_offset}] paused=1 written")
-                    except Exception as me:
-                        log.error(f"⚠️ [SBP] Failed to write mmap pause for {self.bot}: {me}")
-                else:
-                    log.warning(f"⚠️ [SBP] {self.bot}: risk mmap {risk_path} not found (pre-create needed)")
-                    
-        except Exception as e:
-            log.error(f"Failed to enforce paper state: {e}")
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")

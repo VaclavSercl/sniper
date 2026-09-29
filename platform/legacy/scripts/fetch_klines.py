@@ -54,7 +54,7 @@ def main():
     now_ms = int(time.time() * 1000)
     start_ms = now_ms - days * 86400_000
 
-    psql(SCHEMA)
+    # Schema is managed separately; never invent a conflicting primary key.
     total = 0
     cursor = start_ms
     while cursor < now_ms:
@@ -69,7 +69,7 @@ def main():
                     f"'binance_klines_public')")
             psql(f"INSERT INTO market_klines (open_time, symbol, open, high, low, "
                  f"close, volume, close_time, src) VALUES {vals} "
-                 f"ON CONFLICT (open_time) DO NOTHING")
+                 f"ON CONFLICT (symbol, src, open_time) DO NOTHING")
         total += len(batch)
         cursor = batch[-1][0] + 60_000
         if len(batch) < LIMIT_PER_REQ:
