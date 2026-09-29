@@ -1,0 +1,894 @@
+{
+  "schema_version": 1,
+  "canonical_repository": "VaclavSercl/sniper",
+  "host": "beroun",
+  "source_path_rewrites": {
+    "/home/wwwenda/beroun-github": "/opt/sniper/current/platform",
+    "/opt/beroun/repo": "/opt/sniper/current/platform/legacy",
+    "/opt/beroun/services": "/opt/sniper/current/platform/runtime"
+  },
+  "files": [
+    {
+      "path": "platform/db/schema.sql",
+      "source": "beroun@bdb3f444:db/schema.sql",
+      "source_sha256": "d48a1eab6fd9c8acdd2a455bb3f63ce301e19e476b75ac4c9e9d12c909216b68",
+      "sha256": "c528fe27c3bafc1bd62a19df6d5aa22ea2d4348a054c2a8eb9742f58cef8a6ba",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/gateway/execution_router.py",
+      "source": "beroun@bdb3f444:gateway/execution_router.py",
+      "source_sha256": "e450817512cbdec2161375976eda31c9e0e15e9a6f555b7185c8a82abf188f69",
+      "sha256": "e450817512cbdec2161375976eda31c9e0e15e9a6f555b7185c8a82abf188f69",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/gateway/gateway.py",
+      "source": "beroun@bdb3f444:gateway/gateway.py",
+      "source_sha256": "bf3cb2e5fbf98f1e86bae5208c54f0ae133cc4c844d2dad136bcf2dbf4de3508",
+      "sha256": "bf3cb2e5fbf98f1e86bae5208c54f0ae133cc4c844d2dad136bcf2dbf4de3508",
+      "mode": "100755",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/ingest/ingest.py",
+      "source": "beroun@bdb3f444:ingest/ingest.py",
+      "source_sha256": "f62939fbe3e4f95f359da658fd4bb644a63a18c8e10ebe84666a2916b51e061a",
+      "sha256": "f62939fbe3e4f95f359da658fd4bb644a63a18c8e10ebe84666a2916b51e061a",
+      "mode": "100755",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/research/BEROUN_3_STRATEGIE_DETAILNE.md",
+      "source": "beroun@bdb3f444:research/BEROUN_3_STRATEGIE_DETAILNE.md",
+      "source_sha256": "154ac74842f8a836927be83c7bd8646ebb786cb8fcd2303c6e4787e8939c6829",
+      "sha256": "154ac74842f8a836927be83c7bd8646ebb786cb8fcd2303c6e4787e8939c6829",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/research/binance_connector.py",
+      "source": "beroun@bdb3f444:research/binance_connector.py",
+      "source_sha256": "98afc22657ce967fe9d0201c7627e243a584033fe3c2c76d2b79b772e7a8acf0",
+      "sha256": "98afc22657ce967fe9d0201c7627e243a584033fe3c2c76d2b79b772e7a8acf0",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/research/bitfinex_connector.py",
+      "source": "beroun@bdb3f444:research/bitfinex_connector.py",
+      "source_sha256": "28e177f45300a9affdf7f9e5ff17005595910a0e78b8801d22bb003e3936872b",
+      "sha256": "28e177f45300a9affdf7f9e5ff17005595910a0e78b8801d22bb003e3936872b",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/research/hyperliquid_connector.py",
+      "source": "beroun@bdb3f444:research/hyperliquid_connector.py",
+      "source_sha256": "a6e0da1ca76012a0b9c91b5765b2522d60d04a89d92e1fa2730849ee4de28989",
+      "sha256": "a6e0da1ca76012a0b9c91b5765b2522d60d04a89d92e1fa2730849ee4de28989",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/research/strategies/T15_MICA_STRATEGIE_REPORT.md",
+      "source": "beroun@bdb3f444:research/strategies/T15_MICA_STRATEGIE_REPORT.md",
+      "source_sha256": "425598b172a0dae02f998faf82932b4d52b938803e96979af301cd6f6ac9430d",
+      "sha256": "7e4db812f9bf195da7e5506b4b15d402993857e66e043b98fe9777ab2e7bf968",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/research/strategies/T15_REPAIR_NOTES.md",
+      "source": "beroun@bdb3f444:research/strategies/T15_REPAIR_NOTES.md",
+      "source_sha256": "dc24f7c978eccd2599e01af67d4bdedb6e001988dc8ccea8a0e529c5b973ad0a",
+      "sha256": "dc24f7c978eccd2599e01af67d4bdedb6e001988dc8ccea8a0e529c5b973ad0a",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/research/strategies/paper_t15_daemon.py",
+      "source": "beroun@bdb3f444:research/strategies/paper_t15_daemon.py",
+      "source_sha256": "0cf477ae691702321697f16b559d581c32af15483084ce80eb38da15eaca40c8",
+      "sha256": "0cf477ae691702321697f16b559d581c32af15483084ce80eb38da15eaca40c8",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/research/strategies/paper_tri_venue_arb.py",
+      "source": "beroun@bdb3f444:research/strategies/paper_tri_venue_arb.py",
+      "source_sha256": "6a2c29121501dc34f644a4be659fb1bf84300af2db44165ffd331acf92ae1134",
+      "sha256": "6a2c29121501dc34f644a4be659fb1bf84300af2db44165ffd331acf92ae1134",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/research/strategies/t13_basis_carry.py",
+      "source": "beroun@bdb3f444:research/strategies/t13_basis_carry.py",
+      "source_sha256": "64ad7da8f04117d0cb3fade9b254c54835cb45549e4a2aaf7f0a4e43b10b8307",
+      "sha256": "64ad7da8f04117d0cb3fade9b254c54835cb45549e4a2aaf7f0a4e43b10b8307",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/research/strategies/t14_triangular_fx.py",
+      "source": "beroun@bdb3f444:research/strategies/t14_triangular_fx.py",
+      "source_sha256": "240f1503e25e9e991fd88735a9cd46f9ec76cd4b873d4a8b317925e7a7b3beb5",
+      "sha256": "af8edc810467c9daa7b325b5a36bed23a2bc0dfe5151f88b88e6fb6dae1b9c8a",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/research/strategies/t15_mica_cross_basis.py",
+      "source": "beroun@bdb3f444:research/strategies/t15_mica_cross_basis.py",
+      "source_sha256": "9c9b70d943ae2f086311533d7c3c70d4bb2e3e9ae402ddc5fb6487e7d4565210",
+      "sha256": "b344e1482eb41d343044bcf6e577d0790f254b1e382254f838d2feed9e0350d9",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/research/strategies/t15_paper_accounting.py",
+      "source": "beroun@bdb3f444:research/strategies/t15_paper_accounting.py",
+      "source_sha256": "37d3b93bbc0c503edb8e67fa64e501bebd054c091fb71e6a23738dc4217765d1",
+      "sha256": "37d3b93bbc0c503edb8e67fa64e501bebd054c091fb71e6a23738dc4217765d1",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/research/tri_venue_monitor.py",
+      "source": "beroun@bdb3f444:research/tri_venue_monitor.py",
+      "source_sha256": "4970cff723aec4362f29a31ccefa718846526f5a508bba0ea1333e67cb57a28a",
+      "sha256": "4970cff723aec4362f29a31ccefa718846526f5a508bba0ea1333e67cb57a28a",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/research/tri_venue_opportunity_scanner.py",
+      "source": "beroun@bdb3f444:research/tri_venue_opportunity_scanner.py",
+      "source_sha256": "ca677121b548f155eee3dc09636429cd607f5de2a5c9ac953245df6aee9594d4",
+      "sha256": "fe1e28b7a29a281ead2f34f8e9b841bbe14ba928a736519fb169be1ba23fb12b",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/risk-kernel/risk_kernel.py",
+      "source": "beroun@bdb3f444:risk-kernel/risk_kernel.py",
+      "source_sha256": "5fa57edbaa1f89e55423dddf069abb8a3e7e16c073d84a8526d470f2e639cd13",
+      "sha256": "5fa57edbaa1f89e55423dddf069abb8a3e7e16c073d84a8526d470f2e639cd13",
+      "mode": "100755",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/risk-kernel/watchdog.py",
+      "source": "beroun@bdb3f444:risk-kernel/watchdog.py",
+      "source_sha256": "088e75d0d19f939a7d199a048b0c4e83833c97ca31d23aa4f41ae8791eccc1d0",
+      "sha256": "088e75d0d19f939a7d199a048b0c4e83833c97ca31d23aa4f41ae8791eccc1d0",
+      "mode": "100755",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/scripts/autonomous_cascade_runner.py",
+      "source": "beroun@bdb3f444:scripts/autonomous_cascade_runner.py",
+      "source_sha256": "0141216d12c86d744ceabdd7966949bceeefb5668a3405c24b38ae5a062e1834",
+      "sha256": "9367380aa27c7f6b5d95d5fe9ea53bcb876515340aa0061a688ab4c4d5c67f76",
+      "mode": "100755",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/scripts/autonomous_cascade_runner.sh",
+      "source": "beroun@bdb3f444:scripts/autonomous_cascade_runner.sh",
+      "source_sha256": "99018d8eb728851102d581f5223c02b1cdd130cc362088fe887db64549670c3b",
+      "sha256": "99018d8eb728851102d581f5223c02b1cdd130cc362088fe887db64549670c3b",
+      "mode": "100755",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/scripts/backfill_1222d_history.py",
+      "source": "beroun@bdb3f444:scripts/backfill_1222d_history.py",
+      "source_sha256": "963e448afeeddcf235e86ae161e60315da6a118bc66a0551b405f97e186341a4",
+      "sha256": "963e448afeeddcf235e86ae161e60315da6a118bc66a0551b405f97e186341a4",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/scripts/backup_db.sh",
+      "source": "beroun@bdb3f444:scripts/backup_db.sh",
+      "source_sha256": "915687410c21d3765ec8113c2acf999b4b2eecd742ad40cae2092a3beb231b46",
+      "sha256": "915687410c21d3765ec8113c2acf999b4b2eecd742ad40cae2092a3beb231b46",
+      "mode": "100755",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/scripts/daily_report.py",
+      "source": "beroun@bdb3f444:scripts/daily_report.py",
+      "source_sha256": "bb310635d27a2d255eefece169224d1f30206724336ca41ac5965abd87eb00b5",
+      "sha256": "bb310635d27a2d255eefece169224d1f30206724336ca41ac5965abd87eb00b5",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/scripts/fetch_tri_venue_klines.py",
+      "source": "beroun@bdb3f444:scripts/fetch_tri_venue_klines.py",
+      "source_sha256": "7748cd732f5c9546b56bdd3ff2ed7f24537d64ef8518bcc2d26ac3d3b91d396b",
+      "sha256": "7748cd732f5c9546b56bdd3ff2ed7f24537d64ef8518bcc2d26ac3d3b91d396b",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/scripts/generate_rich_report.py",
+      "source": "beroun@bdb3f444:scripts/generate_rich_report.py",
+      "source_sha256": "e39b372feba51949322cda6859de734a91bf8f4bab45ef620160be92d1507d7d",
+      "sha256": "e39b372feba51949322cda6859de734a91bf8f4bab45ef620160be92d1507d7d",
+      "mode": "100755",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/scripts/hermes_wrapper_beroun.sh",
+      "source": "beroun@bdb3f444:scripts/hermes_wrapper_beroun.sh",
+      "source_sha256": "311cbd08dcc0a2c4220765feadbbf8b5ea0644a06c9ad589a6a7c4750f61e071",
+      "sha256": "311cbd08dcc0a2c4220765feadbbf8b5ea0644a06c9ad589a6a7c4750f61e071",
+      "mode": "100755",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/scripts/ingest_tri_venue.py",
+      "source": "beroun@bdb3f444:scripts/ingest_tri_venue.py",
+      "source_sha256": "d833e14903f22f9a83aa52c01ec462174f0484969d9217925bf08dfb6b0267bf",
+      "sha256": "d833e14903f22f9a83aa52c01ec462174f0484969d9217925bf08dfb6b0267bf",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/scripts/kline_retention_partition_manager.py",
+      "source": "beroun@bdb3f444:scripts/kline_retention_partition_manager.py",
+      "source_sha256": "9ad1872ccae5b7fac07890f2257144b047c1d2419f2b25b5aab2647a2f27de6e",
+      "sha256": "9ad1872ccae5b7fac07890f2257144b047c1d2419f2b25b5aab2647a2f27de6e",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/scripts/migrate_to_partitioned_klines.py",
+      "source": "beroun@bdb3f444:scripts/migrate_to_partitioned_klines.py",
+      "source_sha256": "680834c302f3e45b73cb8dfd97ddadbe812c7ca84bc2bef08fa60119353bc38d",
+      "sha256": "3089c98743d5fc3e7b60d9cbe002c78b39179be369994d234d02df90c48e5107",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/scripts/outbox_flush.py",
+      "source": "beroun@bdb3f444:scripts/outbox_flush.py",
+      "source_sha256": "6a6a09a7ecdaba97cd961d91fa85dfc0deeaebfcc5b0bb728d95471e99256e3d",
+      "sha256": "6a6a09a7ecdaba97cd961d91fa85dfc0deeaebfcc5b0bb728d95471e99256e3d",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/scripts/perfect_market_ingest.py",
+      "source": "beroun@bdb3f444:scripts/perfect_market_ingest.py",
+      "source_sha256": "9f3da3328d02c1d747a1f7ffce83d20283b397ca3924dacb72d5a9c07e469bfc",
+      "sha256": "a2b181cb43288c553420285b4ba993731410526fc64ee5161e142577c674eb1c",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/scripts/restore_test.sh",
+      "source": "beroun@bdb3f444:scripts/restore_test.sh",
+      "source_sha256": "4f8b92b42ab7177da9ea3c6f985e84dc420e9a8ede05b65e1e16fa5806e91c8e",
+      "sha256": "4f8b92b42ab7177da9ea3c6f985e84dc420e9a8ede05b65e1e16fa5806e91c8e",
+      "mode": "100755",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/scripts/send_repo_structure_telegram.py",
+      "source": "beroun@bdb3f444:scripts/send_repo_structure_telegram.py",
+      "source_sha256": "1a0026f5834d343611fe066ef760f364a3b4591def49fca503187f5d7dac7061",
+      "sha256": "1a0026f5834d343611fe066ef760f364a3b4591def49fca503187f5d7dac7061",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/scripts/send_telegram_attachments.py",
+      "source": "beroun@bdb3f444:scripts/send_telegram_attachments.py",
+      "source_sha256": "1371cf3f84aadee35bf434c5ca499257422d5bf0998d9961590140a10d4e922f",
+      "sha256": "41aff66c66560c0a8d1fd1e74d18e3756b75c581970f387c244d312b0aad0a9f",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/scripts/sync_strategy_registry.py",
+      "source": "beroun@bdb3f444:scripts/sync_strategy_registry.py",
+      "source_sha256": "efb886b2ab303ef6899c48b08b3117e9ca4a3ab453a01a8ad16ba0457375a67b",
+      "sha256": "efb886b2ab303ef6899c48b08b3117e9ca4a3ab453a01a8ad16ba0457375a67b",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/legacy/db/schema.sql",
+      "source": "/opt/beroun/repo/db/schema.sql",
+      "source_sha256": "d48a1eab6fd9c8acdd2a455bb3f63ce301e19e476b75ac4c9e9d12c909216b68",
+      "sha256": "c528fe27c3bafc1bd62a19df6d5aa22ea2d4348a054c2a8eb9742f58cef8a6ba",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/gateway/gateway.py",
+      "source": "/opt/beroun/repo/gateway/gateway.py",
+      "source_sha256": "3d4b8f940b6854a5e6253b3678fb14b070493f34a385503a42bd3ffa767c198b",
+      "sha256": "3d4b8f940b6854a5e6253b3678fb14b070493f34a385503a42bd3ffa767c198b",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/legacy/ingest/ingest.py",
+      "source": "/opt/beroun/repo/ingest/ingest.py",
+      "source_sha256": "f62939fbe3e4f95f359da658fd4bb644a63a18c8e10ebe84666a2916b51e061a",
+      "sha256": "f62939fbe3e4f95f359da658fd4bb644a63a18c8e10ebe84666a2916b51e061a",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/legacy/research/backtest/__init__.py",
+      "source": "/opt/beroun/repo/research/backtest/__init__.py",
+      "source_sha256": "c374413b9eccbda1004713cae12b03a5d91acfce3777e0485f48850f2582fdf2",
+      "sha256": "c374413b9eccbda1004713cae12b03a5d91acfce3777e0485f48850f2582fdf2",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/backtest/cpcv.py",
+      "source": "/opt/beroun/repo/research/backtest/cpcv.py",
+      "source_sha256": "fb6b20bc30397a4272dfbfdb7922bffd26f5bf09b5d9416aa86259124a0331c7",
+      "sha256": "fb6b20bc30397a4272dfbfdb7922bffd26f5bf09b5d9416aa86259124a0331c7",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/backtest/dsr.py",
+      "source": "/opt/beroun/repo/research/backtest/dsr.py",
+      "source_sha256": "162f48490ecf3af8c332aa415630d6a58c586654e7812a62fa8a5b2b4dcdc322",
+      "sha256": "162f48490ecf3af8c332aa415630d6a58c586654e7812a62fa8a5b2b4dcdc322",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/backtest/minbtl.py",
+      "source": "/opt/beroun/repo/research/backtest/minbtl.py",
+      "source_sha256": "bf85d7b0f5b3212fe3e0f07610dec2ce46d49500afbc92c96e38fac297007652",
+      "sha256": "bf85d7b0f5b3212fe3e0f07610dec2ce46d49500afbc92c96e38fac297007652",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/backtest/pbo.py",
+      "source": "/opt/beroun/repo/research/backtest/pbo.py",
+      "source_sha256": "00752d8701901638dc67bf9cf1bc0aabf0d59de18bae328ebfe321c405e246d8",
+      "sha256": "00752d8701901638dc67bf9cf1bc0aabf0d59de18bae328ebfe321c405e246d8",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/backtest/test_backtest.py",
+      "source": "/opt/beroun/repo/research/backtest/test_backtest.py",
+      "source_sha256": "e1cfaa47ed020fc2287741134bad90d9c3196f0d41b6a54922830bbd70e8c9bf",
+      "sha256": "34a79a62dd3a54ef7e5681a3cdc060fdd3bea22efecc44c10b93e38729576030",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/binance_connector.py",
+      "source": "/opt/beroun/repo/research/binance_connector.py",
+      "source_sha256": "3b09624f767241b6a8e2493099be36475775e603fc2bd28e472672753d195693",
+      "sha256": "3b09624f767241b6a8e2493099be36475775e603fc2bd28e472672753d195693",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/reconcile.py",
+      "source": "/opt/beroun/repo/research/reconcile.py",
+      "source_sha256": "df94c6ed2d5df7ed3aeaffd0f2da07579580bf2acea2b00e182ead2795ad698c",
+      "sha256": "df94c6ed2d5df7ed3aeaffd0f2da07579580bf2acea2b00e182ead2795ad698c",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/paper_grid.py",
+      "source": "/opt/beroun/repo/research/strategies/paper_grid.py",
+      "source_sha256": "608d6210751cd8e1fc0162c20db48e92e502477878d103f76d4b2d8b11aecaa5",
+      "sha256": "608d6210751cd8e1fc0162c20db48e92e502477878d103f76d4b2d8b11aecaa5",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/paper_grid_accum.py",
+      "source": "/opt/beroun/repo/research/strategies/paper_grid_accum.py",
+      "source_sha256": "20a5f9c2f5b8cb15ca9a27bf556333514277794b5d1a1874c78c0b16e66ebae9",
+      "sha256": "20a5f9c2f5b8cb15ca9a27bf556333514277794b5d1a1874c78c0b16e66ebae9",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/register_multiregime.py",
+      "source": "/opt/beroun/repo/research/strategies/register_multiregime.py",
+      "source_sha256": "773409f6ab398c785e5183bf8ed893843f52fe3c16d3ac8611cc8d26b97db7aa",
+      "sha256": "773409f6ab398c785e5183bf8ed893843f52fe3c16d3ac8611cc8d26b97db7aa",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/register_t1.py",
+      "source": "/opt/beroun/repo/research/strategies/register_t1.py",
+      "source_sha256": "105acc314d2f8e2b1f736777b53d05ef12b783acf7c5260d4c023709423fe83b",
+      "sha256": "92af8a3a7ad5bd10f1daceaeca90208e51b3985a5e8ed3717eaa48339bc02234",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/register_t7.py",
+      "source": "/opt/beroun/repo/research/strategies/register_t7.py",
+      "source_sha256": "acf61913ad05e7dec1228a1c40884070085d2c3ea642b705606f9cf2fb200832",
+      "sha256": "53833694745bad7c955f49aa5c9d7598f45cf3fc7b2726ea15ec003b522108ce",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/run_dca_family.py",
+      "source": "/opt/beroun/repo/research/strategies/run_dca_family.py",
+      "source_sha256": "a05fe957ead94f857659e3cea147a87dd5900f212761b68a98e4ad1b0136ffeb",
+      "sha256": "a05fe957ead94f857659e3cea147a87dd5900f212761b68a98e4ad1b0136ffeb",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/run_dca_family_4y.py",
+      "source": "/opt/beroun/repo/research/strategies/run_dca_family_4y.py",
+      "source_sha256": "ad9b4b0dcb9db9690bb13289ea91ff0654368d2817aebedea09c594150016aa7",
+      "sha256": "ad9b4b0dcb9db9690bb13289ea91ff0654368d2817aebedea09c594150016aa7",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/run_dca_family_bottom.py",
+      "source": "/opt/beroun/repo/research/strategies/run_dca_family_bottom.py",
+      "source_sha256": "7105e38d219e8dff1cced6c6a6d51b9c6bba9d2b4a8ee92619b357d99692a013",
+      "sha256": "7105e38d219e8dff1cced6c6a6d51b9c6bba9d2b4a8ee92619b357d99692a013",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/run_dca_family_bull.py",
+      "source": "/opt/beroun/repo/research/strategies/run_dca_family_bull.py",
+      "source_sha256": "fb3a5f7c4dd0bab014d2eba836ff94661c9b67ece75f692327a8a3c7548e604b",
+      "sha256": "fb3a5f7c4dd0bab014d2eba836ff94661c9b67ece75f692327a8a3c7548e604b",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/run_dca_grid.py",
+      "source": "/opt/beroun/repo/research/strategies/run_dca_grid.py",
+      "source_sha256": "d14d9456869fd750615dcedf42c5969d898e029eee2b62eac35134b99733fcaa",
+      "sha256": "d14d9456869fd750615dcedf42c5969d898e029eee2b62eac35134b99733fcaa",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/run_dca_grid_bidir.py",
+      "source": "/opt/beroun/repo/research/strategies/run_dca_grid_bidir.py",
+      "source_sha256": "a4f767e011dc4df6c478ecee0fe3456441a23cf8a88bdf9f5bbfd285b39b411d",
+      "sha256": "a4f767e011dc4df6c478ecee0fe3456441a23cf8a88bdf9f5bbfd285b39b411d",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/run_dca_immediate.py",
+      "source": "/opt/beroun/repo/research/strategies/run_dca_immediate.py",
+      "source_sha256": "7a636bbaac4d2c51868f22641acc838fdb140b4d348dac263baf6b15d178750d",
+      "sha256": "7a636bbaac4d2c51868f22641acc838fdb140b4d348dac263baf6b15d178750d",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/run_grid20.py",
+      "source": "/opt/beroun/repo/research/strategies/run_grid20.py",
+      "source_sha256": "cebca4db7c3f98308246e4f4d82ab19bac5c94c7724798d1bf277c5c55a1eaaa",
+      "sha256": "cebca4db7c3f98308246e4f4d82ab19bac5c94c7724798d1bf277c5c55a1eaaa",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/run_grid20_4y.py",
+      "source": "/opt/beroun/repo/research/strategies/run_grid20_4y.py",
+      "source_sha256": "6f6604a242c086074ec8286d98266405a51d1bd27912ad395227f7aea76c3ae1",
+      "sha256": "6f6604a242c086074ec8286d98266405a51d1bd27912ad395227f7aea76c3ae1",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/run_t1.py",
+      "source": "/opt/beroun/repo/research/strategies/run_t1.py",
+      "source_sha256": "11c7fb6fa019f1e96afd4ea621bade40e5f7fb04ece1a236497ccc389cc7509d",
+      "sha256": "5ceb59c651f32b600a00cc8f9cc54ea976283fe57d844bc9c4899d4a702f5f9e",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/run_t12_mm_as.py",
+      "source": "/opt/beroun/repo/research/strategies/run_t12_mm_as.py",
+      "source_sha256": "80f835ddfb67ef9c4b0e5444dbf9ba13130bcdae67b66de733e69dc4e9449813",
+      "sha256": "80f835ddfb67ef9c4b0e5444dbf9ba13130bcdae67b66de733e69dc4e9449813",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/run_t12_sweep.py",
+      "source": "/opt/beroun/repo/research/strategies/run_t12_sweep.py",
+      "source_sha256": "2956f10ec2839b61dd10d2b2daa525eac83a73dfc4aa662fde94127666d70c61",
+      "sha256": "2956f10ec2839b61dd10d2b2daa525eac83a73dfc4aa662fde94127666d70c61",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/run_t6.py",
+      "source": "/opt/beroun/repo/research/strategies/run_t6.py",
+      "source_sha256": "137f4b43ab40a2b65006d2b9a903184b3520fbc6106280edcae707bb15f59049",
+      "sha256": "008c6b62a0b24857cb784051839bc889b861bb1e2938feca08a9ce3dfd473218",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/run_t6_nostop.py",
+      "source": "/opt/beroun/repo/research/strategies/run_t6_nostop.py",
+      "source_sha256": "7d9b54d7f37765dcc5c7ef1d66f78c4738088a7568ffacbdbcdf07bad6f7a000",
+      "sha256": "7d9b54d7f37765dcc5c7ef1d66f78c4738088a7568ffacbdbcdf07bad6f7a000",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/run_t6b_bidir_ratchet.py",
+      "source": "/opt/beroun/repo/research/strategies/run_t6b_bidir_ratchet.py",
+      "source_sha256": "d450f96c8cbf40fee60fb538a8c8971be1aa06e4dc5ed870925f95fa43a0d6f1",
+      "sha256": "d450f96c8cbf40fee60fb538a8c8971be1aa06e4dc5ed870925f95fa43a0d6f1",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/run_t7.py",
+      "source": "/opt/beroun/repo/research/strategies/run_t7.py",
+      "source_sha256": "71831736069a94af3d550b4a4223a795a257f166a5cc1e184812978a9a411bde",
+      "sha256": "e285dc0185585bcaca2177ece60ce0046ae325ac4fbc2a105ec56095e7b0d40c",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/t1_volatility_breakout.py",
+      "source": "/opt/beroun/repo/research/strategies/t1_volatility_breakout.py",
+      "source_sha256": "655130a26464fcc043d709ab326c66acbb5f832df74091206226a27eed3019b8",
+      "sha256": "655130a26464fcc043d709ab326c66acbb5f832df74091206226a27eed3019b8",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/t6_grid.py",
+      "source": "/opt/beroun/repo/research/strategies/t6_grid.py",
+      "source_sha256": "410c30248ba4050a05b8aeeb0f032a7a7f69d4a37284623e2e5c43c7c129165c",
+      "sha256": "410c30248ba4050a05b8aeeb0f032a7a7f69d4a37284623e2e5c43c7c129165c",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/t7_funding_mr.py",
+      "source": "/opt/beroun/repo/research/strategies/t7_funding_mr.py",
+      "source_sha256": "dca594cd12a3f22ec7cf5858d8b431c8dc8876bb91bfb5d2922c748e2a75c111",
+      "sha256": "dca594cd12a3f22ec7cf5858d8b431c8dc8876bb91bfb5d2922c748e2a75c111",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/strategies/write_t7_results.py",
+      "source": "/opt/beroun/repo/research/strategies/write_t7_results.py",
+      "source_sha256": "55f1bbb9492a8c3a3f26be5a540673c2f485954bd8123d5aa31ff374c99c2142",
+      "sha256": "55f1bbb9492a8c3a3f26be5a540673c2f485954bd8123d5aa31ff374c99c2142",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/test_p010.py",
+      "source": "/opt/beroun/repo/research/test_p010.py",
+      "source_sha256": "949022fba92fd746ee213b50e1fe59964aa54809359e2ac0912cdb9a1733c8d5",
+      "sha256": "627d8db3cc16017d98646ab147c45f0776a32c0802afd1ba0e3c076553cfb945",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/test_reconcile.py",
+      "source": "/opt/beroun/repo/research/test_reconcile.py",
+      "source_sha256": "6e944ac9125df8f5bb24bfd35d55c44500782720a68aca27dd19e4e3faa6e242",
+      "sha256": "6e944ac9125df8f5bb24bfd35d55c44500782720a68aca27dd19e4e3faa6e242",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/research/test_reconcile_venue.py",
+      "source": "/opt/beroun/repo/research/test_reconcile_venue.py",
+      "source_sha256": "d537b963ea37135ee23889677fd1f2d47402de0a177043e4e104bce10a6333cb",
+      "sha256": "d537b963ea37135ee23889677fd1f2d47402de0a177043e4e104bce10a6333cb",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/risk-kernel/risk_kernel.py",
+      "source": "/opt/beroun/repo/risk-kernel/risk_kernel.py",
+      "source_sha256": "5fa57edbaa1f89e55423dddf069abb8a3e7e16c073d84a8526d470f2e639cd13",
+      "sha256": "5fa57edbaa1f89e55423dddf069abb8a3e7e16c073d84a8526d470f2e639cd13",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/legacy/risk-kernel/watchdog.py",
+      "source": "/opt/beroun/repo/risk-kernel/watchdog.py",
+      "source_sha256": "088e75d0d19f939a7d199a048b0c4e83833c97ca31d23aa4f41ae8791eccc1d0",
+      "sha256": "088e75d0d19f939a7d199a048b0c4e83833c97ca31d23aa4f41ae8791eccc1d0",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/legacy/scripts/backfill_klines_gap.py",
+      "source": "/opt/beroun/repo/scripts/backfill_klines_gap.py",
+      "source_sha256": "1713bf167b97c09a50f18113e1f948d3cd5885bd1a0f952d1cc9050b5aab574d",
+      "sha256": "1713bf167b97c09a50f18113e1f948d3cd5885bd1a0f952d1cc9050b5aab574d",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/scripts/backup_db.sh",
+      "source": "/opt/beroun/repo/scripts/backup_db.sh",
+      "source_sha256": "915687410c21d3765ec8113c2acf999b4b2eecd742ad40cae2092a3beb231b46",
+      "sha256": "915687410c21d3765ec8113c2acf999b4b2eecd742ad40cae2092a3beb231b46",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/legacy/scripts/daily_report.py",
+      "source": "/opt/beroun/repo/scripts/daily_report.py",
+      "source_sha256": "bb310635d27a2d255eefece169224d1f30206724336ca41ac5965abd87eb00b5",
+      "sha256": "bb310635d27a2d255eefece169224d1f30206724336ca41ac5965abd87eb00b5",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/scripts/deploy_p009_p010.sh",
+      "source": "/opt/beroun/repo/scripts/deploy_p009_p010.sh",
+      "source_sha256": "acd6a1279ca26c884e9927af88fcec2c498526dc674cc955962fa3e128a05d50",
+      "sha256": "07885ff798e1841e1e14a5f9151cbab69f70123dc1979dbb87ccc6fa97f18405",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/legacy/scripts/fetch_bitfinex_ticks.py",
+      "source": "/opt/beroun/repo/scripts/fetch_bitfinex_ticks.py",
+      "source_sha256": "145f94976b94e297a14d405daaddb2bc906d285faefce282842b2d8e553c7e6d",
+      "sha256": "145f94976b94e297a14d405daaddb2bc906d285faefce282842b2d8e553c7e6d",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/scripts/fetch_funding.py",
+      "source": "/opt/beroun/repo/scripts/fetch_funding.py",
+      "source_sha256": "4a4745b42e765b69816112ca678571a8e0653d5c68fd2ae136bb9e056fd90c33",
+      "sha256": "4a4745b42e765b69816112ca678571a8e0653d5c68fd2ae136bb9e056fd90c33",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/scripts/fetch_klines.py",
+      "source": "/opt/beroun/repo/scripts/fetch_klines.py",
+      "source_sha256": "c255e3d44599b3be5bd27f6d60960927b77a2347fce4e8d44c4a1a0e8b4b4f98",
+      "sha256": "c255e3d44599b3be5bd27f6d60960927b77a2347fce4e8d44c4a1a0e8b4b4f98",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/scripts/hermes_wrapper_beroun.sh",
+      "source": "/opt/beroun/repo/scripts/hermes_wrapper_beroun.sh",
+      "source_sha256": "311cbd08dcc0a2c4220765feadbbf8b5ea0644a06c9ad589a6a7c4750f61e071",
+      "sha256": "311cbd08dcc0a2c4220765feadbbf8b5ea0644a06c9ad589a6a7c4750f61e071",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/legacy/scripts/ingest_market.py",
+      "source": "/opt/beroun/repo/scripts/ingest_market.py",
+      "source_sha256": "68c34280f5715bb0fee8cbf2bd127e5c764160961514f97144ea175076ed4856",
+      "sha256": "68c34280f5715bb0fee8cbf2bd127e5c764160961514f97144ea175076ed4856",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/scripts/notify_telegram.sh",
+      "source": "/opt/beroun/repo/scripts/notify_telegram.sh",
+      "source_sha256": "15f7dea1b096b7cd1fc55754b48ac34f6437950a0114761acc5c317fe15eefd4",
+      "sha256": "15f7dea1b096b7cd1fc55754b48ac34f6437950a0114761acc5c317fe15eefd4",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/legacy/scripts/outbox_flush.py",
+      "source": "/opt/beroun/repo/scripts/outbox_flush.py",
+      "source_sha256": "6a6a09a7ecdaba97cd961d91fa85dfc0deeaebfcc5b0bb728d95471e99256e3d",
+      "sha256": "6a6a09a7ecdaba97cd961d91fa85dfc0deeaebfcc5b0bb728d95471e99256e3d",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/scripts/p011_fix.sql",
+      "source": "/opt/beroun/repo/scripts/p011_fix.sql",
+      "source_sha256": "3180c66ea3b177f0d22f5ea5772e9fefe0a1e46e14fee60a0e7864e54d59ab5b",
+      "sha256": "3180c66ea3b177f0d22f5ea5772e9fefe0a1e46e14fee60a0e7864e54d59ab5b",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/scripts/restore_test.sh",
+      "source": "/opt/beroun/repo/scripts/restore_test.sh",
+      "source_sha256": "4f8b92b42ab7177da9ea3c6f985e84dc420e9a8ede05b65e1e16fa5806e91c8e",
+      "sha256": "4f8b92b42ab7177da9ea3c6f985e84dc420e9a8ede05b65e1e16fa5806e91c8e",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/legacy/services/beroun_gateway.py",
+      "source": "/opt/beroun/repo/services/beroun_gateway.py",
+      "source_sha256": "db27e70f3d662dd722794d1bb6d13e1141df3598e9c9a5cd134249e9cfc4991c",
+      "sha256": "b6c1fd94cf1aa6536f1fd377091dff224e49fd7784f4ac197670cdefdc3ff9ef",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/legacy/services/binance_connector.py",
+      "source": "/opt/beroun/repo/services/binance_connector.py",
+      "source_sha256": "3b09624f767241b6a8e2493099be36475775e603fc2bd28e472672753d195693",
+      "sha256": "3b09624f767241b6a8e2493099be36475775e603fc2bd28e472672753d195693",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/runtime/beroun_gateway.py",
+      "source": "/opt/beroun/services/beroun_gateway.py",
+      "source_sha256": "db27e70f3d662dd722794d1bb6d13e1141df3598e9c9a5cd134249e9cfc4991c",
+      "sha256": "b6c1fd94cf1aa6536f1fd377091dff224e49fd7784f4ac197670cdefdc3ff9ef",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/runtime/beroun_ingest.py",
+      "source": "/opt/beroun/services/beroun_ingest.py",
+      "source_sha256": "f62939fbe3e4f95f359da658fd4bb644a63a18c8e10ebe84666a2916b51e061a",
+      "sha256": "f62939fbe3e4f95f359da658fd4bb644a63a18c8e10ebe84666a2916b51e061a",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/runtime/beroun_watchdog.py",
+      "source": "/opt/beroun/services/beroun_watchdog.py",
+      "source_sha256": "088e75d0d19f939a7d199a048b0c4e83833c97ca31d23aa4f41ae8791eccc1d0",
+      "sha256": "088e75d0d19f939a7d199a048b0c4e83833c97ca31d23aa4f41ae8791eccc1d0",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/runtime/binance_connector.py",
+      "source": "/opt/beroun/services/binance_connector.py",
+      "source_sha256": "3b09624f767241b6a8e2493099be36475775e603fc2bd28e472672753d195693",
+      "sha256": "3b09624f767241b6a8e2493099be36475775e603fc2bd28e472672753d195693",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/runtime/risk_kernel.py",
+      "source": "/opt/beroun/services/risk_kernel.py",
+      "source_sha256": "5fa57edbaa1f89e55423dddf069abb8a3e7e16c073d84a8526d470f2e639cd13",
+      "sha256": "5fa57edbaa1f89e55423dddf069abb8a3e7e16c073d84a8526d470f2e639cd13",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/runtime/scripts/alert.sh",
+      "source": "/opt/beroun/services/scripts/alert.sh",
+      "source_sha256": "2c992101201866ac6d5b99fd92843a0913689e0c9e397b199846c3e9dd0e4710",
+      "sha256": "2c992101201866ac6d5b99fd92843a0913689e0c9e397b199846c3e9dd0e4710",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/runtime/scripts/backup_db.sh",
+      "source": "/opt/beroun/services/scripts/backup_db.sh",
+      "source_sha256": "c2733acd5188601b628ce9f31a5372de87db7d2831508b434a2af5b7fe80e9a7",
+      "sha256": "c2733acd5188601b628ce9f31a5372de87db7d2831508b434a2af5b7fe80e9a7",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/runtime/scripts/daily_report.py",
+      "source": "/opt/beroun/services/scripts/daily_report.py",
+      "source_sha256": "bb310635d27a2d255eefece169224d1f30206724336ca41ac5965abd87eb00b5",
+      "sha256": "bb310635d27a2d255eefece169224d1f30206724336ca41ac5965abd87eb00b5",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/runtime/scripts/github_backup.py",
+      "source": "/opt/beroun/services/scripts/github_backup.py",
+      "source_sha256": "38467cbb2e272cc37fa765c9661e350b1aa07418df8816dcb50eb7fe1bcb3839",
+      "sha256": "75d012eba53966aba8e91a8a4fd9398fcfb365b48a09f37e17903901f922e2d7",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/runtime/scripts/ingest_market.py",
+      "source": "/opt/beroun/services/scripts/ingest_market.py",
+      "source_sha256": "68c34280f5715bb0fee8cbf2bd127e5c764160961514f97144ea175076ed4856",
+      "sha256": "68c34280f5715bb0fee8cbf2bd127e5c764160961514f97144ea175076ed4856",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/runtime/scripts/outbox_flush.py",
+      "source": "/opt/beroun/services/scripts/outbox_flush.py",
+      "source_sha256": "6a6a09a7ecdaba97cd961d91fa85dfc0deeaebfcc5b0bb728d95471e99256e3d",
+      "sha256": "6a6a09a7ecdaba97cd961d91fa85dfc0deeaebfcc5b0bb728d95471e99256e3d",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/runtime/scripts/post_reboot_check.sh",
+      "source": "/opt/beroun/services/scripts/post_reboot_check.sh",
+      "source_sha256": "d402cef0420b7a7bb60a799bfd15b777c27e3e2cdb0e1ed89921d90a26146c27",
+      "sha256": "d402cef0420b7a7bb60a799bfd15b777c27e3e2cdb0e1ed89921d90a26146c27",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/runtime/scripts/restore_test.sh",
+      "source": "/opt/beroun/services/scripts/restore_test.sh",
+      "source_sha256": "a51880e23635e48ccf9365748f39bf31fb35899aab13cde9c4b7021f87c24a45",
+      "sha256": "a51880e23635e48ccf9365748f39bf31fb35899aab13cde9c4b7021f87c24a45",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/runtime/scripts/smart_alert.sh",
+      "source": "/opt/beroun/services/scripts/smart_alert.sh",
+      "source_sha256": "91d8e240eedccd42fa18d5921e0738bc2b42594b4c128c9d978426fe7213c405",
+      "sha256": "1cf42f369ffc76a1e2ff074caf03d5f076d1b38f87f17e63cc0b0862360d9ba3",
+      "mode": "100755"
+    },
+    {
+      "path": "platform/tests/unit/test_cascade_runner.py",
+      "source": "beroun@bdb3f444:.synthbit/tests/test_cascade_runner.py",
+      "source_sha256": "9e7b6b9f784a5dfaa467a3a33f077a019e8748cde6a8020d20d25ea50d153d97",
+      "sha256": "9e7b6b9f784a5dfaa467a3a33f077a019e8748cde6a8020d20d25ea50d153d97",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/tests/unit/test_execution_and_ingest.py",
+      "source": "beroun@bdb3f444:.synthbit/tests/test_execution_and_ingest.py",
+      "source_sha256": "034d73b523747fc3c17f7f284087d92df46b4fe0e1c165f209729e3cd49108d1",
+      "sha256": "034d73b523747fc3c17f7f284087d92df46b4fe0e1c165f209729e3cd49108d1",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/tests/unit/test_opportunity_scanner.py",
+      "source": "beroun@bdb3f444:.synthbit/tests/test_opportunity_scanner.py",
+      "source_sha256": "5e9a8a645f694387007965eb703c72c2f7c0108e88c47e0999a87407101ca458",
+      "sha256": "5e9a8a645f694387007965eb703c72c2f7c0108e88c47e0999a87407101ca458",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/tests/unit/test_perfect_market_ingest.py",
+      "source": "beroun@bdb3f444:.synthbit/tests/test_perfect_market_ingest.py",
+      "source_sha256": "af4f688cfa8fce4f27cac4bbed9b3ee3cd3d2a8408d05d2eae19b87244b7ed2e",
+      "sha256": "067e3b3c6d52119ae04dc8816613cf1e07e929832d1beb73616813d7f5012ba2",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/tests/unit/test_postgres_fixture.py",
+      "source": "beroun@bdb3f444:.synthbit/tests/test_postgres_fixture.py",
+      "source_sha256": "daa6489db97a5dbfad4b828133dc8a0b59d975bafcd2101d75c86b6618080ba0",
+      "sha256": "d1946be2c728128f46c41416c6bebfc722c71d9bf9de89c152a3664e489121cd",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/tests/unit/test_rich_report.py",
+      "source": "beroun@bdb3f444:.synthbit/tests/test_rich_report.py",
+      "source_sha256": "ddd7ef196c5d8ac95359bb97476c324c8480eae3d9f664ed84a7a711198fd2fc",
+      "sha256": "ddd7ef196c5d8ac95359bb97476c324c8480eae3d9f664ed84a7a711198fd2fc",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/tests/unit/test_t15_paper_accounting.py",
+      "source": "beroun@bdb3f444:.synthbit/tests/test_t15_paper_accounting.py",
+      "source_sha256": "5a64c0940a6848b7e5c5f3b62a1a42ba8a08679f07c4e7a3b06975a21923f7c8",
+      "sha256": "5a64c0940a6848b7e5c5f3b62a1a42ba8a08679f07c4e7a3b06975a21923f7c8",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/tests/unit/test_t15_paper_sql.py",
+      "source": "beroun@bdb3f444:.synthbit/tests/test_t15_paper_sql.py",
+      "source_sha256": "a02110200becdbd0a546c7af66e01be06239bf76ab00c718c2578a61bac5781e",
+      "sha256": "a02110200becdbd0a546c7af66e01be06239bf76ab00c718c2578a61bac5781e",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/tests/unit/test_t15_strategy.py",
+      "source": "beroun@bdb3f444:.synthbit/tests/test_t15_strategy.py",
+      "source_sha256": "0941f99395f26c3ea2a6b19e972f6a04e82daeffe12926e97ce6a733fd233fd6",
+      "sha256": "1de0535153912a92192a0f4090433bf278b6aaf151fd0e83d38f89a3ac84de72",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/tests/unit/test_tri_venue_strategies.py",
+      "source": "beroun@bdb3f444:.synthbit/tests/test_tri_venue_strategies.py",
+      "source_sha256": "86123023555dc9b6681a5e594702c5b1126a3e3bda90777855b860aaa2087f0f",
+      "sha256": "86123023555dc9b6681a5e594702c5b1126a3e3bda90777855b860aaa2087f0f",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/tests/unit/test_venues.py",
+      "source": "beroun@bdb3f444:.synthbit/tests/test_venues.py",
+      "source_sha256": "a06873f02b734fb4582e4c097260aeac89bc72387bc10c3a8f847fe5f4f04f1f",
+      "sha256": "a06873f02b734fb4582e4c097260aeac89bc72387bc10c3a8f847fe5f4f04f1f",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    },
+    {
+      "path": "platform/tests/postgres_fixture.py",
+      "source": "beroun@bdb3f444:.synthbit/postgres_fixture.py",
+      "source_sha256": "92ea64dabb3025d405c60832ffabcdb29b11041c7dcf9b2a17aec2087e560baf",
+      "sha256": "92ea64dabb3025d405c60832ffabcdb29b11041c7dcf9b2a17aec2087e560baf",
+      "mode": "100644",
+      "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
+    }
+  ]
+}

@@ -1,5 +1,20 @@
 # 🐺 SNIPER ARMADA v21.1 — Architecture Document
 
+## Canonical repository and deployment host
+
+Sniper owns all trading application sources. Beroun identifies the Linux host,
+not a separate trading system. The existing Rust execution and architect layers
+retain their layout; platform/ contains imported Python gateway, risk, ingestion,
+research and paper-accounting modules, with their application tests and source
+provenance. platform/runtime and platform/legacy preserve deployed compatibility
+modules inside this same repository, without nested Git repositories.
+
+The host source root is planned as /opt/sniper/current, pointing to a verified
+immutable release. Persistent /opt/beroun/state, /etc/beroun, the beroun database,
+Unix identities and sockets remain in place. Service names may retain beroun-
+for compatibility. The migration does not launch Armada or authorize its
+automatic paper-to-LIVE promotion. Refer to infra/beroun/README.md.
+
 > **Sovereign HFT Trading System** — Pure Rust Hive with in-process AI inference.
 > Sub-millisecond execution. Zero-allocation hot paths. Fully autonomous operation.
 > **SIM v2.0** — Sovereign Intelligence Matrix with Candle L1 + ZeroClaw L2 + Gemini 3.1 Pro.

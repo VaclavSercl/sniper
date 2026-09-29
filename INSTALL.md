@@ -1,5 +1,13 @@
 # 🐺 SNIPER ARMADA v19.0 — Installation Guide (SIM v2.0)
 
+## Existing Beroun host consolidation
+
+For the existing Python/read-only/paper services, follow
+[infra/beroun/README.md](infra/beroun/README.md) and validate with
+`python3 -B tools/verify_platform.py`. Do not run the Armada boot sequence below
+as a source-directory migration. It changes a different runtime and may promote
+bots to LIVE. Sniper is the only source repository; Beroun is the host.
+
 ## Requirements
 
 ### Hardware (minimum)

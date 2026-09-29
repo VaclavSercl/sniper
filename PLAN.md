@@ -1,5 +1,48 @@
 # Backtest integrity repair
 
+## Canonical repository consolidation (owner instruction 2026-09-29)
+Sniper is the only trading source repository; Beroun is its deployment host.
+Integrate reviewed application sources from the corrected Beroun checkpoint plus
+deployed sources not represented there, without importing another repository's
+agent instructions, generic harness, secrets, runtime state or Git directory.
+Preserve Sniper's existing Rust and Python architecture and all user changes.
+
+Files: new platform/ application tree (gateway, ingestion, risk, research,
+scripts, DB definitions and application tests), source provenance manifest;
+infra/beroun deployment mapping and reversible migration tooling; narrow README,
+ARCHITECTURE and INSTALL additions. Exact paths follow discovery manifest before
+copy. Existing test fixtures are ported explicitly; generic harness is not installed.
+
+Acceptance: one GitHub source authority VaclavSercl/sniper, preserved source
+provenance, no omitted deployed trading entrypoint, existing backtest regressions
+and relocated application tests pass in a private DB fixture; syntax/diff/secret
+checks; service mapping verifies every source path. Runtime state/DB names remain
+compatible. No funded execution, automatic LIVE promotion or new T15 epoch.
+
+Publication: owner's request includes fixing GitHub in Sniper; use the existing
+repair/backtest-integrity branch and a reviewable PR against main. No force push,
+repository deletion, history rewrite or merge of unverified changes. The prior
+two-repository push plan is superseded. Preserve old Beroun repository history.
+
+Deployment: prepare exact reversible source-path changes only after tests. Any
+required sudo invocation must have concrete scoped approval under A.5; old
+read-only audit consent cannot authorize service mutation. Preserve old files,
+active modes and DB identities. Missing privileges block only cutover. Do not
+claim deployed until service execution paths and health are verified.
+
+Validation: relocated source tree contains 119 reviewed source/test files.
+Linux validation passed 34 backtest/cutover regressions and 76 relocated
+application tests, with actual private PostgreSQL integration and no skips.
+Root Rust binaries are unchanged; no Rust build or live exchange execution.
+Cutover apply/rollback were exercised only in temporary directories with mocked
+systemd. Windows lacks unprivileged symlinks, so the two filesystem cutover tests
+require Linux; no Windows deployment compatibility is claimed.
+Actual read-only host preview resolved 18 unit path overrides. Owner selected
+option 1, explicitly authorizing scoped sudo cutover, preserving originals and
+pausing the old T15 timer. No approval to activate a funded bot is inferred.
+Before checkpoint/publication, rerun exact candidate checks after documentation
+and manifest finalization. Record actual server result externally after deploy.
+
 ## Goal and boundary
 Repair counterfactual validation on baseline c7c9870df8e0bab1d77747b5b30b64075fa690cb, isolated branch repair/backtest-integrity. Owner approved sequential Beroun/T15 and Sniper repairs. No real orders, deployment, dependency installation or remote publication. No harness installation.
 
