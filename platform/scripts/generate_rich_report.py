@@ -181,175 +181,36 @@ def format_progress_bar(ratio: float, length: int = 10) -> str:
 
 
 def generate_ai_narrative(ground_truth: Dict[str, Any]) -> Tuple[str, str]:
-    """Invoke the 4-tier autonomous cascade to generate market regime analysis.
-    Returns (narrative_text, winning_tier).
-    """
-    prompt = (
-        "Jsi analytik kvantitativního obchodního systému BEROUN (L0 Shadow režim). "
-        "Zde je ověřený datový stav portfolia, arbitrážních strategií a trhu:\n"
-        f"{json.dumps(ground_truth, ensure_ascii=False, indent=2)}\n\n"
-        "ÚKOL: Napiš stručnou, přesnou a věcnou analýzu (přesně 3 odstavce / odrážky) o:\n"
-        "1. Tržním režimu BTC a funding rate na Hyperliquidu (výnosové podmínky pro T13 carry).\n"
-        "2. Dislokaci EUR/USD/BTC a stabilitě stablecoinů USDT/USDC (podmínky pro T14 triangular arb).\n"
-        "3. Doporučení pro rizikový perimetr.\n"
-        "STRIKTNÍ PRAVIDLA: Neměň ani nevymýšlej žádná čísla, vycházej pouze z dodaných dat. "
-        "Mluv česky, technické termíny ponechej anglicky. Žádná omáčka, jen fakta."
-    )
-
-    try:
-        resp, winning_tier, meta = cascade_runner.execute_cascade(
-            prompt=prompt,
-            cwd=str(REPO_ROOT),
-            show_tier_badge=False,
-            timeout_codex=40,
-            timeout_claude=30,
-            timeout_agy=35,
-            timeout_hermes=60,
-        )
-        if winning_tier != "NONE" and resp:
-            return resp.strip(), winning_tier
-    except Exception as e:
-        logger.warning("AI narrative generation failed: %s", e)
-
-    fallback = (
-        "Tržní data vykazují stabilní contango s pozitivním fundingem pro strategii T13 Carry.\n"
-        "EUR/USD a stablecoinové odchylky se pohybují v bezpečných pásmech bez strukturálních anomálií.\n"
-        "Rizikový perimetr doporučuje setrvání v L0 Shadow režimu do dokončení 7denního testovacího cyklu."
-    )
-    return fallback, "Deterministický Fallback"
+    """Deterministic observation, without launching an unrestricted agent."""
+    return ("Výsledky starých paper modelů nejsou kvalifikací strategie. "
+            "Stav dat, reálných účtů a provádění vyžaduje samostatné ověření.",
+            "DETERMINISTIC")
 
 
 def build_full_report(data: Dict[str, Any], narrative: str, winning_ai_tier: str) -> str:
-    """Build the final formatted Telegram Markdown report."""
-    now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-
-    # Prices
-    ticks = data.get("ticks", {})
-    btc_usd = ticks.get("tBTCUSD") or ticks.get("BTCUSDT") or 80450.0
-    eur_usd = ticks.get("tEURUSD") or 1.1484
-    btc_eur = ticks.get("tBTCEUR") or (btc_usd / eur_usd)
-
-    # Strategy T13
-    t13 = data.get("strategies", {}).get("t13_carry", {})
-    t13_equity_usd = t13.get("equity_usd", 1000.0)
-    t13_profit_usd = t13_equity_usd - t13.get("capital_usd", 1000.0)
-    t13_funding_usd = t13.get("accumulated_funding_usd", 0.0)
-    t13_rebates_usd = t13.get("accumulated_rebates_usd", 0.0)
-    t13_in_pos = t13.get("in_position", False)
-    t13_spot = t13.get("spot_btc", 0.0)
-    t13_perp = t13.get("perp_short_btc", 0.0)
-
-    # Funding rate
-    funding_info = data.get("funding", {}).get("BTC-PERP", {})
-    funding_rate_h = funding_info.get("hourly_rate", 0.0000125)
-    funding_apr = funding_info.get("annual_apr_pct", 10.95)
-
-    # Strategy T14
-    t14 = data.get("strategies", {}).get("t14_triangle", {})
-    t14_equity_eur = t14.get("equity_eur", 1000.0)
-    t14_profit_eur = t14.get("realized_profit_eur", 0.0)
-    t14_captured_bps = t14.get("captured_bps_total", 0.0)
-    t14_trades = t14.get("total_trades", 0)
-
-    # Calculate live triangular dislocation
-    synthetic_eur = btc_usd / eur_usd if eur_usd > 0 else btc_eur
-    dislocation_eur = synthetic_eur - btc_eur
-    dislocation_bps = (dislocation_eur / btc_eur) * 10000 if btc_eur > 0 else 0.0
-
-    # Strategy T15
-    t15 = data.get("strategies", {}).get("t15_cross_basis", {})
-    t15_equity_usd = t15.get("current_equity_usd", 1000.0)
-    t15_initial_usd = t15.get("initial_capital_usd", 1000.0)
-    t15_pnl_usd = t15_equity_usd - t15_initial_usd
-    t15_trades = t15.get("total_trades", 0)
-    started_at_str = t15.get("started_at")
-    t15_days = 1
-    if started_at_str:
-        try:
-            started_dt = datetime.fromisoformat(started_at_str)
-            elapsed_days = (datetime.now(timezone.utc) - started_dt).days + 1
-            t15_days = max(1, min(30, elapsed_days))
-        except Exception:
-            t15_days = 1
-    t15_s = t15.get("current_synthetic_rate", 1.0)
-    t15_z = t15.get("current_z_score", 0.0)
-    t15_bar = format_progress_bar(t15_days / 30.0)
-
-    # Stables
-    usdt_usd = ticks.get("tUSTUSD", 0.9998)
-    usdc_usd = ticks.get("tUDCUSD", 1.0000)
-    usdc_usdt = ticks.get("USDCUSDT", 1.0002)
-    usdt_dev_bps = round((usdt_usd - 1.0) * 10000, 1)
-    usdc_dev_bps = round((usdc_usd - 1.0) * 10000, 1)
-
-    # Aggregated Capital & PnL
-    # Total portfolio = T13 USD + T14 EUR converted to USD + T15 USD
-    t14_equity_usd = t14_equity_eur * eur_usd
-    t15_active = "t15_cross_basis" in data.get("strategies", {})
-    total_usd = t13_equity_usd + t14_equity_usd + (t15_equity_usd if t15_active else 0.0)
-    total_eur = total_usd / eur_usd
-    total_sats = int(round((total_usd / btc_usd) * 100_000_000))
-
-    profit_usd_total = t13_profit_usd + (t14_profit_eur * eur_usd) + (t15_pnl_usd if t15_active else 0.0)
-    profit_sats_total = int(round((profit_usd_total / btc_usd) * 100_000_000))
-
-    # Margin bar
-    margin_ratio = 0.185
-    margin_bar = format_progress_bar(margin_ratio)
-
-    report_lines = [
-        f"🏛 *BEROUN RANNÍ EXECUTIVE REPORT* | {now_str}",
-        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
-        f"🟢 *STAV SYSTÉMU*: `{data.get('mode', 'L0')}` ({data.get('ladder_level', 'L0')} Shadow Fail-Closed)",
-        f"🔑 *Jádro*: `v2.5` | Hash: `{data.get('core_hash')}`",
-        f"💰 *Celkový kapitál*: `{total_sats:,} sats` (~${total_usd:,.2f} | €{total_eur:,.2f})",
-        f"📈 *24h Výnos*: `+{profit_sats_total} sats` (+${profit_usd_total:,.4f})",
-        f"⚡ *Benchmark BTC*: `${btc_usd:,.1f}` | `€{btc_eur:,.1f}` | EUR/USD: `{eur_usd:.4f}`",
-        "",
-        "📊 *TRI-VENUE STRATEGIE (PAPER ENGINE)*",
-        "────────────────────────────────────",
-        "1️⃣ *T13: Basis & Funding Carry* (Bitfinex Spot + Hyperliquid Perp)",
-        f"   • Pozice: `+{t13_spot:.4f} BTC` Long / `-{t13_perp:.4f} BTC` Short (Delta neutral)",
-        f"   • HL Funding: `{funding_rate_h*100:.5f} %/h` (APR: `{funding_apr:.2f} %`)",
-        f"   • Akumulovaný carry zisk: `+${t13_funding_usd:.4f}` (Rebates: `+${t13_rebates_usd:.4f}`)",
-        f"   • Využití marže: {margin_bar} `{margin_ratio*100:.1f} %` (Bezpečné pásmo)",
-        f"   • Kapitál T13: `${t13_equity_usd:,.2f}`",
-        "",
-        "2️⃣ *T14: Triangular FX Dislocation* (EUR / USD / BTC)",
-        f"   • Aktuální dislokace: `{dislocation_bps:+.1f} bps` ({dislocation_eur:+.1f} €/BTC)",
-        f"   • Akumulovaný zisk: `+€{t14_profit_eur:.4f}` (Celkem: `{t14_captured_bps:.1f} bps`)",
-        f"   • Zobchodováno maker příkazů: `{t14_trades}` (0% poplatek)",
-        f"   • Kapitál T14: `€{t14_equity_eur:,.2f}`",
-        "",
-        f"3️⃣ *T15: MiCA Cross-Basis Carry* (Den {t15_days}/30 L1 Paper)",
-        f"   • Progres testu: {t15_bar} `{t15_days}/30 dní` ({t15_trades}/100 obchodů)",
-        f"   • Syntetický kurz: `{t15_s:.6f}` (Z-skóre: `{t15_z:+.2f}`)",
-        f"   • Simulovaný PnL: `{t15_pnl_usd:+.2f} USD` (Delta: `0.000000 BTC`)",
-        f"   • Kapitál T15: `${t15_equity_usd:,.2f}`",
-        "",
-        "4️⃣ *Monitor stability stablecoinů*",
-        f"   • USDT: `${usdt_usd:.4f}` (`{usdt_dev_bps:+.1f} bps`)",
-        f"   • USDC: `${usdc_usd:.4f}` (`{usdc_dev_bps:+.1f} bps`)",
-        f"   • Binance spread USDC/USDT: `${usdc_usdt:.4f}`",
-        "",
-        "🧠 *AI TRŽNÍ SYNTÉZA & REGIME SHIFT*",
-        "────────────────────────────────────",
-        narrative,
-        "",
-        "🛡 *RIZIKOVÝ PERIMETR & INVARIANTY (§14)*",
-        "────────────────────────────────────",
-        f"• Zamítnuté objednávky kernelu: `{data.get('orders_rejected', 0)}`",
-        f"• Porušení invariantů: `{data.get('invariant_violations', 0)}` (Všechny testy OK)",
-        "• Reconcile stav: `MATCHED_IN_TOLERANCE` (PostgreSQL vs. Venue Ticks)",
-        "",
-        "📌 *PŮVOD DAT (§14) & GLOBÁLNÍ AI HIERARCHIE*:",
-        "• Globální kaskáda: 1️⃣ Codex (--yolo) ➔ 2️⃣ Claude Code (--yolo) ➔ 3️⃣ AGY (--dangerously-skip-permissions) ➔ 4️⃣ Hermes (--yolo)",
-        f"• Dnešní exekuce: Stupeň [{winning_ai_tier}] (okamžitý failover aktivní)",
-        "• Data: PostgreSQL (market_ticks, market_funding, paper_arbitrage_state)",
-        "• Burzy: Bitfinex REST, Hyperliquid L1 API, Binance API",
+    """Never substitute invented balances, reconciliation or qualification."""
+    import math
+    lines = [
+        "SNIPER — PROVOZNÍ REPORT / BEROUN",
+        "Vygenerováno UTC: " + datetime.now(timezone.utc).isoformat(),
+        "STAV SYSTÉMU: " + str(data.get("mode", "UNKNOWN")),
+        "Skutečný burzovní kapitál a PnL: NEOVĚŘENO.",
+        "T13: Basis & Funding Carry — starý model, kvalifikace NEOVĚŘENA.",
+        "T14: Triangular FX Dislocation — starý model, kvalifikace NEOVĚŘENA.",
+        "T15: MiCA Cross-Basis Carry — stará evidence ZNEPLATNĚNA; nové období nepotvrzeno.",
+        "Paper dny, počet plnění ani PASS nelze odvodit z běžícího kalendáře.",
+        "TRŽNÍ POZOROVÁNÍ (čerstvost zde není ověřena):",
     ]
-
-    return "\n".join(report_lines)
+    for symbol, value in sorted(data.get("ticks", {}).items()):
+        if isinstance(value,(int,float)) and not isinstance(value,bool) and math.isfinite(value) and value>0:
+            lines.append(f"{symbol}: {value}")
+    lines.extend([
+        "Reconcile: NEOVĚŘENO; počet porušení není dokladem úspěšných testů.",
+        "Zdroj: PostgreSQL; tento report nepotvrzuje zůstatky ani provedené obchody na burze.",
+        "Komentář (není kvalifikační důkaz): " + narrative,
+        "Způsob komentáře: " + winning_ai_tier,
+    ])
+    return "\n".join(lines)
 
 
 def save_report_to_outbox(report_text: str, data: Dict[str, Any]) -> int:

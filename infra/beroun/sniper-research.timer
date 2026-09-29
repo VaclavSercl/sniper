@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Sniper research cycle (UTC)
+
+[Timer]
+OnCalendar=*-*-* 02:15:00 UTC
+Persistent=true
+RandomizedDelaySec=60
+Unit=sniper-research.service
+
+[Install]
+WantedBy=timers.target

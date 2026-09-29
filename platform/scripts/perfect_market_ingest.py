@@ -279,7 +279,7 @@ class PerfectMarketIngest:
         WHERE next_open_time > open_time + INTERVAL '1 minute'
         ORDER BY open_time ASC;
         """
-        rows = psql(sql, check=False).splitlines()
+        rows = psql(sql, check=True).splitlines()
         gaps = []
         for r in rows:
             if not r or "|" not in r:
@@ -332,7 +332,7 @@ class PerfectMarketIngest:
     # ──────────────────────────────────────────────────────────────────────────
     def run_incremental_cycle(self) -> Dict[str, int]:
         """Runs single incremental cycle to ingest latest closed bars across all venues."""
-        stats = {"binance": 0, "bitfinex": 0, "hyperliquid": 0, "funding": 0}
+        stats = {"binance": 0, "bitfinex": 0, "hyperliquid": 0, "funding": 0, "errors": 0}
 
         # 1. Binance Pairs
         for pair in BINANCE_PAIRS:
@@ -342,6 +342,7 @@ class PerfectMarketIngest:
                 stats["binance"] += saved
                 time.sleep(0.1)
             except Exception as e:
+                stats["errors"] += 1
                 logger.error("Binance %s failed: %s", pair, e)
 
         # 2. Bitfinex Pairs
@@ -352,6 +353,7 @@ class PerfectMarketIngest:
                 stats["bitfinex"] += saved
                 time.sleep(0.15)
             except Exception as e:
+                stats["errors"] += 1
                 logger.error("Bitfinex %s failed: %s", pair, e)
 
         # 3. Hyperliquid Candles
@@ -362,6 +364,7 @@ class PerfectMarketIngest:
                 stats["hyperliquid"] += saved
                 time.sleep(0.1)
             except Exception as e:
+                stats["errors"] += 1
                 logger.error("Hyperliquid %s failed: %s", coin, e)
 
         logger.info("[INCREMENTAL COMPLETE] Saved: %s", json.dumps(stats))
@@ -380,7 +383,7 @@ class PerfectMarketIngest:
             all_gaps.extend(self.detect_gaps(f"{coin}-PERP", "hyperliquid_candles", lookback_days=lookback_days))
 
         if not all_gaps:
-            logger.info("No gaps detected! Continuous data stream is 100% clean.")
+            logger.info("No internal gaps found; missing series, boundaries and freshness are not certified.")
             return 0
 
         logger.warning("Detected %d data gaps across universe! Triggering self-healing...", len(all_gaps))
@@ -445,8 +448,8 @@ def main() -> int:
         return 0
 
     if args.incremental or not any([args.audit_gaps, args.bootstrap_symbol]):
-        ingest.run_incremental_cycle()
-        return 0
+        stats = ingest.run_incremental_cycle()
+        return 1 if stats["errors"] else 0
 
     return 0
 

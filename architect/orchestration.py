@@ -209,6 +209,8 @@ def stop_bot(name: str) -> str:
 
 def save_bot_state(name: str, mode: str):
     """Save bot state (LIVE, PAPER, PAUSED, OFFLINE) to armada_state.json"""
+    if mode.upper() == "LIVE":
+        raise RuntimeError("LIVE promotion unavailable: requires verified execution adapter and owner risk policy")
     import json
     state_file = os.path.join(PROJECT_ROOT, "state", "armada_state.json")
     state = {}
