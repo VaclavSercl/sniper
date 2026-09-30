@@ -219,3 +219,21 @@ daily loss and drawdown limits; independently reproducible strategy-specific
 backtest, realistic fees/slippage, fresh complete data, separate paper epoch,
 exchange reconciliation and tested stop/cancel behavior. These are unresolved,
 not implemented by relabeling research metrics.
+# Operational reporting bridge (2026-09-30)
+
+The dedicated `beroun` producer reads private T1 SQLite state without changing
+it, performs a repeatable-read/read-only market audit and publishes only bounded
+public observations in `/var/lib/sniper/observations/candle.json`. The private
+research/input directory keeps mode 0700. The `wwwenda` reporter reads its own
+Hydra database and rejects observations older than ten minutes, future timestamps,
+invalid schemas and mismatched digests. Atomic replacement prevents partial JSON.
+The digest is an integrity check; root-owned code and producer permissions remain
+the trust boundary. The public projection is never qualification authority.
+
+The new observation timer refreshes every five minutes. The existing six-hour
+report gets only the narrowly owned `95-sniper-observation.conf` override.
+Installation previews pin both prior reporting file hashes, require a verified
+active release, preserve prior files/state and retain operation intent/outcome.
+The first real observation and report must succeed before enabling the timer.
+Failed installation preserves evidence and disables its new timer for explicit
+reconciliation. Source deployment and unit installation are distinct operations.

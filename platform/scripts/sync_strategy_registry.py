@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Read-only research status; no invented legacy T15 PASS or Git publication."""
 import argparse
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import sqlite3
@@ -10,7 +11,9 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'research'))
 from strategy_lifecycle import CATALOG, report, safe_path
 from lifecycle_overview import load_policy, overview
 
-def load_report(state_dir, candle_state_dir=None):
+def load_report(state_dir, candle_state_dir=None, candle_observation=None):
+    if candle_state_dir is not None and candle_observation is not None:
+        raise ValueError('Choose direct state or observation')
     policy, policy_hash = load_policy()
     result = {'schema': 2, 'live_eligible': 0, 'paper_qualified': 0,
               'catalog': [{'id': k, 'status': 'UNQUALIFIED', 'reason': v} for k, v in CATALOG.items()],
@@ -35,6 +38,17 @@ def load_report(state_dir, candle_state_dir=None):
                                  'data': data}
         except (OSError, ValueError, KeyError, TypeError, sqlite3.Error) as exc:
             sources['candle'] = {'status': 'FAILED', 'error_type': type(exc).__name__}
+    if candle_observation is not None:
+        try:
+            from operational_observation import load
+            observation = load(candle_observation, datetime.now(timezone.utc))
+            data = observation['candle']
+            result['candle_research'] = data
+            result['market_data'] = observation['market_data']
+            result['observation_at'] = observation['observed_at']
+            sources['candle'] = {'status': 'OBSERVED' if data['status'] == 'OBSERVED' else 'MISSING', 'data': data}
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            sources['candle'] = {'status': 'FAILED', 'error_type': type(exc).__name__}
     result['catalog'].append({'id': 'T1', 'status': 'UNQUALIFIED',
         'reason': 'Exploratory spot candle screen; annual-data and execution gates unmet'})
     observed = sum(s['status'] == 'OBSERVED' for s in sources.values())
@@ -45,10 +59,12 @@ def load_report(state_dir, candle_state_dir=None):
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--state-dir',type=Path,default=Path('/var/lib/sniper/research'))
-    ap.add_argument('--candle-state-dir',type=Path)
+    group=ap.add_mutually_exclusive_group()
+    group.add_argument('--candle-state-dir',type=Path)
+    group.add_argument('--candle-observation',type=Path)
     args=ap.parse_args()
     try:
-        result=load_report(args.state_dir,args.candle_state_dir)
+        result=load_report(args.state_dir,args.candle_state_dir,args.candle_observation)
     except (OSError,ValueError,KeyError,TypeError,sqlite3.Error) as exc:
         result={'status':'BLOCKED','reason':type(exc).__name__}
     print(json.dumps(result,indent=2,allow_nan=False))

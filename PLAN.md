@@ -1,5 +1,68 @@
 # Backtest integrity repair
 
+Step 1 implementation: public whitelisted observation producer, closed/source-
+isolated read-only PostgreSQL audit, fresh-digest reporter integration, guarded
+installer with prior configuration hashes and durable failure state. Preliminary
+Linux gate: 58 architect + 167 platform tests passed, including actual temporary
+PostgreSQL audit and Linux symlink/installation tests; Windows focused checks
+passed with four explicitly unavailable symlink checks. Unit verification found
+an Environment quoting warning; corrected before final gate. No live orders.
+Final exact-candidate verification, checkpoint, publication and actual deployment
+follow. Steps 2–4 remain separate dependencies, not completion claims.
+
+## Owner-authorized implementation of audit steps 1–4 — 2026-09-30
+Goal: implement the complete proposed lifecycle progressively, verifying each
+dependency before proceeding. Owner explicitly said to perform all proposed
+implementation/repair steps. Baseline 342b77c95a81a2f07271aa4b1455f8ca8a0c722c,
+clean repair/history-recovery worktree. Preserve server checkout/WIP, all
+private state, old releases and quarantined invalid paper epochs.
+Required inputs still requested: actual Hyperliquid account, capital/loss/DD/
+leverage mandate, paid-model budget. Do independent implementation without
+those values; no fabricated defaults or funded orders. Use bounded offline
+hypothesis generation until an explicit provider budget exists. A 30-day
+forward evidence requirement cannot be satisfied by accelerated clock/tests.
+
+Step 1: least-privilege public observation bridge from beroun-owned T1 state,
+read-only data-quality audit, integration into existing wwwenda six-hour report.
+Do not make private SQLite/input directories public or give reporting root.
+New worker runs as existing beroun user, publishes only sanitized derived
+observations to its separate owned directory with explicit timestamps/digests;
+reports reject stale/malformed/mismatched observations. Existing report reads
+its own Hydra registry directly and the derived T1 observation. Add reversible
+root-owned unit/drop-in installation with exact prior hashes, intent/result,
+first actual observation+report check before enabling its timer.
+Step 2: exact spot/perpetual market metadata, source-specific closed candles
+and actual historical funding events; append-only capture with conflict guards,
+bounded requests and explicit API-history limits. Preserve existing rows.
+Step 3: bounded registered new economic hypotheses (distinct from parameter
+variants), train/validation/holdout-aware evaluation, fair cohort comparison,
+causal forward paper with event-id funding, full equity and pinned epochs.
+Historical or forward missing data remains visibly blocked. No arbitrary
+generated-code execution, provider sessions or invented fill calibration.
+Step 4: verified SDK/runtime capability selection, dynamic asset identity,
+precision/nonces/signing/cancel/reconcile adapters; offline then testnet
+verification. Actual promotion requires qualified evidence and concrete owner
+mandate. Never turn absent integrations into a passing qualification flag.
+
+Step 1 file scope: platform/research/operational_observation.py and tests;
+platform/scripts/sync_strategy_registry.py observation input;
+infra/beroun/sniper-observation.service/.timer and reporting drop-in;
+infra/beroun/install_observation.py and installation regression tests;
+platform/SOURCE_MANIFEST.json, LIFECYCLE.md, this plan. Update scope before each
+later dependency. Standard library and existing installed PostgreSQL/tools.
+Acceptance: no private-state disclosure, no mutation on reads, bounded fresh
+observations, meaningful error categories, actual scheduled complete report
+under wwwenda, source/recovery hashes, unaffected WIP and trading boundary.
+Verification: focused unittest discovery; full Linux tools/verify_platform.py
+with private PostgreSQL; shell syntax/systemd-analyze verify; staged manifest
+and diff check against exact candidate before checkpoint. <=3 evidence-driven
+repair cycles per failed gate; persist errors and stop repeated non-improvement.
+Recovery: preserve previous units/drop-ins/state/release, restore only exact
+owned bytes, disable only newly installed timer after failed first cycle.
+Authorization includes necessary scoped service/config/deployment changes,
+local checkpoints, existing Sniper repair branch publication and PR #101 updates;
+no merge, unrelated infrastructure upgrade, broad deletion or kernel changes.
+
 ## Hyperliquid lifecycle rules and truthful reporting — 2026-09-30
 Goal: owner requests an audited strategy-stage report, explicit spot AND
 perpetual scope on Hyperliquid, and rules for recurring proposals, historical
