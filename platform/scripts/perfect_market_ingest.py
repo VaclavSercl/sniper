@@ -52,6 +52,11 @@ BITFINEX_PAIRS = [
 HYPERLIQUID_COINS = ["BTC", "ETH", "SOL", "HYPE"]
 
 
+def closed_minute_cutoff_ms() -> int:
+    """Start of the current minute; capture before requesting exchange data."""
+    return int(time.time() // 60) * 60_000
+
+
 def psql(sql: str, check: bool = True) -> str:
     cmd = ["sudo", "-u", "beroun", "psql", "-d", "beroun", "-t", "-A", "-c", sql]
     res = subprocess.run(cmd, capture_output=True, text=True)
@@ -69,7 +74,17 @@ class PerfectMarketIngest:
         self.hyperliquid = HyperliquidReadOnly()
 
     def save_klines_batch(self, klines: List[Dict[str, Any]]) -> int:
-        """Idempotent batch insert of 1-minute OHLCV candles into market_klines."""
+        """Idempotent batch insert of closed 1-minute candles into market_klines."""
+        cutoff = datetime.fromtimestamp(closed_minute_cutoff_ms() / 1000, tz=timezone.utc)
+        closed = []
+        for candle in klines:
+            opened = datetime.fromisoformat(candle["open_time"])
+            ended = datetime.fromisoformat(candle["close_time"])
+            if opened.utcoffset() is None or ended.utcoffset() is None:
+                raise ValueError("Candle times must include a time zone")
+            if opened + timedelta(minutes=1) <= cutoff and ended <= cutoff:
+                closed.append(candle)
+        klines = closed
         if not klines:
             return 0
         if self.dry_run:
@@ -143,6 +158,7 @@ class PerfectMarketIngest:
         self, symbol: str, limit: int = 100, start_ms: Optional[int] = None, end_ms: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """Fetch 1m klines from Binance Public API."""
+        cutoff_ms = closed_minute_cutoff_ms()
         url = f"https://api.binance.com/api/v3/klines?symbol={symbol}&interval=1m&limit={limit}"
         if start_ms is not None:
             url += f"&startTime={start_ms}"
@@ -155,6 +171,8 @@ class PerfectMarketIngest:
 
         out = []
         for row in data:
+            if int(row[0]) + 60_000 > cutoff_ms:
+                continue
             o_ts = datetime.fromtimestamp(row[0] / 1000.0, tz=timezone.utc).isoformat()
             c_ts = datetime.fromtimestamp(row[6] / 1000.0, tz=timezone.utc).isoformat()
             out.append({
@@ -176,6 +194,7 @@ class PerfectMarketIngest:
         self, symbol: str, limit: int = 100, start_ms: Optional[int] = None, end_ms: Optional[int] = None
     ) -> List[Dict[str, Any]]:
         """Fetch 1m candles from Bitfinex Public API."""
+        cutoff_ms = closed_minute_cutoff_ms()
         # sort=-1 returns most recent candles
         url = f"https://api-pub.bitfinex.com/v2/candles/trade:1m:{symbol}/hist?limit={limit}&sort=-1"
         if start_ms is not None:
@@ -190,6 +209,8 @@ class PerfectMarketIngest:
         out = []
         for row in reversed(data):  # reverse to chronological order
             mts = row[0]
+            if int(mts) + 60_000 > cutoff_ms:
+                continue
             o_ts = datetime.fromtimestamp(mts / 1000.0, tz=timezone.utc).isoformat()
             c_ts = datetime.fromtimestamp((mts + 59999) / 1000.0, tz=timezone.utc).isoformat()
             out.append({
@@ -212,6 +233,7 @@ class PerfectMarketIngest:
     ) -> List[Dict[str, Any]]:
         """Fetch 1m candles from Hyperliquid Public Info API."""
         now_ms = int(time.time() * 1000)
+        cutoff_ms = (now_ms // 60_000) * 60_000
         start = start_ms if start_ms is not None else (now_ms - limit * 60_000)
         end = end_ms if end_ms is not None else now_ms
 
@@ -236,6 +258,8 @@ class PerfectMarketIngest:
         sym = f"{coin}-PERP"
         for row in data:
             mts = row["t"]
+            if int(mts) + 60_000 > cutoff_ms:
+                continue
             o_ts = datetime.fromtimestamp(mts / 1000.0, tz=timezone.utc).isoformat()
             c_ts = datetime.fromtimestamp(row["T"] / 1000.0, tz=timezone.utc).isoformat()
             close_p = float(row["c"])

@@ -1,5 +1,28 @@
 # Backtest integrity repair
 
+## Closed-minute ingestion correction — 2026-09-30
+Goal: prevent the partial candle defect found during the authorized Binance
+history comparison from recurring. Baseline 49e03359cc2c9338d73f8b32b35d6e4a79cc11c4;
+clean owned repair/history-recovery worktree. Active Beroun minute service uses
+platform/scripts/perfect_market_ingest.py, which presently accepts open minutes.
+All 18 historical conflicts were written before their minute closed, and fresh
+exchange responses confirm the archived final candles. The separately reviewed
+18-row SQL correction remains pending its specific approval.
+Scope: that minute collector, two focused invariants in its existing test file,
+source manifest, this plan. Snapshot the closed-minute boundary BEFORE each HTTP
+request, so a request crossing the next minute cannot bless a partial payload.
+Filter unclosed rows from Binance, Bitfinex and Hyperliquid; guard direct writes
+and dry-run counts too. Preserve source identity, final OHLCV and existing SQL.
+Non-goals: no production row correction, trading activation, venue substitution,
+automatic historical re-download, new dependency, or edits to legacy collectors.
+Verify: focused regressions with delayed HTTP responses and an actual isolated
+PostgreSQL boundary test; python3 -B tools/verify_platform.py full Linux gate;
+git diff --cached --check; source manifest and exact staged tree unchanged.
+Failure budget: at most three repair cycles, never weaken existing checks.
+Recovery: local Git checkpoint and retained isolated gate evidence. No source
+cleanup. Publication of this new checkpoint needs its exact remote/branch scope;
+no deployment or database write is inferred from passing these tests.
+
 ## Bounded history recovery — owner request 2026-09-30
 Goal: stage authentic missing candle history and prepare reviewed append-only
 imports; establish a concrete reversible GDS boot-mitigation operation.

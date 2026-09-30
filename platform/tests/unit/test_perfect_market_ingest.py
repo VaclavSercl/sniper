@@ -3,12 +3,13 @@
 Unit and Integration Tests for BEROUN Perfect Market Ingest & 1222-Day Retention Engine (§9b, §10)
 """
 
+import json
 import shutil
 import sys
 import unittest
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SCRIPTS_DIR = REPO_ROOT / "scripts"
@@ -106,6 +107,48 @@ class TestPerfectMarketIngest(unittest.TestCase):
         }]
         saved = self.ingest.save_klines_batch(sample)
         self.assertEqual(saved, 1)
+
+    def test_all_venues_exclude_partial_payload_even_when_request_crosses_minute(self):
+        cutoff = int(datetime(2026, 9, 30, tzinfo=timezone.utc).timestamp() * 1000)
+        opens = [cutoff - 60_000, cutoff, cutoff + 60_000]
+        binance = [[t, "10", "12", "9", "11", "1", t + 59_999, "11", 2] for t in opens]
+        bitfinex = [[t, 10, 11, 12, 9, 1] for t in reversed(opens)]
+        hyperliquid = [dict(t=t, T=t + 60_000, o="10", h="12", l="9", c="11", v="1", n=2) for t in opens]
+        for fetch, payload, symbol in [(self.ingest.fetch_binance_klines, binance, "BTCUSDT"),
+                                        (self.ingest.fetch_bitfinex_candles, bitfinex, "tBTCUSD"),
+                                        (self.ingest.fetch_hyperliquid_candles, hyperliquid, "BTC")]:
+            with self.subTest(venue=fetch.__name__):
+                clock = [(cutoff + 2000) / 1000]
+                def delayed_response(*args, **kwargs):
+                    clock[0] += 70
+                    response = MagicMock()
+                    response.__enter__.return_value.read.return_value = json.dumps(payload).encode()
+                    return response
+                with patch.object(ingest_module.time, "time", side_effect=lambda: clock[0]), \
+                     patch.object(ingest_module.urllib.request, "urlopen", side_effect=delayed_response):
+                    rows = fetch(symbol)
+                self.assertEqual(len(rows), 1)
+                self.assertEqual(datetime.fromisoformat(rows[0]["open_time"]).timestamp() * 1000,
+                                 cutoff - 60_000)
+
+
+class TestClosedMinuteDatabase(IsolatedDatabaseTests):
+    def test_direct_write_and_dry_run_only_accept_completed_minutes(self):
+        retention_mgr.ensure_future_partitions(advance_months=1)
+        cutoff = datetime.now(timezone.utc).replace(second=0, microsecond=0)
+        rows = []
+        for offset in (-1, 0, 1):
+            opened = cutoff + timedelta(minutes=offset)
+            rows.append(dict(open_time=opened.isoformat(),
+                             close_time=(opened + timedelta(milliseconds=59_999)).isoformat(),
+                             symbol="CLOSED_BOUNDARY", src="synthetic", open=10, high=12,
+                             low=9, close=11, volume=1))
+        with patch.object(ingest_module.time, "time", return_value=cutoff.timestamp() + 2):
+            self.assertEqual(PerfectMarketIngest(dry_run=True).save_klines_batch(rows), 1)
+            self.assertEqual(PerfectMarketIngest().save_klines_batch(rows), 1)
+        self.assertEqual(self.client.sql("SELECT count(*) FROM market_klines WHERE symbol='CLOSED_BOUNDARY';"), "1")
+        stored = self.client.sql("SELECT extract(epoch FROM open_time)::bigint FROM market_klines WHERE symbol='CLOSED_BOUNDARY';")
+        self.assertEqual(int(stored), int(cutoff.timestamp()) - 60)
 
 
 class TestGapDetection(IsolatedDatabaseTests):

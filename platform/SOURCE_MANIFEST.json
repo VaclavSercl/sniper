@@ -268,7 +268,7 @@
       "path": "platform/scripts/perfect_market_ingest.py",
       "source": "beroun@bdb3f444:scripts/perfect_market_ingest.py",
       "source_sha256": "9f3da3328d02c1d747a1f7ffce83d20283b397ca3924dacb72d5a9c07e469bfc",
-      "sha256": "5b8ad34794f0795773f7a873d87c94008e5f16ffeb4559be8bf3e8616b0a2378",
+      "sha256": "548c5a90318878e9321f6df6c5a5bc77ab5cfb51169b11f6c514cc00beb5ad95",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -822,7 +822,7 @@
       "path": "platform/tests/unit/test_perfect_market_ingest.py",
       "source": "beroun@bdb3f444:.synthbit/tests/test_perfect_market_ingest.py",
       "source_sha256": "af4f688cfa8fce4f27cac4bbed9b3ee3cd3d2a8408d05d2eae19b87244b7ed2e",
-      "sha256": "067e3b3c6d52119ae04dc8816613cf1e07e929832d1beb73616813d7f5012ba2",
+      "sha256": "24607cb365ad169c5822a15fca43f69b6620d7ed7a6b052cb15ea1200c3e26f6",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
