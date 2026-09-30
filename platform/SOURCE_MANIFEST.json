@@ -300,7 +300,7 @@
       "path": "platform/scripts/sync_strategy_registry.py",
       "source": "beroun@bdb3f444:scripts/sync_strategy_registry.py",
       "source_sha256": "efb886b2ab303ef6899c48b08b3117e9ca4a3ab453a01a8ad16ba0457375a67b",
-      "sha256": "84cd3f94fbe98af024c8d032b3818005e3380dd2208edc75c3a2eb19d7839921",
+      "sha256": "6fd11c02ee9b32f7a631c594fe4191f6d341347b40f969ba1855598a664930f3",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -899,7 +899,7 @@
     {
       "path": "platform/research/LIFECYCLE.md",
       "source": "Sniper lifecycle repair 2026-09-29",
-      "sha256": "1423728c994ea42a2ed17accf7d3ffe70b47682d1d2860eaa75d40641fcabf13",
+      "sha256": "6c59ca0c45ceaf966fe801a6aeb4f34162c06a71ae21edd1fbff2c3fbf1c200a",
       "mode": "100644"
     },
     {
@@ -976,6 +976,18 @@
       "source_sha256": "4fa4e4fe71540cd8c3374de217a6964669b49a07b31dd97a80fdfdbe4d1c1027",
       "sha256": "4fa4e4fe71540cd8c3374de217a6964669b49a07b31dd97a80fdfdbe4d1c1027",
       "mode": "100644"
+    },
+    {
+      "path": "platform/research/candle_research.py",
+      "source": "sniper-native:reviewed-research-repair",
+      "mode": "100644",
+      "sha256": "25cf457aafd90474f318d4059e944b6ef6d038307a4d9a5e45b0d3d2f34f0ce1"
+    },
+    {
+      "path": "platform/tests/unit/test_candle_research.py",
+      "source": "sniper-native:reviewed-research-repair",
+      "mode": "100644",
+      "sha256": "4381b287e364bfa2d53b14207df058f3c1f2d99513521a854a5135fee2450eb5"
     }
   ]
 }

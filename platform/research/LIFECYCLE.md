@@ -1,5 +1,63 @@
 # Evidence-driven research — implementation boundary
 
+## T1 candle research continuation (2026-09-30)
+
+`candle_research.py` adds an executable route for the existing T1 BTCUSDT spot
+hypothesis on complete `binance_klines` data. It does not substitute candles for
+Hydra ticks, or implement the supplied discretionary OMNI strategy descriptions.
+The original Hydra queue below remains available but unqualified.
+
+The daily `sniper-research` unit now targets this candle runner. This source
+document describes the candidate configuration; dated deployment evidence must
+confirm whether the unit was installed. It runs as the existing `beroun` user,
+reads public market data in a PostgreSQL READ ONLY transaction over a Unix
+socket, and has no internet socket capability or order API. State belongs in
+`/var/lib/sniper/candle-research`; the root-owned policy belongs in
+`/etc/sniper/candle-research-policy.json`. Existing Hydra state is preserved.
+
+The policy uses explicit hypothetical 1000 USDT capital, 10 bp fee and 8 bp
+adverse slippage on EACH side, maximum 20% spot allocation and 1% modeled risk.
+These are stress assumptions, not verified account costs, executable liquidity
+or approved real capital. No leverage, rebates or invented funding is applied.
+The causal T1 signal is retained from the legacy implementation. Entry is next
+open, trailing levels are known before the next bar, stops account for gaps,
+and final inventory is liquidated with costs. Candle ordering and slippage are
+unverified, so results never qualify paper or live operation.
+
+One fixed baseline (240-minute breakout, median range filter, 2x trailing range)
+is registered BEFORE fetching/evaluating its data. Training is Aug 26–Sep 23
+(first two days are warmup); its single historical holdout is Sep 23–Sep 30 UTC.
+The other 17 predetermined variants receive only the frozen training window,
+one per UTC day. This is a finite exploratory family, not 18 independent
+strategies or an endless AI search. Exhaustion is explicit. Further families,
+future holdouts or policy migration require a new recorded research design;
+the historical holdout is never recycled for daily selection. The legacy
+annual-data requirement is not relaxed by a 35-day screen.
+
+Immutable data, policy and model bytes accompany each result. A STARTED intent
+survives interruption; it blocks automatic continuation until reconciliation.
+Failed baseline attempts stay visible; a subsequent day cannot bypass them.
+Same-day repetition returns the prior result without another proposal or test.
+State is private cooperative operational evidence, not a tamper-proof security
+boundary against the service account or root. Do not publish the runtime state.
+
+```sh
+python3 -B platform/research/candle_research.py status --state-dir /var/lib/sniper/candle-research
+python3 -B platform/research/candle_research.py reproduce --state-dir /var/lib/sniper/candle-research --day 2026-09-30
+python3 -B platform/scripts/sync_strategy_registry.py --state-dir /var/lib/sniper/research --candle-state-dir /var/lib/sniper/candle-research
+```
+
+Use the service identity or an authorized operator for private state reads.
+Reproduction requires the recorded model revision; changed inputs are refused.
+It makes no exchange/DB call. A completed screen is a successful software run,
+including when its net result is negative. `BASELINE_SCREEN_COMPLETE` and
+`TRAINING_SCREEN_COMPLETE` are not qualification passes.
+
+Recover by stopping only `sniper-research.timer`, preserving the state and
+inspecting the recorded intent, result and input hashes. Do not erase failed
+runs or change the pinned policy to make them pass. Keep existing releases and
+unit/config backups. No universal ai-run/undo harness is installed by this work.
+
 `strategy_lifecycle.py` implements an offline, daily, bounded parameter proposal
 queue and invokes the existing Hydra walk-forward simulator. Twelve distinct
 parameter hypotheses are available; one is proposed per UTC day. These are

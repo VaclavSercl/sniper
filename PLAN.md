@@ -1,5 +1,70 @@
 # Backtest integrity repair
 
+## Operational candle research — owner continuation 2026-09-30
+Goal: complete an authentic, repeatable daily proposal/test/result cycle using
+the existing T1 BTCUSDT spot hypothesis and the audited Binance candles.
+Baseline 9d93e7684beb4c79611d67dbb812ea40290ed10e; clean owned worktree
+repair/history-recovery. Existing server WIP and PR #101 history are preserved.
+Discovery: research registry empty; timer absent; Hydra needs absent Bitfinex
+ticks. Do not substitute Binance candles for those ticks or invent settlement.
+Existing T1 legacy runner misprices round-trip costs, has ambiguous intrabar
+trailing and requires a year of data. Keep its historical files untouched.
+The new 35-day screen is EXPLORATORY, never a relaxed version of its annual gate.
+
+Files: platform/research/candle_research.py, its platform unit tests,
+platform/research/strategy_lifecycle.py catalog/status integration if necessary,
+infra/beroun/sniper-research.service, research policy example and deployment
+documentation, SOURCE_MANIFEST.json and this plan. Operator helpers/evidence
+stay outside the source checkout. No new dependency or trading adapter.
+Implement a bounded read-only PostgreSQL snapshot with exact venue/symbol,
+closed minute and gap checks, provenance, immutable inputs and result history.
+Reuse the causal T1 signal rule; signals execute next open, fees/slippage apply
+on both legs, gap-through stops use the adverse open, no current-bar high may
+raise a stop before its low. Track chronological equity including flat days.
+Research policy explicitly labels hypothetical quote capital and stress costs;
+it is not an exchange-account fee schedule or owner allocation.
+One preregistered baseline gets a single fixed historical holdout. Further
+daily parameter screens use training data only; never recycle that holdout to
+select daily variants. Preserve provenance, rejected/blocked results and exact
+inputs; missing data/config is visible. No paper/live promotion from this model.
+Daily timer runs only after its actual first cycle and repeat/idempotency check.
+Use restricted read-only DB access through the existing approved service account
+or a narrowly scoped export mechanism; never put postgres privileges in the job.
+
+Acceptance: actual complete-data cycle and repeated invocation produce one
+immutable record; complete Linux gate with private PostgreSQL passes; malformed
+data, look-ahead, doubled fees, gap stops, negative cash, holdout reuse and state
+tampering regressions pass. Timer/unit installed reversibly with root-owned
+source, protected runtime state and bounded CPU/memory/network permissions.
+Exact checks: python3 -B tools/verify_platform.py; focused unittest discovery;
+systemd-analyze verify on research units; git diff --cached --check; reviewed
+source manifest, candidate fingerprint unchanged before exact local commit.
+At most three evidence-driven repairs per failed gate. Retain diagnostics.
+Recovery: preserve previous release, prior unit bytes/absence and registry;
+stop/disable only the new timer if first cycle fails, preserve its outputs.
+No broad cleanup, reboot, account/credential change or funded order. The
+universal message governs operating rules; full SynthBit installation remains
+outside this application task and no complete harness attestation is claimed.
+Owner's continuing permission covers necessary repair and deployment steps;
+record source publication separately against the already identified Sniper
+repository/branch. Do not merge PR #101 automatically.
+Additional deployment scope: infra/beroun/install_research.py and isolated
+architect/tests/test_research_install.py. Preview refuses pre-existing units,
+policy or state; installation records intent, runs/reproduces the real first
+cycle and verifies idempotence before enabling the daily timer. Any failed
+first cycle leaves evidence intact and disables only the new research timer.
+No blanket database permissions are added: existing beroun peer identity has
+SELECT access, independently verified read-only. Policy is root-owned outside
+the moving current symlink; each result pins immutable source and input bytes.
+Initial component checks found a test-root path and an unclosed fixture SQLite
+handle; both fixed, 14 focused tests pass. First integrated gate exposed the
+changed documentation digest omitted from the manifest; corrected narrowly,
+199 Linux tests passed before final deployment tests/source refinements.
+Hermes and Agy were invoked in read-only filesystem sandboxes with private
+runtime directories writable. Hermes exceeded its bounded review time. Agy's
+first CLI call rejected prompt transport before reviewing; corrected using its
+observed attached --print argument. Actual final review evidence is external.
+
 ## Closed-minute ingestion correction — 2026-09-30
 Goal: prevent the partial candle defect found during the authorized Binance
 history comparison from recurring. Baseline 49e03359cc2c9338d73f8b32b35d6e4a79cc11c4;

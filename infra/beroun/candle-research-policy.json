@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "source": "binance_klines",
+  "symbol": "BTCUSDT",
+  "start": "2026-08-26T00:00:00Z",
+  "training_end": "2026-09-23T00:00:00Z",
+  "holdout_end": "2026-09-30T00:00:00Z",
+  "initial_quote_capital": 1000,
+  "fee_per_side": 0.001,
+  "slippage_per_side": 0.0008,
+  "position_fraction": 0.2,
+  "risk_fraction": 0.01,
+  "cost_basis": "Research stress assumptions: 10 bp fee plus 8 bp adverse slippage on EACH side, no rebates, hypothetical 1000 USDT quote capital. Not measured account fees, approved allocation, or a fill guarantee.",
+  "scope": "EXPLORATORY_ONLY"
+}
