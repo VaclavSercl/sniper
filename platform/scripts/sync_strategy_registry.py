@@ -11,7 +11,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'research'))
 from strategy_lifecycle import CATALOG, report, safe_path
 from lifecycle_overview import load_policy, overview
 
-def load_report(state_dir, candle_state_dir=None, candle_observation=None, hyperliquid_state_dir=None, account_state_dir=None):
+def load_report(state_dir, candle_state_dir=None, candle_observation=None, hyperliquid_state_dir=None, account_state_dir=None, research_state_dir=None):
     if candle_state_dir is not None and candle_observation is not None:
         raise ValueError('Choose direct state or observation')
     policy, policy_hash = load_policy()
@@ -66,6 +66,32 @@ def load_report(state_dir, candle_state_dir=None, candle_observation=None, hyper
             result['hyperliquid_account'] = account_summary(account_state_dir)
         except (OSError, ValueError, KeyError, TypeError) as exc:
             result['hyperliquid_account'] = {'status': 'FAILED', 'error_type': type(exc).__name__, 'live_enabled': False}
+    if research_state_dir is not None:
+        try:
+            from research_cycle import status as cycle_status
+            data = cycle_status(research_state_dir)
+            result['hyperliquid_research'] = data
+            if data['status'] == 'RESEARCH_OBSERVED':
+                counts = result['lifecycle']['counts']
+                counts.update(new_economic_blueprints_registered=data['blueprints_registered'],
+                    new_market_variants=data['registered_market_variants'],
+                    new_completed_screens=data['completed_screens'],
+                    new_product_models_blocked=data['blocked_product_models'])
+                result['lifecycle']['implemented_capacity'].update(
+                    new_strategy_generator=data['generator'],
+                    new_blueprints_per_utc_day=data['new_blueprints_per_utc_day'],
+                    max_variants_per_blueprint=data['max_variants_per_blueprint'],
+                    max_primary_test_bundles_per_utc_day=data['max_primary_test_bundles_per_utc_day'],
+                    blueprints_remaining=data['blueprints_remaining'],exhaustion_policy=data['exhaustion_policy'])
+                if counts['registered_families_with_runs'] is not None:
+                    counts['registered_families_with_runs'] += data['blueprints_registered']
+        except (OSError, ValueError, KeyError, TypeError, sqlite3.Error) as exc:
+            result['hyperliquid_research'] = {'status': 'FAILED', 'error_type': type(exc).__name__, 'live_eligible': 0}
+    requested = [key for key in ('hyperliquid_history','hyperliquid_account','hyperliquid_research') if key in result]
+    problems = [key for key in requested if result[key]['status'] not in
+                ('OBSERVED','ACCOUNT_OBSERVED_READ_ONLY','RESEARCH_OBSERVED')]
+    result['integration_health'] = {'status':'PARTIAL' if problems else ('OBSERVED' if requested else 'NOT_REQUESTED'),
+                                  'unavailable_or_stale':problems}
     return result
 
 def main():
@@ -76,13 +102,14 @@ def main():
     group.add_argument('--candle-observation',type=Path)
     ap.add_argument('--hyperliquid-state-dir',type=Path,default=Path('/var/lib/sniper/hyperliquid-data'))
     ap.add_argument('--account-state-dir',type=Path,default=Path('/var/lib/sniper/hyperliquid-account'))
+    ap.add_argument('--research-state-dir',type=Path,default=Path('/var/lib/sniper/hyperliquid-research'))
     args=ap.parse_args()
     try:
-        result=load_report(args.state_dir,args.candle_state_dir,args.candle_observation,args.hyperliquid_state_dir,args.account_state_dir)
+        result=load_report(args.state_dir,args.candle_state_dir,args.candle_observation,args.hyperliquid_state_dir,args.account_state_dir,args.research_state_dir)
     except (OSError,ValueError,KeyError,TypeError,sqlite3.Error) as exc:
         result={'status':'BLOCKED','reason':type(exc).__name__}
     print(json.dumps(result,indent=2,allow_nan=False))
-    return 2 if result['status'] in ('BLOCKED','PARTIAL') else 0
+    return 2 if result['status'] in ('BLOCKED','PARTIAL') or result.get('integration_health',{}).get('status')=='PARTIAL' else 0
 
 if __name__=='__main__':
     raise SystemExit(main())

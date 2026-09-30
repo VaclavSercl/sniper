@@ -6,19 +6,21 @@ The owner selected **Hyperliquid, spot and perpetuals**, and wants automatic
 selection after historical AND independent forward paper evidence. Canonical
 structured rules are in `lifecycle_policy.json`; `lifecycle_overview.py` validates
 them and the read-only registry exporter reports coverage and stage counts.
-This is policy/reporting implementation, **not a promotion executor**. Existing
+This includes bounded offline screens and reporting, **not a promotion executor**. Existing
 live refusal stays in force until the required execution and risk integrations
 exist. A JSON field, timer success or model/provider answer cannot enable live.
 
-Current capacity: one predetermined T1 parameter variant/day, at most 18 in one
-family, on Binance research data. No independent new-strategy generator is
-implemented. Hydra has a separate finite 12-variant queue; its execution and
-data prerequisites are different. Neither variant count means new families.
-The **proposed** next capacity is 2 distinct economic hypotheses/day, at most
-6 variants each and 12 training tests/day; compare weekly and admit at most
-2 qualified candidates/week to paper. These are capped planning targets, not
-installed schedules or promises to generate duplicates just to meet a quota.
-Model and compute budgets must be explicit before enabling paid generation.
+T1 retains one predetermined parameter variant/day, at most 18 in one family,
+on Binance research data. Hydra has a separate finite 12-variant queue with
+different data prerequisites. These variants are not new economic families.
+The new bounded offline implementation registers up to two unseen economic
+blueprints/day, six market variants each and twelve primary test bundles/day.
+It has a finite library of six blueprints and records all blocked/rejected
+results. Installed schedules and actual counts require runtime observations;
+the policy status alone cannot prove them. Weekly cohort comparison is implemented.
+At most two qualified paper admissions/week remains a target; the qualification/
+admission executor is not supplied by exploratory screens. Paid generation needs
+an explicit provider budget. Exhaustion must be reported without duplicate filling.
 
 Stages and required evidence:
 
@@ -65,7 +67,8 @@ screens and qualified stages separately. Query both state roots; omitted,
 missing, inaccessible or corrupt data gives UNKNOWN/PARTIAL and nonzero CLI
 status, not zero activity or a healthy complete report. Independent readable
 sources remain visible when another fails. The exporter does not query legacy
-paper workers, systemd health or exchange positions: audit those separately.
+paper workers or systemd health. It reads a fresh minimal actual-account
+observation rather than using an agent wallet's balance or signing credentials.
 Its zero qualified counts describe missing qualification adapters, not a proof
 that no old paper process or direct trading path exists on the host.
 
@@ -78,11 +81,11 @@ an executed pause. Repair inside Sniper with a fresh epoch before resuming.
 
 Observed on Beroun 2026-09-30: a legacy Grid paper tick runs every five minutes
 outside this qualification pipeline. T13/T14 legacy state is stale, T15 paused.
-The old six-hour registry service omits `--candle-state-dir` and runs as wwwenda,
-which cannot read the beroun-owned candle state. Updating source makes that
-coverage gap explicit; a separate least-privilege reporting bridge is still
-required for a complete unattended cross-owner report. Do not broaden private
-state permissions or run an unrestricted root reporting service to hide the gap.
+The old six-hour registry service originally omitted `--candle-state-dir` and
+ran as wwwenda, which could not read beroun-owned candle state. A verified minimal
+observation bridge now supplies that input; the application service and private
+Hydra state have also been consolidated under beroun. Administrative, database
+and independent guardian roles remain separate. Private state is not public.
 
 Hyperliquid API references (checked 2026-09-30):
 - [Instrument identity and account queries](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint)
@@ -288,3 +291,42 @@ The installer pins the private account-identity evidence, copies only public
 addresses/role/provenance and enables its thirty-minute timer after a real
 account observation. Unknown prior configuration is never overwritten. Stale,
 revoked/reassigned agents, malformed numbers and network errors remain visible.
+
+## Bounded economic research cycle
+`research_cycle.py` registers at most two unseen economic blueprints per real UTC
+day and six market variants for each. The current finite offline grammar has six
+blueprints; it does not invent an unlimited stream or call paid models. An
+exhausted library reports `NEED_NEW_BLUEPRINTS_OR_PROVIDER_BUDGET`. Market and
+parameter variants are counted separately from economic hypotheses. The daily
+03:15 UTC timer evaluates at most twelve primary variant bundles; Sunday 03:45
+UTC records a comparison within identical market/product/window/cost/risk cohorts.
+Timer installation and observed throughput are reported separately.
+
+The entire finite grammar and 72 planned market/cost trials are preregistered,
+along with fixed parameters, 120-day closed hourly input, chronological 60/20/20
+partitions, sample thresholds and failure rules. A private immutable compressed
+epoch retains exact metadata, normalized inputs, original response references,
+actual fee observation and source fingerprints. Original response reconstruction
+must match every input row before freezing. Unknown or modified state is refused.
+Training failure stops before validation/final holdout. Holdout consumption is
+durable before evaluation; crashes cannot provide another look at unseen data.
+Completed metrics can be reproduced read-only with the original source revision.
+
+Spot screens assume long-only next-open fills, 25% of a hypothetical 1000-unit
+research balance, conservative fees/slippage and doubled-cost stress. Signals
+use prior closed bars. Full hourly closing equity and flat days, terminal costs,
+same-cohort cash/buy-hold/simple baselines, minimum trades and planned-trial
+Bonferroni sign-test checks are retained. This sign test assumes independent
+daily signs; serial dependence and execution calibration remain unresolved.
+Hourly closes are not tick-level or intrahour drawdown evidence. The fee model
+and market multiplier are explicit research assumptions, not account allocations.
+Perpetual variants remain blocked for absent mark/index/basis, margin/liquidation
+and leverage evidence even though public historical funding rates are available.
+
+An exploratory positive result remains unqualified. Historical qualification,
+forward paper, calibrated fills/recovery and funded promotion are separate gates;
+the thirty actual calendar-day requirement cannot be supplied by these tests.
+Both scheduler services use the common beroun account and make no network or
+exchange writes. The installer starts a real cycle, reproduces every completed
+spot screen and records a comparison before enabling its two new timers. Failed
+installation preserves all state and consumed holdouts for explicit recovery.

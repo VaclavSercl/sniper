@@ -1,0 +1,10 @@
+[Unit]
+Description=Sniper Sunday comparison of the same frozen research cohorts
+
+[Timer]
+OnCalendar=Sun *-*-* 03:45:00 UTC
+Persistent=true
+Unit=sniper-research-compare.service
+
+[Install]
+WantedBy=timers.target

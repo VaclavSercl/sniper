@@ -30,17 +30,21 @@ def load_policy(path=POLICY):
     if (p['schema'] != 1 or type(p['schema']) is not int
             or p['primary_live_venue'] != 'hyperliquid'
             or p['products'] != ['spot', 'perpetual']
-            or p['implementation_boundary'] != 'POLICY_AND_READ_ONLY_REPORTING_ONLY_NO_PROMOTION_EXECUTOR'
+            or p['implementation_boundary'] != 'BOUNDED_OFFLINE_RESEARCH_AND_REPORTING_NO_PROMOTION_EXECUTOR'
             or p['live']['implementation'] != 'UNAVAILABLE'):
         raise ValueError('Unsupported lifecycle policy')
     capacity = p['capacity_proposal']
-    if capacity['status'] != 'PROPOSED_NOT_SCHEDULED':
+    if capacity['status'] != 'BOUNDED_OFFLINE_IMPLEMENTED_RUNTIME_REQUIRES_OBSERVATION':
         raise ValueError('Policy target is not an installed scheduler')
     for key in ('new_hypotheses_per_day', 'max_variants_per_hypothesis',
                 'max_training_tests_per_day', 'comparison_interval_days',
                 'max_paper_admissions_per_week'):
         if type(capacity[key]) is not int or not 1 <= capacity[key] <= 1000:
             raise ValueError('Invalid capacity proposal')
+    limits={'new_hypotheses_per_day':2,'max_variants_per_hypothesis':6,
+            'max_training_tests_per_day':12,'comparison_interval_days':7,'max_paper_admissions_per_week':2}
+    if any(capacity[key]!=value for key,value in limits.items()):
+        raise ValueError('Capacity cannot exceed or misstate the implemented bounded protocol')
     paper = p['paper_evidence']
     if (type(paper['minimum_calendar_days']) is not int or paper['minimum_calendar_days'] < 30
             or paper['parameter_change_restarts_epoch'] is not True
@@ -120,7 +124,7 @@ def overview(sources, policy, policy_hash):
             'qualification_scope': 'REGISTERED_RESEARCH_ONLY_NOT_ALL_HOST_PROCESSES',
             'qualification_counts_basis': 'NO_IMPLEMENTED_QUALIFICATION_ADAPTERS',
             'legacy_paper_scope': 'NOT_QUERIED_REQUIRES_SEPARATE_HOST_AND_DB_AUDIT',
-            'implemented_capacity': {'new_strategy_generator': 'NOT_IMPLEMENTED',
+            'implemented_capacity': {'new_strategy_generator': 'BOUNDED_OFFLINE_CODE_AVAILABLE_RUNTIME_NOT_QUERIED',
                                      't1_variants_per_utc_day': 1, 't1_family_limit': 18,
                                      'scheduler_health': 'NOT_QUERIED'},
             'capacity_proposal': policy['capacity_proposal'],

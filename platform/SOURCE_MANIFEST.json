@@ -300,7 +300,7 @@
       "path": "platform/scripts/sync_strategy_registry.py",
       "source": "beroun@bdb3f444:scripts/sync_strategy_registry.py",
       "source_sha256": "efb886b2ab303ef6899c48b08b3117e9ca4a3ab453a01a8ad16ba0457375a67b",
-      "sha256": "493e829004abba2a33f500bc02178b97e2669d3201bdb1ca901a1919e41e98a1",
+      "sha256": "f8c5045a5b291fa080b40893f604c42438e64fc32fb12c40f7c5a06a526aebf6",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -899,7 +899,7 @@
     {
       "path": "platform/research/LIFECYCLE.md",
       "source": "Sniper lifecycle repair 2026-09-29",
-      "sha256": "99378c4ddd9eb4facf36e85a8ed24b0ed0073fda09eec863e0c273cd867c3ec9",
+      "sha256": "fd49fa7af19cc80f88e0e2392e0e3dfe4f517aedab771babfc5024a4d3757de9",
       "mode": "100644"
     },
     {
@@ -993,19 +993,19 @@
       "path": "platform/research/lifecycle_policy.json",
       "source": "sniper-native:owner-requested-lifecycle-rules-2026-09-30",
       "mode": "100644",
-      "sha256": "14caff444b55a07bd0101708f47fb69b55d3381b266afad9a83cdc4e6f435001"
+      "sha256": "123ec6f06e329715377793a577ad13d91cb7f01c71cb236a58cd5805c2c363e5"
     },
     {
       "path": "platform/research/lifecycle_overview.py",
       "source": "sniper-native:owner-requested-lifecycle-rules-2026-09-30",
       "mode": "100644",
-      "sha256": "e66d5954e6c781ce8c9707c16fb3d0905c5bbbd2f398d8acba4ab971ac4cdf7b"
+      "sha256": "176dcf50d455a93d61bbed603dd0839ba127766c04a886134f5784aaf2a776d2"
     },
     {
       "path": "platform/tests/unit/test_lifecycle_overview.py",
       "source": "sniper-native:owner-requested-lifecycle-rules-2026-09-30",
       "mode": "100644",
-      "sha256": "2c35e8edc4dd0cbf71a37161b0f6b3be1b1db71bd1161912fa0940dd64dd3e22"
+      "sha256": "9169389b7ff67721711252b96bb93bb957fd08e75d99c1e22e17891d03dad751"
     },
     {
       "path": "platform/research/operational_observation.py",
@@ -1066,6 +1066,30 @@
       "source": "owner-authorized read-only Hyperliquid account connection",
       "mode": "100644",
       "sha256": "a965b18b184b5547d5d7792bc176edbd891ca23ce17f3a97886bc6b4b794eb8d"
+    },
+    {
+      "path": "platform/research/research_protocol.py",
+      "source": "owner-authorized bounded economic research cycle",
+      "mode": "100644",
+      "sha256": "221e65a8c21626407356b8512bac61a4824eb82bde52ef23f641552f93882590"
+    },
+    {
+      "path": "platform/research/research_cycle.py",
+      "source": "owner-authorized bounded economic research cycle",
+      "mode": "100644",
+      "sha256": "304e75adff6fe9f88531b8535562c857b5ad9e7230dfae50f83b75e194dcb1e1"
+    },
+    {
+      "path": "platform/tests/unit/test_research_protocol.py",
+      "source": "owner-authorized bounded economic research cycle",
+      "mode": "100644",
+      "sha256": "0ad938a9a3aea43914564217a07ed5fe73e1240dded7c1f79daa03190a7000ed"
+    },
+    {
+      "path": "platform/tests/unit/test_research_cycle.py",
+      "source": "owner-authorized bounded economic research cycle",
+      "mode": "100644",
+      "sha256": "0a7a6c7763b249b0f28ca88abe20b32e8bbe00571687b12a13bad41bfa1e7577"
     }
   ]
 }

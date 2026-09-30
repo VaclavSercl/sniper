@@ -134,5 +134,31 @@ class OverviewTests(unittest.TestCase):
              patch('builtins.print'):
             self.assertEqual(exporter.main(), 2)
 
+    def test_new_economic_blueprints_and_variants_counted_without_qualification(self):
+        h=self.root/'h';c=self.root/'c'
+        with life.database(h):pass
+        self.candle(c,[self.run_record()])
+        data={'status':'RESEARCH_OBSERVED','blueprints_registered':2,'registered_market_variants':12,
+            'completed_screens':4,'blocked_product_models':8,'generator':'FINITE_OFFLINE_BLUEPRINT_LIBRARY_NO_PAID_MODEL',
+            'new_blueprints_per_utc_day':2,'max_variants_per_blueprint':6,'max_primary_test_bundles_per_utc_day':12,
+            'blueprints_remaining':4,'exhaustion_policy':'NEED_NEW_BLUEPRINTS_OR_PROVIDER_BUDGET'}
+        with patch('research_cycle.status',return_value=data):
+            result=exporter.load_report(h,c,research_state_dir=self.root/'r')
+        counts=result['lifecycle']['counts']
+        self.assertEqual(counts['registered_families_with_runs'],3)
+        self.assertEqual(counts['new_economic_blueprints_registered'],2)
+        self.assertEqual(counts['new_market_variants'],12);self.assertEqual(counts['live_eligible'],0)
+        self.assertEqual(result['integration_health']['status'],'OBSERVED')
+
+    def test_broken_new_registry_keeps_older_observations_and_marks_partial(self):
+        h=self.root/'h';c=self.root/'c'
+        with life.database(h):pass
+        self.candle(c,[self.run_record()])
+        with patch('research_cycle.status',side_effect=ValueError('private runtime detail')):
+            result=exporter.load_report(h,c,research_state_dir=self.root/'r')
+        self.assertEqual(result['lifecycle']['counts']['candle_variants_registered'],1)
+        self.assertEqual(result['integration_health']['status'],'PARTIAL')
+        self.assertNotIn('private runtime detail',json.dumps(result))
+
 
 if __name__ == '__main__': unittest.main()

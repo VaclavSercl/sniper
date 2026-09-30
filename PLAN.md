@@ -1,5 +1,44 @@
 # Backtest integrity repair
 
+## Audit step 3 - bounded research cycle, preregistration and causal screens
+Baseline b40b157a48ed18c0d6376dd97c71f260e9f9c4e1, clean owned worktree. Actual
+read-only account timer runs as beroun, no key copied and no live orders. Data
+archive and account observation are installed and verified. Preserve both.
+Implement a finite offline grammar of six economic blueprints, separately from
+six market variants per blueprint. Register at most two unseen blueprints and
+twelve variant test bundles per real UTC day. No paid model/provider invocation,
+arbitrary generated-code execution, duplicate quota filling or unlimited-novelty
+claim. Once exhausted, expose NEED_NEW_BLUEPRINTS_OR_PROVIDER_BUDGET. A submit/
+extension capability needs separate reviewed source, not execution of prompt text.
+Preregister the whole grammar, 72 planned market/cost trials, fixed parameters,
+120-day data epoch, 60/20/20 chronological partitions, sample/DD/failure rules
+and research-only hypothetical capital/costs before testing any candidate.
+Use a private append-only registry and frozen hourly input with provenance from
+the exact venue archive. Reject gaps, future/unclosed bars, unknown schema,
+changed code/policy/data, interrupted attempts and same-path input replacement.
+Each final holdout is consumed once, including failed/interrupted evaluations;
+never automatically retune or rerun it. Training failures stop before holdout.
+All outcomes and missing evidence remain visible, not just profitable winners.
+Causal signals read only prior closed bars and fill at the following observed
+open under explicit conservative uncalibrated assumptions. Spot inventory cannot
+borrow/short; fees/slippage, terminal close, equity and flat days are included.
+Compare cash, buy/hold and a simple baseline on identical market/window/cost/
+allocation; use sample/DD/stress checks and Bonferroni planned-trial correction.
+Perpetual screens remain BLOCKED until the required mark/index/basis and margin/
+liquidation model exists; public funding rates alone cannot substitute for them.
+Positive exploratory metrics do not grant historical qualification or funded
+promotion. Forward shadow diagnostics will have a separate pinned epoch and
+actual causal quote/funding/event accounting; the 30 real-day paper rule and fill
+calibration/recovery gates remain mandatory. No fabricated accelerated evidence.
+Files: research protocol/core, durable cycle registry and tests, lifecycle status
+integration/policy wording, guarded absent-unit daily/weekly schedule installer,
+source manifest/documentation/PLAN. Each dependency gets a full Linux gate and
+actual first execution before its timer is enabled. Preserve older negative T1,
+legacy states, WIP, production SQL and all immutable releases. Recovery preserves
+interrupted evidence, consumed holdouts and private state; no automatic adoption,
+reset, retry of final holdout, cleanup or live activation. Final standalone source
+attestations, exact nonforce SHA push and root-owned source deployment follow.
+
 ## Audit step 4 prerequisite - isolated SDK and read-only account connection
 Baseline eee3299db1de1c43d54003198fed4ba7de104813. Step 2 exact Linux gate
 passed 241 tests; immutable source published and deployed. First actual capture
