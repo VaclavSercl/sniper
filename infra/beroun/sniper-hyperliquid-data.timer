@@ -1,0 +1,11 @@
+[Unit]
+Description=Collect closed Hyperliquid research bars and funding every five minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitInactiveSec=5min
+AccuracySec=1s
+Unit=sniper-hyperliquid-data.service
+
+[Install]
+WantedBy=timers.target

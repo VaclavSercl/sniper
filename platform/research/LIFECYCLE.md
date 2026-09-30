@@ -1,4 +1,4 @@
-# Evidence-driven research â€” implementation boundary
+# Evidence-driven research Ă˘â‚¬â€ť implementation boundary
 
 ## Current owner scope and lifecycle policy (2026-09-30)
 
@@ -114,8 +114,8 @@ and final inventory is liquidated with costs. Candle ordering and slippage are
 unverified, so results never qualify paper or live operation.
 
 One fixed baseline (240-minute breakout, median range filter, 2x trailing range)
-is registered BEFORE fetching/evaluating its data. Training is Aug 26â€“Sep 23
-(first two days are warmup); its single historical holdout is Sep 23â€“Sep 30 UTC.
+is registered BEFORE fetching/evaluating its data. Training is Aug 26Ă˘â‚¬â€śSep 23
+(first two days are warmup); its single historical holdout is Sep 23Ă˘â‚¬â€śSep 30 UTC.
 The other 17 predetermined variants receive only the frozen training window,
 one per UTC day. This is a finite exploratory family, not 18 independent
 strategies or an endless AI search. Exhaustion is explicit. Further families,
@@ -196,7 +196,7 @@ research result remains visible and is not turned into a successful strategy.
 ## What this does not certify
 
 The current Hydra model is uncalibrated and always carries an execution-model
-qualification blocker. T12â€“T16, P019 and other Rust bots have no verified common
+qualification blocker. T12Ă˘â‚¬â€śT16, P019 and other Rust bots have no verified common
 promotion adapter. `RESEARCH_PASS` is never permission to go live. There is no
 paper qualification or production-order adapter in this research queue; the
 zero qualified counts are deliberate capability limits, not measured test passes.
@@ -253,3 +253,22 @@ Daily reporting uses the actual read-only registry/audit and starts no paid mode
 or external messaging. Timer states are preserved; disabled T15 is not started.
 A failed migration keeps exact private/configuration backups and pauses only its
 scoped timers for explicit recovery rather than adopting or deleting unknown work.
+
+## Public Hyperliquid research archive
+`hyperliquid_history.py` stores separate 1m/1h series for dynamically resolved
+BTC/ETH/SOL/HYPE perps and UBTC/HYPE spot against USDC. The private archive is
+owned by the common beroun worker account. Raw responses, metadata versions,
+request bounds, full funding event IDs and closed numeric rows are retained.
+Rows are append-only; conflicts fail without rewriting history. Instrument/token
+identity changes require a distinct data epoch. Read-only reproduction checks
+retained response hashes and every normalized row against the archive.
+The first capture requests 4900 minute bars and 120 days of hourly bars. Missing
+rows remain explicit; the 5000-bar API bound cannot qualify annual-minute T1.
+Funding history is a public rate series, not account settlement or realized PnL.
+Request-weight reservations survive restarts (500/minute for this client); this
+is not an IP-wide guarantee for unrelated clients. HTTP failures/rate limits
+remain failures. Response/pages/storage are bounded; retention needs review.
+The absent-unit installer preserves failed capture evidence and enables the
+five-minute timer only after actual six-market/two-interval capture and replay.
+Reporting publishes only coverage/counts, keeping raw archive inputs private.
+None of these data checks constitutes historical/paper/live qualification.

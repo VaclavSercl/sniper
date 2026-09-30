@@ -1,6 +1,39 @@
 # Backtest integrity repair
 
-## Owner-requested service-account consolidation — design before implementation
+## Audit step 2 — exact-venue research data (implementation scope)
+Baseline 80d984d985e3e745dfbb8757f411c98c67a54abc; five application workers
+actually consolidated under beroun, private registry bytes unchanged, both-source
+report OBSERVED, 231 Linux tests passed, old WIP preserved. Guardian independent.
+Public Hyperliquid metadata verified: BTC0 ETH1 SOL5 HYPE159; spot HYPE@107,
+UBTC@142 quoted in USDC. Never freeze these numbers as order defaults. Funding
+history timestamps contain real millisecond offsets (not exact hour boundaries).
+Official candle endpoint offers only latest 5000 bars. Collect distinct 1m and
+1h datasets in a new private append-only SQLite store, never mix hourly bars into
+production minute tables or silently replace Binance/T1 data. Bootstrap 4900
+closed minute bars and 120 days of closed hourly bars; subsequent bounded capture
+fills missing available ranges. T1's 365-day minute requirement remains unchanged.
+Hourly hypotheses will have their own preregistered history/sample rules.
+Dynamic metadata must uniquely resolve exact base/quote/product/token identities.
+Store immutable raw response provenance, full event timestamps, numeric validation,
+conflict guards and explicit gaps. Public funding rates are venue events, not
+account settlement or PnL. Persist local request-weight reservations (500/minute),
+bound pages/output/storage, halt on rate-limit/conflict, report partial failures.
+No credentials, orders, installs, existing-row rewrites or production schema changes.
+Files: PLAN.md; platform/research/hyperliquid_history.py + focused tests; sanitized
+observation/report history extension; infra/beroun data service/timer/guarded
+installer + regression tests; SOURCE_MANIFEST.json and LIFECYCLE.md. Existing Python
+stdlib and systemd only. Full Linux gate, actual first API capture/replay/append-only
+repeat, source checkpoint/push/deploy, then install timer after actual observations.
+Preserve old releases, source/WIP, all public/private history; no broad cleanup.
+SDK prerequisite discovery: server Python3.14.4, venv but no ensurepip on default
+PATH. Existing Hermes-managed uv and standalone Python/pip found; not yet used.
+Existing Hyperliquid-specific secret stays on server; no valid signing library
+available yet, so account identity has not been derived/verified. Necessary SDK
+setup will be isolated and pinned under the already approved step 4 scope; no
+Hermes/global dependency upgrade and no funded orders before evidence/mandate.
+
+
+## Owner-requested service-account consolidation â€” design before implementation
 Baseline 11bff2768920d94286f17afd8a5fa6dd54cd1ae4; observation bridge actually
 installed, both-source report OBSERVED, timer active at 18:40 UTC. Primary app
 identity selected: existing beroun (UID/GID1001), with existing nonsuperuser
@@ -29,7 +62,7 @@ stopped for recovery. Never touches home directories, broad account permissions,
 server checkout/WIP, source releases or independent safety service ownership.
 Full Linux application/PG gate and systemd verification, then exact checkpoint,
 push/deployment and separately verified account migration. Later audit steps
-2–4 remain pending; real account master identity/risk mandate still unresolved.
+2â€“4 remain pending; real account master identity/risk mandate still unresolved.
 
 
 Step 1 implementation: public whitelisted observation producer, closed/source-
@@ -40,9 +73,9 @@ PostgreSQL audit and Linux symlink/installation tests; Windows focused checks
 passed with four explicitly unavailable symlink checks. Unit verification found
 an Environment quoting warning; corrected before final gate. No live orders.
 Final exact-candidate verification, checkpoint, publication and actual deployment
-follow. Steps 2–4 remain separate dependencies, not completion claims.
+follow. Steps 2â€“4 remain separate dependencies, not completion claims.
 
-## Owner-authorized implementation of audit steps 1–4 — 2026-09-30
+## Owner-authorized implementation of audit steps 1â€“4 â€” 2026-09-30
 Goal: implement the complete proposed lifecycle progressively, verifying each
 dependency before proceeding. Owner explicitly said to perform all proposed
 implementation/repair steps. Baseline 342b77c95a81a2f07271aa4b1455f8ca8a0c722c,
@@ -95,7 +128,7 @@ Authorization includes necessary scoped service/config/deployment changes,
 local checkpoints, existing Sniper repair branch publication and PR #101 updates;
 no merge, unrelated infrastructure upgrade, broad deletion or kernel changes.
 
-## Hyperliquid lifecycle rules and truthful reporting — 2026-09-30
+## Hyperliquid lifecycle rules and truthful reporting â€” 2026-09-30
 Goal: owner requests an audited strategy-stage report, explicit spot AND
 perpetual scope on Hyperliquid, and rules for recurring proposals, historical
 tests, independent paper trading, comparison and eventual automated deployment.
@@ -154,7 +187,7 @@ state. Do not pause market monitor/collection or unrelated enhanced reporting.
 Record before/after and exact resume IDs. Legacy Grid has source mixing,
 intrabar-order and fee-ledger concerns; its activity is not qualification.
 
-## Operational candle research — owner continuation 2026-09-30
+## Operational candle research â€” owner continuation 2026-09-30
 Goal: complete an authentic, repeatable daily proposal/test/result cycle using
 the existing T1 BTCUSDT spot hypothesis and the audited Binance candles.
 Baseline 9d93e7684beb4c79611d67dbb812ea40290ed10e; clean owned worktree
@@ -219,7 +252,7 @@ runtime directories writable. Hermes exceeded its bounded review time. Agy's
 first CLI call rejected prompt transport before reviewing; corrected using its
 observed attached --print argument. Actual final review evidence is external.
 
-## Closed-minute ingestion correction — 2026-09-30
+## Closed-minute ingestion correction â€” 2026-09-30
 Goal: prevent the partial candle defect found during the authorized Binance
 history comparison from recurring. Baseline 49e03359cc2c9338d73f8b32b35d6e4a79cc11c4;
 clean owned repair/history-recovery worktree. Active Beroun minute service uses
@@ -242,7 +275,7 @@ Recovery: local Git checkpoint and retained isolated gate evidence. No source
 cleanup. Publication of this new checkpoint needs its exact remote/branch scope;
 no deployment or database write is inferred from passing these tests.
 
-## Bounded history recovery — owner request 2026-09-30
+## Bounded history recovery â€” owner request 2026-09-30
 Goal: stage authentic missing candle history and prepare reviewed append-only
 imports; establish a concrete reversible GDS boot-mitigation operation.
 Baseline a9aaba4f47e39e6a762bd629074e80adb12692fa, clean reused worktree,
@@ -289,7 +322,7 @@ are pending. T15, Hydra and the original OMNI specifications remain unqualified.
 Final staged candidate gets the complete Linux gate and content checks again;
 the exact checkpoint, results and publication status are recorded externally.
 
-## Reconcile Hermes production changes — owner request 2026-09-29
+## Reconcile Hermes production changes â€” owner request 2026-09-29
 Goal: (1) preserve/reconcile production-only funding repairs into canonical Git
 and pass the full application gate; (2) restore truthful CPU checks and review
 the broad polkit grant; (3) audit current data and repair misleading monitors.
@@ -362,7 +395,7 @@ Current evidence and acceptance refinement:
 - Independent reviews and accepted/rejected findings: infra/beroun/RECONCILIATION.md.
 - No production change, publication, dependency installation or live order occurred.
 
-## Strategy lifecycle repair — owner request 2026-09-29
+## Strategy lifecycle repair â€” owner request 2026-09-29
 Goal: repair proposal scheduling, reproducible evaluation, truthful status and
 promotion checks under the single Sniper repository. Baseline f360cd03900e6bbe93a3f02c6813f7ae6ebc3408;
 clean local branch repair/strategy-lifecycle, existing deployed release unchanged.
