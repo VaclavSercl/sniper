@@ -35,6 +35,7 @@ if str(RESEARCH_DIR) not in sys.path:
 from binance_connector import BinanceReadOnly
 from bitfinex_connector import BitfinexReadOnly
 from hyperliquid_connector import HyperliquidReadOnly
+from db_client import psql
 
 BINANCE_PAIRS = [
     "BTCUSDT", "BTCUSDC", "BTCEUR",
@@ -55,15 +56,6 @@ HYPERLIQUID_COINS = ["BTC", "ETH", "SOL", "HYPE"]
 def closed_minute_cutoff_ms() -> int:
     """Start of the current minute; capture before requesting exchange data."""
     return int(time.time() // 60) * 60_000
-
-
-def psql(sql: str, check: bool = True) -> str:
-    cmd = ["sudo", "-u", "beroun", "psql", "-d", "beroun", "-t", "-A", "-c", sql]
-    res = subprocess.run(cmd, capture_output=True, text=True)
-    if check and res.returncode != 0:
-        logger.error("PSQL execution failure: %s | Query: %s", res.stderr.strip(), sql)
-        raise RuntimeError(f"PSQL error: {res.stderr.strip()}")
-    return res.stdout.strip()
 
 
 class PerfectMarketIngest:

@@ -1,5 +1,37 @@
 # Backtest integrity repair
 
+## Owner-requested service-account consolidation — design before implementation
+Baseline 11bff2768920d94286f17afd8a5fa6dd54cd1ae4; observation bridge actually
+installed, both-source report OBSERVED, timer active at 18:40 UTC. Primary app
+identity selected: existing beroun (UID/GID1001), with existing nonsuperuser
+PostgreSQL peer role and table grants. No account/password creation or renaming.
+Consolidate five remaining application workers (perfect-ingest, retention,
+strategy-registry, rich-report, disabled paper-T15) and exact owned Hydra state.
+Remove unnecessary sudo from ingest/retention DB helpers; errors are sanitized.
+The rich report will use the verified read-only registry report without starting
+paid agents or sending external messages. Preserve its daily schedule. No
+activation of disabled T15. Keep SSH/interactive Hermes administration wwwenda,
+PostgreSQL postgres, privileged backup maintenance and independent safety
+watchdog/kernel beroun-kernel outside the trading worker identity. A shared
+worker UID is not a security boundary; the separate guardian prevents worker
+signals/replacement of its socket and avoids weakening established safeguards.
+
+Files: this plan; infra/beroun/install_application_identity.py, fixed reviewed
+96-sniper-application-user.conf and rich-report override; platform/scripts/
+db_client.py, perfect_market_ingest.py, kline_retention_partition_manager.py;
+focused DB/installer tests, SOURCE_MANIFEST.json and LIFECYCLE.md. Installer
+previews/pins exact unit/override manifests and private-state hashes/modes,
+backs up only managed state/config in protected recovery, stops only affected
+timers/writers, chowns individual verified paths (no recursive shell chown),
+checks read-only peer-role access and first actual complete report, then restores
+previous timer states. Failure preserves all evidence and leaves affected timers
+stopped for recovery. Never touches home directories, broad account permissions,
+server checkout/WIP, source releases or independent safety service ownership.
+Full Linux application/PG gate and systemd verification, then exact checkpoint,
+push/deployment and separately verified account migration. Later audit steps
+2–4 remain pending; real account master identity/risk mandate still unresolved.
+
+
 Step 1 implementation: public whitelisted observation producer, closed/source-
 isolated read-only PostgreSQL audit, fresh-digest reporter integration, guarded
 installer with prior configuration hashes and durable failure state. Preliminary

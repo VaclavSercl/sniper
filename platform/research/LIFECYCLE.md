@@ -1,4 +1,4 @@
-# Evidence-driven research — implementation boundary
+# Evidence-driven research â€” implementation boundary
 
 ## Current owner scope and lifecycle policy (2026-09-30)
 
@@ -114,8 +114,8 @@ and final inventory is liquidated with costs. Candle ordering and slippage are
 unverified, so results never qualify paper or live operation.
 
 One fixed baseline (240-minute breakout, median range filter, 2x trailing range)
-is registered BEFORE fetching/evaluating its data. Training is Aug 26–Sep 23
-(first two days are warmup); its single historical holdout is Sep 23–Sep 30 UTC.
+is registered BEFORE fetching/evaluating its data. Training is Aug 26â€“Sep 23
+(first two days are warmup); its single historical holdout is Sep 23â€“Sep 30 UTC.
 The other 17 predetermined variants receive only the frozen training window,
 one per UTC day. This is a finite exploratory family, not 18 independent
 strategies or an endless AI search. Exhaustion is explicit. Further families,
@@ -196,7 +196,7 @@ research result remains visible and is not turned into a successful strategy.
 ## What this does not certify
 
 The current Hydra model is uncalibrated and always carries an execution-model
-qualification blocker. T12–T16, P019 and other Rust bots have no verified common
+qualification blocker. T12â€“T16, P019 and other Rust bots have no verified common
 promotion adapter. `RESEARCH_PASS` is never permission to go live. There is no
 paper qualification or production-order adapter in this research queue; the
 zero qualified counts are deliberate capability limits, not measured test passes.
@@ -237,3 +237,19 @@ active release, preserve prior files/state and retain operation intent/outcome.
 The first real observation and report must succeed before enabling the timer.
 Failed installation preserves evidence and disables its new timer for explicit
 reconciliation. Source deployment and unit installation are distinct operations.
+
+## One application worker identity
+The worker identity is the existing nonsuperuser Linux/PostgreSQL `beroun` role.
+The reviewed migration consolidates ingest, retention, registry, daily reporting
+and the disabled T15 definition. Exact private Hydra bytes are backed up and
+transferred with mode 0700/0600; only pinned files are changed. Home directories,
+server WIP and root-owned prior unit files remain intact. Shared worker identity
+is a convenience boundary, not protection between untrusted trading strategies.
+The independent guardian/watchdog keeps `beroun-kernel`; administrative SSH and
+Hermes keep `wwwenda`, PostgreSQL keeps `postgres`, privileged backup maintenance
+keeps its required system identity. These services cannot submit trading orders.
+DB helpers use the caller's peer role without sudo, prompt or silent failure.
+Daily reporting uses the actual read-only registry/audit and starts no paid model
+or external messaging. Timer states are preserved; disabled T15 is not started.
+A failed migration keeps exact private/configuration backups and pauses only its
+scoped timers for explicit recovery rather than adopting or deleting unknown work.

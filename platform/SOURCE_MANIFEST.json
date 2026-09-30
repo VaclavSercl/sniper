@@ -244,7 +244,7 @@
       "path": "platform/scripts/kline_retention_partition_manager.py",
       "source": "beroun@bdb3f444:scripts/kline_retention_partition_manager.py",
       "source_sha256": "9ad1872ccae5b7fac07890f2257144b047c1d2419f2b25b5aab2647a2f27de6e",
-      "sha256": "9ad1872ccae5b7fac07890f2257144b047c1d2419f2b25b5aab2647a2f27de6e",
+      "sha256": "eb081b8a67a0721a0b431ad3705435a5f1f3456552063659dee68995d0e91847",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -268,7 +268,7 @@
       "path": "platform/scripts/perfect_market_ingest.py",
       "source": "beroun@bdb3f444:scripts/perfect_market_ingest.py",
       "source_sha256": "9f3da3328d02c1d747a1f7ffce83d20283b397ca3924dacb72d5a9c07e469bfc",
-      "sha256": "548c5a90318878e9321f6df6c5a5bc77ab5cfb51169b11f6c514cc00beb5ad95",
+      "sha256": "f9a801d258eb3da14466ed107bb4b05c10fd765dda8cb79d5a326d04139de98a",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -899,7 +899,7 @@
     {
       "path": "platform/research/LIFECYCLE.md",
       "source": "Sniper lifecycle repair 2026-09-29",
-      "sha256": "57ad68edcb2df8a04f76839ba8244b4b2964556035b6e16d4ed9e8dd806bb2d2",
+      "sha256": "8640397c0e38683d67f03212bf078ccabf00586c12201eb714f1b97329383554",
       "mode": "100644"
     },
     {
@@ -1030,6 +1030,18 @@
       "source": "owner-authorized audit step 1 repair",
       "mode": "100644",
       "sha256": "3f625d5d48f074c8f3f0350e837a079009666fd2d10c963e4cd04e3176721835"
+    },
+    {
+      "path": "platform/scripts/db_client.py",
+      "source": "owner-requested application identity consolidation",
+      "mode": "100644",
+      "sha256": "fe05b0b3222780a9ebc0b4fe91a0df151b9d2f2449de97cb4ef95e7f0e1de21f"
+    },
+    {
+      "path": "platform/tests/unit/test_application_db_client.py",
+      "source": "owner-requested application identity consolidation",
+      "mode": "100644",
+      "sha256": "59316cde6cefc49093ae17527cd02d454cef84c45ee8dd1406a78c4268a1da8e"
     }
   ]
 }
