@@ -330,3 +330,9 @@ Both scheduler services use the common beroun account and make no network or
 exchange writes. The installer starts a real cycle, reproduces every completed
 spot screen and records a comparison before enabling its two new timers. Failed
 installation preserves all state and consumed holdouts for explicit recovery.
+Recovery can only reuse exact known unit files from a failed install while the
+research state is still absent and both timers are inactive. It pins the active
+new release, rejects overrides/ownership/hash changes, records a linked repair
+intent and carries a cumulative three-repair budget. Existing research epochs
+are never adopted by this installation recovery path. The request limiter waits
+until the full weighted deficit expires, preserving its 500/minute ceiling.

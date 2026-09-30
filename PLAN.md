@@ -1,5 +1,30 @@
 # Backtest integrity repair
 
+## Evidence-driven repair 1 - weighted request expiry and interrupted installation
+Baseline ca21c03923d7e06b4ea60e1259f469097ed3bd8d, 266 Linux tests passed,
+source published/deployed. First actual research installation failed before
+research execution because data capture's reservation raised RuntimeError.
+The four new research units are preserved and both research timers are disabled;
+do not retry the absent-target installer or adopt any research state blindly.
+Actual request log: metadata weights 20+20 and four candles of 104 fill 456 of
+500. The next 104 needs 60 weight released; expiring one small oldest request
+per retry exhausts three attempts before a sufficient reservation is considered.
+Compute the earliest weighted expiry that releases the whole deficit, then
+recheck atomically. Preserve the 500/minute ceiling, durable reservations and
+bounded attempts; add a realistic mixed-weight regression and explicit failure
+category. Pause only the new data timer during this repair, preserving its
+enabled state/config and all source/rows/failed-run evidence. Resume it after a
+new actual complete capture and replay, not from a test-only claim.
+Add a reviewed recovery path for the failed research installation: exact prior
+intent/failure, all four unit hashes/ownership, active verified new release,
+both timers inactive and research state still absent are mandatory. Never
+overwrite the old failure or adopt an interrupted/frozen research epoch. Record
+a linked recovery operation, execute/reproduce a real first cycle and compare,
+then enable only those two known timers. Failure preserves evidence and pauses
+them again. This is the first repair cycle for that failed production gate;
+further attempts retain its cumulative three-cycle limit. Full exact Linux gate,
+source checkpoint/push/deploy and actual recovery checks remain required.
+
 ## Audit step 3 - bounded research cycle, preregistration and causal screens
 Baseline b40b157a48ed18c0d6376dd97c71f260e9f9c4e1, clean owned worktree. Actual
 read-only account timer runs as beroun, no key copied and no live orders. Data

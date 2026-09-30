@@ -30,6 +30,10 @@ PERPS=('BTC','ETH','SOL','HYPE')
 SPOTS=('UBTC','HYPE')
 
 
+class BudgetUnavailable(RuntimeError):
+    """A bounded reservation could not be obtained; never an HTTP success."""
+
+
 def encode(value): return json.dumps(value,sort_keys=True,separators=(',',':'),allow_nan=False).encode()
 def digest(raw): return hashlib.sha256(raw).hexdigest()
 
@@ -185,7 +189,7 @@ def append(con,table,market,rows,artifact,interval=None):
 
 def reserve(con,weight,clock=lambda:int(time.time()*1000),sleep=time.sleep):
     integer(weight,1,MAX_WEIGHT)
-    for _ in range(3):
+    for attempt in range(3):
         now=clock()
         # Reserves survive a crash/restart. This covers this archive, not every
         # unrelated client on the server/IP. HTTP 429 remains an explicit failure.
@@ -195,8 +199,16 @@ def reserve(con,weight,clock=lambda:int(time.time()*1000),sleep=time.sleep):
             if rows and rows[-1][0]>now+1000:raise ValueError('Request clock moved backwards')
             if sum(r[1] for r in rows)+weight<=MAX_WEIGHT:
                 con.execute('INSERT INTO requests VALUES(?,?)',(now,weight));return
-        sleep(min(60,max(.001,(rows[0][0]+60001-now)/1000)))
-    raise RuntimeError('Request budget unavailable')
+            deficit=sum(r[1] for r in rows)+weight-MAX_WEIGHT
+            released=0;expiry=None
+            for stamp,reserved in rows:
+                released+=reserved
+                if released>=deficit:
+                    expiry=stamp+60001;break
+            if expiry is None:raise ValueError('Invalid persisted request budget')
+        if attempt==2:break
+        sleep(min(60,max(.001,(expiry-now)/1000)))
+    raise BudgetUnavailable('Request budget unavailable')
 
 
 def post(payload):
@@ -266,6 +278,7 @@ def capture(root,now,fetch=post,budget=reserve):
         except (OSError,ValueError,KeyError,TypeError,RuntimeError,sqlite3.Error) as exc:
             con.rollback();result['status']='BLOCKED'
             result['errors'].append({'error_type':type(exc).__name__,
+                'category':'REQUEST_BUDGET_UNAVAILABLE' if isinstance(exc,BudgetUnavailable) else 'CAPTURE_FAILURE',
                 'http_status':exc.code if isinstance(exc,urllib.error.HTTPError) else None})
         result['finished_ms']=int(time.time()*1000)
         con.execute('UPDATE runs SET status=?,record=? WHERE id=?',(result['status'],encode(result).decode(),run_id));con.commit()

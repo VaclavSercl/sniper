@@ -113,5 +113,25 @@ class HistoryTests(unittest.TestCase):
             with self.assertRaises(ValueError):h.reserve(con,20,clock=lambda:now[0]-5000,sleep=sleep)
             self.assertEqual(con.execute('SELECT count(*) FROM requests').fetchone()[0],2)
 
+    def test_mixed_weights_wait_for_whole_deficit_instead_of_three_small_expirations(self):
+        with closing(h.connect(self.root)) as con:
+            for stamp,weight in ((100000,20),(100001,20),(100002,104),(100003,104),(100004,104),(100005,104)):
+                h.reserve(con,weight,clock=lambda stamp=stamp:stamp,sleep=lambda _:self.fail('Initial budget should fit'))
+            now=[100010];waits=[]
+            def sleep(seconds):waits.append(seconds);now[0]+=int(seconds*1000)+1
+            h.reserve(con,104,clock=lambda:now[0],sleep=sleep)
+            self.assertEqual(len(waits),1)
+            self.assertGreaterEqual(now[0],160003)
+            used=con.execute('SELECT sum(weight) FROM requests WHERE time_ms>?',(now[0]-60000,)).fetchone()[0]
+            self.assertLessEqual(used,500)
+
+    def test_contention_is_bounded_and_preserved_as_failure(self):
+        with closing(h.connect(self.root)) as con:
+            h.reserve(con,500,clock=lambda:100000,sleep=lambda _:None)
+            waits=[]
+            with self.assertRaises(h.BudgetUnavailable):h.reserve(con,20,clock=lambda:100001,sleep=waits.append)
+            self.assertEqual(len(waits),2)
+            self.assertEqual(con.execute('SELECT count(*) FROM requests').fetchone()[0],1)
+
 
 if __name__=='__main__':unittest.main()

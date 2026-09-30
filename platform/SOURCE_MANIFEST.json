@@ -899,7 +899,7 @@
     {
       "path": "platform/research/LIFECYCLE.md",
       "source": "Sniper lifecycle repair 2026-09-29",
-      "sha256": "fd49fa7af19cc80f88e0e2392e0e3dfe4f517aedab771babfc5024a4d3757de9",
+      "sha256": "defa4f4246ff26d52ca93e984f71ba4aca21e3fcb5906640d68b46f3c3747294",
       "mode": "100644"
     },
     {
@@ -1047,13 +1047,13 @@
       "path": "platform/research/hyperliquid_history.py",
       "source": "owner-authorized Hyperliquid data audit implementation",
       "mode": "100644",
-      "sha256": "7c430d04fa52df532d2dcffb6ddc1919a72e3c323ac1aa2649e12e8e3d68df7f"
+      "sha256": "c5ea7b85469e6591367344efefea448531bce2750756c047e76cab2e8f294b5d"
     },
     {
       "path": "platform/tests/unit/test_hyperliquid_history.py",
       "source": "owner-authorized Hyperliquid data audit implementation",
       "mode": "100644",
-      "sha256": "17aa00088a0de10b93604991c581fa48e1493aedf8d0d9b1ba51ef1132c49ed1"
+      "sha256": "e480a90727e89ee353b363c0c247e4089718719300f492e512fc08ad88b426ec"
     },
     {
       "path": "platform/research/hyperliquid_account.py",
