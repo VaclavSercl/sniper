@@ -300,7 +300,7 @@
       "path": "platform/scripts/sync_strategy_registry.py",
       "source": "beroun@bdb3f444:scripts/sync_strategy_registry.py",
       "source_sha256": "efb886b2ab303ef6899c48b08b3117e9ca4a3ab453a01a8ad16ba0457375a67b",
-      "sha256": "6fd11c02ee9b32f7a631c594fe4191f6d341347b40f969ba1855598a664930f3",
+      "sha256": "1386c2dcccbb6e596785fa88402ea6a8946e18ef745b20129f181897064e344d",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -899,7 +899,7 @@
     {
       "path": "platform/research/LIFECYCLE.md",
       "source": "Sniper lifecycle repair 2026-09-29",
-      "sha256": "6c59ca0c45ceaf966fe801a6aeb4f34162c06a71ae21edd1fbff2c3fbf1c200a",
+      "sha256": "42d91699f84d03450793c97fb70212eaf1e2703b3b221a41325d4e2d68bc9ed1",
       "mode": "100644"
     },
     {
@@ -988,6 +988,24 @@
       "source": "sniper-native:reviewed-research-repair",
       "mode": "100644",
       "sha256": "4381b287e364bfa2d53b14207df058f3c1f2d99513521a854a5135fee2450eb5"
+    },
+    {
+      "path": "platform/research/lifecycle_policy.json",
+      "source": "sniper-native:owner-requested-lifecycle-rules-2026-09-30",
+      "mode": "100644",
+      "sha256": "14caff444b55a07bd0101708f47fb69b55d3381b266afad9a83cdc4e6f435001"
+    },
+    {
+      "path": "platform/research/lifecycle_overview.py",
+      "source": "sniper-native:owner-requested-lifecycle-rules-2026-09-30",
+      "mode": "100644",
+      "sha256": "e66d5954e6c781ce8c9707c16fb3d0905c5bbbd2f398d8acba4ab971ac4cdf7b"
+    },
+    {
+      "path": "platform/tests/unit/test_lifecycle_overview.py",
+      "source": "sniper-native:owner-requested-lifecycle-rules-2026-09-30",
+      "mode": "100644",
+      "sha256": "2c35e8edc4dd0cbf71a37161b0f6b3be1b1db71bd1161912fa0940dd64dd3e22"
     }
   ]
 }

@@ -1,0 +1,50 @@
+{
+  "schema": 1,
+  "policy_id": "hyperliquid-research-v1",
+  "primary_live_venue": "hyperliquid",
+  "products": ["spot", "perpetual"],
+  "owner_intent": "automatic_selection_after_backtest_and_forward_paper",
+  "excluded_legacy_evidence": ["T15_pre_repair_epoch", "T_HL_legacy_funding_paper", "legacy_grid_uncalibrated_paper", "P014_raw_funding_observations"],
+  "capacity_proposal": {
+    "status": "PROPOSED_NOT_SCHEDULED",
+    "new_hypotheses_per_day": 2,
+    "max_variants_per_hypothesis": 6,
+    "max_training_tests_per_day": 12,
+    "comparison_interval_days": 7,
+    "max_paper_admissions_per_week": 2,
+    "rules": ["deduplicate_economic_hypotheses", "count_variants_separately", "do_not_fill_quota_with_duplicates", "respect_data_compute_and_provider_budgets"]
+  },
+  "historical_evidence": {
+    "required": ["preregister_hypothesis_and_failure_rule", "pin_code_parameters_data_costs", "validate_exact_venue_product_instrument", "causal_execution_and_no_lookahead", "complete_closed_data", "train_validation_final_holdout_separation", "single_use_final_holdout", "record_all_trials_and_multiple_testing", "reproduce_independently", "net_positive_after_costs_and_stress", "compare_cash_buy_hold_and_simple_baseline_at_same_risk", "predeclare_sample_size_and_drawdown_limit"],
+    "preserve_stricter_strategy_rules": true,
+    "strategy_minimum_history_days": {"T1": 365},
+    "missing_evidence": "BLOCKED"
+  },
+  "paper_evidence": {
+    "minimum_calendar_days": 30,
+    "required": ["new_forward_epoch_after_candidate_freeze", "same_code_parameters_and_risk_as_candidate", "fresh_target_venue_data", "calibrated_fills_partial_fills_latency_and_rejections", "deduplicated_orders_and_fills", "complete_chronological_equity_including_flat_days", "family_specific_preregistered_sample_size", "positive_net_result_and_stress", "within_preregistered_drawdown_and_loss_limits", "reconcile_and_test_stop_cancel_disconnect_recovery"],
+    "parameter_change_restarts_epoch": true,
+    "missing_or_insufficient_sample": "BLOCKED"
+  },
+  "perpetual_requirements": ["actual_historical_funding_events", "margin_and_liquidation_model", "mark_index_and_basis", "reduce_only_and_margin_mode", "explicit_leverage_limit"],
+  "spot_requirements": ["spot_metadata_and_token_identity", "inventory_and_quote_balance", "no_unapproved_borrowing", "spot_fees_and_liquidity"],
+  "comparison": {
+    "cohort_keys": ["venue", "product", "instrument", "evaluation_window", "cost_model", "risk_budget"],
+    "selection_order": ["all_required_gates_pass", "robust_net_risk_adjusted_performance", "drawdown_and_tail_risk", "stability_across_periods_and_parameters", "cost_capacity_and_turnover", "portfolio_correlation"],
+    "no_qualified_candidate": "KEEP_CASH_NO_PROMOTION"
+  },
+  "live": {
+    "intent": "AUTOMATIC_WITHIN_OWNER_MANDATE",
+    "implementation": "UNAVAILABLE",
+    "account_identity": null,
+    "total_capital": null,
+    "per_strategy_capital": null,
+    "daily_loss_limit": null,
+    "maximum_drawdown": null,
+    "perpetual_leverage_limit": null,
+    "required": ["all_historical_and_paper_evidence", "verified_signed_execution_adapter", "owner_account_capital_and_risk_mandate", "portfolio_exposure_and_correlation_checks", "small_capped_canary_before_scaling", "runtime_loss_data_and_reconciliation_guards", "append_only_transition_evidence"],
+    "on_breach": "PAUSE_NEW_RISK_AND_RECONCILE",
+    "new_owner_confirmation_per_candidate": false
+  },
+  "implementation_boundary": "POLICY_AND_READ_ONLY_REPORTING_ONLY_NO_PROMOTION_EXECUTOR"
+}

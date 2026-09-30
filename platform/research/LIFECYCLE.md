@@ -1,5 +1,94 @@
 # Evidence-driven research — implementation boundary
 
+## Current owner scope and lifecycle policy (2026-09-30)
+
+The owner selected **Hyperliquid, spot and perpetuals**, and wants automatic
+selection after historical AND independent forward paper evidence. Canonical
+structured rules are in `lifecycle_policy.json`; `lifecycle_overview.py` validates
+them and the read-only registry exporter reports coverage and stage counts.
+This is policy/reporting implementation, **not a promotion executor**. Existing
+live refusal stays in force until the required execution and risk integrations
+exist. A JSON field, timer success or model/provider answer cannot enable live.
+
+Current capacity: one predetermined T1 parameter variant/day, at most 18 in one
+family, on Binance research data. No independent new-strategy generator is
+implemented. Hydra has a separate finite 12-variant queue; its execution and
+data prerequisites are different. Neither variant count means new families.
+The **proposed** next capacity is 2 distinct economic hypotheses/day, at most
+6 variants each and 12 training tests/day; compare weekly and admit at most
+2 qualified candidates/week to paper. These are capped planning targets, not
+installed schedules or promises to generate duplicates just to meet a quota.
+Model and compute budgets must be explicit before enabling paid generation.
+
+Stages and required evidence:
+
+1. `IDEA`: unique economic rationale, venue/product/instrument and failure rule.
+   Hash the design; distinguish a new family from a parameter variation. Reject
+   duplicates and keep failed ideas, not only winners. Generated code receives
+   isolated tests/review, no credentials or permission to run arbitrary commands.
+2. `DATA_READY`: exact Hyperliquid instruments and closed, complete, timestamped
+   history. Spot and perpetual IDs/costs differ. Other-venue screening is useful
+   research but cannot qualify Hyperliquid execution. Record dataset provenance.
+3. `HISTORICAL_TEST`: freeze candidate/code/costs before testing. Chronological
+   train/validation splits and walk-forward checks precede a single untouched
+   final holdout. Log all trials, account for selection bias/multiple testing,
+   reproduce from immutable inputs and retain stricter family-specific gates
+   (T1 requires annual history). A missing history or sample stays BLOCKED.
+   Include adverse spread/slippage, latency, partial/rejected fills and both-leg
+   fees; perps additionally need funding events, margin and liquidation. Require
+   positive net and stressed results, predeclared loss/drawdown/sample thresholds
+   and comparisons to cash, buy-and-hold and a simple baseline at equal risk.
+4. `FORWARD_PAPER`: separate fresh epoch after freeze, same code and parameters,
+   at least 30 calendar days AND the preregistered independent sample requirement.
+   Thirty days alone never suffice. Changing strategy parameters restarts the
+   epoch. Record all equity, including flat days, simulated fills and settlement;
+   test stale data, restart, disconnection, reconciliation and stop/cancel behavior.
+   Legacy paper balances or funding snapshots cannot be relabeled as qualification.
+5. `ELIGIBLE_FOR_CANARY`: all prior gates plus reviewed signing/execution,
+   exact account, real fees, approved capital/loss/drawdown/leverage mandate,
+   portfolio exposure/correlation and tested reconciliation. Compare candidates
+   only within comparable venue/product/window/cost/risk cohorts; raw net profit
+   or annualized Sharpe from a short sample is not a winner criterion.
+6. `CAPPED_LIVE` then `LIVE`: intended automatic admission inside the configured
+   owner mandate, starting with a small capped allocation and scaling only after
+   fresh evidence. No repeated owner approval per candidate is required once that
+   concrete mandate and executor exist. Today they do not exist in this lifecycle.
+   Runtime breaches pause new risk and trigger reconciliation; risk-reducing exit
+   handling must be independently implemented/tested, not assumed from this rule.
+
+If no candidate qualifies, keep cash and keep testing; never lower a gate to fill
+a deployment slot. Account/capital/day-loss/drawdown/perp-leverage values remain
+unset. Research assumptions in an old backtest do not supply those values.
+
+Reporting: count catalog entries, families, variants, completed/rejected/blocked
+screens and qualified stages separately. Query both state roots; omitted,
+missing, inaccessible or corrupt data gives UNKNOWN/PARTIAL and nonzero CLI
+status, not zero activity or a healthy complete report. Independent readable
+sources remain visible when another fails. The exporter does not query legacy
+paper workers, systemd health or exchange positions: audit those separately.
+Its zero qualified counts describe missing qualification adapters, not a proof
+that no old paper process or direct trading path exists on the host.
+
+Do not use legacy T_HL funding paper as qualification: inspection on 2026-09-30
+found no funding event deduplication/time eligibility, missing open price PnL,
+and an opening counted as a roundtrip. Quarantine its update job 5e6174a0a370
+and state-based report 290f1ca4b209, preserving definitions and historical data.
+Their new state must be verified separately; this document is not evidence of
+an executed pause. Repair inside Sniper with a fresh epoch before resuming.
+
+Observed on Beroun 2026-09-30: a legacy Grid paper tick runs every five minutes
+outside this qualification pipeline. T13/T14 legacy state is stale, T15 paused.
+The old six-hour registry service omits `--candle-state-dir` and runs as wwwenda,
+which cannot read the beroun-owned candle state. Updating source makes that
+coverage gap explicit; a separate least-privilege reporting bridge is still
+required for a complete unattended cross-owner report. Do not broaden private
+state permissions or run an unrestricted root reporting service to hide the gap.
+
+Hyperliquid API references (checked 2026-09-30):
+- [Instrument identity and account queries](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint)
+- [Fees](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/fees)
+- [Funding](https://hyperliquid.gitbook.io/hyperliquid-docs/trading/funding)
+
 ## T1 candle research continuation (2026-09-30)
 
 `candle_research.py` adds an executable route for the existing T1 BTCUSDT spot
@@ -66,11 +155,11 @@ reported explicitly. No paid AI session, shell command from a proposal, or remot
 Git publication occurs. Arbitrary AI-generated executable strategies are not
 automatically trusted or run.
 
-The seven current Hermes schedules were inventoried on 2026-09-29: five report
-blocked_config, P014-B hourly reports ok, and one verdict is pending. None is a
-regular proposal job. The supplied systemd timer is a reviewed deployment
-candidate, not evidence that it has been installed. Preserve existing research
-state until the P014-B and Hyperliquid dependencies have been reconciled.
+Historical Hermes inventory on 2026-09-29 had five blocked_config jobs, P014-B
+hourly ok and a pending verdict. Rechecked 2026-09-30: six report last_status=ok
+and one verdict is pending. These job statuses do not prove paper profitability
+or generation. No regular new-hypothesis job was identified. The research timer
+was installed for T1 on 2026-09-30; it does not schedule the Hydra queue below.
 
 ## Inputs and execution
 

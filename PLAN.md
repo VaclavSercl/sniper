@@ -1,5 +1,64 @@
 # Backtest integrity repair
 
+## Hyperliquid lifecycle rules and truthful reporting — 2026-09-30
+Goal: owner requests an audited strategy-stage report, explicit spot AND
+perpetual scope on Hyperliquid, and rules for recurring proposals, historical
+tests, independent paper trading, comparison and eventual automated deployment.
+Baseline: 45e021e008b0cbda63f99bacb267554d86e5ec05, clean owned
+repair/history-recovery worktree; preserve six untracked server WIP entries.
+The old .ai/MASTER_PROMPT.md whole-project/refactor instructions do not expand
+this task; current owner scope controls. No full SynthBit installation.
+
+Discovery: one finite T1 family, 18 variants, one variant/day; one negative
+baseline completed. Hydra queue empty. Twelve catalog entries are unqualified.
+Legacy paper_grid actually runs every 5 minutes; it is outside the qualification
+registry and must NOT be described as zero paper activity or qualified paper.
+T13/T14 old states stale; T15 paused. Hyperliquid has about ten days of perp
+candles and no spot candles in the audited market_klines source. Existing
+six-hour exporter omits T1 because candle-state argument is absent. Hermes
+has seven observation/report jobs, no evidenced independent proposal generator.
+
+Design: separate owner-selected venues/products, binding evidence requirements,
+and PROPOSED_CAPACITY targets (2 new hypotheses/day, <=6 variants each, weekly
+shortlist <=2) from measured scheduler behavior. Targets must never be reported
+as running jobs. No invented live allocation/leverage/loss limits. Preserve
+stricter strategy-specific requirements, T1 annual history and one-use holdout.
+Research rules: frozen code/params, causal costs including funding/margin for
+perps, distinct training/validation/final holdout, correction for multiple
+trials, separate forward paper epoch >=30 days (longer for insufficient trades),
+positive net/stress results and drawdown within an explicitly defined limit.
+Rank only comparable venue/product/window/cost/risk cohorts; no raw-PnL winner.
+Auto-promotion intent is recorded, but current adapters cannot authorize it.
+
+Files: this plan; platform/research/lifecycle_policy.json, lifecycle_overview.py,
+LIFECYCLE.md; platform/scripts/sync_strategy_registry.py; platform unit tests;
+platform/SOURCE_MANIFEST.json; README.md research boundary only. Add policy
+validation and truthful stage/count reporting, preserving independent source
+errors and UNKNOWN for unread sources. The exporter remains read-only, cannot
+create missing state, submit orders, run arbitrary generated code or promote.
+Record reporting coverage gaps instead of false empty/healthy counts.
+
+Acceptance: finite variant counts/rejected results and actual research scope
+visible; omitted/missing/corrupt sources are distinct, no fabricated zero or
+paper/live pass, policy invalidity fails closed, input bytes unchanged. Run
+focused unittest plus full existing Linux gate with private PostgreSQL,
+source manifest checks and git diff --cached --check against exact candidate.
+At most three evidence-driven repair cycles; preserve failed evidence.
+Recovery: local checkpoint and prior deployed source retained; only source-only
+release update under existing authorization, no service/DB/credential change.
+The broader automatic generator, calibrated paper worker and live dispatcher
+remain a concrete follow-on implementation, not capabilities created by JSON.
+Publishing targets existing VaclavSercl/sniper repair/history-recovery and
+PR #101 only; exact verified SHA, non-force, no automatic merge.
+Additional evidenced scope: external /home/wwwenda/hyperliquid/paper_trading.py
+adds the latest funding event on every invocation without event identity/time
+deduplication, excludes open price PnL and increments roundtrips on opening.
+Quarantine only Hermes job 5e6174a0a370 and its state-based report 290f1ca4b209
+through capability-verified CLI pause, preserving their definitions and all
+state. Do not pause market monitor/collection or unrelated enhanced reporting.
+Record before/after and exact resume IDs. Legacy Grid has source mixing,
+intrabar-order and fee-ledger concerns; its activity is not qualification.
+
 ## Operational candle research — owner continuation 2026-09-30
 Goal: complete an authentic, repeatable daily proposal/test/result cycle using
 the existing T1 BTCUSDT spot hypothesis and the audited Binance candles.
