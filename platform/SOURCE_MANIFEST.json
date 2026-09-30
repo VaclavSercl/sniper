@@ -955,6 +955,27 @@
       "source": "owner-authorized reconciliation 2026-09-29",
       "mode": "100644",
       "sha256": "327a2190514023c304e9516cf0a3fc74e5ba251336ad4ff13f7ee88657af51a3"
+    },
+    {
+      "path": "platform/research/history_recovery.py",
+      "source": "owner-authorized history recovery 2026-09-30",
+      "source_sha256": "991c5d89682c2bc2e570c76fedf0a6b7b9a16836dbd015755568a7859b297417",
+      "sha256": "991c5d89682c2bc2e570c76fedf0a6b7b9a16836dbd015755568a7859b297417",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/tests/unit/test_history_recovery.py",
+      "source": "owner-authorized history recovery 2026-09-30",
+      "source_sha256": "b0c7fa5ee340d26df9019d5656ddb680f74481d3a6bab0eb639387d34856b1b9",
+      "sha256": "b0c7fa5ee340d26df9019d5656ddb680f74481d3a6bab0eb639387d34856b1b9",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/tests/unit/test_history_sql.py",
+      "source": "owner-authorized history recovery 2026-09-30",
+      "source_sha256": "4fa4e4fe71540cd8c3374de217a6964669b49a07b31dd97a80fdfdbe4d1c1027",
+      "sha256": "4fa4e4fe71540cd8c3374de217a6964669b49a07b31dd97a80fdfdbe4d1c1027",
+      "mode": "100644"
     }
   ]
 }

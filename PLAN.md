@@ -1,5 +1,52 @@
 # Backtest integrity repair
 
+## Bounded history recovery — owner request 2026-09-30
+Goal: stage authentic missing candle history and prepare reviewed append-only
+imports; establish a concrete reversible GDS boot-mitigation operation.
+Baseline a9aaba4f47e39e6a762bd629074e80adb12692fa, clean reused worktree,
+branch repair/history-recovery. Preserve the other P014 worktree and server WIP.
+Non-goals: live trading, new paper epoch, synthetic candles/FX/funding settlement,
+unbounded 1222-day ingestion, wholesale kernel/package upgrades or cleanup.
+Environment: Windows editor, existing Linux Python/PostgreSQL tests on Beroun;
+standard library only. No automatic privilege escalation or installation.
+Files: platform/research/history_recovery.py; focused unit/SQL tests;
+platform/SOURCE_MANIFEST.json; this plan; infra/beroun/HISTORY_RECOVERY.md.
+Impact: new explicit offline recovery entrypoint, no automatic service changes.
+Existing legacy backfill scripts are not invoked: they overwrite rows, retry
+forever or suppress failures. Raw HTTP bytes and request identities are retained;
+bounded closed intervals, exact source/symbol, finite OHLCV and chronology are
+validated. Missing records stay missing; generated SQL never updates/deletes.
+Gate changes are limited to registering new source and meaningful regressions;
+existing checks and thresholds stay intact.
+Acceptance: no incomplete/future candle, forged/changed bundle, unsafe path,
+pagination loop or conflicting duplicate accepted. Every import binds the
+reviewed manifest digest, validates archived raw responses and reports actually
+inserted identities. Replays insert zero; existing conflicting rows block.
+Verification: python -B -m unittest discover -s platform/tests/unit -p
+test_history_recovery.py -v; python3 -B tools/verify_platform.py with real private
+PostgreSQL; git diff --check; unchanged candidate/index and manifest check.
+Recovery: preserve raw source bundle and inserted-row output; no automated SQL
+undo or deletion. Any uncertain transaction is reconciled read-only first.
+Approval: prepare concrete sudo/DB/boot operations before requesting privilege;
+remote publication requires approval for this exact new branch/checkpoint.
+No harness installation; user-provided universal instructions govern scope.
+At most three evidence-driven repair cycles per failing integrated gate.
+
+Discovery/verification outcome: the first candidate passed all 182 Linux tests
+including real isolated PostgreSQL. A subsequent live read of public candles
+staged 50,400 bars for each of nine Binance markets, 2026-08-26 through the
+exclusive end 2026-09-30 UTC. Bitfinex tBTCUSD/tBTCEUR remain sparse; four later
+markets hit HTTP 429, and that venue batch is stopped. Hyperliquid BTC supplies
+only recent history. No production SQL, sudo or reboot has been performed.
+Refinement from this evidence: retain invalid raw responses without a completed
+manifest, slow Bitfinex requests, expose HTTP 429 and Retry-After explicitly,
+and add a regression proving one request/no automatic retry. No policy weakened.
+All source bundles and generated append-only SQL are protected outside Git.
+CPU boot-plan and read-only data audit are prepared; their explicit approvals
+are pending. T15, Hydra and the original OMNI specifications remain unqualified.
+Final staged candidate gets the complete Linux gate and content checks again;
+the exact checkpoint, results and publication status are recorded externally.
+
 ## Reconcile Hermes production changes — owner request 2026-09-29
 Goal: (1) preserve/reconcile production-only funding repairs into canonical Git
 and pass the full application gate; (2) restore truthful CPU checks and review
