@@ -11,7 +11,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'research'))
 from strategy_lifecycle import CATALOG, report, safe_path
 from lifecycle_overview import load_policy, overview
 
-def load_report(state_dir, candle_state_dir=None, candle_observation=None, hyperliquid_state_dir=None):
+def load_report(state_dir, candle_state_dir=None, candle_observation=None, hyperliquid_state_dir=None, account_state_dir=None):
     if candle_state_dir is not None and candle_observation is not None:
         raise ValueError('Choose direct state or observation')
     policy, policy_hash = load_policy()
@@ -60,6 +60,12 @@ def load_report(state_dir, candle_state_dir=None, candle_observation=None, hyper
             result['hyperliquid_history'] = summary(hyperliquid_state_dir)
         except (OSError, ValueError, KeyError, TypeError, sqlite3.Error) as exc:
             result['hyperliquid_history'] = {'status': 'FAILED', 'error_type': type(exc).__name__, 'qualified': False}
+    if account_state_dir is not None:
+        try:
+            from hyperliquid_account import summary as account_summary
+            result['hyperliquid_account'] = account_summary(account_state_dir)
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            result['hyperliquid_account'] = {'status': 'FAILED', 'error_type': type(exc).__name__, 'live_enabled': False}
     return result
 
 def main():
@@ -69,9 +75,10 @@ def main():
     group.add_argument('--candle-state-dir',type=Path)
     group.add_argument('--candle-observation',type=Path)
     ap.add_argument('--hyperliquid-state-dir',type=Path,default=Path('/var/lib/sniper/hyperliquid-data'))
+    ap.add_argument('--account-state-dir',type=Path,default=Path('/var/lib/sniper/hyperliquid-account'))
     args=ap.parse_args()
     try:
-        result=load_report(args.state_dir,args.candle_state_dir,args.candle_observation,args.hyperliquid_state_dir)
+        result=load_report(args.state_dir,args.candle_state_dir,args.candle_observation,args.hyperliquid_state_dir,args.account_state_dir)
     except (OSError,ValueError,KeyError,TypeError,sqlite3.Error) as exc:
         result={'status':'BLOCKED','reason':type(exc).__name__}
     print(json.dumps(result,indent=2,allow_nan=False))

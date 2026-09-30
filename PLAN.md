@@ -1,5 +1,56 @@
 # Backtest integrity repair
 
+## Audit step 4 prerequisite - isolated SDK and read-only account connection
+Baseline eee3299db1de1c43d54003198fed4ba7de104813. Step 2 exact Linux gate
+passed 241 tests; immutable source published and deployed. First actual capture
+reproduced 58200 rows, 120-day hourly histories have no internal gaps across six
+markets, 2880 venue funding events per perpetual; data timer is active. The owner explicitly
+requests connecting the existing Hyperliquid account. Existing signing material
+must stay on Beroun; do not print, hash, copy into source, or transmit it.
+Use only the installed standalone pip 26.2.1 with verified --python capability,
+and an isolated no-pip venv under Sniper's private operations directory. Resolve
+official hyperliquid-python-sdk==0.24.0 from PyPI with binary wheels only,
+record exact resolved wheel hashes, then install the complete hash-locked set.
+No global or Hermes environment change, runtime upgrade or executable download.
+Keep sanitized installation evidence and actual dependency checks distinct from
+a vulnerability assessment; missing assessment cannot mean a clean audit.
+Verify official signing primitives with synthetic keys before using existing
+material. Derive only its public address locally and query userRole to resolve
+the actual master/subaccount identity; then read account balances, positions,
+open orders and fee schedule. Empty agent balances are not proof of empty master
+balances. No exchange mutations, orders, leverage settings, approvals or transfers.
+Persist public account configuration privately outside Git only after validating
+the role relationship. Key parsing, malformed roles, unsafe permissions, unknown
+ownership, unavailable SDK and transport failures must remain explicit blockers.
+Planned source scope: reusable account inspection, SDK requirements with exact
+hashes, meaningful offline signature/account-role tests, guarded runtime install
+and account-report integration; PLAN, SOURCE_MANIFEST and lifecycle documentation.
+Final checks: existing full Linux gate plus isolated SDK import/signature recovery,
+pip check, exact account read-only evidence; source and instructions unchanged.
+No live mandate inferred from available balance. Funded execution and automatic
+promotion still require implemented order guards, qualified historical/paper
+evidence, testnet verification and explicit capital/loss/drawdown/leverage limits.
+Recovery: preserve failed setup directories and reports; never overwrite/adopt
+an unknown runtime or credential. Stop only the affected connection operation.
+Observed dependency evidence: binary-only hash-locked installation and pip check
+passed on Python 3.14.4; ten offline signature/domain mutation checks passed.
+PyPI release advisory metadata was available for all thirty resolved packages,
+with zero listed advisories; this is not a complete supply-chain assessment.
+Actual userRole resolved the existing agent to a user account; read-only API
+observed 6.26 spot USDC, zero perpetual equity, zero positions and open orders.
+Public identity remains private on the server; no signing material was copied.
+Implementation scope now includes account report service/timer, absent-target
+installer, whitelisted public identity and exact companion-evidence pinning,
+account/installer regressions and SDK offline verifier + platform-specific lock.
+Production observation runs as beroun without a signing dependency or key.
+Windows focused tests omit the Linux directory-fsync durability test explicitly;
+the required full gate executes it on Beroun, without a platform skip.
+Preliminary account gate passed 249 Linux tests. Host inspection found an existing
+root:root 0755 /etc/sniper directory. Preserve that shared directory unchanged;
+accept safe root-owned traversal permissions while refusing nonroot ownership
+and group/world writes, and create only the new 0640 root:beroun identity file.
+Add independent permission regression checks and rerun the complete exact gate.
+
 ## Audit step 2 — exact-venue research data (implementation scope)
 Baseline 80d984d985e3e745dfbb8757f411c98c67a54abc; five application workers
 actually consolidated under beroun, private registry bytes unchanged, both-source

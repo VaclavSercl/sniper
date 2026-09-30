@@ -300,7 +300,7 @@
       "path": "platform/scripts/sync_strategy_registry.py",
       "source": "beroun@bdb3f444:scripts/sync_strategy_registry.py",
       "source_sha256": "efb886b2ab303ef6899c48b08b3117e9ca4a3ab453a01a8ad16ba0457375a67b",
-      "sha256": "ea7a4048dab0a0e9ef35e546d4d2fd36f639b56ccf3f5b6c58cfc44b7e579163",
+      "sha256": "493e829004abba2a33f500bc02178b97e2669d3201bdb1ca901a1919e41e98a1",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -899,7 +899,7 @@
     {
       "path": "platform/research/LIFECYCLE.md",
       "source": "Sniper lifecycle repair 2026-09-29",
-      "sha256": "f1b4634a3cfdd76f018995ae99284dc8abfd7445219f4a67c118cb1733cfe729",
+      "sha256": "99378c4ddd9eb4facf36e85a8ed24b0ed0073fda09eec863e0c273cd867c3ec9",
       "mode": "100644"
     },
     {
@@ -1054,6 +1054,18 @@
       "source": "owner-authorized Hyperliquid data audit implementation",
       "mode": "100644",
       "sha256": "17aa00088a0de10b93604991c581fa48e1493aedf8d0d9b1ba51ef1132c49ed1"
+    },
+    {
+      "path": "platform/research/hyperliquid_account.py",
+      "source": "owner-authorized read-only Hyperliquid account connection",
+      "mode": "100644",
+      "sha256": "b54c23d31d9d1406db388cde0d2700c220bde1c92c5c39c4ed2ddf6079d4e31e"
+    },
+    {
+      "path": "platform/tests/unit/test_hyperliquid_account.py",
+      "source": "owner-authorized read-only Hyperliquid account connection",
+      "mode": "100644",
+      "sha256": "a965b18b184b5547d5d7792bc176edbd891ca23ce17f3a97886bc6b4b794eb8d"
     }
   ]
 }

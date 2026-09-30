@@ -272,3 +272,19 @@ The absent-unit installer preserves failed capture evidence and enables the
 five-minute timer only after actual six-market/two-interval capture and replay.
 Reporting publishes only coverage/counts, keeping raw archive inputs private.
 None of these data checks constitutes historical/paper/live qualification.
+
+## Actual Hyperliquid account observation
+The existing signing material remains in its protected administrative location.
+The official SDK 0.24.0 is hash-locked in a separate operations venv; its offline
+signature recovery and nonce/network/account/action mutation checks are separate
+from real exchange execution. This is not a validated funded order adapter.
+Read-only service `sniper-hyperliquid-account` runs under `beroun`, using only
+root-owned public identity configuration. On every observation it revalidates
+the agent-to-account relationship and queries the actual account's spot/perp
+state, open orders and fees. It cannot sign orders, change leverage or transfer
+funds. Available balances do not create a capital/risk mandate. Agent expiry,
+testnet order execution and live execution remain unverified/disabled.
+The installer pins the private account-identity evidence, copies only public
+addresses/role/provenance and enables its thirty-minute timer after a real
+account observation. Unknown prior configuration is never overwritten. Stale,
+revoked/reassigned agents, malformed numbers and network errors remain visible.
