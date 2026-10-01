@@ -70,7 +70,8 @@ by this source change. Offline transport fixtures and actual synthetic SDK
 signing remain separate evidence. A genuine testnet execution demonstration
 requires an associated funded testnet account and an explicit testnet session.
 Mainnet remains blocked by zero qualified candidates, incomplete forward-paper
-execution and absent owner capital/loss/drawdown/leverage limits. A 30 real-day
+execution and unimplemented funded loss/exposure enforcement. The October 1
+owner mandate below supplies the capital rule and AI-selected limits. A 30 real-day
 paper interval cannot be replaced by historical replay or passing unit tests.
 
 October 1 verification: 288 Linux application/architecture tests passed, plus

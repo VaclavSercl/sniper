@@ -1,5 +1,17 @@
 # Backtest integrity repair
 
+## Mandate documentation reconciliation after actual installation
+Baseline cd0ff31f6cefb04801867b479f4f4561e7364a4d is published/source-deployed;
+the root-owned 90% mandate was actually installed and observed under beroun,
+without orders or guardian changes. Existing introductory lifecycle/SDK wording
+still describes the earlier missing-mandate state. Narrowly reconcile those
+paragraphs and retain the distinction between installed policy and unimplemented
+funded enforcement. Do not change the research epoch, approved 90% rule, risk
+defaults, account configuration or any service. Files: PLAN, LIFECYCLE.md,
+SDK_ACCOUNT.md and platform manifest. Complete final Linux gate, exact SHA
+publication/source-only update and unchanged root-config/read-only report checks
+are required. The existing mandate installer is not rerun against its owned file.
+
 ## Owner steering October 1 - 90 percent account mandate, AI risk defaults
 Baseline 31ad61c0fff0b0d85a58ed1f5b89210e3ca29df9 is verified, published and
 source-deployed. Owner explicitly sets capital to at most 90% of the main account

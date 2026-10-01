@@ -54,13 +54,27 @@ Stages and required evidence:
 6. `CAPPED_LIVE` then `LIVE`: intended automatic admission inside the configured
    owner mandate, starting with a small capped allocation and scaling only after
    fresh evidence. No repeated owner approval per candidate is required once that
-   concrete mandate and executor exist. Today they do not exist in this lifecycle.
+   concrete mandate and executor exist. The owner mandate is now configured;
+   the funded executor and qualification/admission integrations remain unavailable.
    Runtime breaches pause new risk and trigger reconciliation; risk-reducing exit
    handling must be independently implemented/tested, not assumed from this rule.
 
 If no candidate qualifies, keep cash and keep testing; never lower a gate to fill
-a deployment slot. Account/capital/day-loss/drawdown/perp-leverage values remain
-unset. Research assumptions in an old backtest do not supply those values.
+a deployment slot. On October 1 the owner set a 90% main-account capital ceiling
+and delegated other risk choices to AI. The protected runtime mandate supplies
+the conservative initial canary limits; public JSON fields stay unset because
+they are not the private account authority. Research assumptions do not supply
+or override these values. The report distinguishes configured policy from
+unimplemented funded loss/exposure enforcement.
+
+`/etc/sniper/hyperliquid-mandate.json` is root:beroun 0640 and bound to the current
+protected public account identity. Initial AI limits are one strategy, <=20% of
+the deployable budget per strategy, <=25% of that allocation per order, daily
+loss <=1% of budget, drawdown <=3% and perpetual leverage <=1x. Fresh USDC spot
+and perpetual equity determine the 90% ceiling without double counting; held or
+nonwithdrawable funds reduce deployable capital. Positive other assets require
+verified valuation. This calculator is read-only policy evidence and cannot
+activate trading, relax guardian mode or replace 30 real-day paper qualification.
 
 Reporting: count catalog entries, families, variants, completed/rejected/blocked
 screens and qualified stages separately. Query both state roots; omitted,
