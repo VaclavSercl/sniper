@@ -112,3 +112,10 @@ ceiling, 1.1268 per strategy, 0.2817 per order, 0.05634 daily-loss ceiling and
 minimum; product-specific exit exceptions still require verification. Mainnet
 execution, qualified paper admission and the complete loss/exposure monitor
 remain unimplemented, so configuring this mandate does not make trading ready.
+# Risk admission added after the owner mandate
+
+The testnet spot buy boundary now enforces durable portfolio/strategy/order caps,
+chronological loss/drawdown and account/fill reconciliation in the same journal
+as order intent. See [RISK_EXECUTION.md](RISK_EXECUTION.md) for precise boundaries,
+expiry/recovery restrictions and actual testnet activation. This is testnet-only
+integration, not a running funded executor or independent mainnet guardian.

@@ -350,3 +350,12 @@ new release, rejects overrides/ownership/hash changes, records a linked repair
 intent and carries a cumulative three-repair budget. Existing research epochs
 are never adopted by this installation recovery path. The request limiter waits
 until the full weighted deficit expires, preserving its 500/minute ceiling.
+# October 1 execution dependency update
+
+Testnet spot admission now requires a durable portfolio-risk reservation and
+fresh actual-account/fill reconciliation. Mainnet transport, qualified paper
+admission and automatic funded promotion remain unavailable. See
+[RISK_EXECUTION.md](../../infra/beroun/RISK_EXECUTION.md). Preserve the frozen
+research epoch and four pinned modules; source tests do not promote any of the
+current rejected/blocked candidates. Thirty real paper days begin only after
+historical qualification and candidate freeze, not after source deployment.

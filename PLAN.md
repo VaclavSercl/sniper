@@ -1,5 +1,103 @@
 # Backtest integrity repair
 
+## October 1 - owner-authorized five-stage trading lifecycle completion
+
+Goal: complete risk enforcement, real testnet verification, historical-to-forward
+paper qualification, sustainable hypothesis generation and guarded live canary
+promotion, in that dependency order. Baseline is the clean, owned
+469b05ca53f5761722a01d9f715894f168630aa8 checkout on repair/history-recovery.
+Sniper is the sole source repository; Beroun 10.0.1.191 is the approved host.
+The owner authorizes implementation, tests, documentation, scoped deployment and
+ordinary publication to VaclavSercl/sniper refs/heads/repair/history-recovery.
+No automatic main merge, force push, arbitrary cleanup or wallet transfer.
+
+Detected environment: Windows PowerShell and bundled Python 3.12, existing Linux
+Python 3.14.4/PostgreSQL fixture and isolated official SDK 0.24.0 on Beroun.
+No repository/ancestor AGENTS.md exists in this checkout. Apply the owner-selected
+universal v2.3 operating contract; this remains application work, not installing
+the universal harness. Resolve its already pinned byte digest before code writes.
+
+Impact and ownership: add explicit modules under platform/gateway and focused unit
+tests; integrate only with the verified Hyperliquid testnet boundary first.
+Preserve the four pinned research modules, frozen epoch, consumed holdouts,
+private account/key material, root mandate, guardian mode and foreign server WIP.
+The independent guardian and administrative/database identities remain separate.
+Later stage file lists and acceptance commands must be recorded before their
+implementation. Never substitute a collection of unconnected helpers for actual
+runtime integration or mark a blocker as completed software.
+
+Stage 1 acceptance: exact Decimal 90-percent portfolio and strategy/order caps;
+fresh complete account/exposure evidence; chronological daily loss/drawdown;
+fees, held/pending inventory; atomic durable reservation before dispatch;
+unreconciled/unknown outcomes block new risk across restart; cancellation and
+genuine inventory-reducing exits remain possible. Unknown valuation, cashflows,
+account identity or evidence invalidates admission. Enforce the policy at the
+single implemented testnet dispatch path, not just in a report. Mainnet is blocked
+until stages 2-5 have real evidence and an independently controlled guardian.
+
+Stage 2 acceptance: actual testnet role association, balances and dedicated signer;
+real owned order lifecycle and restart/reconciliation evidence. Mocks and offline
+signatures are separate evidence. A wallet action unavailable to the agent blocks
+only exchange writes; do not copy or request a secret or infer an association.
+
+Stages 3-5 acceptance: independently reproduced historical qualification with
+calibrated execution and untouched final holdout; only then a frozen forward
+epoch covering at least 30 real calendar days, complete equity/fills/recovery and
+statistical/sample requirements. A sustainable generator must preregister and
+deduplicate hypotheses, record all trials and respect a bounded provider budget;
+no endless variation of failed holdouts. Promotion requires exact qualified
+identities, testnet evidence, enforced risk, adequate order minimum/cost capacity
+and a single capped canary. No qualified candidate means keep cash.
+
+Verification commands: python -B -m unittest discover -s platform/tests/unit -p
+test_portfolio_risk.py -v; python3 -B tools/verify_platform.py in an exact staged
+isolated Linux copy (architecture tests and private PostgreSQL application tests);
+existing bash syntax and systemd-analyze verify commands; exact source manifest,
+full changed-candidate secret/diff scans and git diff --cached --check. The final
+gate follows all plan, documentation and manifest changes. Real SDK tests remain
+offline and must pin each changed order source. Windows cannot attest Linux
+locking/fsync behavior. No native Rust change/build or new dependencies planned.
+
+Exact stage-1 file scope: platform/gateway/portfolio_risk.py,
+order_validation.py, spot_risk_observation.py and hyperliquid_orders.py;
+platform/tests/unit/test_portfolio_risk.py and test_hyperliquid_orders.py;
+platform/SOURCE_MANIFEST.json, infra/beroun/RISK_EXECUTION.md, SDK_ACCOUNT.md,
+platform/research/LIFECYCLE.md and this plan. Separate the venue observation,
+pure transaction risk accounting and signing/dispatch concerns. Preserve old
+frozen research modules byte-for-byte. The first full Linux gate failed only an
+old repeated-refresh fixture exceeding the unchanged 500/min request budget;
+repair cycle 1 schedules that independent refresh after real budget expiry and
+adds owned-fill/cashflow/legacy-intent bypass regressions. No policy relaxation.
+The second full gate caught CRLF working-file hashes differing from normalized
+Git index bytes after the module extraction. Repair cycle 2 binds the manifest
+to exact staged blobs; both failed reports remain immutable. This is a packaging
+defect, not permission to relax manifest integrity or reset the repair budget.
+Repair cycle 2 then passed the complete Linux application gate: 74 architecture
+and 239 platform tests (313 total), actual private PostgreSQL, shell syntax and
+systemd unit verification. Final verification follows these documentation edits.
+The final staged diff check found four newly added blank EOF lines; repair
+cycle 3 removes only those whitespace defects and keeps every check required.
+No further automatic repair is available if the final integrated gate fails.
+The added guard is mandatory within the testnet library; no running funded worker
+or independent mainnet admission service is claimed. Actual testnet activation is
+pending owner authentication/association. Browser inspection found different
+email-derived wallets; no private key was read or generated. Stages 3-5 remain
+dependent on real execution calibration/qualified candidates/30 elapsed days and
+reviewed generation capacity, not silently completed by mocks or helper code.
+
+Failure/recovery: at most three evidence-driven repair cycles per failing gate;
+retain failed evidence, durable unknown intents and old source releases. Do not
+renew owner liveness, relax REDUCE_ONLY, reset research or erase pending orders
+to obtain PASS. Reconcile partial deployment/publication before retry. Record
+separate local checkpoint, exact-SHA push, source-only deployment and actual
+runtime observations. Thirty calendar days and absent positive strategies are
+real prerequisites, not conditions tests can manufacture.
+
+Ongoing opposition: perform explicit adversarial self-review of each dependency,
+including concurrency, stale state, withdrawals/deposits, fees, terminal orders,
+precision, missing sources and independent-guardian bypass; record findings and
+regression evidence. Do not claim a separate provider review without its result.
+
 ## Mandate documentation reconciliation after actual installation
 Baseline cd0ff31f6cefb04801867b479f4f4561e7364a4d is published/source-deployed;
 the root-owned 90% mandate was actually installed and observed under beroun,

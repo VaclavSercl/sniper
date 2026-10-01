@@ -7,7 +7,7 @@ private journal is the single nonce authority for one dedicated testnet signer;
 sharing the signer with another writer or deleting its journal is unsupported.
 """
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 import hashlib
 from importlib.metadata import version
 import json
@@ -17,6 +17,9 @@ import re
 import sqlite3
 import time
 import urllib.request
+from portfolio_risk import RiskBook, MAX_AGE_MS
+from order_validation import integer, address, number, wire
+from spot_risk_observation import observe as observe_spot_risk
 
 TESTNET = 'https://api.hyperliquid-testnet.xyz'
 LIMIT = 1024 * 1024
@@ -24,38 +27,6 @@ LIMIT = 1024 * 1024
 
 def encode(value):
     return json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False)
-
-
-def integer(value, minimum=0, maximum=2**63-1):
-    if type(value) is not int or not minimum <= value <= maximum:
-        raise ValueError('Invalid bounded integer')
-    return value
-
-
-def address(value):
-    if not isinstance(value, str) or not re.fullmatch(r'0x[0-9a-fA-F]{40}', value):
-        raise ValueError('Invalid public account identity')
-    return value.lower()
-
-
-def number(value, positive=True):
-    # Floats are intentionally unsupported at the signing boundary.
-    if type(value) not in (str, int, Decimal) or len(str(value)) > 64:
-        raise ValueError('Exact bounded decimal required')
-    try:
-        n = Decimal(value)
-    except InvalidOperation:
-        raise ValueError('Invalid decimal') from None
-    if not n.is_finite() or abs(n) > Decimal('1e15') or n.as_tuple().exponent < -30:
-        raise ValueError('Nonfinite/unbounded decimal')
-    if positive and n <= 0 or not positive and n < 0:
-        raise ValueError('Invalid decimal sign')
-    return n
-
-
-def wire(n):
-    text = format(n, 'f')
-    return text.rstrip('0').rstrip('.') if '.' in text else text
 
 
 @dataclass(frozen=True)
@@ -157,7 +128,8 @@ def transport(kind, payload):
     if kind not in ('info', 'exchange'):
         raise ValueError('Unsupported endpoint')
     if kind == 'info' and payload.get('type') not in (
-            'meta', 'spotMeta', 'userRole', 'spotClearinghouseState', 'clearinghouseState', 'orderStatus'):
+            'meta', 'spotMeta', 'userRole', 'spotClearinghouseState', 'clearinghouseState', 'orderStatus',
+            'openOrders', 'userFees', 'l2Book', 'userNonFundingLedgerUpdates', 'userFillsByTime'):
         raise ValueError('Unsupported read-only request')
     if kind == 'exchange' and payload.get('action', {}).get('type') not in ('order', 'cancelByCloid'):
         raise ValueError('Unsupported signed action')
@@ -250,6 +222,7 @@ class TestnetClient:
             if self.con.execute("SELECT value FROM settings WHERE key='schema'").fetchone() != ('1',) or \
                     self.con.execute("SELECT value FROM settings WHERE key='binding'").fetchone() != (self.binding(),):
                 raise ValueError('Journal identity/limit mismatch')
+            self.risk = RiskBook(self.con)
             fd = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
             try:
                 os.fsync(fd)
@@ -365,6 +338,21 @@ class TestnetClient:
             if row is None or row[0] != nonce or row[2] != 'PREPARED' or \
                     encode(json.loads(row[1])['action']) != encode(action) or json.loads(row[3])['expires_ms'] != expires:
                 raise ValueError('Dispatch requires the exact unused durable intent')
+            intent = json.loads(row[1])
+            needs_risk = (action['type'] == 'order' and intent['instrument']['product'] == 'spot'
+                          and action['orders'][0]['b'])
+            if needs_risk:
+                state = self.risk.state()
+                reservation = self.con.execute('SELECT notional FROM risk_reservations WHERE operation=?',
+                                               (operation,)).fetchone()
+                if (intent.get('risk_required') is not True or not reservation or
+                        reservation[0] != intent['notional'] or not state or
+                        not state['fresh'] or state['halted'] or
+                        not 0 <= integer(self.clock())-state['time_ms'] <= MAX_AGE_MS):
+                    raise ValueError('Exact fresh durable risk reservation required before signing')
+            if (action['type'] == 'order' and intent['instrument']['product'] == 'perpetual'
+                    and action['orders'][0]['r'] is not True):
+                raise ValueError('Prepared perpetual intent cannot introduce new risk')
         try:
             if integer(self.clock()) >= expires:
                 raise ValueError('Intent expired before signing')
@@ -392,6 +380,9 @@ class TestnetClient:
         if not isinstance(client_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,80}', client_id):
             raise ValueError('Invalid owned client ID')
         operation = 'order:'+client_id
+        notional = number(price)*number(quantity)
+        if notional > self.order_cap:
+            raise ValueError('Explicit testnet order limit')
         cloid = '0x'+hashlib.sha256((self.binding()+'\0'+client_id).encode()).hexdigest()[:32]
         with self.transaction():
             if self.con.execute('SELECT 1 FROM operations WHERE id=?', (operation,)).fetchone():
@@ -400,19 +391,30 @@ class TestnetClient:
                     "'RECONCILIATION_STARTED','UNKNOWN_REQUIRES_RECONCILIATION',"
                     "'RESPONSE_RECEIVED_REQUIRES_RECONCILIATION')").fetchone():
                 raise ValueError('Unreconciled operation blocks new dispatch')
+            spent = sum((number(json.loads(r[0])['notional']) for r in self.con.execute(
+                         "SELECT intent FROM operations WHERE kind='order'")), Decimal(0))
+            if spent+notional > self.session_cap:
+                raise ValueError('Explicit testnet lifetime submission limit')
         self.check_role()
         instrument = self.instrument(product, symbol)
         action = prepare(instrument, side, price, quantity, post_only, reduce_only, cloid)
         self.inventory(instrument, side, price, quantity, reduce_only)
+        # The implemented entry path cannot bypass portfolio admission. Genuine
+        # inventory-reducing exits and owned cancellation remain possible even
+        # after a risk halt; the preceding inventory check proves no short/flip.
+        risk_required = instrument.product == 'spot' and side == 'buy'
+        if risk_required:
+            self.observe_risk(instrument)
         with self.transaction():
-            notional = number(price)*number(quantity)
-            spent = sum((number(json.loads(r[0])['notional']) for r in self.con.execute(
-                         "SELECT intent FROM operations WHERE kind='order'")), Decimal(0))
-            if notional > self.order_cap or spent+notional > self.session_cap:
-                raise ValueError('Explicit testnet order/session limit')
-            intent = {'instrument': instrument.__dict__, 'action': action, 'notional': wire(notional)}
+            intent = {'instrument': instrument.__dict__, 'action': action, 'notional': wire(notional),
+                      'risk_required': risk_required}
+            if risk_required:
+                intent['risk'] = self.risk.reserve(operation, wire(notional), integer(self.clock()))
             nonce, expires = self.reserve(operation, 'order', client_id, intent)
         return self.dispatch(operation, action, nonce, expires)
+
+    def observe_risk(self, instrument):
+        return observe_spot_risk(self, instrument)
 
     def reconcile(self, client_id):
         with self.transaction():

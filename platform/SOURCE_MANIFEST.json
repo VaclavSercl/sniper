@@ -899,7 +899,7 @@
     {
       "path": "platform/research/LIFECYCLE.md",
       "source": "Sniper lifecycle repair 2026-09-29",
-      "sha256": "6250ab81025e5a576b65cf8964d1ec4c02be3af07b9b5692f873b429f89ea7ae",
+      "sha256": "7cdf89cbdea977fda227fae798c32ba8fe34b12e08806f3f58734bf90fe6c41e",
       "mode": "100644"
     },
     {
@@ -1095,7 +1095,7 @@
       "path": "platform/gateway/hyperliquid_orders.py",
       "source": "Sniper audit step 4: guarded order boundary",
       "source_sha256": "8b9d40f4c092edaa2ae5c1daf7d56711bf557c06bdd5cf0a010bc5f2d8109a97",
-      "sha256": "8b9d40f4c092edaa2ae5c1daf7d56711bf557c06bdd5cf0a010bc5f2d8109a97",
+      "sha256": "566d015c0dd0277f94fe03b652b6e89ef8511b0c52de11dc06cd461d6c6261f3",
       "mode": "100644",
       "source_revision": "5ab3c4f61338cd2059d9822d410ca276f3b3b600"
     },
@@ -1103,7 +1103,7 @@
       "path": "platform/tests/unit/test_hyperliquid_orders.py",
       "source": "Sniper audit step 4: guarded order boundary",
       "source_sha256": "471bd3438d4d51fcddbc30a34352becc0a2d2d819e05db4e9ccda4fa039ad24a",
-      "sha256": "471bd3438d4d51fcddbc30a34352becc0a2d2d819e05db4e9ccda4fa039ad24a",
+      "sha256": "e2ce71fc3cefacde93f3993ea352e4e28438ebf7a0537232a264562928b22482",
       "mode": "100644",
       "source_revision": "5ab3c4f61338cd2059d9822d410ca276f3b3b600"
     },
@@ -1122,6 +1122,34 @@
       "sha256": "7296a73edc77fe8f3d3bd8c063fa3fbd51fc9af98bf4c8829f4669274d2e6945",
       "mode": "100644",
       "source_revision": "31ad61c0fff0b0d85a58ed1f5b89210e3ca29df9"
+    },
+    {
+      "path": "platform/gateway/portfolio_risk.py",
+      "source": "sniper:owner-authorized-lifecycle-completion",
+      "source_sha256": "1b4d03a77204a21a9bd584e641698dfa4e5aee197bf55e8c145fe7899491f524",
+      "sha256": "1b4d03a77204a21a9bd584e641698dfa4e5aee197bf55e8c145fe7899491f524",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/tests/unit/test_portfolio_risk.py",
+      "source": "sniper:owner-authorized-lifecycle-completion",
+      "source_sha256": "34670c8d9ed78119245eb6e3963bb7b7de198fe103830c3dd4a4c5301d322981",
+      "sha256": "34670c8d9ed78119245eb6e3963bb7b7de198fe103830c3dd4a4c5301d322981",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/gateway/order_validation.py",
+      "source": "sniper:owner-authorized-lifecycle-completion",
+      "source_sha256": "577a416042688705b30359d84ff5d8f14b437c54792b2569033adeb1af3c5364",
+      "sha256": "530409685130ec1da8383e55389afb43b489cd2db04c11f08e9500495b59c34c",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/gateway/spot_risk_observation.py",
+      "source": "sniper:owner-authorized-lifecycle-completion",
+      "source_sha256": "9fc2a3ea79f425c0f80e8ceafe055616177ad4dec7ea6f9bab79e2043eda88ff",
+      "sha256": "1ae28e9a8d846a1b5609521c5edb6dcb92719468ef49617a1cff02f2d15fac45",
+      "mode": "100644"
     }
   ]
 }

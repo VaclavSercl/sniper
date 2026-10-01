@@ -30,8 +30,8 @@ class FakeVenue:
         self.meta = copy.deepcopy(META); self.spot = copy.deepcopy(SPOT)
         self.role = {'role': 'agent', 'data': {'user': ACCOUNT}}
         self.balances = [{'token': 0, 'total': '10000', 'hold': '0'},
-                         {'token': 6, 'total': '100', 'hold': '0'}]
-        self.positions = [{'position': {'coin': 'SOL', 'szi': '2'}}]
+                         {'token': 6, 'total': '0', 'hold': '0'}]
+        self.positions = []; self.fills = []; self.flows = []; self.clock = lambda: NOW
 
     def __call__(self, kind, payload):
         self.requests.append((kind, copy.deepcopy(payload)))
@@ -43,19 +43,32 @@ class FakeVenue:
         if name == 'meta': return self.meta
         if name == 'spotMeta': return self.spot
         if name == 'spotClearinghouseState': return {'balances': self.balances}
-        if name == 'clearinghouseState': return {'assetPositions': self.positions}
+        if name == 'clearinghouseState': return {'assetPositions': self.positions, 'marginSummary': {'accountValue': '0'}}
+        if name == 'userFees': return {'userSpotCrossRate': '0.0007'}
+        if name == 'userNonFundingLedgerUpdates': return self.flows
+        if name == 'userFillsByTime': return self.fills
+        if name == 'l2Book': return {'coin': '@19', 'time': self.clock(), 'levels': [[{'px': '20', 'sz': '1000'}], []]}
+        if name == 'openOrders': return [self.order] if self.status == 'open' else []
         if name == 'orderStatus':
             return {'status': 'unknownOid'} if self.status == 'unknownOid' else {
                 'status': 'order', 'order': {'status': self.status, 'order': self.order}}
         raise AssertionError(name)
 
-    def acknowledge(self, client, status='open'):
-        intent = json.loads(client.con.execute("SELECT intent FROM operations WHERE kind='order'").fetchone()[0])
+    def acknowledge(self, client, status='open', client_id='first'):
+        intent = json.loads(client.con.execute("SELECT intent FROM operations WHERE kind='order' AND client=?",
+                                               (client_id,)).fetchone()[0])
         o = intent['action']['orders'][0]
         self.status = status
         self.order = {'coin': intent['instrument']['coin'], 'cloid': o['c'], 'side': 'B' if o['b'] else 'A',
                       'limitPx': o['p'], 'origSz': o['s'], 'sz': o['s'] if status == 'open' else '0',
-                      'oid': 123, 'reduceOnly': o['r']}
+                      'oid': len(self.fills)+123, 'reduceOnly': o['r']}
+        if status == 'filled':
+            from decimal import Decimal
+            qty, price = Decimal(o['s']), Decimal(o['p'])
+            self.balances[0]['total'] = str(Decimal(self.balances[0]['total'])-qty*price)
+            self.balances[1]['total'] = str(Decimal(self.balances[1]['total'])+qty)
+            self.fills.append({'oid': self.order['oid'], 'tid': len(self.fills)+1, 'time': client.clock(),
+                'coin': '@19', 'side': 'B', 'px': o['p'], 'sz': o['s'], 'fee': '0', 'feeToken': 'USDC'})
 
 
 class OrderPreparation(unittest.TestCase):
@@ -123,6 +136,7 @@ class DurableExecution(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory(); self.root = Path(self.temp.name)/'state'
         self.venue = FakeVenue(); self.clients = []
         self.client = self.make()
+        self.venue.clock = lambda: self.client.clock()
 
     def tearDown(self):
         for client in reversed(self.clients):
@@ -203,6 +217,7 @@ class DurableExecution(unittest.TestCase):
 
     def test_failed_refresh_cannot_reuse_previous_reconciliation(self):
         self.submit(); self.venue.acknowledge(self.client); self.client.reconcile('first')
+        self.client.clock = lambda: NOW+60000
         self.venue.status = 'unknownOid'
         self.assertEqual(self.client.reconcile('first')['status'], 'UNKNOWN_REQUIRES_RECONCILIATION')
         with self.assertRaises(ValueError): self.submit('another')
@@ -234,9 +249,7 @@ class DurableExecution(unittest.TestCase):
         self.submit(quantity='5'); self.venue.acknowledge(self.client, 'filled'); self.client.reconcile('first')
         self.client.clock = lambda: NOW+120000
         self.submit('second', quantity='5')
-        self.venue.status = 'filled'
-        intent = json.loads(self.client.con.execute("SELECT intent FROM operations WHERE client='second'").fetchone()[0])
-        self.venue.order['cloid'] = intent['action']['orders'][0]['c']
+        self.venue.acknowledge(self.client, 'filled', 'second')
         self.client.reconcile('second')
         with self.assertRaises(ValueError): self.submit('third')
         self.client.close(); self.clients.remove(self.client)
@@ -263,6 +276,7 @@ class DurableExecution(unittest.TestCase):
         self.assertEqual(self.client.con.execute('SELECT sum(weight) FROM requests').fetchone()[0], 60)
 
     def test_perpetual_only_genuinely_reducing_position(self):
+        self.venue.positions = [{'position': {'coin': 'SOL', 'szi': '2'}}]
         for side, quantity, reduce in [('sell', '1', False), ('buy', '1', True), ('sell', '3', True)]:
             self.client.clock = lambda n=len(self.venue.requests): NOW+n*60000
             with self.subTest(side=side, quantity=quantity, reduce=reduce), self.assertRaises(ValueError):
@@ -270,6 +284,42 @@ class DurableExecution(unittest.TestCase):
         self.client.clock = lambda: NOW+1800000
         self.submit(product='perpetual', symbol='SOL', side='sell', quantity='1', reduce_only=True)
         self.assertTrue(self.writes()[0][1]['action']['orders'][0]['r'])
+
+    def test_owner_minimum_and_fee_exposure_guard_precede_wire(self):
+        with self.assertRaises(ValueError): self.submit(price='1', quantity='1')
+        self.assertFalse(self.writes())
+        self.client.clock = lambda: NOW+60000
+        self.venue.balances[0]['total'] = '6.26'
+        with self.assertRaises(ValueError): self.submit()
+        self.assertFalse(self.writes())
+
+    def test_unowned_fills_cashflows_and_account_discrepancy_block(self):
+        self.venue.flows = [{'time': NOW, 'delta': {'type': 'deposit'}}]
+        with self.assertRaises(ValueError): self.submit()
+        self.assertFalse(self.writes())
+        self.client.clock = lambda: NOW+60000
+        self.venue.flows = []
+        self.venue.fills = [{'oid': 999, 'tid': 1, 'time': NOW+60000, 'coin': '@19',
+                            'side': 'B', 'px': '20', 'sz': '1', 'fee': '0', 'feeToken': 'USDC'}]
+        with self.assertRaises(ValueError): self.submit()
+        self.assertFalse(self.writes())
+
+    def test_risk_observation_failure_invalidates_prior_pass(self):
+        self.submit(); self.venue.acknowledge(self.client, 'canceled'); self.client.reconcile('first')
+        self.client.clock = lambda: NOW+60000
+        self.venue.flows = [{'time': NOW+60000, 'delta': {'type': 'withdraw'}}]
+        with self.assertRaises(ValueError): self.submit('after-withdrawal')
+        self.assertFalse(self.client.risk.state()['fresh'])
+        self.assertEqual(len(self.writes()), 1)
+
+    def test_explicit_prepared_old_intent_cannot_bypass_new_risk_guard(self):
+        instrument = hl.resolve('spot', 'HYPE/USDC', META, SPOT)
+        action = hl.prepare(instrument, 'buy', '20', '1', True, False, '0x'+'f'*32)
+        with self.client.transaction():
+            nonce, expires = self.client.reserve('order:legacy', 'order', 'legacy',
+                {'instrument': instrument.__dict__, 'action': action, 'notional': '20'})
+        with self.assertRaises(ValueError): self.client.dispatch('order:legacy', action, nonce, expires)
+        self.assertFalse(self.writes())
 
 
 if __name__ == '__main__': unittest.main()
