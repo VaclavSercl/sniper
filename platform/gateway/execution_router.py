@@ -16,6 +16,7 @@ import dataclasses
 import hashlib
 import hmac
 import json
+import math
 import os
 import time
 import urllib.error
@@ -40,6 +41,16 @@ class OrderRequest:
     capability_level: str = "L0"  # "L0" (Shadow), "L1" (Testnet), "L2" (Live Mikro)
 
     def validate(self) -> None:
+        if self.capability_level not in ('L0', 'L1', 'L2'):
+            raise ValueError('Unknown execution capability')
+        if any(not isinstance(v, str) or not v or len(v) > 80
+               for v in (self.venue, self.symbol, self.side, self.order_type)):
+            raise ValueError('Invalid order identity')
+        if type(self.post_only) is not bool or type(self.reduce_only) is not bool:
+            raise ValueError('Order flags must be boolean')
+        if any(isinstance(v, bool) or not isinstance(v, (int, float)) or
+               not math.isfinite(v) for v in (self.price, self.quantity)):
+            raise ValueError('Nonfinite or invalid price/quantity')
         venue_lower = self.venue.lower()
         if venue_lower not in ("binance", "bitfinex", "hyperliquid"):
             raise ValueError(f"Unsupported venue '{self.venue}'. Must be 'binance', 'bitfinex', or 'hyperliquid'.")
@@ -216,28 +227,25 @@ class BitfinexExecutionAdapter:
 
 
 class HyperliquidExecutionAdapter:
-    """Hyperliquid DEX L1 execution adapter (Non-Custodial Agent Wallets, EIP-712)."""
+    """Legacy L0 diagnostics only; signed testnet operations use hyperliquid_orders.
+
+    A legacy float request has no explicit product, token identity or qualified
+    mandate. It can never be promoted to an executable wire payload.
+    """
 
     def __init__(self, agent_address: Optional[str] = None):
-        self.agent_address = agent_address or os.environ.get("HYPERLIQUID_AGENT_WALLET")
-        self.mainnet_url = "https://api.hyperliquid.xyz/exchange"
-        self.testnet_url = "https://api.hyperliquid-testnet.xyz/exchange"
-        # Asset universe mapping (standard perpetual asset indices)
-        self.asset_map = {"BTC": 0, "ETH": 1, "SOL": 2, "HYPE": 100}
+        # Keep constructor compatibility without reading credentials in L0.
+        self.agent_address = agent_address
 
     def normalize_symbol(self, sym: str) -> str:
-        s = sym.upper()
-        for prefix in ("T", "W"):
-            if s.startswith(prefix) and len(s) > 3:
-                s = s[1:]
-        for suffix in ("USDT", "USD", "-PERP"):
-            if s.endswith(suffix):
-                s = s[:-len(suffix)]
-        return s
+        return sym.upper()
 
     def build_payload(self, req: OrderRequest) -> Dict[str, Any]:
         coin = self.normalize_symbol(req.symbol)
-        asset_id = self.asset_map.get(coin, 0)
+        req.validate()
+        if req.capability_level != 'L0':
+            raise ValueError('Legacy Hyperliquid execution disabled; use explicit testnet client')
+        asset_id = None
         is_buy = req.side.lower() == "buy"
 
         # Time-in-force: "Alo" = Add Liquidity Only (Post-Only maker), "Gtc" = Good Til Cancel
@@ -245,8 +253,8 @@ class HyperliquidExecutionAdapter:
         order_spec = {
             "a": asset_id,
             "b": is_buy,
-            "p": f"{req.price:.2f}",
-            "s": f"{req.quantity:.6f}".rstrip("0").rstrip("."),
+            "p": str(req.price),
+            "s": str(req.quantity),
             "r": req.reduce_only,
             "t": {"limit": {"tif": tif}}
         }
@@ -261,7 +269,8 @@ class HyperliquidExecutionAdapter:
             "action": action,
             "coin": coin,
             "asset_id": asset_id,
-            "nonce": int(time.time() * 1000)
+            "wire_ready": False,
+            "unresolved": ['product', 'asset_metadata', 'precision', 'account', 'mandate']
         }
 
     def execute(self, req: OrderRequest) -> Dict[str, Any]:
@@ -276,6 +285,8 @@ class HyperliquidExecutionAdapter:
                 "action": "SIMULATED_ORDER_ACCEPTED",
                 "coin": payload.get("coin"),
                 "asset_id": payload.get("asset_id"),
+                "wire_ready": False,
+                "unresolved": payload['unresolved'],
                 "order_spec": payload["action"]["orders"][0],
                 "post_only": req.post_only,
                 "timestamp_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
@@ -283,33 +294,15 @@ class HyperliquidExecutionAdapter:
                 "final": "REJECTED_L0_NO_VENUE"
             }
 
-        # L1 / L2 on-chain submission
-        target_url = self.testnet_url if req.capability_level == "L1" else self.mainnet_url
-        if not self.agent_address:
-            raise ValueError("Hyperliquid agent wallet address not configured for execution.")
-
-        # Signature payload for Agent Wallet action dispatch
-        wire_data = {
-            "action": payload["action"],
-            "nonce": payload["nonce"],
-            "signature": {"r": "0x0", "s": "0x0", "v": 27},
-            "vaultAddress": None
-        }
-        data = json.dumps(wire_data).encode("utf-8")
-        http_req = urllib.request.Request(
-            target_url,
-            data=data,
-            headers={"Content-Type": "application/json", "User-Agent": USER_AGENT},
-            method="POST"
-        )
-        with urllib.request.urlopen(http_req, timeout=10) as resp:
-            return json.loads(resp.read().decode("utf-8"))
+        raise ValueError('Legacy Hyperliquid execution disabled')
 
 
 class UnifiedExecutionRouter:
     """Central router managing order execution dispatch across the Tri-Venue Core."""
 
     def __init__(self, capability_level: str = "L0"):
+        if capability_level not in ('L0', 'L1', 'L2'):
+            raise ValueError('Unknown execution capability')
         self.capability_level = capability_level
         self.adapters = {
             "binance": BinanceExecutionAdapter(),

@@ -1,5 +1,50 @@
 # Backtest integrity repair
 
+## Audit step 4 - exact order preparation and durable testnet execution
+Baseline 5ab3c4f61338cd2059d9822d410ca276f3b3b600, clean owned checkout,
+270 required Linux tests passed. Actual October 1 observation: four blueprints,
+24 variants, eight rejected spot training screens, sixteen perpetual model
+blockers, zero qualified candidates; both research timers active. Preserve the
+frozen epoch and the four pinned research modules without alteration.
+Replace the legacy Hyperliquid placeholder signature and fixed/default BTC
+asset IDs. L0 remains a clearly non-executable diagnostic; L1/L2 through the
+legacy router fail closed. Add a separate explicit testnet-only SDK boundary:
+unique product identity from fresh metadata, exact Decimal price/size rules,
+limit orders only, durable client IDs/nonces/intents, bounded responses and
+read-only reconciliation. Unknown transport/venue state must block resubmission;
+never adopt another account's order or issue a cancel without recorded ownership.
+Testnet operation requires a verified current role/account binding and explicit
+testnet-only configured limits. Mainnet execution remains unavailable until
+historical and 30 real-day paper qualification, calibrated fills/recovery,
+testnet verification and an actual owner capital/loss/drawdown/leverage mandate.
+No balance-derived mandate, credential copy, real order, leverage mutation,
+new dependencies, paid agents, broader infrastructure change or cleanup.
+Files: platform/gateway/execution_router.py, new testnet/order module and focused
+tests, infra/beroun SDK_ACCOUNT.md, source manifest and PLAN. Reuse the isolated
+official SDK 0.24.0 for an exact-source synthetic signature test; distinguish it
+from exchange execution. Verify fake transport timeout/interruption/idempotency,
+metadata ambiguity/precision/finite values, cancellation ownership and actual
+no-network legacy behavior. Exact Linux gate and reviewed source-only deploy
+follow checkpoint/push. Preserve evidence and at most three repairs per failed
+gate. No new trading service or timer is enabled by this software deployment.
+Forward paper execution is still incomplete; do not label exploratory results
+or existing legacy paper balances as a passed qualification.
+Preliminary exact Linux gate passed 71 architecture + 217 application tests
+including actual private PostgreSQL integration, both shell syntax checks and
+systemd unit verification. New durable execution tests are Linux-only; no
+macOS/WSL compatibility or actual exchange-write verification is claimed.
+The exact staged order module and its verifier passed fourteen real SDK
+synthetic signature/domain/expiry/wire-order checks with no network calls.
+Independent provider review was not obtained; self-review found and corrected
+rollbackable request reservations, stale reconciliation reuse and action key
+order changes before the complete gate. Regression checks cover these cases.
+Actual read-only testnet userRole returned missing for both current account
+and agent; no signed testnet transaction was attempted. Historical/paper
+qualified and live-eligible counts remain zero. Remaining external inputs are
+an associated funded testnet account and explicit owner risk/capital limits;
+remaining implementation is calibrated forward paper and funded promotion.
+Do not authorize any mainnet write from this verified software checkpoint.
+
 ## Evidence-driven repair 1 - weighted request expiry and interrupted installation
 Baseline ca21c03923d7e06b4ea60e1259f469097ed3bd8d, 266 Linux tests passed,
 source published/deployed. First actual research installation failed before

@@ -20,7 +20,7 @@
       "path": "platform/gateway/execution_router.py",
       "source": "beroun@bdb3f444:gateway/execution_router.py",
       "source_sha256": "e450817512cbdec2161375976eda31c9e0e15e9a6f555b7185c8a82abf188f69",
-      "sha256": "e450817512cbdec2161375976eda31c9e0e15e9a6f555b7185c8a82abf188f69",
+      "sha256": "87fffc67afd73f63798c2f838a007a0ef1f3e6f157925e23c910d073b755f958",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -1090,6 +1090,22 @@
       "source": "owner-authorized bounded economic research cycle",
       "mode": "100644",
       "sha256": "0a7a6c7763b249b0f28ca88abe20b32e8bbe00571687b12a13bad41bfa1e7577"
+    },
+    {
+      "path": "platform/gateway/hyperliquid_orders.py",
+      "source": "Sniper audit step 4: guarded order boundary",
+      "source_sha256": "8b9d40f4c092edaa2ae5c1daf7d56711bf557c06bdd5cf0a010bc5f2d8109a97",
+      "sha256": "8b9d40f4c092edaa2ae5c1daf7d56711bf557c06bdd5cf0a010bc5f2d8109a97",
+      "mode": "100644",
+      "source_revision": "5ab3c4f61338cd2059d9822d410ca276f3b3b600"
+    },
+    {
+      "path": "platform/tests/unit/test_hyperliquid_orders.py",
+      "source": "Sniper audit step 4: guarded order boundary",
+      "source_sha256": "471bd3438d4d51fcddbc30a34352becc0a2d2d819e05db4e9ccda4fa039ad24a",
+      "sha256": "471bd3438d4d51fcddbc30a34352becc0a2d2d819e05db4e9ccda4fa039ad24a",
+      "mode": "100644",
+      "source_revision": "5ab3c4f61338cd2059d9822d410ca276f3b3b600"
     }
   ]
 }
