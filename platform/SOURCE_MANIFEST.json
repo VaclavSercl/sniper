@@ -300,7 +300,7 @@
       "path": "platform/scripts/sync_strategy_registry.py",
       "source": "beroun@bdb3f444:scripts/sync_strategy_registry.py",
       "source_sha256": "efb886b2ab303ef6899c48b08b3117e9ca4a3ab453a01a8ad16ba0457375a67b",
-      "sha256": "5e17bd75d18dbd65cf532f9f7b6631218d41a8707caff8ef6416a2e6753cd5cf",
+      "sha256": "cebb9b853d19bbe68e12144d706f28f8340b51cf057331c69bb703100d14fb27",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -899,7 +899,7 @@
     {
       "path": "platform/research/LIFECYCLE.md",
       "source": "Sniper lifecycle repair 2026-09-29",
-      "sha256": "7cdf89cbdea977fda227fae798c32ba8fe34b12e08806f3f58734bf90fe6c41e",
+      "sha256": "18086345876734b14d532e37e063dfa5bebb6b48348dc4b6422dd20d30668081",
       "mode": "100644"
     },
     {
@@ -1005,7 +1005,7 @@
       "path": "platform/tests/unit/test_lifecycle_overview.py",
       "source": "sniper-native:owner-requested-lifecycle-rules-2026-09-30",
       "mode": "100644",
-      "sha256": "9169389b7ff67721711252b96bb93bb957fd08e75d99c1e22e17891d03dad751"
+      "sha256": "5bbed594d2f9f3042062dcb549d634e3fdde6e303bdbb6daccbbf1221dab3388"
     },
     {
       "path": "platform/research/operational_observation.py",
@@ -1150,6 +1150,22 @@
       "source_sha256": "9fc2a3ea79f425c0f80e8ceafe055616177ad4dec7ea6f9bab79e2043eda88ff",
       "sha256": "1ae28e9a8d846a1b5609521c5edb6dcb92719468ef49617a1cff02f2d15fac45",
       "mode": "100644"
+    },
+    {
+      "path": "platform/research/research_accounting_audit.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "63e58f221c0e09c8c3151075e076631734e48bb5b8ccd5c697e31a9557f205b4",
+      "sha256": "63e58f221c0e09c8c3151075e076631734e48bb5b8ccd5c697e31a9557f205b4",
+      "mode": "100644",
+      "source_revision": "23eb8113a34bff53914235c4ba3c1d9ec2a206a2"
+    },
+    {
+      "path": "platform/tests/unit/test_research_accounting_audit.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "7195f8ca2d92dd126dd459a3498ad9397f601917da9882d06c4974f4faca37a6",
+      "sha256": "7195f8ca2d92dd126dd459a3498ad9397f601917da9882d06c4974f4faca37a6",
+      "mode": "100644",
+      "source_revision": "23eb8113a34bff53914235c4ba3c1d9ec2a206a2"
     }
   ]
 }

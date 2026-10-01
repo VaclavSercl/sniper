@@ -87,6 +87,19 @@ def load_report(state_dir, candle_state_dir=None, candle_observation=None, hyper
                     counts['registered_families_with_runs'] += data['blueprints_registered']
         except (OSError, ValueError, KeyError, TypeError, sqlite3.Error) as exc:
             result['hyperliquid_research'] = {'status': 'FAILED', 'error_type': type(exc).__name__, 'live_eligible': 0}
+        try:
+            from research_accounting_audit import audit as accounting_audit, stage_fingerprint
+            accounting = accounting_audit(research_state_dir)
+            source = result['hyperliquid_research']
+            if (source['status'] != 'RESEARCH_OBSERVED'
+                    or accounting.get('epoch_sha256') != source.get('epoch_sha256')
+                    or accounting.get('attempts_checked') != len(source.get('stages', []))
+                    or accounting.get('reported_stages_sha256') != stage_fingerprint(source.get('stages', []))):
+                raise ValueError('Research accounting snapshot differs from report')
+            result['research_accounting'] = accounting
+        except (OSError, ValueError, KeyError, TypeError, ArithmeticError, sqlite3.Error) as exc:
+            result['research_accounting'] = {'status': 'FAILED', 'error_type': type(exc).__name__,
+                                             'qualified': False}
     if mandate_path is not None:
         try:
             from hyperliquid_mandate import load as load_mandate, evaluate as evaluate_mandate
@@ -100,6 +113,8 @@ def load_report(state_dir, candle_state_dir=None, candle_observation=None, hyper
     requested = [key for key in ('hyperliquid_history','hyperliquid_account','hyperliquid_research','hyperliquid_mandate') if key in result]
     problems = [key for key in requested if result[key]['status'] not in
                 ('OBSERVED','ACCOUNT_OBSERVED_READ_ONLY','RESEARCH_OBSERVED','OWNER_MANDATE_OBSERVED_POLICY_ONLY')]
+    if 'research_accounting' in result and result['research_accounting']['status'] != 'PASS':
+        problems.append('research_accounting')
     result['integration_health'] = {'status':'PARTIAL' if problems else ('OBSERVED' if requested else 'NOT_REQUESTED'),
                                   'unavailable_or_stale':problems}
     return result

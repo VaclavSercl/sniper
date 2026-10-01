@@ -359,3 +359,32 @@ admission and automatic funded promotion remain unavailable. See
 research epoch and four pinned modules; source tests do not promote any of the
 current rejected/blocked candidates. Thirty real paper days begin only after
 historical qualification and candidate freeze, not after source deployment.
+
+## Independent accounting audit while testnet is unavailable
+
+The owner permits research to continue without a successful testnet faucet.
+Actual signed testnet execution remains a prerequisite for funded activation.
+The canonical read-only `sync_strategy_registry.py` report now includes
+`research_accounting`: a separate cash/inventory reference ledger checks every
+stored completed spot phase's normal/stressed results and cash, buy-hold and
+simple-MA benchmark accounting. It does not call the simulator or signal model.
+It checks pinned next-open price assumptions, entry budget, complete inventory
+exits, fees, chronological hourly equity including flat days, terminal costs,
+closing drawdown, daily returns and the exact sign-test tail. Cash cannot trade;
+buy-hold must use its pinned entry/terminal interval.
+
+The auditor uses a bounded read-only SQLite transaction and validates original
+epoch/model identity, attempt/phase identity and durable holdout consumption.
+A digest of the complete public stage projection binds the audit to the report;
+concurrent changes cannot silently attest another reported snapshot. Missing,
+corrupt, interrupted or inconsistent evidence makes integration health PARTIAL
+and the CLI nonzero. Product-blocked perpetuals are explicitly NOT_APPLICABLE.
+No completed accounting evidence remains BLOCKED, rather than an empty PASS.
+
+Accounting PASS is limited to stored assumed-fill arithmetic. It does not verify
+the signals independently, calibrate realistic fills, prove a return advantage,
+resolve serial dependence or qualify historical/paper/live trading. No new trial
+or unused holdout evaluation occurs; frozen research bytes and state remain
+unchanged. A qualifying forward-paper epoch still needs historical admission
+and at least thirty real calendar days. Runtime/accounting audit evidence must
+be recorded separately from source tests and service health.

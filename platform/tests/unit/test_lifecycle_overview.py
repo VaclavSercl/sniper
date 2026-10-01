@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT/'platform/scripts'))
 import lifecycle_overview as view
 import sync_strategy_registry as exporter
 import strategy_lifecycle as life
+from research_accounting_audit import stage_fingerprint
 
 
 class OverviewTests(unittest.TestCase):
@@ -141,8 +142,12 @@ class OverviewTests(unittest.TestCase):
         data={'status':'RESEARCH_OBSERVED','blueprints_registered':2,'registered_market_variants':12,
             'completed_screens':4,'blocked_product_models':8,'generator':'FINITE_OFFLINE_BLUEPRINT_LIBRARY_NO_PAID_MODEL',
             'new_blueprints_per_utc_day':2,'max_variants_per_blueprint':6,'max_primary_test_bundles_per_utc_day':12,
-            'blueprints_remaining':4,'exhaustion_policy':'NEED_NEW_BLUEPRINTS_OR_PROVIDER_BUDGET'}
-        with patch('research_cycle.status',return_value=data):
+            'blueprints_remaining':4,'exhaustion_policy':'NEED_NEW_BLUEPRINTS_OR_PROVIDER_BUDGET',
+            'epoch_sha256':'a'*64,'stages':[{'variant':str(i)} for i in range(12)]}
+        with patch('research_cycle.status',return_value=data), \
+             patch('research_accounting_audit.audit',return_value={'status':'PASS','qualified':False,
+                'epoch_sha256':'a'*64,'attempts_checked':12,
+                'reported_stages_sha256':stage_fingerprint(data['stages'])}):
             result=exporter.load_report(h,c,research_state_dir=self.root/'r')
         counts=result['lifecycle']['counts']
         self.assertEqual(counts['registered_families_with_runs'],3)
@@ -159,6 +164,38 @@ class OverviewTests(unittest.TestCase):
         self.assertEqual(result['lifecycle']['counts']['candle_variants_registered'],1)
         self.assertEqual(result['integration_health']['status'],'PARTIAL')
         self.assertNotIn('private runtime detail',json.dumps(result))
+
+    def test_accounting_failure_blocks_integration_without_hiding_research(self):
+        data={'status':'RESEARCH_OBSERVED','blueprints_registered':2,'registered_market_variants':12,
+            'completed_screens':4,'blocked_product_models':8,'generator':'FINITE_OFFLINE_BLUEPRINT_LIBRARY_NO_PAID_MODEL',
+            'new_blueprints_per_utc_day':2,'max_variants_per_blueprint':6,'max_primary_test_bundles_per_utc_day':12,
+            'blueprints_remaining':4,'exhaustion_policy':'NEED_NEW_BLUEPRINTS_OR_PROVIDER_BUDGET',
+            'epoch_sha256':'a'*64,'stages':[{'variant':str(i)} for i in range(12)]}
+        with patch('research_cycle.status',return_value=data), \
+             patch('research_accounting_audit.audit',side_effect=ValueError('private evidence contents')):
+            result=exporter.load_report(self.root/'h',research_state_dir=self.root/'r')
+        self.assertEqual(result['hyperliquid_research'],data)
+        self.assertEqual(result['integration_health']['status'],'PARTIAL')
+        self.assertIn('research_accounting',result['integration_health']['unavailable_or_stale'])
+        self.assertEqual(result['research_accounting']['qualified'],False)
+        self.assertNotIn('private evidence contents',json.dumps(result))
+
+    def test_accounting_different_snapshot_cannot_attest_report(self):
+        data={'status':'RESEARCH_OBSERVED','blueprints_registered':0,'registered_market_variants':0,
+            'completed_screens':0,'blocked_product_models':0,'generator':'FINITE_OFFLINE_BLUEPRINT_LIBRARY_NO_PAID_MODEL',
+            'new_blueprints_per_utc_day':2,'max_variants_per_blueprint':6,'max_primary_test_bundles_per_utc_day':12,
+            'blueprints_remaining':6,'exhaustion_policy':'NEED_NEW_BLUEPRINTS_OR_PROVIDER_BUDGET',
+            'epoch_sha256':'a'*64,'stages':[]}
+        for audit in ({'status':'PASS','epoch_sha256':'b'*64,'attempts_checked':0},
+                      {'status':'PASS','epoch_sha256':'a'*64,'attempts_checked':1},
+                      {'status':'PASS','epoch_sha256':'a'*64,'attempts_checked':0,
+                       'reported_stages_sha256':'0'*64},
+                      {'status':'BLOCKED','epoch_sha256':'a'*64,'attempts_checked':0,
+                       'reported_stages_sha256':stage_fingerprint([])}):
+            with patch('research_cycle.status',return_value=data), \
+                 patch('research_accounting_audit.audit',return_value=audit):
+                result=exporter.load_report(self.root/'h',research_state_dir=self.root/'r')
+            self.assertEqual(result['integration_health']['status'],'PARTIAL')
 
 
 if __name__ == '__main__': unittest.main()

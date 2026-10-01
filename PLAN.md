@@ -1,5 +1,62 @@
 # Backtest integrity repair
 
+## October 1 continuation - independent accounting while testnet is unavailable
+
+Owner steering permits independent research work without a working faucet;
+actual testnet execution remains required before funded activation. Baseline:
+23eb8113a34bff53914235c4ba3c1d9ec2a206a2, clean repair/history-recovery.
+Keep the existing pinned universal instruction set and lifecycle run lineage.
+Three repair cycles were already consumed; this continuation does not reset them.
+
+Goal: independently reconcile every persisted completed hourly spot screen's
+orders, cash, inventory, fees, complete equity, daily returns and drawdown.
+Use a separate reference ledger, never call the research simulator to compute
+expected accounting. Integrate its result into the canonical read-only registry
+report. Accounting correctness does not certify signals, realistic execution,
+profitability, unseen holdout generalization or paper/live qualification.
+
+Non-goals: no new/repeated research trial, no peeking/evaluation of unused holdout,
+no replacement of frozen protocol/source/epoch, no wallet or exchange writes,
+no changed risk bounds, dependency installation, service restart or main merge.
+
+Exact file checklist: platform/research/research_accounting_audit.py;
+platform/tests/unit/test_research_accounting_audit.py;
+platform/tests/unit/test_lifecycle_overview.py;
+platform/scripts/sync_strategy_registry.py; platform/research/LIFECYCLE.md;
+platform/SOURCE_MANIFEST.json; PLAN.md. Preserve all other files and foreign WIP.
+
+Acceptance: a bounded consistent read-only SQLite snapshot; original epoch,
+model and phase/holdout provenance verified; all stored normal/stress and cash,
+buy/hold, simple-MA benchmark legs independently checked; malformed, missing,
+duplicated, changed or inconsistent accounting blocks a healthy report. An
+unevaluated/product-blocked variant is explicitly NOT_APPLICABLE, never a pass.
+Verify empty/flat days, bad fees/prices/quantity, sparse equity, altered metrics,
+tampered state/provenance and absent required evidence through regressions.
+
+Exact verification: bundled Python -B -m unittest discover -s platform/tests/unit
+-p test_research_accounting_audit.py -v; existing tools/verify_platform.py in an
+isolated Linux copy of the exact staged tree; existing shell syntax/systemd
+checks; full changed-file integrity/secret audit; git diff --cached --check.
+After the final gate, checkpoint the exact tested tree, ordinary exact-SHA push
+to VaclavSercl/sniper refs/heads/repair/history-recovery, source-only deployment,
+then run the integrated read-only report against actual persisted Beroun screens.
+
+Failure/recovery: preserve candidate and evidence; no automatic fourth repair,
+no new run identity to bypass the shared budget. Audit errors expose only type
+and bounded public variant identity. Keep current release/config/services on a
+failed gate or deployment preview; record local, remote and runtime outcomes
+separately in the existing common-directory operations store. Self-review scope:
+provenance, numeric rounding, chronology, no future-data evaluation, inconsistent
+snapshot reads, missing evidence and overclaiming qualification.
+
+Implementation evidence: twelve independent-ledger regressions and fifteen
+canonical-report regressions pass in the existing Windows Python environment.
+Self-review added cash/buy-hold benchmark timing checks and a digest of the
+complete public stage projection, in addition to epoch and attempt-count checks,
+so a same-count concurrent state change invalidates report attestation. Final
+Linux/source/publication/runtime evidence is kept outside the tracked candidate
+in the authoritative common-directory operation; no post-gate source edits.
+
 ## October 1 - owner-authorized five-stage trading lifecycle completion
 
 Goal: complete risk enforcement, real testnet verification, historical-to-forward
