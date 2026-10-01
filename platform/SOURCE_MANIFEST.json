@@ -1171,7 +1171,7 @@
       "path": "infra/beroun/install_forward_research.py",
       "source": "sniper:independent-accounting-continuation",
       "source_sha256": "f32e75b050e9e04da105eb79b57d775aaa07f20b86f8f1e94993d17c71433324",
-      "sha256": "f32e75b050e9e04da105eb79b57d775aaa07f20b86f8f1e94993d17c71433324",
+      "sha256": "f5c79b85a5d9f93a34c152e521af167e55368b200a1ff9820722a47552bb284b",
       "mode": "100644",
       "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
     },
@@ -1251,7 +1251,7 @@
       "path": "platform/tests/unit/test_forward_installation.py",
       "source": "sniper:independent-accounting-continuation",
       "source_sha256": "b9d529016fd49671a1ffaeebf57e893399914818a35a4dc8b3f22755991309c1",
-      "sha256": "b9d529016fd49671a1ffaeebf57e893399914818a35a4dc8b3f22755991309c1",
+      "sha256": "45d7e3be4c16c02cfdcfc6687354ae392583dc34ce7d9a5a7dfd61dde4f70b34",
       "mode": "100644",
       "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
     },

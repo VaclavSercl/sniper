@@ -1,5 +1,62 @@
 # Backtest integrity repair
 
+## October 1 owner-approved startup readiness repair
+
+Baseline 6e1e4669cf886e888b84b9634b507125b48a2075, clean repair/history-recovery.
+The complete 360-test source gate, isolated real public-data probe, exact-SHA push
+and source deployment passed. Actual installation then failed with KeyError:
+the first worker report legitimately returned MISSING before database creation.
+The installer preserved its failed operation and stopped its three newly created
+units; two public books and the private epoch remain. Core services stayed active.
+This runtime failure is not hidden by the prior source PASS.
+
+Owner explicitly approved one additional narrowly scoped cycle: bounded startup
+readiness handling, its regressions, complete verification, checkpoint/publication,
+source deployment and recovery of only the proven created units, preserving state.
+The original lifecycle run and pinned instructions remain; cumulative repair count
+is five, including both specific owner exceptions. No general repair budget resets.
+
+Files: this plan, infra/beroun/install_forward_research.py,
+platform/tests/unit/test_forward_installation.py and platform/SOURCE_MANIFEST.json.
+Wait only for the documented initial MISSING state, within a fixed deadline; require
+valid counts and a successful capture heartbeat before running research or enabling
+units. Malformed/nonzero/unhealthy reports and exhausted readiness must fail visibly.
+Add meaningful startup-order, malformed-report and timeout regressions without live
+systemd calls, network requests or host changes. Do not alter any trading model,
+frozen epoch, risk thresholds, capture cadence, source identity or candidate rules.
+
+Verification: focused Linux installation tests followed by python3 -B
+tools/verify_platform.py on the exact staged tree; existing Bash syntax, all systemd
+unit verification, source manifest, owned-path/secret/diff audit and unchanged-tree
+attestation. Recover existing units only after matching their bytes to the preserved
+failed installation intent and confirming no overrides, paper or exchange orders.
+Start capture and run the initial screen, then enable only after real healthy counts.
+Record actual final canonical report, increasing book counts, source integrity,
+application user and unchanged mandate/core services. No deletion or reinitialization.
+
+AGY actual isolated review of tree 850a8b174b4de1b37e9ebb15374321f4f757f5f4
+completed with nonempty provider evidence and unchanged source. It conditionally
+supports public research but correctly blocks repeating an absent-target-only
+installer over the retained units. Complete the already owner-approved recovery
+as --recover-install-from in the same repository-owned installer, with regression
+fixtures for failed-operation ownership, exact unit/model hashes, no unknown
+overrides/state, preserved epoch and activation only after fresh capture/screens.
+This remains within the approved four paths and the same fifth repair cycle.
+Keep the prior passing tree, gate, probe and review immutable; verify the final
+extended candidate completely and have AGY review the recovery delta before use.
+AGY's suggestion to tolerate FAILED/future/stale heartbeat is rejected: these
+conditions intentionally block activation, as the agreed fail-closed contract
+requires. Funded-calibration/qualification/transport/capital blockers remain.
+
+Owner also requests AGY review of the code and whole Sniper system. Detect the actual
+installed CLI and enforce a read-only source/runtime evidence boundary using available
+host isolation; no unrestricted permissions or secret/config/environment dumps.
+Preserve actual provider output and distinguish findings, hypotheses and verified
+evidence. Review cannot grant publication or financial authority. Unavailable safe
+execution or unrelated findings remain explicit limitations; do not expand this repair
+without separate evidence and owner authority. Stop on a failed final gate, preserve
+state, and report the exact blocked stage rather than claiming complete trading.
+
 ## October 1 continuation - measured execution, forward paper and extended generation
 
 Goal: implement and operate the three independent application components requested
