@@ -79,3 +79,35 @@ read-only testnet role query returned `missing` for the existing account and
 agent. No exchange-write verification or account PnL claim follows from these
 results. Obtain a genuine testnet association and explicit test session before
 the real testnet demonstration. The production account monitor is independent.
+
+## Owner's October 1 capital mandate
+
+The owner sets an upper trading allocation of 90% of the main account and
+delegates remaining risk decisions to AI. `hyperliquid_mandate.py` calculates
+that ceiling from a fresh associated account, retaining a 10% reserve. It sums
+USDC spot equity and perpetual equity once and separately limits deployable
+capital to unheld spot USDC plus withdrawable perpetual funds. Positive other
+assets block calculation until measured valuation exists; it does not assume
+every stablecoin equals one USDC or convert inventory implicitly.
+
+Initial AI-selected canary bounds: one concurrent strategy; up to 20% of the
+deployable budget per strategy and 25% of that allocation per order; daily loss
+up to 1% of budget, drawdown up to 3%, perpetual leverage up to 1x. These are
+conservative initial policy choices, not validated strategy recommendations.
+Research's hypothetical 1000 USDC cannot override these account-derived limits.
+Risk changes require reviewed policy and candidate requalification.
+
+`install_hyperliquid_mandate.py --release <verified-SHA>` previews exactly one
+absent root:beroun 0640 policy file, bound to the protected public account
+configuration. Authorized `--apply` records intent, creates that file and verifies
+the actual combined read-only report. It does not issue orders, enable a service,
+renew an owner-presence token or relax guardian mode. A failed installation
+preserves its file/evidence and requires reconciliation rather than overwrite.
+
+Reporting distinguishes `CONFIGURED_POLICY_ONLY_NO_FUNDED_EXECUTOR` from actual
+funded enforcement. The current 6.26 USDC observation yields 5.634 USDC total
+ceiling, 1.1268 per strategy, 0.2817 per order, 0.05634 daily-loss ceiling and
+0.16902 drawdown ceiling. The order cap is below the documented default 10 USDC
+minimum; product-specific exit exceptions still require verification. Mainnet
+execution, qualified paper admission and the complete loss/exposure monitor
+remain unimplemented, so configuring this mandate does not make trading ready.

@@ -1,5 +1,42 @@
 # Backtest integrity repair
 
+## Owner steering October 1 - 90 percent account mandate, AI risk defaults
+Baseline 31ad61c0fff0b0d85a58ed1f5b89210e3ca29df9 is verified, published and
+source-deployed. Owner explicitly sets capital to at most 90% of the main account
+and delegates other risk choices to AI. This replaces the missing-number blocker,
+not the historical/paper/execution gates. No further confirmation is needed for
+conservative policy configuration within that authority. Preserve the frozen
+research modules, holdouts, account observations and REDUCE_ONLY guardian mode.
+AI-selected initial canary limits: one strategy; per-strategy allocation <=20%
+of the 90% budget; per-order <=25% of that allocation; daily loss <=1% of budget;
+drawdown <=3%; perpetual leverage <=1x. These are initial policy bounds, not a
+claim that a funded risk manager exists or a promise of profitability. Market
+evidence may tighten limits; changing candidate risk requires requalification.
+Compute exact decimal caps from a fresh, associated account observation. Sum
+USDC spot equity and perpetual equity once; subtract unavailable inventory via
+separate deployable budget. Non-USDC positive holdings require measured valuation
+and otherwise block capital calculation. Account-address binding stays private.
+Persist an absent-target root:beroun 0640 mandate tied to the current verified
+public account configuration. Preview exact paths/permissions/source digest;
+write intent before side effect, observe actual values and report under beroun.
+Failed installation preserves the configuration and evidence for reconciliation.
+Files: new mandate calculator/tests, guarded config installer/tests, report
+integration/tests, source manifest, SDK_ACCOUNT.md and PLAN. No credentials,
+exchange writes, token renewal, new timer, risk-mode relaxation or unlimited AI
+provider budget. Full exact Linux gate, SHA publication/source deployment, actual
+mandate installation and final reporting are required. Recovery never deletes an
+unknown configuration or substitutes a stale account observation. Remaining work
+is calibrated forward-paper admission, perpetual models and funded promotion;
+testnet role association remains missing and no candidate is qualified.
+Exact preliminary checks passed 74 architecture + 225 application tests on
+Linux, actual isolated PostgreSQL, both shell syntax checks and systemd verify.
+The unchanged order module retains its exact fourteen-check real SDK attestation.
+Mandate arithmetic tests cover held funds, double counting, stale/future data,
+nonfinite amounts, unknown positive inventory, silent policy relaxation and
+report failure isolation. The installed root file and actual read-only worker
+report must still be observed after this software checkpoint; tests are not
+proof of root configuration deployment or funded enforcement.
+
 ## Audit step 4 - exact order preparation and durable testnet execution
 Baseline 5ab3c4f61338cd2059d9822d410ca276f3b3b600, clean owned checkout,
 270 required Linux tests passed. Actual October 1 observation: four blueprints,

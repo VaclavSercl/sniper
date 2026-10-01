@@ -11,7 +11,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'research'))
 from strategy_lifecycle import CATALOG, report, safe_path
 from lifecycle_overview import load_policy, overview
 
-def load_report(state_dir, candle_state_dir=None, candle_observation=None, hyperliquid_state_dir=None, account_state_dir=None, research_state_dir=None):
+def load_report(state_dir, candle_state_dir=None, candle_observation=None, hyperliquid_state_dir=None, account_state_dir=None, research_state_dir=None, mandate_path=None):
     if candle_state_dir is not None and candle_observation is not None:
         raise ValueError('Choose direct state or observation')
     policy, policy_hash = load_policy()
@@ -87,9 +87,19 @@ def load_report(state_dir, candle_state_dir=None, candle_observation=None, hyper
                     counts['registered_families_with_runs'] += data['blueprints_registered']
         except (OSError, ValueError, KeyError, TypeError, sqlite3.Error) as exc:
             result['hyperliquid_research'] = {'status': 'FAILED', 'error_type': type(exc).__name__, 'live_eligible': 0}
-    requested = [key for key in ('hyperliquid_history','hyperliquid_account','hyperliquid_research') if key in result]
+    if mandate_path is not None:
+        try:
+            from hyperliquid_mandate import load as load_mandate, evaluate as evaluate_mandate
+            config = load_mandate(mandate_path)
+            data = evaluate_mandate(config, result.get('hyperliquid_account', {}))
+            result['hyperliquid_mandate'] = data
+            result['hyperliquid_account']['mandate'] = data['enforcement']
+            result['lifecycle']['owner_mandate'] = data
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            result['hyperliquid_mandate'] = {'status':'FAILED','error_type':type(exc).__name__,'live_eligible':False}
+    requested = [key for key in ('hyperliquid_history','hyperliquid_account','hyperliquid_research','hyperliquid_mandate') if key in result]
     problems = [key for key in requested if result[key]['status'] not in
-                ('OBSERVED','ACCOUNT_OBSERVED_READ_ONLY','RESEARCH_OBSERVED')]
+                ('OBSERVED','ACCOUNT_OBSERVED_READ_ONLY','RESEARCH_OBSERVED','OWNER_MANDATE_OBSERVED_POLICY_ONLY')]
     result['integration_health'] = {'status':'PARTIAL' if problems else ('OBSERVED' if requested else 'NOT_REQUESTED'),
                                   'unavailable_or_stale':problems}
     return result
@@ -103,9 +113,10 @@ def main():
     ap.add_argument('--hyperliquid-state-dir',type=Path,default=Path('/var/lib/sniper/hyperliquid-data'))
     ap.add_argument('--account-state-dir',type=Path,default=Path('/var/lib/sniper/hyperliquid-account'))
     ap.add_argument('--research-state-dir',type=Path,default=Path('/var/lib/sniper/hyperliquid-research'))
+    ap.add_argument('--mandate-path',type=Path,default=Path('/etc/sniper/hyperliquid-mandate.json'))
     args=ap.parse_args()
     try:
-        result=load_report(args.state_dir,args.candle_state_dir,args.candle_observation,args.hyperliquid_state_dir,args.account_state_dir,args.research_state_dir)
+        result=load_report(args.state_dir,args.candle_state_dir,args.candle_observation,args.hyperliquid_state_dir,args.account_state_dir,args.research_state_dir,args.mandate_path)
     except (OSError,ValueError,KeyError,TypeError,sqlite3.Error) as exc:
         result={'status':'BLOCKED','reason':type(exc).__name__}
     print(json.dumps(result,indent=2,allow_nan=False))

@@ -300,7 +300,7 @@
       "path": "platform/scripts/sync_strategy_registry.py",
       "source": "beroun@bdb3f444:scripts/sync_strategy_registry.py",
       "source_sha256": "efb886b2ab303ef6899c48b08b3117e9ca4a3ab453a01a8ad16ba0457375a67b",
-      "sha256": "f8c5045a5b291fa080b40893f604c42438e64fc32fb12c40f7c5a06a526aebf6",
+      "sha256": "5e17bd75d18dbd65cf532f9f7b6631218d41a8707caff8ef6416a2e6753cd5cf",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -1106,6 +1106,22 @@
       "sha256": "471bd3438d4d51fcddbc30a34352becc0a2d2d819e05db4e9ccda4fa039ad24a",
       "mode": "100644",
       "source_revision": "5ab3c4f61338cd2059d9822d410ca276f3b3b600"
+    },
+    {
+      "path": "platform/research/hyperliquid_mandate.py",
+      "source": "Owner 90 percent capital and AI risk delegation",
+      "source_sha256": "05feb227984d79505725e89d3004b9b89de6826b3ca57b967fe493074bceb1c8",
+      "sha256": "05feb227984d79505725e89d3004b9b89de6826b3ca57b967fe493074bceb1c8",
+      "mode": "100644",
+      "source_revision": "31ad61c0fff0b0d85a58ed1f5b89210e3ca29df9"
+    },
+    {
+      "path": "platform/tests/unit/test_hyperliquid_mandate.py",
+      "source": "Owner 90 percent capital and AI risk delegation",
+      "source_sha256": "7296a73edc77fe8f3d3bd8c063fa3fbd51fc9af98bf4c8829f4669274d2e6945",
+      "sha256": "7296a73edc77fe8f3d3bd8c063fa3fbd51fc9af98bf4c8829f4669274d2e6945",
+      "mode": "100644",
+      "source_revision": "31ad61c0fff0b0d85a58ed1f5b89210e3ca29df9"
     }
   ]
 }
