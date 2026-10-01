@@ -63,6 +63,12 @@ def load_policy(path=POLICY):
                 'daily_loss_limit', 'maximum_drawdown', 'perpetual_leverage_limit'):
         if p['live'][key] is not None:
             raise ValueError('Live mandate integration is not implemented')
+    forward=p['forward_pipeline']
+    if (forward['campaign']!='spot-book-forward-v1' or forward['historical_book_days']!=120 or
+        forward['holdout_fraction']!='0.4' or forward['planned_market_trials']!=1848 or
+        forward['economic_grammar_size']!=336 or forward['actual_execution_calibration_required'] is not True or
+        forward['runtime_status_requires_observation'] is not True or forward['mainnet_transport']!='UNAVAILABLE'):
+        raise ValueError('Forward evidence policy changed')
     return p, hashlib.sha256(raw).hexdigest()
 
 

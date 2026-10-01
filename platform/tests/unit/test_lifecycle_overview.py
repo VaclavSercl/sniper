@@ -128,6 +128,30 @@ class OverviewTests(unittest.TestCase):
             p.write_text(data)
             with self.assertRaises(ValueError): view.load_policy(p)
 
+    def test_forward_runtime_missing_or_corrupt_cannot_claim_admission(self):
+        result=exporter.load_report(self.root/'absent',forward_state_dir=self.root/'forward')
+        self.assertEqual(result['forward_research']['status'],'MISSING')
+        self.assertEqual(result['integration_health']['status'],'PARTIAL')
+        self.assertEqual(result['lifecycle']['automatic_paper_admission'],'NOT_IMPLEMENTED')
+
+    def test_observed_forward_counts_remain_separate_from_legacy_screens(self):
+        from forward_pipeline import connect, generate
+        from contextlib import closing
+        from test_execution_evidence import MARKET
+        import time
+        root=self.root/'forward';now=int(time.time()*1000)
+        with closing(connect(root)) as con:
+            generate(con,[MARKET,{**MARKET,'id':'spot:OTHER/USDC','coin':'@124'}],now)
+            with con:
+                con.execute('INSERT INTO health VALUES(1,?,?,?)',(now,'PASS','{}'))
+                con.execute('INSERT INTO health VALUES(2,?,?,?)',(now,'PASS','{}'))
+        result=exporter.load_report(self.root/'absent',forward_state_dir=root)
+        self.assertEqual(result['lifecycle']['counts']['forward_economic_mechanisms'],2)
+        self.assertEqual(result['lifecycle']['counts']['forward_market_variants'],12)
+        self.assertEqual(result['paper_qualified'],0)
+        self.assertEqual(result['lifecycle']['automatic_paper_admission'],'IMPLEMENTED_MEASURED_BOOK_HISTORICAL_GATES')
+        self.assertEqual(result['lifecycle']['automatic_live_promotion'],'NOT_IMPLEMENTED')
+
     def test_cli_partial_is_nonzero_without_network(self):
         with life.database(self.root): pass
         with patch.object(sys, 'argv', ['sync', '--state-dir', str(self.root)]), \

@@ -11,7 +11,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'research'))
 from strategy_lifecycle import CATALOG, report, safe_path
 from lifecycle_overview import load_policy, overview
 
-def load_report(state_dir, candle_state_dir=None, candle_observation=None, hyperliquid_state_dir=None, account_state_dir=None, research_state_dir=None, mandate_path=None):
+def load_report(state_dir, candle_state_dir=None, candle_observation=None, hyperliquid_state_dir=None, account_state_dir=None, research_state_dir=None, mandate_path=None, forward_state_dir=None):
     if candle_state_dir is not None and candle_observation is not None:
         raise ValueError('Choose direct state or observation')
     policy, policy_hash = load_policy()
@@ -110,7 +110,28 @@ def load_report(state_dir, candle_state_dir=None, candle_observation=None, hyper
             result['lifecycle']['owner_mandate'] = data
         except (OSError, ValueError, KeyError, TypeError) as exc:
             result['hyperliquid_mandate'] = {'status':'FAILED','error_type':type(exc).__name__,'live_eligible':False}
-    requested = [key for key in ('hyperliquid_history','hyperliquid_account','hyperliquid_research','hyperliquid_mandate') if key in result]
+    if forward_state_dir is not None:
+        try:
+            from forward_pipeline import report as forward_report
+            data=forward_report(forward_state_dir)
+            result['forward_research']=data
+            if data['status']=='OBSERVED':
+                counts=result['lifecycle']['counts']
+                counts.update(forward_economic_mechanisms=data['counts']['families'],
+                    forward_market_variants=data['counts']['candidates'],
+                    forward_known_data_screens=data['counts']['screens'],
+                    forward_historical_qualified=data['historical_qualified'],
+                    forward_paper_running=sum(p['runtime_status']=='RUNNING' for p in data['paper_results']),
+                    paper_qualified=data['paper_qualified'])
+                result['paper_qualified']=data['paper_qualified']
+                result['lifecycle']['automatic_paper_admission']='IMPLEMENTED_MEASURED_BOOK_HISTORICAL_GATES'
+                result['lifecycle']['qualification_counts_basis']='VALIDATED_VERSIONED_FORWARD_REGISTRY'
+                result['lifecycle']['implemented_capacity']['forward_generator']=data['generator']
+                result['lifecycle']['implemented_capacity']['forward_mechanisms_remaining']=data['mechanisms_remaining']
+                result['lifecycle']['forward_calibration']=data['calibration']
+        except (OSError,ValueError,KeyError,TypeError,ArithmeticError,sqlite3.Error) as exc:
+            result['forward_research']={'status':'FAILED','error_type':type(exc).__name__,'live_eligible':0}
+    requested = [key for key in ('hyperliquid_history','hyperliquid_account','hyperliquid_research','hyperliquid_mandate','forward_research') if key in result]
     problems = [key for key in requested if result[key]['status'] not in
                 ('OBSERVED','ACCOUNT_OBSERVED_READ_ONLY','RESEARCH_OBSERVED','OWNER_MANDATE_OBSERVED_POLICY_ONLY')]
     if 'research_accounting' in result and result['research_accounting']['status'] != 'PASS':
@@ -129,9 +150,10 @@ def main():
     ap.add_argument('--account-state-dir',type=Path,default=Path('/var/lib/sniper/hyperliquid-account'))
     ap.add_argument('--research-state-dir',type=Path,default=Path('/var/lib/sniper/hyperliquid-research'))
     ap.add_argument('--mandate-path',type=Path,default=Path('/etc/sniper/hyperliquid-mandate.json'))
+    ap.add_argument('--forward-state-dir',type=Path,default=Path('/var/lib/sniper/forward-research-v1'))
     args=ap.parse_args()
     try:
-        result=load_report(args.state_dir,args.candle_state_dir,args.candle_observation,args.hyperliquid_state_dir,args.account_state_dir,args.research_state_dir,args.mandate_path)
+        result=load_report(args.state_dir,args.candle_state_dir,args.candle_observation,args.hyperliquid_state_dir,args.account_state_dir,args.research_state_dir,args.mandate_path,args.forward_state_dir)
     except (OSError,ValueError,KeyError,TypeError,sqlite3.Error) as exc:
         result={'status':'BLOCKED','reason':type(exc).__name__}
     print(json.dumps(result,indent=2,allow_nan=False))

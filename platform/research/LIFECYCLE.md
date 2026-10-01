@@ -388,3 +388,78 @@ or unused holdout evaluation occurs; frozen research bytes and state remain
 unchanged. A qualifying forward-paper epoch still needs historical admission
 and at least thirty real calendar days. Runtime/accounting audit evidence must
 be recorded separately from source tests and service health.
+# Measured-book continuation (October 1, 2026)
+
+The `spot-book-forward-v1` campaign is separate from the frozen six-blueprint
+campaign. `forward_worker.py` records actual Hyperliquid MAINNET public L2 books
+for the metadata-resolved HYPE/USDC and UBTC/USDC pairs every ten seconds. It
+never signs or sends an exchange order and cannot read the account/key paths
+hidden by its service. State is private to `beroun` at
+`/var/lib/sniper/forward-research-v1`; the existing risk guardian stays separate.
+
+`execution_evidence.py` models spot IOC orders with exact venue precision,
+minimum notional, protected limits, one-second delay, five-percent displayed-depth
+participation, cancellation of unfilled size and base/quote fee accounting.
+Stress doubles latency/fees and halves available depth. Missing future books,
+stale/gapped books or insufficient balance never produce hypothetical fills.
+REST receipt timing is an observation proxy, **not actual execution calibration**.
+Only linked, reconciled owned real MAINNET order/fill evidence can calibrate this
+model; testnet and unsupported fee assets cannot substitute for mainnet evidence.
+The optional import is a root-owned, non-world-readable journal at
+`/var/lib/sniper/execution-calibration/mainnet.json`, not a PASS certificate.
+Absent evidence blocks qualification while public collection continues.
+
+The generator enumerates 336 declared economic interactions of four causal price
+triggers with zero, one, two or three non-contradictory volume/trend/volatility/session
+filters. At most two new mechanisms and up to twelve market/parameter variants are
+registered per UTC day. There are 1,848 planned primary trials, at most twelve/day.
+Lookback windows (1/6/24 hours, or 6/24 for pullbacks), holding parameters, wording and market variants do not create new economic identities.
+This is a deterministic generator, **not an LLM integration or unlimited novelty**.
+Exhaustion is explicit and requires a separately reviewed new grammar/campaign;
+it does not recycle a failed holdout. Weekly comparisons preserve equal-market,
+equal-frozen-input cohorts and remain diagnostic until qualification.
+
+Continuous capture/paper runs in `sniper-forward-research.service`; generation
+and potentially long historical tests run separately in `sniper-forward-screen.service`
+every fifteen minutes through its timer. Daily quotas are enforced independently
+of timer frequency. SQLite WAL and separate process locks allow continued collection
+during tests; this is tested local process coordination, not cross-host locking.
+
+Immediate preliminary screens use only the old frozen training/validation data
+(first eighty percent) with clearly labelled OHLC cost assumptions. No old final
+holdout is evaluated by this continuation. New exact book-based historical windows
+start at the next UTC midnight **after each candidate is preregistered** and need
+120 days of complete prospective coverage. Their train/validation/final split is
+50/10/40 percent; final holdouts are consumed once and durably before evaluation.
+Normal and stressed results must pass costs, same-risk cash/buy-hold/MA benchmarks,
+sample and risk limits. No new entry is allowed in the terminal holding window;
+residual terminal inventory is written off rather than assumed liquidatable for
+free. Observed intra-hour price extrema are assessed after the decision, so
+future adverse prices cannot suppress an earlier signal. Non-overlapping three-day sign blocks and a correction for
+all 1,848 planned trials are conservative selection checks, not proof of independent
+returns or future profit. A second Decimal reference ledger checks execution,
+accounting, chronological equity and metrics without calling the production fill
+or accounting functions. Shared DSL source is pinned; independent strategy
+authorship/model review is not claimed.
+
+Only historical candidates passing all gates enter forward paper, at most two
+admissions per ISO week, ranked by stressed final-holdout result. Paper uses the
+same frozen signal, execution and risk fractions with **hypothetical 1,000 USDC**
+per experiment. This never allocates the actual account balance. Marks describe
+closed hourly periods and retain actual observation timestamps and source-book
+digests; partial admission days are not full qualification days. Thirty real days,
+complete equity including flat periods, normal/stress performance and fresh
+calibration are mandatory. Durable intents deduplicate across restart; feed gaps
+invalidate an epoch and cancel unresolved paper orders. Fault tests on isolated
+clones test stop/cancel, disconnect invalidation and reopening without rewinding
+the production paper journal. These tests are not exchange execution evidence.
+
+Use `python3 -B /opt/sniper/current/platform/research/forward_worker.py status`
+as the application user, or the existing canonical registry report, to inspect
+actual counts and blockers. `once` performs one real public capture/research cycle;
+`run` is the continuous capture/paper worker; `research-once` is the separate
+bounded generator/test pass. Missing/stale state makes canonical
+integration health PARTIAL. Running collection, positive diagnostics or elapsed
+wall time alone never grants funded promotion. Perpetual qualification remains
+blocked by missing margin/mark/funding mechanics; funded transport, actual testnet
+verification, guardian/risk/capacity gates are separate prerequisites.

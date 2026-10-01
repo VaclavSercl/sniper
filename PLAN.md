@@ -1,5 +1,107 @@
 # Backtest integrity repair
 
+## October 1 continuation - measured execution, forward paper and extended generation
+
+Goal: implement and operate the three independent application components requested
+by the owner while the testnet faucet is unavailable. Baseline c9a4641464c1dca3c5956ee33ca84f63a71ec0f7,
+clean repair/history-recovery. Retain lifecycle-completion-daa3c4babe0244e89bd54ec63f647f06,
+the verified universal v2.3 instruction pin and its three consumed repair cycles.
+This is application implementation, not installation of the universal harness.
+
+Discovery/design: existing Linux Python 3.14.4 and standard library; Windows
+bundled Python, existing private PostgreSQL test fixture and verified immutable
+source deployment tools. Public Hyperliquid REST provides at most twenty levels
+per side. Current archive lacks historical books and measured order outcomes.
+The finite six-blueprint campaign is frozen and must not be redefined. No candidate
+is qualified and no funded exchange transport is authorized by a paper result.
+
+Impact/file checklist: add platform/research/execution_evidence.py,
+strategy_recipes.py, forward_pipeline.py, forward_reference.py and forward_worker.py;
+platform/tests/unit/test_execution_evidence.py, test_strategy_recipes.py,
+test_forward_pipeline.py and test_forward_installation.py;
+infra/beroun/sniper-forward-research.service, sniper-forward-screen.service,
+sniper-forward-screen.timer and
+install_forward_research.py. Narrowly integrate platform/scripts/sync_strategy_registry.py,
+platform/research/LIFECYCLE.md, lifecycle_policy.json, lifecycle_overview.py;
+platform/tests/unit/test_lifecycle_overview.py; platform/SOURCE_MANIFEST.json and PLAN.md.
+Preserve four frozen research modules, prior holdouts, mandate, guardian, credentials,
+all foreign WIP and privilege separation. No dependencies or generated executable code.
+
+Execution acceptance: exact Decimal spot IOC simulation against timestamped real
+books after a frozen latency delay; explicit missing/stale/gapped data, tick/lot,
+minimum order, fee asset, quote/inventory, bounded displayed-depth participation,
+partial fills and unfilled cancellation. Store raw public response fingerprints,
+metadata, request/receipt times and durable journals. REST timing is a proxy,
+not calibrated actual order execution. A calibration evaluator must require and
+reconcile independently owned real order/fill evidence; missing evidence blocks
+qualification. Unsupported perpetual mechanics remain explicitly blocked.
+
+Generation acceptance: versioned declarative causal recipes with economic rationale
+and failure rule, semantic deduplication independent of parameters/market/wording;
+expand mechanisms through declared interactions between price, volume, regime and
+session. Enumerate at most two new economic mechanisms/day, at most six variants
+and twelve primary test bundles/day. Record finite search-space size and exhaustion;
+never claim infinite novelty or paid LLM generation. Separate known-data preliminary
+screens from untouched future final holdout and exact book-based historical trials.
+The initial generator is deterministic and dependency-free, not a working LLM adapter.
+Self-review separates lookback parameters from mechanisms: four trigger families
+with up to three compatible context filters yield 336 economic mechanisms and
+1,848 preregistered market/parameter trials; two mechanisms/day, up to six
+variants each. No irrelevant pullback window is counted or duplicated.
+
+Paper acceptance: automatic admission only from independently reproduced, calibrated,
+positive normal/stress historical results with single-use holdout and exact immutable
+candidate/protocol identity. Same signal/execution/risk code for historical and forward
+paper. Clock starts after admission; thirty real calendar days, full chronological
+marks including flat periods, sample/statistical/loss/drawdown/cost gates; restart,
+dedupe, stop/cancel and feed-gap invalidation. Exploratory collection never counts as
+qualified paper. Zero admissions is a factual waiting state, not failed installation.
+
+Verification: bundled Python -B -m unittest discover -s platform/tests/unit -p
+ test_execution_evidence.py -v (and the other two focused suites); Linux
+ python3 -B tools/verify_platform.py against the exact staged tree, existing Bash
+ syntax and systemd verification, full candidate secret/path/mode/diff audit;
+ git diff --cached --check. Tests use synthetic public fixtures, never exchange writes.
+Review causal chronology, precision, accounting, gaps/restarts, state ownership,
+trial quotas, holdout reuse, qualification evidence and source/config tampering.
+Hermes/Agy may review only if actual no-tool/read-only capabilities can be enforced;
+otherwise label self-review and the CLI limitation explicitly.
+
+Operational acceptance: ordinary exact-SHA checkpoint/push to the owner-approved
+VaclavSercl/sniper refs/heads/repair/history-recovery; existing source-only release
+preview/apply; absent-target-only scoped forward service installation on Beroun.
+Run initial public capture and generation under beroun and verify actual persisted
+counts, unit state and canonical report. No wallet/secret copy, main merge, force
+push, automatic legacy cleanup or funded activation. Service uses a new private
+/var/lib/sniper/forward-research-v1 namespace and hourly existing read-only candles.
+Separate continuous capture/paper from fifteen-minute screening so long historical
+tests cannot stop feed collection. SQLite WAL supports the two local processes;
+no cross-host locking claim. Initial component assembly found a Windows-only test
+fixture connection leak (fixed by closing explicitly), before the complete gate
+exists. This does not reset the inherited integrated repair budget.
+
+Component evidence before the final gate: Windows execution/DSL/pipeline/report
+checks pass; real Beroun public capture generates two economic mechanisms and
+12 market/parameter candidates and independently labelled known-data screens.
+No real order or paid-provider invocation occurred. Self-review fixed chronology,
+terminal inventory optimism, dust handling, lookback deduplication, fee evidence,
+reader/writer interference and expensive whole-archive recovery cloning. Preserve
+both earlier and current prototype evidence; neither is the final attestation.
+Hermes/Agy executables/help were inspected; no provider review is claimed because
+an isolated read-only context/tool boundary has not been verified. This is a
+labelled self-review plus reproducible independent reference-ledger checks.
+Final commands/results and exact checkpoint/publication/installation outcomes
+will be stored durably outside this tracked candidate, with no post-gate edits.
+
+Recovery/failures: preserve candidate/evidence and old release. No automatic fourth
+integrated-gate repair or new run identity to bypass the shared budget. Durable
+operation intent/outcome in the existing common-directory sniper-operations store;
+source and service rollback are separately inspectable. Unknown pre-existing unit,
+state or configuration blocks installation rather than being overwritten. Network
+failure and history/calibration/time blockers remain visible and must not become
+paper qualification. Installed software is distinct from profitability evidence.
+
+
 ## October 1 continuation - independent accounting while testnet is unavailable
 
 Owner steering permits independent research work without a working faucet;

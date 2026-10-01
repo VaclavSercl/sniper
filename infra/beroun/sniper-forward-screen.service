@@ -1,0 +1,22 @@
+[Unit]
+Description=Sniper bounded economic generation and prospective historical tests
+After=sniper-forward-research.service
+
+[Service]
+Type=oneshot
+User=beroun
+Group=beroun
+ExecStart=/usr/bin/python3 -B /opt/sniper/current/platform/research/forward_worker.py research-once
+UMask=0077
+Nice=15
+CPUQuota=50%
+MemoryMax=768M
+TimeoutStartSec=1200
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+RestrictAddressFamilies=AF_UNIX
+ReadOnlyPaths=/var/lib/sniper/hyperliquid-data /var/lib/sniper/hyperliquid-research
+ReadWritePaths=/var/lib/sniper/forward-research-v1
+InaccessiblePaths=-/etc/sniper -/var/lib/sniper/hyperliquid-account -/var/lib/sniper/hyperliquid-orders

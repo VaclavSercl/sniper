@@ -4,6 +4,18 @@
   "primary_live_venue": "hyperliquid",
   "products": ["spot", "perpetual"],
   "owner_intent": "automatic_selection_after_backtest_and_forward_paper",
+  "forward_pipeline": {
+    "campaign": "spot-book-forward-v1",
+    "implementation": "MEASURED_BOOK_RESEARCH_AND_GUARDED_PAPER",
+    "runtime_status_requires_observation": true,
+    "historical_book_days": 120,
+    "holdout_fraction": "0.4",
+    "economic_grammar_size": 336,
+    "planned_market_trials": 1848,
+    "generator": "DETERMINISTIC_DECLARATIVE_INTERACTIONS_NO_LLM",
+    "actual_execution_calibration_required": true,
+    "mainnet_transport": "UNAVAILABLE"
+  },
   "excluded_legacy_evidence": ["T15_pre_repair_epoch", "T_HL_legacy_funding_paper", "legacy_grid_uncalibrated_paper", "P014_raw_funding_observations"],
   "capacity_proposal": {
     "status": "BOUNDED_OFFLINE_IMPLEMENTED_RUNTIME_REQUIRES_OBSERVATION",

@@ -300,7 +300,7 @@
       "path": "platform/scripts/sync_strategy_registry.py",
       "source": "beroun@bdb3f444:scripts/sync_strategy_registry.py",
       "source_sha256": "efb886b2ab303ef6899c48b08b3117e9ca4a3ab453a01a8ad16ba0457375a67b",
-      "sha256": "cebb9b853d19bbe68e12144d706f28f8340b51cf057331c69bb703100d14fb27",
+      "sha256": "03c99fb85100ac94c1cd897634ed9e18fdc47202fbf7b44ea16fb5492f2a3cce",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -899,7 +899,7 @@
     {
       "path": "platform/research/LIFECYCLE.md",
       "source": "Sniper lifecycle repair 2026-09-29",
-      "sha256": "18086345876734b14d532e37e063dfa5bebb6b48348dc4b6422dd20d30668081",
+      "sha256": "8762428961ef98cfa8cc11da471c0f744e7616f3eb0a02df65d0b98a66e1b5cb",
       "mode": "100644"
     },
     {
@@ -993,19 +993,19 @@
       "path": "platform/research/lifecycle_policy.json",
       "source": "sniper-native:owner-requested-lifecycle-rules-2026-09-30",
       "mode": "100644",
-      "sha256": "123ec6f06e329715377793a577ad13d91cb7f01c71cb236a58cd5805c2c363e5"
+      "sha256": "c0cc4e55d7970b3c1d19ad6c5c5a1412594d61a0209c2914c0c3d4119a9d7c76"
     },
     {
       "path": "platform/research/lifecycle_overview.py",
       "source": "sniper-native:owner-requested-lifecycle-rules-2026-09-30",
       "mode": "100644",
-      "sha256": "176dcf50d455a93d61bbed603dd0839ba127766c04a886134f5784aaf2a776d2"
+      "sha256": "24e8156adf7e41a3f9002dc77f404389d397196202334c1fbc1acd805816edd1"
     },
     {
       "path": "platform/tests/unit/test_lifecycle_overview.py",
       "source": "sniper-native:owner-requested-lifecycle-rules-2026-09-30",
       "mode": "100644",
-      "sha256": "5bbed594d2f9f3042062dcb549d634e3fdde6e303bdbb6daccbbf1221dab3388"
+      "sha256": "3bc08098c5d081fd176f098d741ae479b2f9303743ced2772f70c728770f07eb"
     },
     {
       "path": "platform/research/operational_observation.py",
@@ -1166,6 +1166,110 @@
       "sha256": "7195f8ca2d92dd126dd459a3498ad9397f601917da9882d06c4974f4faca37a6",
       "mode": "100644",
       "source_revision": "23eb8113a34bff53914235c4ba3c1d9ec2a206a2"
+    },
+    {
+      "path": "infra/beroun/install_forward_research.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "f32e75b050e9e04da105eb79b57d775aaa07f20b86f8f1e94993d17c71433324",
+      "sha256": "f32e75b050e9e04da105eb79b57d775aaa07f20b86f8f1e94993d17c71433324",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "infra/beroun/sniper-forward-research.service",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "373b25d54ec544fe43cec0bcf45c62f3a9f15466d2845d03f41c82ea9e7f5d46",
+      "sha256": "373b25d54ec544fe43cec0bcf45c62f3a9f15466d2845d03f41c82ea9e7f5d46",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "infra/beroun/sniper-forward-screen.service",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "d976774904ed7f548c07ac46d9cfa276255c6443c83efc8ad26523ae6cc7ab48",
+      "sha256": "d976774904ed7f548c07ac46d9cfa276255c6443c83efc8ad26523ae6cc7ab48",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "infra/beroun/sniper-forward-screen.timer",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "765336b098bf22cd5c0d28077ead175473f7863c821bac7a880fe7c815d4a629",
+      "sha256": "765336b098bf22cd5c0d28077ead175473f7863c821bac7a880fe7c815d4a629",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/research/execution_evidence.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "0336c0cb082e422fcdf77e103cfd3a48055536436c690b4c1e47c71ca896585d",
+      "sha256": "0336c0cb082e422fcdf77e103cfd3a48055536436c690b4c1e47c71ca896585d",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/research/forward_pipeline.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "c3cfb302ee8d4522bcc0a0e3a755bf5f8e2141cfa3612d05f105bc5fc31d1ace",
+      "sha256": "c3cfb302ee8d4522bcc0a0e3a755bf5f8e2141cfa3612d05f105bc5fc31d1ace",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/research/forward_reference.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "99877499ec4cabf67fce39cb741a9bf8b9aac6cb29391bc33a49d8d627f1b8f0",
+      "sha256": "99877499ec4cabf67fce39cb741a9bf8b9aac6cb29391bc33a49d8d627f1b8f0",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/research/forward_worker.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "9d6aed1ed8e4a131bb1111358038c2e25be5f41a0edddaf566fd6fb963f7bbf2",
+      "sha256": "9d6aed1ed8e4a131bb1111358038c2e25be5f41a0edddaf566fd6fb963f7bbf2",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/research/strategy_recipes.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "d1e6b6185b48168f3b4c70bab217cf7c493f63bc102f92c12c5040285c3d6637",
+      "sha256": "d1e6b6185b48168f3b4c70bab217cf7c493f63bc102f92c12c5040285c3d6637",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/tests/unit/test_execution_evidence.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "0dcef9e432eddaacd611b84014b8455e82ce1438ead51d8a6d37f9a8df30e5c2",
+      "sha256": "0dcef9e432eddaacd611b84014b8455e82ce1438ead51d8a6d37f9a8df30e5c2",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/tests/unit/test_forward_installation.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "b9d529016fd49671a1ffaeebf57e893399914818a35a4dc8b3f22755991309c1",
+      "sha256": "b9d529016fd49671a1ffaeebf57e893399914818a35a4dc8b3f22755991309c1",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/tests/unit/test_forward_pipeline.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "65419a2648b2710c2d92766c52cd6256a54fcb1e053f5d541520a40533e65b87",
+      "sha256": "65419a2648b2710c2d92766c52cd6256a54fcb1e053f5d541520a40533e65b87",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/tests/unit/test_strategy_recipes.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "f43d5c4d965c094396476aa3f68a76c6bf8e7d149343911e6728443958de1f96",
+      "sha256": "f43d5c4d965c094396476aa3f68a76c6bf8e7d149343911e6728443958de1f96",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
     }
   ]
 }

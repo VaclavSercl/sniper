@@ -1,0 +1,11 @@
+[Unit]
+Description=Sniper automatic bounded research every fifteen minutes
+
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=15min
+Persistent=true
+Unit=sniper-forward-screen.service
+
+[Install]
+WantedBy=timers.target
