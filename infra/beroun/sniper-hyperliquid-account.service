@@ -1,0 +1,20 @@
+[Unit]
+Description=Sniper read-only actual Hyperliquid account observation
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=beroun
+Group=beroun
+ExecStart=/usr/bin/python3 -B /opt/sniper/current/platform/research/hyperliquid_account.py observe
+StateDirectory=sniper/hyperliquid-account
+StateDirectoryMode=0700
+UMask=0077
+TimeoutStartSec=180
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/sniper/hyperliquid-account

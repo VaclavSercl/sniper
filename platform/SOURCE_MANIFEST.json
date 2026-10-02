@@ -20,7 +20,7 @@
       "path": "platform/gateway/execution_router.py",
       "source": "beroun@bdb3f444:gateway/execution_router.py",
       "source_sha256": "e450817512cbdec2161375976eda31c9e0e15e9a6f555b7185c8a82abf188f69",
-      "sha256": "e450817512cbdec2161375976eda31c9e0e15e9a6f555b7185c8a82abf188f69",
+      "sha256": "87fffc67afd73f63798c2f838a007a0ef1f3e6f157925e23c910d073b755f958",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -244,7 +244,7 @@
       "path": "platform/scripts/kline_retention_partition_manager.py",
       "source": "beroun@bdb3f444:scripts/kline_retention_partition_manager.py",
       "source_sha256": "9ad1872ccae5b7fac07890f2257144b047c1d2419f2b25b5aab2647a2f27de6e",
-      "sha256": "9ad1872ccae5b7fac07890f2257144b047c1d2419f2b25b5aab2647a2f27de6e",
+      "sha256": "eb081b8a67a0721a0b431ad3705435a5f1f3456552063659dee68995d0e91847",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -268,7 +268,7 @@
       "path": "platform/scripts/perfect_market_ingest.py",
       "source": "beroun@bdb3f444:scripts/perfect_market_ingest.py",
       "source_sha256": "9f3da3328d02c1d747a1f7ffce83d20283b397ca3924dacb72d5a9c07e469bfc",
-      "sha256": "5b8ad34794f0795773f7a873d87c94008e5f16ffeb4559be8bf3e8616b0a2378",
+      "sha256": "f9a801d258eb3da14466ed107bb4b05c10fd765dda8cb79d5a326d04139de98a",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -300,7 +300,7 @@
       "path": "platform/scripts/sync_strategy_registry.py",
       "source": "beroun@bdb3f444:scripts/sync_strategy_registry.py",
       "source_sha256": "efb886b2ab303ef6899c48b08b3117e9ca4a3ab453a01a8ad16ba0457375a67b",
-      "sha256": "84cd3f94fbe98af024c8d032b3818005e3380dd2208edc75c3a2eb19d7839921",
+      "sha256": "03c99fb85100ac94c1cd897634ed9e18fdc47202fbf7b44ea16fb5492f2a3cce",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -822,7 +822,7 @@
       "path": "platform/tests/unit/test_perfect_market_ingest.py",
       "source": "beroun@bdb3f444:.synthbit/tests/test_perfect_market_ingest.py",
       "source_sha256": "af4f688cfa8fce4f27cac4bbed9b3ee3cd3d2a8408d05d2eae19b87244b7ed2e",
-      "sha256": "067e3b3c6d52119ae04dc8816613cf1e07e929832d1beb73616813d7f5012ba2",
+      "sha256": "24607cb365ad169c5822a15fca43f69b6620d7ed7a6b052cb15ea1200c3e26f6",
       "mode": "100644",
       "source_revision": "bdb3f4448d9bdbc5cab64c23f11beecd68a824a2"
     },
@@ -899,7 +899,7 @@
     {
       "path": "platform/research/LIFECYCLE.md",
       "source": "Sniper lifecycle repair 2026-09-29",
-      "sha256": "1423728c994ea42a2ed17accf7d3ffe70b47682d1d2860eaa75d40641fcabf13",
+      "sha256": "de23c4c8ae5ee4ec3a6c3962af9952053879ed226ab63bf43ffffef7938f2907",
       "mode": "100644"
     },
     {
@@ -955,6 +955,393 @@
       "source": "owner-authorized reconciliation 2026-09-29",
       "mode": "100644",
       "sha256": "327a2190514023c304e9516cf0a3fc74e5ba251336ad4ff13f7ee88657af51a3"
+    },
+    {
+      "path": "platform/research/history_recovery.py",
+      "source": "owner-authorized history recovery 2026-09-30",
+      "source_sha256": "991c5d89682c2bc2e570c76fedf0a6b7b9a16836dbd015755568a7859b297417",
+      "sha256": "991c5d89682c2bc2e570c76fedf0a6b7b9a16836dbd015755568a7859b297417",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/tests/unit/test_history_recovery.py",
+      "source": "owner-authorized history recovery 2026-09-30",
+      "source_sha256": "b0c7fa5ee340d26df9019d5656ddb680f74481d3a6bab0eb639387d34856b1b9",
+      "sha256": "b0c7fa5ee340d26df9019d5656ddb680f74481d3a6bab0eb639387d34856b1b9",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/tests/unit/test_history_sql.py",
+      "source": "owner-authorized history recovery 2026-09-30",
+      "source_sha256": "4fa4e4fe71540cd8c3374de217a6964669b49a07b31dd97a80fdfdbe4d1c1027",
+      "sha256": "4fa4e4fe71540cd8c3374de217a6964669b49a07b31dd97a80fdfdbe4d1c1027",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/research/candle_research.py",
+      "source": "sniper-native:reviewed-research-repair",
+      "mode": "100644",
+      "sha256": "25cf457aafd90474f318d4059e944b6ef6d038307a4d9a5e45b0d3d2f34f0ce1"
+    },
+    {
+      "path": "platform/tests/unit/test_candle_research.py",
+      "source": "sniper-native:reviewed-research-repair",
+      "mode": "100644",
+      "sha256": "4381b287e364bfa2d53b14207df058f3c1f2d99513521a854a5135fee2450eb5"
+    },
+    {
+      "path": "platform/research/lifecycle_policy.json",
+      "source": "sniper-native:owner-requested-lifecycle-rules-2026-09-30",
+      "mode": "100644",
+      "sha256": "c0cc4e55d7970b3c1d19ad6c5c5a1412594d61a0209c2914c0c3d4119a9d7c76"
+    },
+    {
+      "path": "platform/research/lifecycle_overview.py",
+      "source": "sniper-native:owner-requested-lifecycle-rules-2026-09-30",
+      "mode": "100644",
+      "sha256": "24e8156adf7e41a3f9002dc77f404389d397196202334c1fbc1acd805816edd1"
+    },
+    {
+      "path": "platform/tests/unit/test_lifecycle_overview.py",
+      "source": "sniper-native:owner-requested-lifecycle-rules-2026-09-30",
+      "mode": "100644",
+      "sha256": "3bc08098c5d081fd176f098d741ae479b2f9303743ced2772f70c728770f07eb"
+    },
+    {
+      "path": "platform/research/operational_observation.py",
+      "source": "owner-authorized audit step 1 repair",
+      "mode": "100644",
+      "sha256": "aac6fa06400e595b642074d0f30d752babe9c98c3398272c4dece919d49b30b6"
+    },
+    {
+      "path": "platform/tests/unit/test_operational_observation.py",
+      "source": "owner-authorized audit step 1 repair",
+      "mode": "100644",
+      "sha256": "2c46aa20dac14b2eec4ef2de8ee7e8b011b719c34afd1cf7218df2f3fffb6638"
+    },
+    {
+      "path": "platform/tests/unit/test_observation_sql.py",
+      "source": "owner-authorized audit step 1 repair",
+      "mode": "100644",
+      "sha256": "a65daa2c84c2168854a40c1c52ef347ca01908c85ae18bf07ee3883d6d03f1a9"
+    },
+    {
+      "path": "platform/tests/unit/test_observation_install.py",
+      "source": "owner-authorized audit step 1 repair",
+      "mode": "100644",
+      "sha256": "3f625d5d48f074c8f3f0350e837a079009666fd2d10c963e4cd04e3176721835"
+    },
+    {
+      "path": "platform/scripts/db_client.py",
+      "source": "owner-requested application identity consolidation",
+      "mode": "100644",
+      "sha256": "fe05b0b3222780a9ebc0b4fe91a0df151b9d2f2449de97cb4ef95e7f0e1de21f"
+    },
+    {
+      "path": "platform/tests/unit/test_application_db_client.py",
+      "source": "owner-requested application identity consolidation",
+      "mode": "100644",
+      "sha256": "59316cde6cefc49093ae17527cd02d454cef84c45ee8dd1406a78c4268a1da8e"
+    },
+    {
+      "path": "platform/research/hyperliquid_history.py",
+      "source": "owner-authorized Hyperliquid data audit implementation",
+      "mode": "100644",
+      "sha256": "c5ea7b85469e6591367344efefea448531bce2750756c047e76cab2e8f294b5d"
+    },
+    {
+      "path": "platform/tests/unit/test_hyperliquid_history.py",
+      "source": "owner-authorized Hyperliquid data audit implementation",
+      "mode": "100644",
+      "sha256": "e480a90727e89ee353b363c0c247e4089718719300f492e512fc08ad88b426ec"
+    },
+    {
+      "path": "platform/research/hyperliquid_account.py",
+      "source": "owner-authorized read-only Hyperliquid account connection",
+      "mode": "100644",
+      "sha256": "b54c23d31d9d1406db388cde0d2700c220bde1c92c5c39c4ed2ddf6079d4e31e"
+    },
+    {
+      "path": "platform/tests/unit/test_hyperliquid_account.py",
+      "source": "owner-authorized read-only Hyperliquid account connection",
+      "mode": "100644",
+      "sha256": "a965b18b184b5547d5d7792bc176edbd891ca23ce17f3a97886bc6b4b794eb8d"
+    },
+    {
+      "path": "platform/research/research_protocol.py",
+      "source": "owner-authorized bounded economic research cycle",
+      "mode": "100644",
+      "sha256": "221e65a8c21626407356b8512bac61a4824eb82bde52ef23f641552f93882590"
+    },
+    {
+      "path": "platform/research/research_cycle.py",
+      "source": "owner-authorized bounded economic research cycle",
+      "mode": "100644",
+      "sha256": "304e75adff6fe9f88531b8535562c857b5ad9e7230dfae50f83b75e194dcb1e1"
+    },
+    {
+      "path": "platform/tests/unit/test_research_protocol.py",
+      "source": "owner-authorized bounded economic research cycle",
+      "mode": "100644",
+      "sha256": "0ad938a9a3aea43914564217a07ed5fe73e1240dded7c1f79daa03190a7000ed"
+    },
+    {
+      "path": "platform/tests/unit/test_research_cycle.py",
+      "source": "owner-authorized bounded economic research cycle",
+      "mode": "100644",
+      "sha256": "0a7a6c7763b249b0f28ca88abe20b32e8bbe00571687b12a13bad41bfa1e7577"
+    },
+    {
+      "path": "platform/gateway/hyperliquid_orders.py",
+      "source": "Sniper audit step 4: guarded order boundary",
+      "source_sha256": "8b9d40f4c092edaa2ae5c1daf7d56711bf557c06bdd5cf0a010bc5f2d8109a97",
+      "sha256": "2cf9fc94fd3a776fc66b27e5cffe4ca2913edd3e003b453592ddb5c5fadf89c7",
+      "mode": "100644",
+      "source_revision": "5ab3c4f61338cd2059d9822d410ca276f3b3b600"
+    },
+    {
+      "path": "platform/tests/unit/test_hyperliquid_orders.py",
+      "source": "Sniper audit step 4: guarded order boundary",
+      "source_sha256": "471bd3438d4d51fcddbc30a34352becc0a2d2d819e05db4e9ccda4fa039ad24a",
+      "sha256": "e2ce71fc3cefacde93f3993ea352e4e28438ebf7a0537232a264562928b22482",
+      "mode": "100644",
+      "source_revision": "5ab3c4f61338cd2059d9822d410ca276f3b3b600"
+    },
+    {
+      "path": "platform/research/hyperliquid_mandate.py",
+      "source": "Owner 90 percent capital and AI risk delegation",
+      "source_sha256": "05feb227984d79505725e89d3004b9b89de6826b3ca57b967fe493074bceb1c8",
+      "sha256": "05feb227984d79505725e89d3004b9b89de6826b3ca57b967fe493074bceb1c8",
+      "mode": "100644",
+      "source_revision": "31ad61c0fff0b0d85a58ed1f5b89210e3ca29df9"
+    },
+    {
+      "path": "platform/tests/unit/test_hyperliquid_mandate.py",
+      "source": "Owner 90 percent capital and AI risk delegation",
+      "source_sha256": "7296a73edc77fe8f3d3bd8c063fa3fbd51fc9af98bf4c8829f4669274d2e6945",
+      "sha256": "7296a73edc77fe8f3d3bd8c063fa3fbd51fc9af98bf4c8829f4669274d2e6945",
+      "mode": "100644",
+      "source_revision": "31ad61c0fff0b0d85a58ed1f5b89210e3ca29df9"
+    },
+    {
+      "path": "platform/gateway/portfolio_risk.py",
+      "source": "sniper:owner-authorized-lifecycle-completion",
+      "source_sha256": "1b4d03a77204a21a9bd584e641698dfa4e5aee197bf55e8c145fe7899491f524",
+      "sha256": "1b4d03a77204a21a9bd584e641698dfa4e5aee197bf55e8c145fe7899491f524",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/tests/unit/test_portfolio_risk.py",
+      "source": "sniper:owner-authorized-lifecycle-completion",
+      "source_sha256": "34670c8d9ed78119245eb6e3963bb7b7de198fe103830c3dd4a4c5301d322981",
+      "sha256": "34670c8d9ed78119245eb6e3963bb7b7de198fe103830c3dd4a4c5301d322981",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/gateway/order_validation.py",
+      "source": "sniper:owner-authorized-lifecycle-completion",
+      "source_sha256": "577a416042688705b30359d84ff5d8f14b437c54792b2569033adeb1af3c5364",
+      "sha256": "530409685130ec1da8383e55389afb43b489cd2db04c11f08e9500495b59c34c",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/gateway/spot_risk_observation.py",
+      "source": "sniper:owner-authorized-lifecycle-completion",
+      "source_sha256": "9fc2a3ea79f425c0f80e8ceafe055616177ad4dec7ea6f9bab79e2043eda88ff",
+      "sha256": "1ae28e9a8d846a1b5609521c5edb6dcb92719468ef49617a1cff02f2d15fac45",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/research/research_accounting_audit.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "63e58f221c0e09c8c3151075e076631734e48bb5b8ccd5c697e31a9557f205b4",
+      "sha256": "63e58f221c0e09c8c3151075e076631734e48bb5b8ccd5c697e31a9557f205b4",
+      "mode": "100644",
+      "source_revision": "23eb8113a34bff53914235c4ba3c1d9ec2a206a2"
+    },
+    {
+      "path": "platform/tests/unit/test_research_accounting_audit.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "7195f8ca2d92dd126dd459a3498ad9397f601917da9882d06c4974f4faca37a6",
+      "sha256": "7195f8ca2d92dd126dd459a3498ad9397f601917da9882d06c4974f4faca37a6",
+      "mode": "100644",
+      "source_revision": "23eb8113a34bff53914235c4ba3c1d9ec2a206a2"
+    },
+    {
+      "path": "infra/beroun/install_forward_research.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "f32e75b050e9e04da105eb79b57d775aaa07f20b86f8f1e94993d17c71433324",
+      "sha256": "f5c79b85a5d9f93a34c152e521af167e55368b200a1ff9820722a47552bb284b",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "infra/beroun/sniper-forward-research.service",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "373b25d54ec544fe43cec0bcf45c62f3a9f15466d2845d03f41c82ea9e7f5d46",
+      "sha256": "373b25d54ec544fe43cec0bcf45c62f3a9f15466d2845d03f41c82ea9e7f5d46",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "infra/beroun/sniper-forward-screen.service",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "d976774904ed7f548c07ac46d9cfa276255c6443c83efc8ad26523ae6cc7ab48",
+      "sha256": "d976774904ed7f548c07ac46d9cfa276255c6443c83efc8ad26523ae6cc7ab48",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "infra/beroun/sniper-forward-screen.timer",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "765336b098bf22cd5c0d28077ead175473f7863c821bac7a880fe7c815d4a629",
+      "sha256": "765336b098bf22cd5c0d28077ead175473f7863c821bac7a880fe7c815d4a629",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/research/execution_evidence.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "0336c0cb082e422fcdf77e103cfd3a48055536436c690b4c1e47c71ca896585d",
+      "sha256": "0336c0cb082e422fcdf77e103cfd3a48055536436c690b4c1e47c71ca896585d",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/research/forward_pipeline.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "c3cfb302ee8d4522bcc0a0e3a755bf5f8e2141cfa3612d05f105bc5fc31d1ace",
+      "sha256": "c3cfb302ee8d4522bcc0a0e3a755bf5f8e2141cfa3612d05f105bc5fc31d1ace",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/research/forward_reference.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "99877499ec4cabf67fce39cb741a9bf8b9aac6cb29391bc33a49d8d627f1b8f0",
+      "sha256": "99877499ec4cabf67fce39cb741a9bf8b9aac6cb29391bc33a49d8d627f1b8f0",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/research/forward_worker.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "9d6aed1ed8e4a131bb1111358038c2e25be5f41a0edddaf566fd6fb963f7bbf2",
+      "sha256": "80b3c92ce9a197634a9723fc9f58fc18e446c054c0b36239307c20b749d75ade",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/research/strategy_recipes.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "d1e6b6185b48168f3b4c70bab217cf7c493f63bc102f92c12c5040285c3d6637",
+      "sha256": "d1e6b6185b48168f3b4c70bab217cf7c493f63bc102f92c12c5040285c3d6637",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/tests/unit/test_execution_evidence.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "0dcef9e432eddaacd611b84014b8455e82ce1438ead51d8a6d37f9a8df30e5c2",
+      "sha256": "0dcef9e432eddaacd611b84014b8455e82ce1438ead51d8a6d37f9a8df30e5c2",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/tests/unit/test_forward_installation.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "b9d529016fd49671a1ffaeebf57e893399914818a35a4dc8b3f22755991309c1",
+      "sha256": "45d7e3be4c16c02cfdcfc6687354ae392583dc34ce7d9a5a7dfd61dde4f70b34",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/tests/unit/test_forward_pipeline.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "65419a2648b2710c2d92766c52cd6256a54fcb1e053f5d541520a40533e65b87",
+      "sha256": "65419a2648b2710c2d92766c52cd6256a54fcb1e053f5d541520a40533e65b87",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/tests/unit/test_strategy_recipes.py",
+      "source": "sniper:independent-accounting-continuation",
+      "source_sha256": "f43d5c4d965c094396476aa3f68a76c6bf8e7d149343911e6728443958de1f96",
+      "sha256": "f43d5c4d965c094396476aa3f68a76c6bf8e7d149343911e6728443958de1f96",
+      "mode": "100644",
+      "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/gateway/hyperliquid_mainnet.py",
+      "sha256": "a91c4e99263a770d2e109bf5271787c4f093304ce1f8a79ac713ff2f72b8c695",
+      "source_sha256": "d273383871d186a573d5ec94bececbbb398b904fc9a24870ba8db177b87de0a6",
+      "source": "sniper:owner-next-lifecycle-steps",
+      "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/gateway/mainnet_admission.py",
+      "sha256": "33673391c23bffa66e3a5c2bc380a209d150c1bcdacf2a1406d59181c00bf5ff",
+      "source_sha256": "e6c80ed9030b34bb8370b95bebeccccdce2fa19704cde325d29bfb8fe176b3b7",
+      "source": "sniper:owner-next-lifecycle-steps",
+      "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/research/forward_operations.py",
+      "sha256": "08474df1e3aab01e04999616cf189e4126a94b700afa7d99541e8120ced56e33",
+      "source_sha256": "7db5ad77be7221362f229b7b7767a0d51601182457bb93dfac75b3ae8c9d9cd4",
+      "source": "sniper:owner-next-lifecycle-steps",
+      "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/research/strategy_proposals.py",
+      "sha256": "d952a68980759d5ef5b2ebfbf91748a412ffa422b43debfb7b696b1d54cc588b",
+      "source_sha256": "d952a68980759d5ef5b2ebfbf91748a412ffa422b43debfb7b696b1d54cc588b",
+      "source": "sniper:owner-next-lifecycle-steps",
+      "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/tests/unit/test_forward_operations.py",
+      "sha256": "0f981b61f113aa41699bbe9a82cd00c6fbf19962f4535e30b4db5d09df6971f7",
+      "source_sha256": "04607d48b1e31c73b5e7591850c21ab16ab50513485f31bd9a5be493cf8642f0",
+      "source": "sniper:owner-next-lifecycle-steps",
+      "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/tests/unit/test_hyperliquid_mainnet.py",
+      "sha256": "2c02e29d165dc882f29859812276e1f70bae16f1143fec3b0fdcf224784edf7b",
+      "source_sha256": "102f59c088446021b0fae8559f39f0d29e2b879544805c3f510651b9028f5a51",
+      "source": "sniper:owner-next-lifecycle-steps",
+      "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/tests/unit/test_mainnet_admission.py",
+      "sha256": "e71075d80f6e753836c86eb8cde0feb6285bf79fab331684ee4a595646e10556",
+      "source_sha256": "20d7bd0d8a4edebec85108ad53e43fc18ff29a28099e92f543d98b2e7b202017",
+      "source": "sniper:owner-next-lifecycle-steps",
+      "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/tests/unit/test_strategy_proposals.py",
+      "sha256": "b2acfa6554a79dd128b7dfe49b7eed59abf25d815121424f985e1c8e2ae39227",
+      "source_sha256": "b2acfa6554a79dd128b7dfe49b7eed59abf25d815121424f985e1c8e2ae39227",
+      "source": "sniper:owner-next-lifecycle-steps",
+      "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",
+      "mode": "100644"
+    },
+    {
+      "path": "infra/beroun/RISK_EXECUTION.md",
+      "sha256": "62661325dbaa63919aadbcabcf7457e3a2327cf7f004e5048f243e3e2fca5bd2",
+      "source_sha256": "a94f6b28d65202c15ed8732302f9495b59c24bedf430bca5e9672978e6f228fa",
+      "source": "sniper:owner-next-lifecycle-steps",
+      "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",
+      "mode": "100644"
     }
   ]
 }

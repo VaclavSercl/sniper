@@ -129,12 +129,13 @@ The Cortex is a dedicated Rust daemon running 5 concurrent subsystems:
 - **SeqLock write protocol:** Increment version (odd), write fields, increment version (even)
 
 ### Sovereign Boot Protocol (SBP)
-1. **Phase 1:** Infrastructure (Cortex, PnL, Dashboard, Commander)
-2. **Phase 2:** Read pre-crash state from `state/armada_state.json`
-3. **Phase 3:** Start all bots in **PAPER** mode
-4. **Phase 4:** 66-minute validation window (monitor PnL, fills, toxicity)
-5. **Phase 5:** AI-driven analysis (Gemini evaluates performance)
-6. **Phase 6:** Promote passing bots to **LIVE**
+The old 66-minute PAPER-to-LIVE procedure is retired and is not a deployment
+instruction. Legacy Armada state cannot qualify a Hyperliquid strategy.
+The current contract is documented in `platform/research/LIFECYCLE.md`:
+preregistered historical evidence, measured mainnet execution calibration,
+independent reproduction, at least 30 actual forward-paper days, verified
+execution and independent risk admission before a capped live canary. Missing
+evidence keeps funds unallocated. Boot/restart never bypasses these gates.
 
 ---
 

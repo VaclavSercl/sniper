@@ -1,0 +1,10 @@
+[Unit]
+Description=Sniper daily bounded economic blueprint registration and testing
+
+[Timer]
+OnCalendar=*-*-* 03:15:00 UTC
+Persistent=true
+Unit=sniper-research-cycle.service
+
+[Install]
+WantedBy=timers.target

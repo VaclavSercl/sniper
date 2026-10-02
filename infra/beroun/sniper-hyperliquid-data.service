@@ -1,0 +1,21 @@
+[Unit]
+Description=Sniper public spot/perpetual historical data archive
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=beroun
+Group=beroun
+WorkingDirectory=/opt/sniper/current/platform/research
+ExecStart=/usr/bin/python3 -B /opt/sniper/current/platform/research/hyperliquid_history.py capture
+StateDirectory=sniper/hyperliquid-data
+StateDirectoryMode=0700
+UMask=0077
+TimeoutStartSec=900
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=/var/lib/sniper/hyperliquid-data

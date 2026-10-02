@@ -1,0 +1,34 @@
+[Unit]
+Description=Sniper measured spot books and guarded forward research
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=beroun
+Group=beroun
+ExecStart=/usr/bin/python3 -B /opt/sniper/current/platform/research/forward_worker.py run
+Restart=on-failure
+RestartSec=5
+StateDirectory=sniper/forward-research-v1
+StateDirectoryMode=0700
+UMask=0077
+Nice=10
+CPUQuota=50%
+MemoryMax=768M
+TimeoutStopSec=30
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadOnlyPaths=/var/lib/sniper/hyperliquid-data /var/lib/sniper/hyperliquid-research
+ReadWritePaths=/var/lib/sniper/forward-research-v1
+InaccessiblePaths=-/etc/sniper -/var/lib/sniper/hyperliquid-account -/var/lib/sniper/hyperliquid-orders
+
+[Install]
+WantedBy=multi-user.target

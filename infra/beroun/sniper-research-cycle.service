@@ -1,0 +1,21 @@
+[Unit]
+Description=Sniper bounded preregistered Hyperliquid research cycle
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=beroun
+Group=beroun
+ExecStart=/usr/bin/python3 -B /opt/sniper/current/platform/research/research_cycle.py cycle
+StateDirectory=sniper/hyperliquid-research
+StateDirectoryMode=0700
+UMask=0077
+TimeoutStartSec=600
+Nice=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+RestrictAddressFamilies=AF_UNIX
+ReadOnlyPaths=/var/lib/sniper/hyperliquid-data /var/lib/sniper/hyperliquid-account
+ReadWritePaths=/var/lib/sniper/hyperliquid-research

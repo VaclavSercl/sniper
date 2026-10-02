@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh sanitized Sniper observations every five minutes
+
+[Timer]
+OnBootSec=60
+OnUnitActiveSec=5min
+AccuracySec=1s
+Unit=sniper-observation.service
+
+[Install]
+WantedBy=timers.target

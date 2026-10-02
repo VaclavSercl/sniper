@@ -3,9 +3,11 @@
 > **Research repair:** [evidence-driven lifecycle](platform/research/LIFECYCLE.md)
 > documents actual capabilities and blockers. Legacy T15 metrics do not qualify
 > trading. The registry exporter no longer writes fabricated PASS results to
-> another repository. Daily parameter proposals and offline evaluation have a
-> repository-owned scheduler candidate; installation and live readiness must be
-> verified separately. Existing marketing descriptions below are not deployment
+> another repository. A bounded daily T1 research timer was deployed on Beroun;
+> new-hypothesis generation and paper-to-live promotion remain unimplemented.
+> Hyperliquid spot/perpetual rules and proposed capacity are recorded in the
+> lifecycle policy; configured targets are not observed throughput.
+> Existing marketing descriptions below are not deployment
 > or profitability evidence.
 
 > **Repository ownership (2026-09-29):** Sniper is the single trading system and

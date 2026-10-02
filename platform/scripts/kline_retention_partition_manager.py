@@ -16,6 +16,7 @@ import time
 from datetime import datetime, timezone, timedelta
 from dateutil.relativedelta import relativedelta
 from typing import List, Tuple
+from db_client import psql
 
 logging.basicConfig(
     level=logging.INFO,
@@ -26,15 +27,6 @@ logger = logging.getLogger("retention_manager")
 RETENTION_DAYS = 1222
 TICK_RETENTION_DAYS = 90
 TABLES = ["market_klines", "market_funding"]
-
-
-def psql(sql: str, check: bool = True) -> str:
-    cmd = ["sudo", "-u", "beroun", "psql", "-d", "beroun", "-t", "-A", "-c", sql]
-    res = subprocess.run(cmd, capture_output=True, text=True)
-    if check and res.returncode != 0:
-        logger.error("PSQL Error: %s | Query: %s", res.stderr.strip(), sql)
-        raise RuntimeError(f"psql failed: {res.stderr.strip()}")
-    return res.stdout.strip()
 
 
 def ensure_future_partitions(advance_months: int = 2) -> List[str]:

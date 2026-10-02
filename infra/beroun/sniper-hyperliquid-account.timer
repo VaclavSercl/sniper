@@ -1,0 +1,10 @@
+[Unit]
+Description=Sniper read-only account check every 30 minutes
+
+[Timer]
+OnBootSec=3min
+OnUnitInactiveSec=30min
+Unit=sniper-hyperliquid-account.service
+
+[Install]
+WantedBy=timers.target

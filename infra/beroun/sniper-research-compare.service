@@ -1,0 +1,19 @@
+[Unit]
+Description=Sniper cohort-specific weekly research comparison
+
+[Service]
+Type=oneshot
+User=beroun
+Group=beroun
+ExecStart=/usr/bin/python3 -B /opt/sniper/current/platform/research/research_cycle.py compare
+StateDirectory=sniper/hyperliquid-research
+StateDirectoryMode=0700
+UMask=0077
+TimeoutStartSec=120
+Nice=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+RestrictAddressFamilies=AF_UNIX
+ReadWritePaths=/var/lib/sniper/hyperliquid-research
