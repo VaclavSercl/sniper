@@ -1289,7 +1289,7 @@
     },
     {
       "path": "platform/research/forward_operations.py",
-      "sha256": "b60bab91a8ff5e1087b50632419a0a1a7005eb7debbd8335a4a88d5a6805b18d",
+      "sha256": "08474df1e3aab01e04999616cf189e4126a94b700afa7d99541e8120ced56e33",
       "source_sha256": "7db5ad77be7221362f229b7b7767a0d51601182457bb93dfac75b3ae8c9d9cd4",
       "source": "sniper:owner-next-lifecycle-steps",
       "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",
@@ -1305,7 +1305,7 @@
     },
     {
       "path": "platform/tests/unit/test_forward_operations.py",
-      "sha256": "74e69b611548aa6b1228b8f8cf93c7c5dadd09f5d5160b0a171f65b0105ef441",
+      "sha256": "0f981b61f113aa41699bbe9a82cd00c6fbf19962f4535e30b4db5d09df6971f7",
       "source_sha256": "04607d48b1e31c73b5e7591850c21ab16ab50513485f31bd9a5be493cf8642f0",
       "source": "sniper:owner-next-lifecycle-steps",
       "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",

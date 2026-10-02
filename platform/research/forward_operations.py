@@ -196,7 +196,9 @@ def retain_two(archive):
 def backup(root, now_ms=None, max_backup_bytes=24*GIB):
     now_ms = int(time.time()*1000) if now_ms is None else integer(now_ms)
     root = private(root, directory=True); source = private(root/'forward.sqlite3')
-    archive = private(root/'operations/backups', directory=True, create=True)
+    # parents=True does not apply mode to intermediate directories.
+    operations = private(root/'operations', directory=True, create=True)
+    archive = private(operations/'backups', directory=True, create=True)
     import fcntl
     lock = safe(archive/'writer.lock')
     fd = os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)

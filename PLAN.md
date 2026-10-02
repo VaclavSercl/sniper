@@ -1,4 +1,56 @@
 # Backtest integrity repair
+## October 2 approved private operations parent repair
+
+Goal: resolve the actual fb44ad0 production maintenance ValueError. Read-only
+production diagnosis, isolated exact-source umask0022 reproduction and actual
+AGY opposition confirmed that recursive backup mkdir left operations0755.
+The backup/restore passed; strict alert-path validation correctly rejected it.
+Baseline fb44ad0328abf10dd60482a2a9edf33d7931d4da, clean repair/history-recovery,
+same pinned universal instruction set and common-dir application operation.
+Owner approves one specific further A.10 cycle: retain3 automatic,2 prior extra
+and5 earlier completed repairs; reserve extra3 before changes, no budget reset.
+
+Non-goals: no generic harness installation, model/epoch/candidate/risk changes,
+financial orders, service identity changes, merge, force push or broad cleanup.
+Detected environment: Windows Git/Python for isolated checkout; existing Linux
+Python/PostgreSQL fixture and actual AGY read-only namespace on Beroun, no install.
+Impact/file checklist: this plan; platform/research/forward_operations.py;
+platform/tests/unit/test_forward_operations.py; platform/SOURCE_MANIFEST.json.
+Create/validate operations explicitly before backups, preserving strict ownership,
+mode and symlink guards. Never adopt an existing unsafe parent automatically.
+
+Acceptance: complete maintenance under umask0022 creates private operations and
+backups, real backup/restore succeeds and alert transition is recorded; repeat
+preserves WAL and immutable proof; unsafe existing0755 parent is rejected without
+mutation. Exercise research_work through real maintenance with scoped fixture
+metadata/candidates and missing calibration, preserving qualification blocks.
+Exact checks: python3 -B -m unittest discover -s platform/tests/unit -p
+test_forward_operations.py -v; python3 -B tools/verify_platform.py; git diff
+--cached --check; exact scope/mode/secret/manifest/frozen-module audit. Actual
+AGY opposition and selected offline tests precede final exact-candidate gate.
+
+Authorized deployment: exact verified checkpoint to VaclavSercl/sniper
+refs/heads/repair/history-recovery, update existing PR101 without merge; immutable
+source-only release on Beroun. After owner/identity/symlink/mode/backup evidence
+checks, change only /var/lib/sniper/forward-research-v1/operations0755->0700 via
+sudo -n, without recursion or data modification. One research pass in the same
+epoch and read-only source/mandate/service/backup verification. Existing backup
+proof remains; today's verified backup is reused, not overwritten for a fake PASS.
+Failure scenarios: concurrent changes, unsafe/foreign parent, changed backup proof,
+failed gate, empty AGY review or uncertain push/deploy. Recovery: retain dirty work,
+all failed evidence, prior releases and data; stop that operation without retries
+or resetting budgets. Funded trading remains NO_GO; elapsed history/paper, actual
+calibration/testnet and continuous independent guardian remain required.
+Status: SOURCE_IMPLEMENTED_PRELIMINARY_GATE_PASS_FINAL_GATE_PENDING.
+All64 focused checks and412 complete Linux/PostgreSQL tests passed. Actual AGY
+first returned provider503 without a review; preserved as incomplete. One bounded
+retry completed with no confirmed defects and public research CONDITIONAL_GO,
+funded NO_GO. Its32 selected tests passed with source writes/network/credentials/
+production blocked. Changed source hashes remain exactly those reviewed. No
+publication/deployment or directory remediation has occurred for this candidate.
+Final exact-candidate gate follows this tracked evidence before checkpointing.
+Platform/supply-chain limitations remain; no dependency or policy weakening.
+
 
 ## October 2 approved copy-only A.10 continuation
 

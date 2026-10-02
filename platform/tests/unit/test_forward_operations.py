@@ -9,6 +9,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+import zlib
 from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'research'))
@@ -30,6 +31,60 @@ class Operations(unittest.TestCase):
                 [('hype',NOW,NOW,NOW,'20','hash',b'data'),('btc',NOW,NOW,NOW,'20','hash',b'data')])
     def tearDown(self):
         self.con.close();self.tmp.cleanup()
+    def test_complete_maintenance_under_normal_umask_and_repeat(self):
+        old=os.umask(0o022)
+        try:
+            result=ops.maintain(self.root,NOW)
+            self.assertEqual(result['status'],'PASS')
+            self.assertTrue(result['backup']['restore_verified'])
+            self.assertEqual(result['alert']['status'],'TRANSITION_RECORDED')
+            for path in (self.root/'operations',self.root/'operations/backups',self.root/'operations/alerts'):
+                self.assertEqual(path.stat().st_mode&0o777,0o700)
+            folder=Path(result['backup']['path'])
+            proof=(folder/'result.json').read_bytes();database=ops.digest(folder/'forward.sqlite3')
+            again=ops.maintain(self.root,NOW)
+            self.assertEqual(again['status'],'PASS')
+            self.assertEqual(again['backup']['status'],'ALREADY_VERIFIED_TODAY')
+            self.assertEqual(again['alert']['status'],'UNCHANGED')
+            self.assertEqual((folder/'result.json').read_bytes(),proof)
+            self.assertEqual(ops.digest(folder/'forward.sqlite3'),database)
+            self.assertEqual(self.con.execute('PRAGMA journal_mode').fetchone(),('wal',))
+        finally:os.umask(old)
+    def test_unsafe_existing_operations_parent_is_never_adopted(self):
+        parent=self.root/'operations';parent.mkdir();parent.chmod(0o755)
+        marker=parent/'unowned.txt';marker.write_text('preserve')
+        for callback in (lambda:ops.backup(self.root,NOW),lambda:ops.maintain(self.root,NOW)):
+            with self.assertRaisesRegex(ValueError,'Private owned operation path required'):callback()
+            self.assertEqual(parent.stat().st_mode&0o777,0o755)
+            self.assertEqual(marker.read_text(),'preserve')
+            self.assertEqual({p.name for p in parent.iterdir()},{'unowned.txt'})
+    def test_real_research_work_reaches_final_health_under_normal_umask(self):
+        from test_execution_evidence import MARKET
+        markets=[MARKET,{**MARKET,'id':'spot:OTHER/USDC','coin':'@124','symbol':'OTHER/USDC','asset_id':10124}]
+        pipeline.generate(self.con,markets,NOW)
+        value={'markets':markets}
+        diagnostic={'status':'CANDLE_DIAGNOSTIC_ONLY','source_epoch':'synthetic-fixture',
+                    'phases':{'validation':{'stress':{'net_return':'0'}}},'qualified':False}
+        with self.con:
+            self.con.execute('INSERT INTO metadata VALUES(?,?,?)',
+                (worker.ex.sha(value),NOW,zlib.compress(worker.history.encode(value))))
+            for identity, in self.con.execute('SELECT id FROM candidates').fetchall():
+                self.con.execute('INSERT INTO screens VALUES(?,?,?)',
+                    (identity,diagnostic['status'],worker.history.encode(diagnostic).decode()))
+        importer=worker.import_calibration;old=os.umask(0o022)
+        try:
+            with patch.object(worker.time,'time',return_value=NOW/1000),patch.object(worker,'import_calibration',
+                    side_effect=lambda con,now:importer(con,now,self.root/'missing-calibration.json')):
+                result=worker.research_work(self.con,self.root/'history',self.root/'old',NOW)
+            self.assertEqual(result['generation']['status'],'DAILY_QUOTA')
+            self.assertEqual(result['operations']['status'],'PASS')
+            self.assertTrue(result['operations']['backup']['restore_verified'])
+            self.assertEqual(result['operations']['alert']['status'],'TRANSITION_RECORDED')
+            self.assertEqual(result['calibration']['status'],'BLOCKED')
+            self.assertEqual(self.con.execute('SELECT status FROM health WHERE id=2').fetchone(),('PASS',))
+            self.assertEqual([self.con.execute('SELECT count(*) FROM '+table).fetchone()[0]
+                              for table in ('trials','paper','orders')],[0,0,0])
+        finally:os.umask(old)
     def test_wal_consistent_backup_and_real_restore_without_replacing_writer(self):
         result=ops.backup(self.root,NOW)
         self.assertTrue(result['restore_verified'])
