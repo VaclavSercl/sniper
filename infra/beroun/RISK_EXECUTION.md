@@ -2,10 +2,28 @@
 
 ## Current boundary
 
-The implemented Hyperliquid exchange path is TESTNET ONLY. Its spot buy admission
-now requires an exact durable portfolio reservation before signing. Mainnet
-orders, automatic paper admission and funded promotion remain unavailable. A
-source deployment does not enable a trading service or qualify a strategy.
+The verified operational exchange path remains TESTNET ONLY. Spot buy admission
+requires an exact durable portfolio reservation before signing. The separate
+`hyperliquid_mainnet.py` library now prepares model-compatible spot IOC intents
+in `mainnet.sqlite3`; preparation never signs or calls `/exchange`. Its explicit
+`dispatch_authorized` requires an exact root-issued fresh permit and consumes it
+durably before signing. Unknown outcomes cannot be replayed. Testnet journal,
+network binding and signature domain remain separate and unchanged.
+
+`mainnet_admission.py` recomputes the actual frozen candidate, historical/paper
+chain and measured calibration, validates the root-owned account/mandate and
+requires independent guardian and actual testnet-journal proof. Guardian evidence
+must bind the exact account, signer, candidate and pinned risk profile with fresh
+equity, availability, exposure, owned order inventory, loss and drawdown limits.
+Root custody of evidence is a host trust boundary, not protection against a
+hostile administrator fabricating it. A continuous independent guardian producer,
+real testnet execution, actual mainnet calibration and funded runtime wiring are
+not installed. Missing evidence blocks permits; no supplied PASS flag qualifies.
+Owned cancellations and inventory-reducing exits require exact reduction permits
+and may proceed under a risk halt, while stale/unowned evidence still blocks.
+
+A source deployment does not enable a funded service or qualify a strategy.
+The existing mandate still truthfully reports funded enforcement unavailable.
 
 The main-account owner mandate remains `/etc/sniper/hyperliquid-mandate.json`:
 at most 90% of measured account equity; one canary strategy; allocation at most
@@ -72,7 +90,8 @@ only venue reduce-only orders proven not to flip an existing position are allowe
 
 Prepared legacy buys without a durable risk reservation cannot be signed after
 the upgrade. The dispatch boundary derives this requirement from the actual
-product/side, not an optional caller flag. Mainnet transport is still absent.
+product/side, not an optional caller flag. The mainnet library has offline tests;
+actual signed mainnet execution and automatic funded promotion are unverified.
 
 ## Real testnet activation
 
@@ -111,6 +130,16 @@ preserve the four pinned research modules, epoch and consumed holdouts. Neither
 this document nor passing tests approves a new research epoch or bypasses gates.
 
 ## Verification and opposition
+
+The additional owner-approved A.10 repair rechecks the current root mandate and
+identity at signing/transport boundaries. Frozen v1 UNAVAILABLE cannot authorize
+entries. Permits constrain the actual expiresAfter to at most five seconds, with
+slow-signing and mandate-revocation regressions. New-entry lifetime accounting
+does not prevent completely proved owned spot exits under a halt; original
+testnet verification caps are preserved. Explicit expired-PREPARED recovery
+requires no dispatch event, the exclusive writer lock and complete account proof.
+Unknown writes are never reclassified or replayed through this recovery route.
+No funds or live risk-policy migration are authorized by these library changes.
 
 Pure Decimal/transaction tests cover fee allowance, pending reservations, original
 budget, equity chronology, midnight losses, drawdown, stale/future/gapped evidence,

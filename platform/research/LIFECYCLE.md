@@ -463,3 +463,53 @@ integration health PARTIAL. Running collection, positive diagnostics or elapsed
 wall time alone never grants funded promotion. Perpetual qualification remains
 blocked by missing margin/mark/funding mechanics; funded transport, actual testnet
 verification, guardian/risk/capacity gates are separate prerequisites.
+
+## Operation and proposal additions (October 1)
+
+`forward_operations.py` inspects actual archive/feed/storage state, projects the
+storage requirement to the last registered window, and keeps a deduplicated
+local alert outbox. Local recording is not external notification delivery.
+Each research pass performs an online daily SQLite backup and an actual restore
+into an absent private probe directory. Committed WAL contents, integrity,
+campaign/source identities and table counts are checked. Production restore is
+never automatic; existing targets and changed/corrupt backups are rejected.
+Backups share an explicit 24 GiB total budget, including temporary restore space.
+Keep two verified databases. Remove only older owned databases after verifying
+their hashes, retaining immutable intent/result and pruning evidence. Unknown,
+modified, incomplete or interrupted attempts block new backups and are preserved
+for explicit operator reconciliation; they are never retried automatically.
+The restore probe is deleted only after its actual restored hash/state matches;
+its proof remains in the backup result. Exhaustion is visible. This backup covers the forward
+SQLite epoch, not PostgreSQL, the separate candle archive or the whole server.
+Only newly created backup/restore copies are finalized as standalone DELETE
+journals with integrity/settings/count comparisons. The live source remains WAL;
+no unknown WAL/SHM files are manually removed to obtain successful verification.
+
+`strategy_proposals.py` balances economic trigger families within the existing
+336-mechanism/1,848-variant grammar and the SAME database-wide daily quota.
+Existing candidates, their model/source fingerprints and consumed holdouts are
+unchanged. Future candidates record proposal version/source/rationale provenance.
+External AI proposals can be validated as bounded data-only DSL; a paid or
+scheduled LLM generator is not configured by this change. No output executes as
+Python or changes risk thresholds, holding protocol, data windows or trial budget.
+
+The guarded mainnet library is distinct from the public worker. Preparing an
+order commits the nonce/intent/risk reserve without signing or sending it.
+An exact short-lived root-owned operation permit is required for dispatch. The
+permit issuer recomputes historical/paper/calibration evidence and requires
+independent fresh guardian and actual testnet evidence. These prerequisites
+remain unavailable in the current runtime. No funded daemon, credential reader
+or calibration pilot is installed; offline adapter tests are not actual fills.
+Independent continuous guardian implementation and real transport/recovery
+evidence remain blockers before any automated funded activation.
+
+Research health is RUNNING until maintenance finishes; external status never
+accepts this interim state. A combined once failure marks the actual failed stage.
+The current root mandate is reloaded before signing and immediately before send;
+UNAVAILABLE forbids entries. Venue expiry cannot exceed the five-second permit.
+Owned exits require complete reconciled fills and independent reduction permits,
+including under a latched halt, and do not consume new-entry lifetime caps.
+Expired PREPARED operations with no dispatch event may be explicitly reconciled
+as unsent after stopped-writer and complete account proof. Unknown sends remain
+blocked; no operation is replayed. These are offline-tested capabilities, with
+no funded daemon, production permits, actual orders or profit qualification.

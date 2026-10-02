@@ -899,7 +899,7 @@
     {
       "path": "platform/research/LIFECYCLE.md",
       "source": "Sniper lifecycle repair 2026-09-29",
-      "sha256": "8762428961ef98cfa8cc11da471c0f744e7616f3eb0a02df65d0b98a66e1b5cb",
+      "sha256": "de23c4c8ae5ee4ec3a6c3962af9952053879ed226ab63bf43ffffef7938f2907",
       "mode": "100644"
     },
     {
@@ -1095,7 +1095,7 @@
       "path": "platform/gateway/hyperliquid_orders.py",
       "source": "Sniper audit step 4: guarded order boundary",
       "source_sha256": "8b9d40f4c092edaa2ae5c1daf7d56711bf557c06bdd5cf0a010bc5f2d8109a97",
-      "sha256": "566d015c0dd0277f94fe03b652b6e89ef8511b0c52de11dc06cd461d6c6261f3",
+      "sha256": "2cf9fc94fd3a776fc66b27e5cffe4ca2913edd3e003b453592ddb5c5fadf89c7",
       "mode": "100644",
       "source_revision": "5ab3c4f61338cd2059d9822d410ca276f3b3b600"
     },
@@ -1227,7 +1227,7 @@
       "path": "platform/research/forward_worker.py",
       "source": "sniper:independent-accounting-continuation",
       "source_sha256": "9d6aed1ed8e4a131bb1111358038c2e25be5f41a0edddaf566fd6fb963f7bbf2",
-      "sha256": "9d6aed1ed8e4a131bb1111358038c2e25be5f41a0edddaf566fd6fb963f7bbf2",
+      "sha256": "80b3c92ce9a197634a9723fc9f58fc18e446c054c0b36239307c20b749d75ade",
       "mode": "100644",
       "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
     },
@@ -1270,6 +1270,78 @@
       "sha256": "f43d5c4d965c094396476aa3f68a76c6bf8e7d149343911e6728443958de1f96",
       "mode": "100644",
       "source_revision": "c9a4641464c1dca3c5956ee33ca84f63a71ec0f7"
+    },
+    {
+      "path": "platform/gateway/hyperliquid_mainnet.py",
+      "sha256": "a91c4e99263a770d2e109bf5271787c4f093304ce1f8a79ac713ff2f72b8c695",
+      "source_sha256": "d273383871d186a573d5ec94bececbbb398b904fc9a24870ba8db177b87de0a6",
+      "source": "sniper:owner-next-lifecycle-steps",
+      "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/gateway/mainnet_admission.py",
+      "sha256": "33673391c23bffa66e3a5c2bc380a209d150c1bcdacf2a1406d59181c00bf5ff",
+      "source_sha256": "e6c80ed9030b34bb8370b95bebeccccdce2fa19704cde325d29bfb8fe176b3b7",
+      "source": "sniper:owner-next-lifecycle-steps",
+      "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/research/forward_operations.py",
+      "sha256": "b60bab91a8ff5e1087b50632419a0a1a7005eb7debbd8335a4a88d5a6805b18d",
+      "source_sha256": "7db5ad77be7221362f229b7b7767a0d51601182457bb93dfac75b3ae8c9d9cd4",
+      "source": "sniper:owner-next-lifecycle-steps",
+      "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/research/strategy_proposals.py",
+      "sha256": "d952a68980759d5ef5b2ebfbf91748a412ffa422b43debfb7b696b1d54cc588b",
+      "source_sha256": "d952a68980759d5ef5b2ebfbf91748a412ffa422b43debfb7b696b1d54cc588b",
+      "source": "sniper:owner-next-lifecycle-steps",
+      "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/tests/unit/test_forward_operations.py",
+      "sha256": "74e69b611548aa6b1228b8f8cf93c7c5dadd09f5d5160b0a171f65b0105ef441",
+      "source_sha256": "04607d48b1e31c73b5e7591850c21ab16ab50513485f31bd9a5be493cf8642f0",
+      "source": "sniper:owner-next-lifecycle-steps",
+      "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/tests/unit/test_hyperliquid_mainnet.py",
+      "sha256": "2c02e29d165dc882f29859812276e1f70bae16f1143fec3b0fdcf224784edf7b",
+      "source_sha256": "102f59c088446021b0fae8559f39f0d29e2b879544805c3f510651b9028f5a51",
+      "source": "sniper:owner-next-lifecycle-steps",
+      "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/tests/unit/test_mainnet_admission.py",
+      "sha256": "e71075d80f6e753836c86eb8cde0feb6285bf79fab331684ee4a595646e10556",
+      "source_sha256": "20d7bd0d8a4edebec85108ad53e43fc18ff29a28099e92f543d98b2e7b202017",
+      "source": "sniper:owner-next-lifecycle-steps",
+      "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",
+      "mode": "100644"
+    },
+    {
+      "path": "platform/tests/unit/test_strategy_proposals.py",
+      "sha256": "b2acfa6554a79dd128b7dfe49b7eed59abf25d815121424f985e1c8e2ae39227",
+      "source_sha256": "b2acfa6554a79dd128b7dfe49b7eed59abf25d815121424f985e1c8e2ae39227",
+      "source": "sniper:owner-next-lifecycle-steps",
+      "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",
+      "mode": "100644"
+    },
+    {
+      "path": "infra/beroun/RISK_EXECUTION.md",
+      "sha256": "62661325dbaa63919aadbcabcf7457e3a2327cf7f004e5048f243e3e2fca5bd2",
+      "source_sha256": "a94f6b28d65202c15ed8732302f9495b59c24bedf430bca5e9672978e6f228fa",
+      "source": "sniper:owner-next-lifecycle-steps",
+      "source_revision": "081be0c8a9efec7c984936b6d43e858a748e044a",
+      "mode": "100644"
     }
   ]
 }

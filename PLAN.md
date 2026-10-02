@@ -1,5 +1,135 @@
 # Backtest integrity repair
 
+## October 2 approved copy-only A.10 continuation
+
+Same baseline, operation, owned 15 paths and pinned instruction bytes. Owner
+approved one further specific repair: normalize only the newly created SQLite
+backup and restore copies to DELETE journal mode, compare integrity/settings/
+counts before and after, and add a regression proving the live source remains
+WAL. No unknown auxiliary files or production state are manually deleted.
+The three automatic repairs and prior extra failure remain immutable; this
+reserves the second specific extra repair, with no general budget reset.
+Affected checks then python3 -B tools/verify_platform.py on exact staged Git
+bytes; fresh actual read-only AGY opposition and AGY-selected offline checks.
+No publication, sudo or funded-action permission is enlarged by this exception.
+Status: COPY_REPAIR_IMPLEMENTED_AND_PRELIMINARILY_VERIFIED. All 61 focused
+checks and the complete 409-test Linux/PostgreSQL gate passed. Actual public
+capture/backup/restore and 14 installed SDK synthetic signing checks passed.
+Two new actual read-only AGY reviews have no confirmed defects; 57 selected tests
+passed in a network/credential/production-free namespace. Evidence is immutable
+under the same Git common-dir application operation, not a generic harness ledger.
+Final exact-candidate gate follows this tracked summary before checkpointing.
+Publication/deployment are separate and have not occurred. Existing PR #101 and
+the actual repair/history-recovery remote head were read-only verified at 081be0c.
+Funded stage remains NO_GO: no actual testnet/calibration/complete historical and
+30-real-day paper qualification, continuous independent guardian or funded daemon.
+MacOS/WSL, Rust, remote CI and a new supply-chain audit were not exercised; no
+dependency or risk-policy change was made. Local alerts are not external delivery.
+
+## October 1 explicit A.10 continuation, same operation and baseline
+
+Owner approved one specific additional repair cycle after the AGY findings.
+The current three consumed automatic repairs and the prior completed five remain
+immutable. This continuation reserves repair four before source changes; no new
+general repair budget, sudo grant, publication or funded trading is inferred.
+Saved index, working hashes, baseline, branch and pinned instructions were checked.
+
+Within the existing 15-path scope: invalidate research health before work and
+publish PASS only after maintenance; attribute once failures to the actual stage.
+Back up online, restore in a temporary private probe, retain two verified databases
+within 24 GiB, and preserve incomplete/unknown artifacts without retry or deletion.
+Only exact owned old copies with verified immutable evidence may be pruned; retain
+intent/result/hash and pruning evidence. Keep the two newest verified copies.
+Mainnet admission rechecks the current root mandate/account and refuses new risk
+under UNAVAILABLE; revalidate before signing and immediately before sending. Bind
+venue expiry to the earlier intent/permit limit. Reconcile provably unsent expired
+PREPARED intents with no dispatch event and fresh complete owned account evidence,
+never retry unknown writes. Permit fully proved reducing spot exits under a halt
+without consuming new-entry lifetime caps; preserve original testnet caps.
+
+Regression checks cover abrupt research interruption, stage attribution, retention
+and interrupted backup preservation, slow signing, revoked mandates, unknown vs
+unsent intent, and complete-fill owned exits vs unowned inventory. Then the exact
+staged LF candidate runs python3 -B tools/verify_platform.py plus actual read-only
+AGY review and AGY-selected offline tests. Failure leaves restartable evidence;
+one specific exception is not permission for another automatic repair.
+No epochs, frozen model/grammar, risk fractions, keys or services are changed.
+Status: OWNER_EXCEPTION_RESERVED_IMPLEMENTATION_PENDING.
+
+## October 1 owner-authorized next lifecycle implementation, baseline 081be0c
+
+Goal: execute the five owner-selected next steps, starting with operation,
+execution safeguards and diverse proposals; obtain actual AGY tests and review.
+This is new application work from the completed clean checkpoint
+081be0c8a9efec7c984936b6d43e858a748e044a on repair/history-recovery.
+The preceding completed run retains its five consumed repairs and immutable
+failure/success evidence; it is not resumed or relabelled as a fresh attempt.
+New failures receive at most three evidence-driven repairs for this scope.
+Universal v2.3 owner-selected bytes/digest remain the operating instruction pin.
+No generic harness installation or unrelated accounts/repositories are in scope.
+
+Discovery: inspect current Beroun sources, units, storage and reports read-only.
+The verified Linux/Python/PostgreSQL fixture and existing AGY namespace are reused
+without installing dependencies. Local worktree is clean, linked Git common dir
+is the authoritative application operation store. All managed paths must remain
+inside this worktree; preserve server WIP, credentials and independent guardian.
+
+Impact/file checklist: add platform/research/forward_operations.py for bounded
+health/storage reporting, durable transition alerts and consistent SQLite backup
+with restoration to a new private target; platform/research/strategy_proposals.py
+for economic diversity and validated declarative proposal provenance using the
+existing frozen grammar and total daily quota. Narrowly integrate forward_worker.py
+without changing the four frozen model/recipe/pipeline/reference files or epochs.
+Add guarded execution/admission modules in platform/gateway after discovery of
+the current signing/risk interfaces. Add meaningful unit/integration regressions,
+update ARCHITECTURE.md, platform/research/LIFECYCLE.md, infra/beroun/RISK_EXECUTION.md,
+this PLAN.md and platform/SOURCE_MANIFEST.json. Extend scope here before any
+additional production file. Keep generated reports/backups outside Git.
+
+Acceptance: recovery copies reproduce immutable campaign/source identities and
+book/journal counts while preserving the live writer; stale/future/failed feed,
+clock anomalies and approaching storage exhaustion generate explicit alerts.
+Proposals prioritize different economic trigger families, never count parameter
+or wording differences as novelty, never consume final holdout for screening,
+and never exceed two mechanisms/twelve variants daily in the same existing epoch.
+Signed mainnet code must require an independently issued, fresh exact-operation
+admission, owned durable nonce/journal, risk enforcement and fail-closed unknown
+outcome reconciliation; testing transports cannot be presented as live proof.
+Keep calibration experimentation separate from strategy qualification. Missing
+funded authority/data/capital or elapsed paper evidence blocks only that stage.
+No risk relaxation, orders, account transfers or perpetual qualification shortcut.
+
+Exact verification: python3 -B tools/verify_platform.py in the existing isolated
+Linux/PostgreSQL fixture; focused unittest modules for each added component;
+git diff --check; source manifest/diff/mode/secret/scope audit; bash -n for changed
+shell sources and systemd-analyze verify for declared units. Record exact candidate
+hashes, commands, exits and platform limitations. Have installed AGY independently
+inspect the exact source/evidence in a tested read-only namespace and check actual
+test evidence; permit offline test execution only in a disposable isolated copy.
+AGY results and self-review are distinct from reproducible verification.
+
+Failure scenarios: concurrent source edits, failed canonical evidence writes,
+unavailable safe reviewer/test environment, inconsistent backup, missing account
+permission, insufficient capital, unavailable calibration/history or paper days.
+Recovery: retain immutable operations, old release and all epochs; no broad cleanup,
+reset/stash or overwrite. Preview any service restart, new timer, privileged data
+read/backup or source deployment with actual paths/hashes before its authorized use.
+Owner's current request authorizes the five steps and AGY; publication remains the
+previous explicitly selected VaclavSercl/sniper repair/history-recovery ordinary
+exact-checkpoint push and existing PR #101 update, no merge or force push. A funded
+calibration pilot requires a concrete separate mandate before financial actions.
+Status: DISCOVERY_AND_DESIGN; implementation and current server proof pending.
+
+Execution scope resolved: add platform/gateway/mainnet_admission.py and
+hyperliquid_mainnet.py, with root-owned exact-operation permits and mandatory
+qualification recomputation, plus test_mainnet_admission.py and
+test_hyperliquid_mainnet.py. Extend hyperliquid_orders.py narrowly with a journal
+filename class attribute; testnet behavior/signing/endpoint remain unchanged.
+Mainnet orders are prepared durably then dispatched only by a separate explicit
+authorized operation. The guardian issuer is deliberately unavailable until
+actual testnet proof, historical/paper chain and fresh account/risk evidence exist.
+No operational funded daemon or key reader is installed in this phase.
+
 ## October 1 owner-approved startup readiness repair
 
 Baseline 6e1e4669cf886e888b84b9634b507125b48a2075, clean repair/history-recovery.

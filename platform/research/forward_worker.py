@@ -16,6 +16,8 @@ import zlib
 import execution_evidence as ex
 import forward_pipeline as pipeline
 import hyperliquid_history as history
+import forward_operations as operations
+import strategy_proposals as proposals
 
 STATE=Path('/var/lib/sniper/forward-research-v1')
 CALIBRATION=Path('/var/lib/sniper/execution-calibration/mainnet.json')
@@ -104,8 +106,9 @@ def stored_markets(con,now):
 
 def research_work(con,history_root,old_research_root,now=None):
     now=int(time.time()*1000) if now is None else now
+    with con: con.execute('INSERT OR REPLACE INTO health VALUES(2,?,?,?)',(now,'RUNNING','{}'))
     markets=stored_markets(con,now)
-    generation=pipeline.generate(con,markets,now)
+    generation=proposals.generate(con,markets,now)
     screens=pipeline.screen_pending(con,old_research_root)
     pipeline.compare(con,now)
     calibration=import_calibration(con,now)
@@ -131,7 +134,11 @@ def research_work(con,history_root,old_research_root,now=None):
     details={'generation':generation,'new_known_data_screens':screens,
              'calibration':calibration,'historical_attempts':attempted,
              'real_exchange_orders':0,'paid_provider_calls':0}
-    with con: con.execute('INSERT OR REPLACE INTO health VALUES(2,?,?,?)',(now,'PASS',history.encode(details).decode()))
+    state_root=Path(con.execute('PRAGMA database_list').fetchone()[2]).parent
+    details['operations']=operations.maintain(state_root,int(time.time()*1000),research_started_ms=now)
+    with con: con.execute('INSERT OR REPLACE INTO health VALUES(2,?,?,?)',
+        (int(time.time()*1000),'PASS' if details['operations']['status']=='PASS' else 'FAILED',history.encode(details).decode()))
+    if details['operations']['status']!='PASS': raise RuntimeError('Forward maintenance requires operator review')
     return details
 
 
@@ -189,16 +196,19 @@ def main():
         with closing(pipeline.connect(root)) as con:
             while not stopping[0]:
                 started=time.monotonic()
+                health_id=2 if args.command=='research-once' else 1
                 try:
                     storage_budget(con)
                     if args.command=='research-once': result=research_work(con,args.history_dir,args.old_research_dir)
-                    elif args.command=='once': result=work(con,args.history_dir,args.old_research_dir)
+                    elif args.command=='once':
+                        capture_work(con,args.history_dir)
+                        health_id=2
+                        result=research_work(con,args.history_dir,args.old_research_dir)
                     else: result=capture_work(con,args.history_dir)
                     if args.command!='run': print(json.dumps(result,allow_nan=False)); return 0
                 except (OSError,ValueError,LookupError,RuntimeError,sqlite3.Error) as exc:
                     con.rollback()
                     result={'error_type':type(exc).__name__,'real_exchange_orders':0}
-                    health_id=2 if args.command=='research-once' else 1
                     with con: con.execute('INSERT OR REPLACE INTO health VALUES(?,?,?,?)',(health_id,int(time.time()*1000),'FAILED',history.encode(result).decode()))
                     print(json.dumps(result),flush=True)
                     if args.command!='run': return 2

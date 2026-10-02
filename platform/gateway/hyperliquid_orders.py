@@ -174,6 +174,9 @@ class TestnetClient:
     reconciliation does not replenish it. Perpetuals may only reduce a currently
     observed position. No subaccounts/vaults, market orders or transfers.
     """
+    journal_name = 'testnet.sqlite3'
+    prepare_action = staticmethod(prepare)
+
     def __init__(self, root, wallet, account, order_cap, session_cap,
                  expires_ms, *, send=transport, signer=sdk_sign, clock=None):
         if os.name != 'posix':
@@ -191,7 +194,7 @@ class TestnetClient:
         root.mkdir(mode=0o700, parents=True, exist_ok=True)
         if root.stat().st_mode & 0o077:
             raise ValueError('Execution state must be private')
-        path = root/'testnet.sqlite3'
+        path = root/self.journal_name
         if path.is_symlink() or path.exists() and (path.stat().st_nlink != 1 or path.stat().st_mode & 0o077):
             raise ValueError('Unsafe journal')
         if path.exists() and path.stat().st_size > 32*1024*1024:
@@ -356,15 +359,18 @@ class TestnetClient:
         try:
             if integer(self.clock()) >= expires:
                 raise ValueError('Intent expired before signing')
+            self.check_dispatch_authority(operation, action, nonce, expires)
             signature = self.signer(self.wallet, action, nonce, expires)
             if set(signature) != {'r', 's', 'v'} or signature['v'] not in (27, 28) or any(
                     not isinstance(signature[k], str) or not re.fullmatch(r'0x[0-9a-fA-F]{1,64}', signature[k]) or
                     int(signature[k], 16) == 0 for k in ('r', 's')):
                 raise ValueError('Invalid signature')
+            self.check_dispatch_authority(operation, action, nonce, expires)
             with self.transaction():
                 self.record(operation, 'DISPATCH_STARTED', {'nonce': nonce, 'expires_ms': expires})
             if integer(self.clock()) >= expires:
                 raise ValueError('Intent expired before transport')
+            self.check_dispatch_authority(operation, action, nonce, expires)
             response = self.send('exchange', {'action': action, 'nonce': nonce,
                 'signature': signature, 'vaultAddress': None, 'expiresAfter': expires})
             # An HTTP response is not fill/account reconciliation, even when ok.
@@ -376,13 +382,27 @@ class TestnetClient:
             self.record(operation, state, evidence)
         return {'operation': operation, 'status': state, 'live_eligible': False}
 
+    def check_dispatch_authority(self, operation, action, nonce, expires):
+        if json.loads(self.binding())['network'] != 'testnet':
+            raise ValueError('Non-testnet clients require separate dispatch authority')
+
+    def check_submission_limits(self, product, side, notional):
+        if notional > self.order_cap:
+            raise ValueError('Explicit testnet order limit')
+        spent = sum((number(json.loads(r[0])['notional']) for r in self.con.execute(
+                     "SELECT intent FROM operations WHERE kind='order'")), Decimal(0))
+        if spent+notional > self.session_cap:
+            raise ValueError('Explicit testnet lifetime submission limit')
+
+    def observe_submission(self, instrument, side):
+        if instrument.product == 'spot' and side == 'buy':
+            self.observe_risk(instrument)
+
     def submit(self, client_id, product, symbol, side, price, quantity, *, post_only=True, reduce_only=False):
         if not isinstance(client_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{1,80}', client_id):
             raise ValueError('Invalid owned client ID')
         operation = 'order:'+client_id
         notional = number(price)*number(quantity)
-        if notional > self.order_cap:
-            raise ValueError('Explicit testnet order limit')
         cloid = '0x'+hashlib.sha256((self.binding()+'\0'+client_id).encode()).hexdigest()[:32]
         with self.transaction():
             if self.con.execute('SELECT 1 FROM operations WHERE id=?', (operation,)).fetchone():
@@ -391,20 +411,16 @@ class TestnetClient:
                     "'RECONCILIATION_STARTED','UNKNOWN_REQUIRES_RECONCILIATION',"
                     "'RESPONSE_RECEIVED_REQUIRES_RECONCILIATION')").fetchone():
                 raise ValueError('Unreconciled operation blocks new dispatch')
-            spent = sum((number(json.loads(r[0])['notional']) for r in self.con.execute(
-                         "SELECT intent FROM operations WHERE kind='order'")), Decimal(0))
-            if spent+notional > self.session_cap:
-                raise ValueError('Explicit testnet lifetime submission limit')
+            self.check_submission_limits(product,side,notional)
         self.check_role()
         instrument = self.instrument(product, symbol)
-        action = prepare(instrument, side, price, quantity, post_only, reduce_only, cloid)
+        action = self.prepare_action(instrument, side, price, quantity, post_only, reduce_only, cloid)
         self.inventory(instrument, side, price, quantity, reduce_only)
         # The implemented entry path cannot bypass portfolio admission. Genuine
         # inventory-reducing exits and owned cancellation remain possible even
         # after a risk halt; the preceding inventory check proves no short/flip.
         risk_required = instrument.product == 'spot' and side == 'buy'
-        if risk_required:
-            self.observe_risk(instrument)
+        self.observe_submission(instrument,side)
         with self.transaction():
             intent = {'instrument': instrument.__dict__, 'action': action, 'notional': wire(notional),
                       'risk_required': risk_required}
